@@ -29,55 +29,12 @@ def cli(ctx: click.Context, log_level: str) -> None:
     configure_logging(level=ctx.obj["log_level"])
 
 
-# Import and register interface CLI
+# Import and register component CLIs
 from meshcore_hub.interface.cli import interface
+from meshcore_hub.collector.cli import collector
 
 cli.add_command(interface)
-
-
-@cli.command()
-@click.option(
-    "--mqtt-host",
-    type=str,
-    default="localhost",
-    envvar="MQTT_HOST",
-    help="MQTT broker host",
-)
-@click.option(
-    "--mqtt-port",
-    type=int,
-    default=1883,
-    envvar="MQTT_PORT",
-    help="MQTT broker port",
-)
-@click.option(
-    "--prefix",
-    type=str,
-    default="meshcore",
-    envvar="MQTT_PREFIX",
-    help="MQTT topic prefix",
-)
-@click.option(
-    "--database-url",
-    type=str,
-    default="sqlite:///./meshcore.db",
-    envvar="DATABASE_URL",
-    help="Database connection URL",
-)
-def collector(
-    mqtt_host: str,
-    mqtt_port: int,
-    prefix: str,
-    database_url: str,
-) -> None:
-    """Run the collector component.
-
-    Subscribes to MQTT broker and stores events in database.
-    """
-    click.echo("Starting collector...")
-    click.echo(f"MQTT: {mqtt_host}:{mqtt_port} (prefix: {prefix})")
-    click.echo(f"Database: {database_url}")
-    click.echo("Collector component not yet implemented.")
+cli.add_command(collector)
 
 
 @cli.command()
