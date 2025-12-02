@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}{{ network_name }} - Node Map{% endblock %}
+
+{% block extra_head %}
+<style>
+    #map {
+        height: calc(100vh - 250px);
+        min-height: 400px;
+        border-radius: var(--rounded-box);
+    }
+    .leaflet-popup-content-wrapper {
+        background: oklch(var(--b1));
+        color: oklch(var(--bc));
+    }
+    .leaflet-popup-tip {
+        background: oklch(var(--b1));
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-3xl font-bold">Node Map</h1>
+    <span id="node-count" class="badge badge-lg">Loading...</span>
+</div>
+
+<div class="card bg-base-100 shadow-xl">
+    <div class="card-body p-2">
+        <div id="map"></div>
+    </div>
+</div>
+
+<div class="mt-4 text-sm opacity-70">
+    <p>Nodes are placed on the map based on their <code>lat</code> and <code>lon</code> tags.</p>
+    <p>To add a node to the map, set its location tags via the API.</p>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Initialize map
+    const map = L.map('map').setView([{{ network_location[0] }}, {{ network_location[1] }}], 10);
+
+    // Add tile layer
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    // Custom marker icon
+    const nodeIcon = L.divIcon({
+        className: 'custom-div-icon',
+        html: `<div style="background-color: oklch(var(--p)); width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
+        iconSize: [12, 12],
+        iconAnchor: [6, 6]
+    });
+
+    // Fetch and display nodes
+    fetch('/map/data')
+        .then(response => response.json())
+        .then(data => {
+            const nodes = data.nodes;
+            const center = data.center;
+
+            // Update node count
+            document.getElementById('node-count').textContent = `${nodes.length} nodes on map`;
+
+            // Add markers for each node
+            nodes.forEach(node => {
+                const marker = L.marker([node.lat, node.lon], { icon: nodeIcon }).addTo(map);
+
+                // Create popup content
+                const popupContent = `
+                    <div class="p-2">
+                        <h3 class="font-bold text-lg mb-2">${node.name}</h3>
+                        <div class="space-y-1 text-sm">
+                            <p><span class="opacity-70">Type:</span> ${node.adv_type || 'Unknown'}</p>
+                            <p><span class="opacity-70">Key:</span> <code class="text-xs">${node.public_key.substring(0, 16)}...</code></p>
+                            <p><span class="opacity-70">Location:</span> ${node.lat.toFixed(4)}, ${node.lon.toFixed(4)}</p>
+                            ${node.last_seen ? `<p><span class="opacity-70">Last seen:</span> ${node.last_seen.substring(0, 19).replace('T', ' ')}</p>` : ''}
+                        </div>
+                        <a href="/nodes/${node.public_key}" class="btn btn-primary btn-xs mt-3">View Details</a>
+                    </div>
+                `;
+
+                marker.bindPopup(popupContent);
+            });
+
+            // Fit bounds if we have nodes
+            if (nodes.length > 0) {
+                const bounds = L.latLngBounds(nodes.map(n => [n.lat, n.lon]));
+                map.fitBounds(bounds, { padding: [50, 50] });
+            } else if (center.lat !== 0 || center.lon !== 0) {
+                // Use network center if no nodes
+                map.setView([center.lat, center.lon], 10);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading map data:', error);
+            document.getElementById('node-count').textContent = 'Error loading data';
+        });
+</script>
+{% endblock %}

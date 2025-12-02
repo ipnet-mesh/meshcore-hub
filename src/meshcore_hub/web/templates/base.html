@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ network_name }}{% endblock %}</title>
+
+    <!-- Tailwind CSS with DaisyUI -->
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.19/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Leaflet CSS for maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <style>
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: oklch(var(--b2));
+        }
+        ::-webkit-scrollbar-thumb {
+            background: oklch(var(--bc) / 0.3);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: oklch(var(--bc) / 0.5);
+        }
+
+        /* Table styling */
+        .table-compact td, .table-compact th {
+            padding: 0.5rem 0.75rem;
+        }
+
+        /* Truncate text in table cells */
+        .truncate-cell {
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+    </style>
+
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="min-h-screen bg-base-200">
+    <!-- Navbar -->
+    <div class="navbar bg-base-100 shadow-lg">
+        <div class="navbar-start">
+            <div class="dropdown">
+                <div tabindex="0" role="button" class="btn btn-ghost lg:hidden">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h8m-8 6h16" />
+                    </svg>
+                </div>
+                <ul tabindex="0" class="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52">
+                    <li><a href="/" class="{% if request.url.path == '/' %}active{% endif %}">Home</a></li>
+                    <li><a href="/network" class="{% if request.url.path == '/network' %}active{% endif %}">Network</a></li>
+                    <li><a href="/nodes" class="{% if '/nodes' in request.url.path %}active{% endif %}">Nodes</a></li>
+                    <li><a href="/messages" class="{% if request.url.path == '/messages' %}active{% endif %}">Messages</a></li>
+                    <li><a href="/map" class="{% if request.url.path == '/map' %}active{% endif %}">Map</a></li>
+                    <li><a href="/members" class="{% if request.url.path == '/members' %}active{% endif %}">Members</a></li>
+                </ul>
+            </div>
+            <a href="/" class="btn btn-ghost text-xl">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.14 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+                </svg>
+                {{ network_name }}
+            </a>
+        </div>
+        <div class="navbar-center hidden lg:flex">
+            <ul class="menu menu-horizontal px-1">
+                <li><a href="/" class="{% if request.url.path == '/' %}active{% endif %}">Home</a></li>
+                <li><a href="/network" class="{% if request.url.path == '/network' %}active{% endif %}">Network</a></li>
+                <li><a href="/nodes" class="{% if '/nodes' in request.url.path %}active{% endif %}">Nodes</a></li>
+                <li><a href="/messages" class="{% if request.url.path == '/messages' %}active{% endif %}">Messages</a></li>
+                <li><a href="/map" class="{% if request.url.path == '/map' %}active{% endif %}">Map</a></li>
+                <li><a href="/members" class="{% if request.url.path == '/members' %}active{% endif %}">Members</a></li>
+            </ul>
+        </div>
+        <div class="navbar-end">
+            <div class="badge badge-outline badge-sm">v{{ version }}</div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-6">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer footer-center p-4 bg-base-100 text-base-content mt-auto">
+        <aside>
+            <p>
+                {{ network_name }}
+                {% if network_city and network_country %}
+                - {{ network_city }}, {{ network_country }}
+                {% endif %}
+            </p>
+            <p class="text-sm opacity-70">
+                {% if network_contact_email %}
+                <a href="mailto:{{ network_contact_email }}" class="link link-hover">{{ network_contact_email }}</a>
+                {% endif %}
+                {% if network_contact_email and network_contact_discord %} | {% endif %}
+                {% if network_contact_discord %}
+                <span>Discord: {{ network_contact_discord }}</span>
+                {% endif %}
+            </p>
+            <p class="text-xs opacity-50 mt-2">Powered by MeshCore Hub v{{ version }}</p>
+        </aside>
+    </footer>
+
+    <!-- Leaflet JS for maps -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

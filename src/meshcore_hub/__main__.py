@@ -33,71 +33,12 @@ def cli(ctx: click.Context, log_level: str) -> None:
 from meshcore_hub.interface.cli import interface
 from meshcore_hub.collector.cli import collector
 from meshcore_hub.api.cli import api
+from meshcore_hub.web.cli import web
 
 cli.add_command(interface)
 cli.add_command(collector)
 cli.add_command(api)
-
-
-@cli.command()
-@click.option(
-    "--host",
-    type=str,
-    default="0.0.0.0",
-    envvar="WEB_HOST",
-    help="Web server host",
-)
-@click.option(
-    "--port",
-    type=int,
-    default=8080,
-    envvar="WEB_PORT",
-    help="Web server port",
-)
-@click.option(
-    "--api-url",
-    type=str,
-    default="http://localhost:8000",
-    envvar="API_BASE_URL",
-    help="API server base URL",
-)
-@click.option(
-    "--api-key",
-    type=str,
-    default=None,
-    envvar="API_KEY",
-    help="API key for queries",
-)
-@click.option(
-    "--network-name",
-    type=str,
-    default="MeshCore Network",
-    envvar="NETWORK_NAME",
-    help="Network display name",
-)
-@click.option(
-    "--reload",
-    is_flag=True,
-    default=False,
-    help="Enable auto-reload for development",
-)
-def web(
-    host: str,
-    port: int,
-    api_url: str,
-    api_key: str | None,
-    network_name: str,
-    reload: bool,
-) -> None:
-    """Run the web dashboard.
-
-    Provides a web interface for visualizing network status.
-    """
-    click.echo("Starting web dashboard...")
-    click.echo(f"Listening on: {host}:{port}")
-    click.echo(f"API URL: {api_url}")
-    click.echo(f"Network name: {network_name}")
-    click.echo("Web dashboard not yet implemented.")
+cli.add_command(web)
 
 
 @cli.group()

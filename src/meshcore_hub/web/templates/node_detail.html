@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}{{ network_name }} - Node Details{% endblock %}
+
+{% block content %}
+<div class="breadcrumbs text-sm mb-4">
+    <ul>
+        <li><a href="/">Home</a></li>
+        <li><a href="/nodes">Nodes</a></li>
+        <li>{{ node.name or public_key[:12] + '...' if node else 'Not Found' }}</li>
+    </ul>
+</div>
+
+{% if api_error %}
+<div class="alert alert-warning mb-6">
+    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+    </svg>
+    <span>Could not fetch data from API: {{ api_error }}</span>
+</div>
+{% endif %}
+
+{% if node %}
+<!-- Node Info Card -->
+<div class="card bg-base-100 shadow-xl mb-6">
+    <div class="card-body">
+        <h1 class="card-title text-2xl">
+            {{ node.name or 'Unnamed Node' }}
+            {% if node.adv_type %}
+            <span class="badge badge-secondary">{{ node.adv_type }}</span>
+            {% endif %}
+        </h1>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <div>
+                <h3 class="font-semibold opacity-70 mb-2">Public Key</h3>
+                <code class="text-sm bg-base-200 p-2 rounded block break-all">{{ node.public_key }}</code>
+            </div>
+            <div>
+                <h3 class="font-semibold opacity-70 mb-2">Activity</h3>
+                <div class="space-y-1 text-sm">
+                    <p><span class="opacity-70">First seen:</span> {{ node.first_seen[:19].replace('T', ' ') if node.first_seen else '-' }}</p>
+                    <p><span class="opacity-70">Last seen:</span> {{ node.last_seen[:19].replace('T', ' ') if node.last_seen else '-' }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tags -->
+        {% if node.tags %}
+        <div class="mt-6">
+            <h3 class="font-semibold opacity-70 mb-2">Tags</h3>
+            <div class="overflow-x-auto">
+                <table class="table table-compact w-full">
+                    <thead>
+                        <tr>
+                            <th>Key</th>
+                            <th>Value</th>
+                            <th>Type</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for tag in node.tags %}
+                        <tr>
+                            <td class="font-mono">{{ tag.key }}</td>
+                            <td>{{ tag.value }}</td>
+                            <td class="opacity-70">{{ tag.value_type or 'string' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- Recent Advertisements -->
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title">Recent Advertisements</h2>
+            {% if advertisements %}
+            <div class="overflow-x-auto">
+                <table class="table table-compact w-full">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Type</th>
+                            <th>Name</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for adv in advertisements %}
+                        <tr>
+                            <td class="text-xs">{{ adv.received_at[:19].replace('T', ' ') if adv.received_at else '-' }}</td>
+                            <td>{{ adv.adv_type or '-' }}</td>
+                            <td>{{ adv.name or '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="opacity-70">No advertisements recorded.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Recent Telemetry -->
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title">Recent Telemetry</h2>
+            {% if telemetry %}
+            <div class="overflow-x-auto">
+                <table class="table table-compact w-full">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Data</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for tel in telemetry %}
+                        <tr>
+                            <td class="text-xs">{{ tel.received_at[:19].replace('T', ' ') if tel.received_at else '-' }}</td>
+                            <td class="text-xs font-mono">
+                                {% if tel.parsed_data %}
+                                {{ tel.parsed_data | tojson }}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="opacity-70">No telemetry recorded.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% else %}
+<div class="alert alert-error">
+    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+    <span>Node not found: {{ public_key }}</span>
+</div>
+<a href="/nodes" class="btn btn-primary mt-4">Back to Nodes</a>
+{% endif %}
+{% endblock %}
