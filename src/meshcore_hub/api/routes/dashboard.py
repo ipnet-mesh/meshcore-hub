@@ -8,8 +8,8 @@ from sqlalchemy import func, select
 
 from meshcore_hub.api.auth import RequireRead
 from meshcore_hub.api.dependencies import DbSession
-from meshcore_hub.common.models import Advertisement, Message, Node
-from meshcore_hub.common.schemas.messages import DashboardStats
+from meshcore_hub.common.models import Advertisement, Message, Node, NodeTag
+from meshcore_hub.common.schemas.messages import DashboardStats, RecentAdvertisement
 
 router = APIRouter()
 
@@ -55,6 +55,49 @@ async def get_stats(
         session.execute(select(func.count()).select_from(Advertisement)).scalar() or 0
     )
 
+    # Advertisements in last 24h
+    advertisements_24h = (
+        session.execute(
+            select(func.count())
+            .select_from(Advertisement)
+            .where(Advertisement.received_at >= yesterday)
+        ).scalar()
+        or 0
+    )
+
+    # Recent advertisements (last 10)
+    recent_ads = (
+        session.execute(
+            select(Advertisement).order_by(Advertisement.received_at.desc()).limit(10)
+        )
+        .scalars()
+        .all()
+    )
+
+    # Get friendly_name tags for the advertised nodes
+    ad_public_keys = [ad.public_key for ad in recent_ads]
+    friendly_names: dict[str, str] = {}
+    if ad_public_keys:
+        friendly_name_query = (
+            select(Node.public_key, NodeTag.value)
+            .join(NodeTag, Node.id == NodeTag.node_id)
+            .where(Node.public_key.in_(ad_public_keys))
+            .where(NodeTag.key == "friendly_name")
+        )
+        for public_key, value in session.execute(friendly_name_query).all():
+            friendly_names[public_key] = value
+
+    recent_advertisements = [
+        RecentAdvertisement(
+            public_key=ad.public_key,
+            name=ad.name,
+            friendly_name=friendly_names.get(ad.public_key),
+            adv_type=ad.adv_type,
+            received_at=ad.received_at,
+        )
+        for ad in recent_ads
+    ]
+
     # Channel message counts
     channel_counts_query = (
         select(Message.channel_idx, func.count())
@@ -73,6 +116,8 @@ async def get_stats(
         total_messages=total_messages,
         messages_today=messages_today,
         total_advertisements=total_advertisements,
+        advertisements_24h=advertisements_24h,
+        recent_advertisements=recent_advertisements,
         channel_message_counts=channel_message_counts,
     )
 

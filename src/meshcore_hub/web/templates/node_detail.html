@@ -7,7 +7,17 @@
     <ul>
         <li><a href="/">Home</a></li>
         <li><a href="/nodes">Nodes</a></li>
-        <li>{{ node.name or public_key[:12] + '...' if node else 'Not Found' }}</li>
+        {% if node %}
+        {% set ns = namespace(friendly_name=none) %}
+        {% for tag in node.tags or [] %}
+            {% if tag.key == 'friendly_name' %}
+                {% set ns.friendly_name = tag.value %}
+            {% endif %}
+        {% endfor %}
+        <li>{{ ns.friendly_name or node.name or public_key[:12] + '...' }}</li>
+        {% else %}
+        <li>Not Found</li>
+        {% endif %}
     </ul>
 </div>
 
@@ -21,11 +31,17 @@
 {% endif %}
 
 {% if node %}
+{% set ns = namespace(friendly_name=none) %}
+{% for tag in node.tags or [] %}
+    {% if tag.key == 'friendly_name' %}
+        {% set ns.friendly_name = tag.value %}
+    {% endif %}
+{% endfor %}
 <!-- Node Info Card -->
 <div class="card bg-base-100 shadow-xl mb-6">
     <div class="card-body">
         <h1 class="card-title text-2xl">
-            {{ node.name or 'Unnamed Node' }}
+            {{ ns.friendly_name or node.name or 'Unnamed Node' }}
             {% if node.adv_type %}
             <span class="badge badge-secondary">{{ node.adv_type }}</span>
             {% endif %}

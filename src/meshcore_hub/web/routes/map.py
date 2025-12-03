@@ -40,23 +40,33 @@ async def map_data(request: Request) -> JSONResponse:
                 tags = node.get("tags", [])
                 lat = None
                 lon = None
+                friendly_name = None
                 for tag in tags:
-                    if tag.get("key") == "lat":
+                    key = tag.get("key")
+                    if key == "lat":
                         try:
                             lat = float(tag.get("value"))
                         except (ValueError, TypeError):
                             pass
-                    elif tag.get("key") == "lon":
+                    elif key == "lon":
                         try:
                             lon = float(tag.get("value"))
                         except (ValueError, TypeError):
                             pass
+                    elif key == "friendly_name":
+                        friendly_name = tag.get("value")
 
                 if lat is not None and lon is not None:
+                    # Use friendly_name, then node name, then public key prefix
+                    display_name = (
+                        friendly_name
+                        or node.get("name")
+                        or node.get("public_key", "")[:12]
+                    )
                     nodes_with_location.append(
                         {
                             "public_key": node.get("public_key"),
-                            "name": node.get("name") or node.get("public_key", "")[:12],
+                            "name": display_name,
                             "adv_type": node.get("adv_type"),
                             "lat": lat,
                             "lon": lon,

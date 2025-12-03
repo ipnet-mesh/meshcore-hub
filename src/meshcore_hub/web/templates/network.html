@@ -36,16 +36,16 @@
         <div class="stat-desc">All discovered nodes</div>
     </div>
 
-    <!-- Active Nodes -->
+    <!-- Advertisements (24h) -->
     <div class="stat bg-base-100 rounded-box shadow">
         <div class="stat-figure text-secondary">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728m-9.9-2.829a5 5 0 010-7.07m7.072 0a5 5 0 010 7.07M13 12a1 1 0 11-2 0 1 1 0 012 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
             </svg>
         </div>
-        <div class="stat-title">Active Nodes</div>
-        <div class="stat-value text-secondary">{{ stats.active_nodes }}</div>
-        <div class="stat-desc">Active in last 24 hours</div>
+        <div class="stat-title">Advertisements</div>
+        <div class="stat-value text-secondary">{{ stats.advertisements_24h }}</div>
+        <div class="stat-desc">Received in last 24 hours</div>
     </div>
 
     <!-- Total Messages -->
@@ -75,17 +75,44 @@
 
 <!-- Additional Stats -->
 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-    <!-- Advertisements -->
+    <!-- Recent Advertisements -->
     <div class="card bg-base-100 shadow-xl">
         <div class="card-body">
             <h2 class="card-title">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
                 </svg>
-                Advertisements
+                Recent Advertisements
             </h2>
-            <div class="stat-value">{{ stats.total_advertisements }}</div>
-            <p class="text-sm opacity-70">Total advertisements received</p>
+            {% if stats.recent_advertisements %}
+            <div class="overflow-x-auto">
+                <table class="table table-compact w-full">
+                    <thead>
+                        <tr>
+                            <th>Node</th>
+                            <th>Type</th>
+                            <th class="text-right">Received</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ad in stats.recent_advertisements %}
+                        <tr>
+                            <td>
+                                <div class="font-medium">{{ ad.friendly_name or ad.name or ad.public_key[:12] + '...' }}</div>
+                                {% if ad.friendly_name or ad.name %}
+                                <div class="text-xs opacity-50 font-mono">{{ ad.public_key[:12] }}...</div>
+                                {% endif %}
+                            </td>
+                            <td>{{ ad.adv_type or '-' }}</td>
+                            <td class="text-right text-sm opacity-70">{{ ad.received_at.split('T')[1][:8] if ad.received_at else '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-sm opacity-70">No advertisements recorded yet.</p>
+            {% endif %}
         </div>
     </div>
 

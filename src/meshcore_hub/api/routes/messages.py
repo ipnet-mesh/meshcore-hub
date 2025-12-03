@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 
 from meshcore_hub.api.auth import RequireRead
 from meshcore_hub.api.dependencies import DbSession
-from meshcore_hub.common.models import Message
+from meshcore_hub.common.models import Message, Node, NodeTag
 from meshcore_hub.common.schemas.messages import MessageList, MessageRead
 
 router = APIRouter()
@@ -59,8 +59,47 @@ async def list_messages(
     # Execute
     messages = session.execute(query).scalars().all()
 
+    # Look up friendly_names for senders with pubkey_prefix
+    pubkey_prefixes = [m.pubkey_prefix for m in messages if m.pubkey_prefix]
+    friendly_names: dict[str, str] = {}
+    if pubkey_prefixes:
+        # Find nodes whose public_key starts with any of these prefixes
+        for prefix in set(pubkey_prefixes):
+            friendly_name_query = (
+                select(Node.public_key, NodeTag.value)
+                .join(NodeTag, Node.id == NodeTag.node_id)
+                .where(Node.public_key.startswith(prefix))
+                .where(NodeTag.key == "friendly_name")
+            )
+            for public_key, value in session.execute(friendly_name_query).all():
+                # Map the prefix to the friendly_name
+                friendly_names[public_key[:12]] = value
+
+    # Build response with friendly_names
+    items = []
+    for m in messages:
+        msg_dict = {
+            "id": m.id,
+            "receiver_node_id": m.receiver_node_id,
+            "message_type": m.message_type,
+            "pubkey_prefix": m.pubkey_prefix,
+            "sender_friendly_name": (
+                friendly_names.get(m.pubkey_prefix) if m.pubkey_prefix else None
+            ),
+            "channel_idx": m.channel_idx,
+            "text": m.text,
+            "path_len": m.path_len,
+            "txt_type": m.txt_type,
+            "signature": m.signature,
+            "snr": m.snr,
+            "sender_timestamp": m.sender_timestamp,
+            "received_at": m.received_at,
+            "created_at": m.created_at,
+        }
+        items.append(MessageRead(**msg_dict))
+
     return MessageList(
-        items=[MessageRead.model_validate(m) for m in messages],
+        items=items,
         total=total,
         limit=limit,
         offset=offset,

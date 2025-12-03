@@ -209,7 +209,7 @@ def run_cmd(ctx: click.Context) -> None:
 
 
 @collector.command("import-tags")
-@click.argument("file", type=click.Path(exists=True), required=False, default=None)
+@click.argument("file", type=click.Path(), required=False, default=None)
 @click.option(
     "--no-create-nodes",
     is_flag=True,
@@ -253,10 +253,11 @@ def import_tags_cmd(
     settings = ctx.obj["settings"]
     tags_file = file if file else settings.effective_tags_file
 
-    # Check if file exists when using default
-    if not file and not Path(tags_file).exists():
+    # Check if file exists
+    if not Path(tags_file).exists():
         click.echo(f"Tags file not found: {tags_file}")
-        click.echo("Specify a file path or create the default tags file.")
+        if not file:
+            click.echo("Specify a file path or create the default tags file.")
         return
 
     click.echo(f"Importing tags from: {tags_file}")

@@ -74,11 +74,15 @@
                     <span class="badge badge-success badge-sm">Direct</span>
                     {% endif %}
                 </td>
-                <td class="font-mono text-xs">
+                <td class="text-sm">
                     {% if msg.message_type == 'channel' %}
-                    CH{{ msg.channel_idx }}
+                    <span class="font-mono">CH{{ msg.channel_idx }}</span>
                     {% else %}
-                    {{ (msg.pubkey_prefix or '-')[:12] }}
+                        {% if msg.sender_friendly_name %}
+                        <span class="font-medium">{{ msg.sender_friendly_name }}</span>
+                        {% else %}
+                        <span class="font-mono text-xs">{{ (msg.pubkey_prefix or '-')[:12] }}</span>
+                        {% endif %}
                     {% endif %}
                 </td>
                 <td class="truncate-cell" title="{{ msg.text }}">

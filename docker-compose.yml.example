@@ -190,6 +190,8 @@ services:
       - MQTT_PASSWORD=${MQTT_PASSWORD:-}
       - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
       - DATA_HOME=/data
+      # Explicitly unset to use DATA_HOME-based default path
+      - DATABASE_URL=
       # Webhook configuration
       - WEBHOOK_ADVERTISEMENT_URL=${WEBHOOK_ADVERTISEMENT_URL:-}
       - WEBHOOK_ADVERTISEMENT_SECRET=${WEBHOOK_ADVERTISEMENT_SECRET:-}
@@ -241,6 +243,8 @@ services:
       - MQTT_PASSWORD=${MQTT_PASSWORD:-}
       - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
       - DATA_HOME=/data
+      # Explicitly unset to use DATA_HOME-based default path
+      - DATABASE_URL=
       - API_HOST=0.0.0.0
       - API_PORT=8000
       - API_READ_KEY=${API_READ_KEY:-}
@@ -311,6 +315,8 @@ services:
       - ${DATA_HOME:-./data}:/data
     environment:
       - DATA_HOME=/data
+      # Explicitly unset to use DATA_HOME-based default path
+      - DATABASE_URL=
     command: ["db", "upgrade"]
 
   # ==========================================================================
@@ -329,6 +335,8 @@ services:
     environment:
       - DATA_HOME=/data
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Explicitly unset to use DATA_HOME-based default path
+      - DATABASE_URL=
     # Uses default tags file: /data/collector/tags.json
     command: ["collector", "import-tags"]
 

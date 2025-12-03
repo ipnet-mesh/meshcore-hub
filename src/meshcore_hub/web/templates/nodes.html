@@ -59,8 +59,14 @@
         </thead>
         <tbody>
             {% for node in nodes %}
+            {% set ns = namespace(friendly_name=none) %}
+            {% for tag in node.tags or [] %}
+                {% if tag.key == 'friendly_name' %}
+                    {% set ns.friendly_name = tag.value %}
+                {% endif %}
+            {% endfor %}
             <tr class="hover">
-                <td class="font-medium">{{ node.name or '-' }}</td>
+                <td class="font-medium">{{ ns.friendly_name or node.name or '-' }}</td>
                 <td class="font-mono text-xs truncate-cell" title="{{ node.public_key }}">
                     {{ node.public_key[:16] }}...
                 </td>

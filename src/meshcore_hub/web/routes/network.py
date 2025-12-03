@@ -25,6 +25,8 @@ async def network_overview(request: Request) -> HTMLResponse:
         "total_messages": 0,
         "messages_today": 0,
         "total_advertisements": 0,
+        "advertisements_24h": 0,
+        "recent_advertisements": [],
         "channel_message_counts": {},
     }
 

@@ -17,6 +17,9 @@ class MessageRead(BaseModel):
     pubkey_prefix: Optional[str] = Field(
         default=None, description="Sender's public key prefix (12 chars)"
     )
+    sender_friendly_name: Optional[str] = Field(
+        default=None, description="Sender's friendly name from node tags"
+    )
     channel_idx: Optional[int] = Field(default=None, description="Channel index")
     text: str = Field(..., description="Message content")
     path_len: Optional[int] = Field(default=None, description="Number of hops")
@@ -163,6 +166,16 @@ class TelemetryList(BaseModel):
     offset: int = Field(..., description="Page offset")
 
 
+class RecentAdvertisement(BaseModel):
+    """Schema for a recent advertisement summary."""
+
+    public_key: str = Field(..., description="Node public key")
+    name: Optional[str] = Field(default=None, description="Node name")
+    friendly_name: Optional[str] = Field(default=None, description="Friendly name tag")
+    adv_type: Optional[str] = Field(default=None, description="Node type")
+    received_at: datetime = Field(..., description="When received")
+
+
 class DashboardStats(BaseModel):
     """Schema for dashboard statistics."""
 
@@ -171,6 +184,12 @@ class DashboardStats(BaseModel):
     total_messages: int = Field(..., description="Total number of messages")
     messages_today: int = Field(..., description="Messages received today")
     total_advertisements: int = Field(..., description="Total advertisements")
+    advertisements_24h: int = Field(
+        default=0, description="Advertisements received in last 24h"
+    )
+    recent_advertisements: list[RecentAdvertisement] = Field(
+        default_factory=list, description="Last 10 advertisements"
+    )
     channel_message_counts: dict[int, int] = Field(
         default_factory=dict,
         description="Message count per channel",
