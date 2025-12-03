@@ -36,5 +36,5 @@ repos:
           - pydantic-settings>=2.0.0
           - sqlalchemy>=2.0.0
           - fastapi>=0.100.0
+          - alembic>=1.7.0
           - types-paho-mqtt>=1.6.0
-        args: ["--ignore-missing-imports"]

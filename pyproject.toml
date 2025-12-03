@@ -107,6 +107,7 @@ module = [
     "paho.*",
     "uvicorn.*",
     "alembic.*",
+    "meshcore.*",
 ]
 ignore_missing_imports = true
 

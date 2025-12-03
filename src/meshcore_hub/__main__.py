@@ -71,7 +71,7 @@ def db() -> None:
 def db_upgrade(revision: str, database_url: str | None) -> None:
     """Upgrade database to a later version."""
     import os
-    from alembic import command  # type: ignore[attr-defined]
+    from alembic import command
     from alembic.config import Config
 
     click.echo(f"Upgrading database to revision: {revision}")
@@ -101,7 +101,7 @@ def db_upgrade(revision: str, database_url: str | None) -> None:
 def db_downgrade(revision: str, database_url: str | None) -> None:
     """Revert database to a previous version."""
     import os
-    from alembic import command  # type: ignore[attr-defined]
+    from alembic import command
     from alembic.config import Config
 
     click.echo(f"Downgrading database to revision: {revision}")
@@ -130,7 +130,7 @@ def db_downgrade(revision: str, database_url: str | None) -> None:
 )
 def db_revision(message: str, autogenerate: bool) -> None:
     """Create a new database migration."""
-    from alembic import command  # type: ignore[attr-defined]
+    from alembic import command
     from alembic.config import Config
 
     click.echo(f"Creating new revision: {message}")
@@ -151,7 +151,7 @@ def db_revision(message: str, autogenerate: bool) -> None:
 def db_current(database_url: str | None) -> None:
     """Show current database revision."""
     import os
-    from alembic import command  # type: ignore[attr-defined]
+    from alembic import command
     from alembic.config import Config
 
     alembic_cfg = Config("alembic.ini")
@@ -164,7 +164,7 @@ def db_current(database_url: str | None) -> None:
 @db.command("history")
 def db_history() -> None:
     """Show database migration history."""
-    from alembic import command  # type: ignore[attr-defined]
+    from alembic import command
     from alembic.config import Config
 
     alembic_cfg = Config("alembic.ini")
