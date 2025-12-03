@@ -276,10 +276,13 @@ meshcore-hub/
 │   └── versions/
 ├── etc/
 │   └── mosquitto.conf        # MQTT broker configuration
-├── data/
-│   └── members.json          # Network members data
+├── example/
+│   └── data/
+│       └── members.json      # Example network members data
+├── data/                     # Runtime data (gitignored)
 ├── Dockerfile                # Docker build configuration
-└── docker-compose.yml        # Docker Compose services
+├── docker-compose.yml        # Docker Compose services (gitignored)
+└── docker-compose.yml.example  # Docker Compose template
 ```
 
 ## MQTT Topic Structure

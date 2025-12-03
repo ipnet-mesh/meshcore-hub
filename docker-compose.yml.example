@@ -265,7 +265,7 @@ services:
       - NETWORK_CONTACT_DISCORD=${NETWORK_CONTACT_DISCORD:-}
       - MEMBERS_FILE=${MEMBERS_FILE:-}
     volumes:
-      - ${MEMBERS_FILE_PATH:-./data/members.json}:/app/members.json:ro
+      - ${MEMBERS_FILE_PATH:-./example/data/members.json}:/app/members.json:ro
     command: ["web"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]

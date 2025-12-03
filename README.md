@@ -359,9 +359,12 @@ meshcore-hub/
 ├── tests/                  # Test suite
 ├── alembic/                # Database migrations
 ├── etc/                    # Configuration files (mosquitto.conf)
-├── data/                   # Data files (members.json)
+├── example/                # Example files for testing
+│   └── data/               # Example data files (members.json)
+├── data/                   # Runtime data (gitignored)
 ├── Dockerfile              # Docker build configuration
-├── docker-compose.yml      # Docker Compose services
+├── docker-compose.yml      # Docker Compose services (gitignored)
+├── docker-compose.yml.example  # Docker Compose template
 ├── PROMPT.md               # Project specification
 ├── SCHEMAS.md              # Event schema documentation
 ├── PLAN.md                 # Implementation plan
