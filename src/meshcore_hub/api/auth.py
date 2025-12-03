@@ -83,8 +83,9 @@ async def require_read(
         return token
 
     raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
+        status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid API key",
+        headers={"WWW-Authenticate": "Bearer"},
     )
 
 

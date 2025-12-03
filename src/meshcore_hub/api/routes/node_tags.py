@@ -28,6 +28,33 @@ async def list_node_tags(
     return [NodeTagRead.model_validate(t) for t in node.tags]
 
 
+@router.get("/nodes/{public_key}/tags/{key}", response_model=NodeTagRead)
+async def get_node_tag(
+    _: RequireRead,
+    session: DbSession,
+    public_key: str,
+    key: str,
+) -> NodeTagRead:
+    """Get a specific tag for a node."""
+    # Find node
+    node_query = select(Node).where(Node.public_key == public_key)
+    node = session.execute(node_query).scalar_one_or_none()
+
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+
+    # Find tag
+    tag_query = select(NodeTag).where(
+        (NodeTag.node_id == node.id) & (NodeTag.key == key)
+    )
+    node_tag = session.execute(tag_query).scalar_one_or_none()
+
+    if not node_tag:
+        raise HTTPException(status_code=404, detail="Tag not found")
+
+    return NodeTagRead.model_validate(node_tag)
+
+
 @router.post("/nodes/{public_key}/tags", response_model=NodeTagRead, status_code=201)
 async def create_node_tag(
     _: RequireAdmin,

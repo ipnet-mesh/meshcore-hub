@@ -25,4 +25,4 @@ api_router.include_router(
 )
 api_router.include_router(telemetry_router, prefix="/telemetry", tags=["Telemetry"])
 api_router.include_router(commands_router, prefix="/commands", tags=["Commands"])
-api_router.include_router(dashboard_router, tags=["Dashboard"])
+api_router.include_router(dashboard_router, prefix="/dashboard", tags=["Dashboard"])

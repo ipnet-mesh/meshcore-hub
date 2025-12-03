@@ -18,7 +18,7 @@ router = APIRouter()
 async def list_messages(
     _: RequireRead,
     session: DbSession,
-    type: Optional[str] = Query(None, description="Filter by message type"),
+    message_type: Optional[str] = Query(None, description="Filter by message type"),
     pubkey_prefix: Optional[str] = Query(None, description="Filter by sender prefix"),
     channel_idx: Optional[int] = Query(None, description="Filter by channel"),
     since: Optional[datetime] = Query(None, description="Start timestamp"),
@@ -31,8 +31,8 @@ async def list_messages(
     # Build query
     query = select(Message)
 
-    if type:
-        query = query.where(Message.message_type == type)
+    if message_type:
+        query = query.where(Message.message_type == message_type)
 
     if pubkey_prefix:
         query = query.where(Message.pubkey_prefix == pubkey_prefix)
