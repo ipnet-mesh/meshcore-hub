@@ -1,10 +1,14 @@
 """MeshCore Hub CLI entry point."""
 
 import click
+from dotenv import load_dotenv
 
 from meshcore_hub import __version__
 from meshcore_hub.common.config import LogLevel
 from meshcore_hub.common.logging import configure_logging
+
+# Load .env file early so Click's envvar parameter picks up values
+load_dotenv()
 
 
 @click.group()
