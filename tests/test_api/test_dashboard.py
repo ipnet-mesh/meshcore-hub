@@ -30,11 +30,11 @@ class TestDashboardStats:
 
 
 class TestDashboardHtml:
-    """Tests for GET /dashboard/dashboard endpoint."""
+    """Tests for GET /dashboard endpoint."""
 
     def test_dashboard_html_response(self, client_no_auth):
         """Test dashboard returns HTML."""
-        response = client_no_auth.get("/api/v1/dashboard/dashboard")
+        response = client_no_auth.get("/api/v1/dashboard")
         assert response.status_code == 200
         assert "text/html" in response.headers["content-type"]
         assert "<!DOCTYPE html>" in response.text
@@ -44,7 +44,7 @@ class TestDashboardHtml:
         self, client_no_auth, sample_node, sample_message
     ):
         """Test dashboard HTML contains stat values."""
-        response = client_no_auth.get("/api/v1/dashboard/dashboard")
+        response = client_no_auth.get("/api/v1/dashboard")
         assert response.status_code == 200
         # Check that stats are present
         assert "Total Nodes" in response.text
@@ -53,7 +53,7 @@ class TestDashboardHtml:
 
     def test_dashboard_contains_recent_data(self, client_no_auth, sample_node):
         """Test dashboard HTML contains recent nodes."""
-        response = client_no_auth.get("/api/v1/dashboard/dashboard")
+        response = client_no_auth.get("/api/v1/dashboard")
         assert response.status_code == 200
         assert "Recent Nodes" in response.text
         # The node name should appear in the table

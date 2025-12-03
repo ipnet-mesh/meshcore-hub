@@ -17,8 +17,8 @@ class TestCommonSettings:
     """Tests for CommonSettings."""
 
     def test_default_values(self) -> None:
-        """Test default setting values."""
-        settings = CommonSettings()
+        """Test default setting values without .env file influence."""
+        settings = CommonSettings(_env_file=None)
 
         assert settings.log_level == LogLevel.INFO
         assert settings.mqtt_host == "localhost"
@@ -32,8 +32,8 @@ class TestInterfaceSettings:
     """Tests for InterfaceSettings."""
 
     def test_default_values(self) -> None:
-        """Test default setting values."""
-        settings = InterfaceSettings()
+        """Test default setting values without .env file influence."""
+        settings = InterfaceSettings(_env_file=None)
 
         assert settings.interface_mode == InterfaceMode.RECEIVER
         assert settings.serial_port == "/dev/ttyUSB0"
@@ -45,23 +45,23 @@ class TestCollectorSettings:
     """Tests for CollectorSettings."""
 
     def test_default_values(self) -> None:
-        """Test default setting values."""
-        settings = CollectorSettings()
+        """Test default setting values without .env file influence."""
+        settings = CollectorSettings(_env_file=None)
 
         assert settings.database_url == "sqlite:///./meshcore.db"
 
     def test_database_url_validation(self) -> None:
         """Test database URL validation."""
         with pytest.raises(ValueError):
-            CollectorSettings(database_url="")
+            CollectorSettings(_env_file=None, database_url="")
 
 
 class TestAPISettings:
     """Tests for APISettings."""
 
     def test_default_values(self) -> None:
-        """Test default setting values."""
-        settings = APISettings()
+        """Test default setting values without .env file influence."""
+        settings = APISettings(_env_file=None)
 
         assert settings.api_host == "0.0.0.0"
         assert settings.api_port == 8000
@@ -74,8 +74,8 @@ class TestWebSettings:
     """Tests for WebSettings."""
 
     def test_default_values(self) -> None:
-        """Test default setting values."""
-        settings = WebSettings()
+        """Test default setting values without .env file influence."""
+        settings = WebSettings(_env_file=None)
 
         assert settings.web_host == "0.0.0.0"
         assert settings.web_port == 8080

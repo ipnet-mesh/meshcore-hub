@@ -77,7 +77,7 @@ async def get_stats(
     )
 
 
-@router.get("/dashboard", response_class=HTMLResponse)
+@router.get("/", response_class=HTMLResponse)
 async def dashboard(
     request: Request,
     session: DbSession,
