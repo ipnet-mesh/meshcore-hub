@@ -616,62 +616,62 @@ This document tracks implementation progress for the MeshCore Hub project. Each 
 
 ## Phase 6: Docker & Deployment
 
-### 6.1 Dockerfile
+### 6.1 Dockerfile ✅
 
-- [ ] Create `docker/Dockerfile`:
-  - [ ] Multi-stage build:
-    - [ ] Stage 1: Build frontend assets (Tailwind)
-    - [ ] Stage 2: Python dependencies
-    - [ ] Stage 3: Final runtime image
-  - [ ] Base image: python:3.11-slim
-  - [ ] Install system dependencies
-  - [ ] Copy and install Python package
-  - [ ] Copy frontend assets
-  - [ ] Set entrypoint to `meshcore-hub`
-  - [ ] Default CMD (show help)
-  - [ ] Health check instruction
+- [x] Create `docker/Dockerfile`:
+  - [x] Multi-stage build:
+    - [x] Stage 1: Build frontend assets (Tailwind)
+    - [x] Stage 2: Python dependencies
+    - [x] Stage 3: Final runtime image
+  - [x] Base image: python:3.11-slim
+  - [x] Install system dependencies
+  - [x] Copy and install Python package
+  - [x] Copy frontend assets
+  - [x] Set entrypoint to `meshcore-hub`
+  - [x] Default CMD (show help)
+  - [x] Health check instruction
 
-### 6.2 Docker Compose
+### 6.2 Docker Compose ✅
 
-- [ ] Create `docker/docker-compose.yml`:
-  - [ ] MQTT broker service (Eclipse Mosquitto):
-    - [ ] Port mapping (1883, 9001)
-    - [ ] Volume for persistence
-    - [ ] Configuration file
-  - [ ] Interface Receiver service:
-    - [ ] Depends on MQTT
-    - [ ] Device passthrough (/dev/ttyUSB0)
-    - [ ] Environment variables
-  - [ ] Interface Sender service:
-    - [ ] Depends on MQTT
-    - [ ] Device passthrough
-    - [ ] Environment variables
-  - [ ] Collector service:
-    - [ ] Depends on MQTT
-    - [ ] Database volume
-    - [ ] Environment variables
-  - [ ] API service:
-    - [ ] Depends on Collector (for DB)
-    - [ ] Port mapping (8000)
-    - [ ] Database volume (shared)
-    - [ ] Environment variables
-  - [ ] Web service:
-    - [ ] Depends on API
-    - [ ] Port mapping (8080)
-    - [ ] Environment variables
-- [ ] Create `docker/mosquitto.conf`:
-  - [ ] Listener configuration
-  - [ ] Anonymous access (or auth)
-  - [ ] Persistence settings
+- [x] Create `docker/docker-compose.yml`:
+  - [x] MQTT broker service (Eclipse Mosquitto):
+    - [x] Port mapping (1883, 9001)
+    - [x] Volume for persistence
+    - [x] Configuration file
+  - [x] Interface Receiver service:
+    - [x] Depends on MQTT
+    - [x] Device passthrough (/dev/ttyUSB0)
+    - [x] Environment variables
+  - [x] Interface Sender service:
+    - [x] Depends on MQTT
+    - [x] Device passthrough
+    - [x] Environment variables
+  - [x] Collector service:
+    - [x] Depends on MQTT
+    - [x] Database volume
+    - [x] Environment variables
+  - [x] API service:
+    - [x] Depends on Collector (for DB)
+    - [x] Port mapping (8000)
+    - [x] Database volume (shared)
+    - [x] Environment variables
+  - [x] Web service:
+    - [x] Depends on API
+    - [x] Port mapping (8080)
+    - [x] Environment variables
+- [x] Create `docker/mosquitto.conf`:
+  - [x] Listener configuration
+  - [x] Anonymous access (or auth)
+  - [x] Persistence settings
 
-### 6.3 Health Checks
+### 6.3 Health Checks ✅
 
-- [ ] Add health check endpoint to API:
-  - [ ] `GET /health` - basic health
-  - [ ] `GET /health/ready` - includes DB check
-- [ ] Add health check endpoint to Web:
-  - [ ] `GET /health` - basic health
-  - [ ] `GET /health/ready` - includes API connectivity
+- [x] Add health check endpoint to API:
+  - [x] `GET /health` - basic health
+  - [x] `GET /health/ready` - includes DB check
+- [x] Add health check endpoint to Web:
+  - [x] `GET /health` - basic health
+  - [x] `GET /health/ready` - includes API connectivity
 - [ ] Add health check to Interface:
   - [ ] Device connection status
   - [ ] MQTT connection status
@@ -679,14 +679,14 @@ This document tracks implementation progress for the MeshCore Hub project. Each 
   - [ ] MQTT connection status
   - [ ] Database connection status
 
-### 6.4 Database CLI Commands
+### 6.4 Database CLI Commands ✅
 
-- [ ] Create `db` Click command group:
-  - [ ] `meshcore-hub db upgrade` - run migrations
-  - [ ] `meshcore-hub db downgrade` - rollback migration
-  - [ ] `meshcore-hub db revision -m "message"` - create migration
-  - [ ] `meshcore-hub db current` - show current revision
-  - [ ] `meshcore-hub db history` - show migration history
+- [x] Create `db` Click command group:
+  - [x] `meshcore-hub db upgrade` - run migrations
+  - [x] `meshcore-hub db downgrade` - rollback migration
+  - [x] `meshcore-hub db revision -m "message"` - create migration
+  - [x] `meshcore-hub db current` - show current revision
+  - [x] `meshcore-hub db history` - show migration history
 
 ### 6.5 Documentation
 
@@ -702,33 +702,33 @@ This document tracks implementation progress for the MeshCore Hub project. Each 
   - [ ] API documentation link
   - [ ] Deployment guides
 
-### 6.6 CI/CD (Optional)
+### 6.6 CI/CD ✅
 
-- [ ] Create `.github/workflows/ci.yml`:
-  - [ ] Run on push/PR
-  - [ ] Set up Python
-  - [ ] Install dependencies
-  - [ ] Run linting (black, flake8)
-  - [ ] Run type checking (mypy)
-  - [ ] Run tests (pytest)
-  - [ ] Upload coverage report
-- [ ] Create `.github/workflows/docker.yml`:
-  - [ ] Build Docker image
-  - [ ] Push to registry (on release)
+- [x] Create `.github/workflows/ci.yml`:
+  - [x] Run on push/PR
+  - [x] Set up Python
+  - [x] Install dependencies
+  - [x] Run linting (black, flake8)
+  - [x] Run type checking (mypy)
+  - [x] Run tests (pytest)
+  - [x] Upload coverage report
+- [x] Create `.github/workflows/docker.yml`:
+  - [x] Build Docker image
+  - [x] Push to registry (on release)
 
-### 6.7 End-to-End Testing
+### 6.7 End-to-End Testing ✅
 
-- [ ] Create `tests/e2e/` directory
-- [ ] Create `tests/e2e/docker-compose.test.yml`:
-  - [ ] All services with mock device
-  - [ ] Test database
-- [ ] Create `tests/e2e/test_full_flow.py`:
-  - [ ] Start all services
-  - [ ] Generate mock events
-  - [ ] Verify events stored in database
-  - [ ] Verify API returns events
-  - [ ] Verify web dashboard displays data
-  - [ ] Test command flow (API -> MQTT -> Sender)
+- [x] Create `tests/e2e/` directory
+- [x] Create `tests/e2e/docker-compose.test.yml`:
+  - [x] All services with mock device
+  - [x] Test database
+- [x] Create `tests/e2e/test_full_flow.py`:
+  - [x] Start all services
+  - [x] Generate mock events
+  - [x] Verify events stored in database
+  - [x] Verify API returns events
+  - [x] Verify web dashboard displays data
+  - [x] Test command flow (API -> MQTT -> Sender)
 
 ---
 
@@ -741,8 +741,8 @@ This document tracks implementation progress for the MeshCore Hub project. Each 
 | Phase 3: Collector | 27 | 20 | 74% |
 | Phase 4: API | 44 | 44 | 100% |
 | Phase 5: Web Dashboard | 40 | 40 | 100% |
-| Phase 6: Docker & Deployment | 28 | 0 | 0% |
-| **Total** | **221** | **186** | **84%** |
+| Phase 6: Docker & Deployment | 28 | 24 | 86% |
+| **Total** | **221** | **210** | **95%** |
 
 ---
 
@@ -786,3 +786,5 @@ This document tracks implementation progress for the MeshCore Hub project. Each 
 | 2025-12-03 | 3 | Phase 3: Collector | MQTT subscriber, event handlers, CLI, tests (webhook pending) |
 | 2025-12-03 | 4 | Phase 4: API | FastAPI app, auth, all routes, CLI, tests (108 passed, 9 pre-existing failures) |
 | 2025-12-03 | 5 | Phase 5: Web Dashboard | FastAPI + Jinja2, Tailwind/DaisyUI, Leaflet map, all pages, CLI (tests pending) |
+| 2025-12-03 | 6 | Code quality | Aligned mypy settings between `mypy src/` and pre-commit hooks; added meshcore to ignore_missing_imports, added alembic to pre-commit dependencies |
+| 2025-12-03 | 7 | Docker packaging | Fixed pyproject.toml package-data to include web/templates and api/templates in wheel builds |

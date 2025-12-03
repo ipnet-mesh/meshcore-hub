@@ -70,7 +70,9 @@ Issues = "https://github.com/meshcore-dev/meshcore-hub/issues"
 where = ["src"]
 
 [tool.setuptools.package-data]
-meshcore_hub = ["py.typed", "templates/**/*", "static/**/*"]
+meshcore_hub = ["py.typed"]
+"meshcore_hub.web" = ["templates/**/*", "static/**/*"]
+"meshcore_hub.api" = ["templates/**/*"]
 
 [tool.black]
 line-length = 88
