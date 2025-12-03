@@ -249,6 +249,7 @@ meshcore-hub/
 │   ├── collector/
 │   │   ├── cli.py
 │   │   ├── subscriber.py     # MQTT subscriber
+│   │   ├── tag_import.py     # Tag import from JSON
 │   │   ├── handlers/         # Event handlers
 │   │   └── webhook.py        # Webhook dispatcher
 │   ├── api/
@@ -278,8 +279,13 @@ meshcore-hub/
 │   └── mosquitto.conf        # MQTT broker configuration
 ├── example/
 │   └── data/
-│       └── members.json      # Example network members data
+│       ├── collector/
+│       │   └── tags.json     # Example node tags data
+│       └── web/
+│           └── members.json  # Example network members data
 ├── data/                     # Runtime data (gitignored)
+│   ├── collector/            # Collector data (tags.json)
+│   └── web/                  # Web data (members.json)
 ├── Dockerfile                # Docker build configuration
 ├── docker-compose.yml        # Docker Compose services (gitignored)
 └── docker-compose.yml.example  # Docker Compose template

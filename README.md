@@ -231,6 +231,9 @@ meshcore-hub interface --mode sender --mock  # Use mock device
 # Collector component
 meshcore-hub collector --database-url sqlite:///./data.db
 
+# Import node tags from JSON file
+meshcore-hub collector import-tags /path/to/tags.json
+
 # API component
 meshcore-hub api --host 0.0.0.0 --port 8000
 
@@ -241,6 +244,102 @@ meshcore-hub web --port 8080 --network-name "My Network"
 meshcore-hub db upgrade      # Run migrations
 meshcore-hub db downgrade    # Rollback one migration
 meshcore-hub db current      # Show current revision
+```
+
+## Node Tags
+
+Node tags allow you to attach custom metadata to nodes (e.g., location, role, owner). Tags are stored in the database and returned with node data via the API.
+
+### Importing Tags from JSON
+
+Tags can be bulk imported from a JSON file:
+
+```bash
+# Native CLI
+meshcore-hub collector import-tags /path/to/tags.json
+
+# With Docker Compose
+docker compose --profile import-tags run --rm import-tags
+```
+
+### Tags JSON Format
+
+```json
+{
+  "tags": [
+    {
+      "public_key": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "key": "location",
+      "value": "San Francisco, CA",
+      "value_type": "string"
+    },
+    {
+      "public_key": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "key": "altitude",
+      "value": "150",
+      "value_type": "number"
+    }
+  ]
+}
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `public_key` | Yes | 64-character hex public key of the node |
+| `key` | Yes | Tag name (max 100 characters) |
+| `value` | No | Tag value (stored as text) |
+| `value_type` | No | Type hint: `string`, `number`, `boolean`, or `coordinate` (default: `string`) |
+
+### Import Options
+
+```bash
+# Create nodes if they don't exist (default behavior)
+meshcore-hub collector import-tags tags.json
+
+# Skip tags for nodes that don't exist
+meshcore-hub collector import-tags --no-create-nodes tags.json
+```
+
+### Data Directory Structure
+
+For Docker deployments, organize your data files:
+
+```
+data/
+├── collector/
+│   └── tags.json      # Node tags for import
+└── web/
+    └── members.json   # Network members list
+```
+
+Example files are provided in `example/data/`.
+
+### Managing Tags via API
+
+Tags can also be managed via the REST API:
+
+```bash
+# List tags for a node
+curl http://localhost:8000/api/v1/nodes/{public_key}/tags
+
+# Create a tag (requires admin key)
+curl -X POST \
+  -H "Authorization: Bearer <API_ADMIN_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{"key": "location", "value": "Building A"}' \
+  http://localhost:8000/api/v1/nodes/{public_key}/tags
+
+# Update a tag
+curl -X PUT \
+  -H "Authorization: Bearer <API_ADMIN_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{"value": "Building B"}' \
+  http://localhost:8000/api/v1/nodes/{public_key}/tags/location
+
+# Delete a tag
+curl -X DELETE \
+  -H "Authorization: Bearer <API_ADMIN_KEY>" \
+  http://localhost:8000/api/v1/nodes/{public_key}/tags/location
 ```
 
 ## API Documentation
