@@ -210,4 +210,3 @@ __marimo__/
 # MeshCore Hub specific
 *.db
 meshcore.db
-members.json

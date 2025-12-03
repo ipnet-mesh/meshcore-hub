@@ -1,0 +1,10 @@
+{
+  "members": [
+    {
+      "name": "Example Member",
+      "callsign": "N0CALL",
+      "role": "Network Operator",
+      "description": "Example member entry"
+    }
+  ]
+}
