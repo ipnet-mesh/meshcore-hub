@@ -13,6 +13,7 @@ import logging
 import signal
 import threading
 import time
+import uuid
 from typing import Any, Callable, Optional, TYPE_CHECKING
 
 from meshcore_hub.common.database import DatabaseManager
@@ -307,14 +308,15 @@ def create_subscriber(
     Returns:
         Configured Subscriber instance
     """
-    # Create MQTT client
+    # Create MQTT client with unique client ID to allow multiple collectors
+    unique_id = uuid.uuid4().hex[:8]
     mqtt_config = MQTTConfig(
         host=mqtt_host,
         port=mqtt_port,
         username=mqtt_username,
         password=mqtt_password,
         prefix=mqtt_prefix,
-        client_id="meshcore-collector",
+        client_id=f"meshcore-collector-{unique_id}",
     )
     mqtt_client = MQTTClient(mqtt_config)
 

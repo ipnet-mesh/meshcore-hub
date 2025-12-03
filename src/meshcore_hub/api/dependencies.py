@@ -1,6 +1,7 @@
 """FastAPI dependencies for the API."""
 
 import logging
+import uuid
 from typing import Annotated, Generator
 
 from fastapi import Depends, Request
@@ -57,11 +58,13 @@ def get_mqtt_client(request: Request) -> MQTTClient:
     mqtt_port = getattr(request.app.state, "mqtt_port", 1883)
     mqtt_prefix = getattr(request.app.state, "mqtt_prefix", "meshcore")
 
+    # Use unique client ID to allow multiple API instances
+    unique_id = uuid.uuid4().hex[:8]
     config = MQTTConfig(
         host=mqtt_host,
         port=mqtt_port,
         prefix=mqtt_prefix,
-        client_id="meshcore-api",
+        client_id=f"meshcore-api-{unique_id}",
     )
 
     client = MQTTClient(config)
