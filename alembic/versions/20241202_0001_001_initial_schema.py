@@ -76,6 +76,33 @@ def upgrade() -> None:
     op.create_index("ix_node_tags_node_id", "node_tags", ["node_id"])
     op.create_index("ix_node_tags_key", "node_tags", ["key"])
 
+    # Create members table
+    op.create_table(
+        "members",
+        sa.Column("id", sa.String(), nullable=False),
+        sa.Column("name", sa.String(255), nullable=False),
+        sa.Column("callsign", sa.String(20), nullable=True),
+        sa.Column("role", sa.String(100), nullable=True),
+        sa.Column("description", sa.Text(), nullable=True),
+        sa.Column("contact", sa.String(255), nullable=True),
+        sa.Column("public_key", sa.String(64), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index("ix_members_name", "members", ["name"])
+    op.create_index("ix_members_public_key", "members", ["public_key"])
+
     # Create messages table
     op.create_table(
         "messages",
@@ -257,5 +284,6 @@ def downgrade() -> None:
     op.drop_table("trace_paths")
     op.drop_table("advertisements")
     op.drop_table("messages")
+    op.drop_table("members")
     op.drop_table("node_tags")
     op.drop_table("nodes")

@@ -1,8 +1,5 @@
 """Web dashboard test fixtures."""
 
-import json
-import tempfile
-from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -139,6 +136,17 @@ class MockHttpClient:
             },
         }
 
+        # Default members response (empty)
+        self._responses["GET:/api/v1/members"] = {
+            "status_code": 200,
+            "json": {
+                "items": [],
+                "total": 0,
+                "limit": 100,
+                "offset": 0,
+            },
+        }
+
         # Health check response
         self._responses["GET:/health"] = {
             "status_code": 200,
@@ -220,7 +228,6 @@ def web_app(mock_http_client: MockHttpClient) -> Any:
         network_radio_config="Test Radio Config",
         network_contact_email="test@example.com",
         network_contact_discord="https://discord.gg/test",
-        members_file=None,
     )
 
     # Override the lifespan to use our mock client
@@ -242,37 +249,49 @@ def client(web_app: Any, mock_http_client: MockHttpClient) -> TestClient:
 
 
 @pytest.fixture
-def members_file() -> Any:
-    """Create a temporary members JSON file."""
-    members_data = {
-        "members": [
-            {
-                "name": "Alice",
-                "callsign": "W1ABC",
-                "role": "Admin",
-                "contact": "alice@example.com",
-            },
-            {
-                "name": "Bob",
-                "callsign": "W2XYZ",
-                "role": "Member",
-                "contact": None,
-            },
-        ]
-    }
-
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        json.dump(members_data, f)
-        f.flush()
-        yield f.name
-
-    # Cleanup
-    Path(f.name).unlink(missing_ok=True)
+def mock_http_client_with_members() -> MockHttpClient:
+    """Create a mock HTTP client with members data."""
+    client = MockHttpClient()
+    client.set_response(
+        "GET",
+        "/api/v1/members",
+        200,
+        {
+            "items": [
+                {
+                    "id": "member-1",
+                    "name": "Alice",
+                    "callsign": "W1ABC",
+                    "role": "Admin",
+                    "description": None,
+                    "contact": "alice@example.com",
+                    "public_key": None,
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "updated_at": "2024-01-01T00:00:00Z",
+                },
+                {
+                    "id": "member-2",
+                    "name": "Bob",
+                    "callsign": "W2XYZ",
+                    "role": "Member",
+                    "description": None,
+                    "contact": None,
+                    "public_key": None,
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "updated_at": "2024-01-01T00:00:00Z",
+                },
+            ],
+            "total": 2,
+            "limit": 100,
+            "offset": 0,
+        },
+    )
+    return client
 
 
 @pytest.fixture
-def web_app_with_members(mock_http_client: MockHttpClient, members_file: str) -> Any:
-    """Create a web app with a members file configured."""
+def web_app_with_members(mock_http_client_with_members: MockHttpClient) -> Any:
+    """Create a web app with members API responses configured."""
     app = create_app(
         api_url="http://localhost:8000",
         api_key="test-api-key",
@@ -283,18 +302,17 @@ def web_app_with_members(mock_http_client: MockHttpClient, members_file: str) ->
         network_radio_config="Test Radio Config",
         network_contact_email="test@example.com",
         network_contact_discord="https://discord.gg/test",
-        members_file=members_file,
     )
 
-    app.state.http_client = mock_http_client
+    app.state.http_client = mock_http_client_with_members
 
     return app
 
 
 @pytest.fixture
 def client_with_members(
-    web_app_with_members: Any, mock_http_client: MockHttpClient
+    web_app_with_members: Any, mock_http_client_with_members: MockHttpClient
 ) -> TestClient:
-    """Create a test client with members file configured."""
-    web_app_with_members.state.http_client = mock_http_client
+    """Create a test client with members API responses configured."""
+    web_app_with_members.state.http_client = mock_http_client_with_members
     return TestClient(web_app_with_members, raise_server_exceptions=True)

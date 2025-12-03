@@ -96,13 +96,6 @@ import click
     help="Discord server info",
 )
 @click.option(
-    "--members-file",
-    type=str,
-    default=None,
-    envvar="MEMBERS_FILE",
-    help="Path to members JSON file (default: {data_home}/web/members.json)",
-)
-@click.option(
     "--reload",
     is_flag=True,
     default=False,
@@ -124,13 +117,14 @@ def web(
     network_radio_config: str | None,
     network_contact_email: str | None,
     network_contact_discord: str | None,
-    members_file: str | None,
     reload: bool,
 ) -> None:
     """Run the web dashboard.
 
     Provides a web interface for visualizing network status, browsing nodes,
     viewing messages, and displaying a node map.
+
+    Members are fetched from the API (managed by the collector).
 
     Examples:
 
@@ -142,9 +136,6 @@ def web(
 
         # Run with API authentication
         meshcore-hub web --api-url http://api.example.com --api-key secret
-
-        # Run with members file
-        meshcore-hub web --members-file /path/to/members.json
 
         # Development mode with auto-reload
         meshcore-hub web --reload
@@ -162,10 +153,6 @@ def web(
     if data_home:
         settings = settings.model_copy(update={"data_home": data_home})
 
-    # Use effective members file if not explicitly provided
-    effective_members_file = (
-        members_file if members_file else settings.effective_members_file
-    )
     effective_data_home = data_home or settings.data_home
 
     # Ensure web data directory exists
@@ -185,7 +172,6 @@ def web(
         click.echo(f"Location: {network_city}, {network_country}")
     if network_lat != 0.0 or network_lon != 0.0:
         click.echo(f"Map center: {network_lat}, {network_lon}")
-    click.echo(f"Members file: {effective_members_file}")
     click.echo(f"Reload mode: {reload}")
     click.echo("=" * 50)
 
@@ -215,7 +201,6 @@ def web(
             network_radio_config=network_radio_config,
             network_contact_email=network_contact_email,
             network_contact_discord=network_contact_discord,
-            members_file=effective_members_file,
         )
 
         click.echo("\nStarting web dashboard...")

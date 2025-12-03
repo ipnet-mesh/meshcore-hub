@@ -56,7 +56,6 @@ def create_app(
     network_radio_config: str | None = None,
     network_contact_email: str | None = None,
     network_contact_discord: str | None = None,
-    members_file: str | None = None,
 ) -> FastAPI:
     """Create and configure the web dashboard application.
 
@@ -70,7 +69,6 @@ def create_app(
         network_radio_config: Radio configuration description
         network_contact_email: Contact email address
         network_contact_discord: Discord invite/server info
-        members_file: Path to members JSON file
 
     Returns:
         Configured FastAPI application
@@ -94,7 +92,6 @@ def create_app(
     app.state.network_radio_config = network_radio_config
     app.state.network_contact_email = network_contact_email
     app.state.network_contact_discord = network_contact_discord
-    app.state.members_file = members_file
 
     # Set up templates
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))

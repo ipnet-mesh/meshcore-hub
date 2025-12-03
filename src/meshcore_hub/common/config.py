@@ -80,10 +80,10 @@ class CollectorSettings(CommonSettings):
         description="SQLAlchemy database URL (default: sqlite:///{data_home}/collector/meshcore.db)",
     )
 
-    # Tags file for import - default uses data_home/collector/tags.json
-    tags_file: Optional[str] = Field(
-        default=None,
-        description="Path to tags JSON file (default: {data_home}/collector/tags.json)",
+    # Seed home directory - contains initial data files (node_tags.json, members.json)
+    seed_home: str = Field(
+        default="./seed",
+        description="Directory containing seed data files (default: ./seed)",
     )
 
     # Webhook URLs (empty = disabled)
@@ -139,13 +139,25 @@ class CollectorSettings(CommonSettings):
         return f"sqlite:///{db_path}"
 
     @property
-    def effective_tags_file(self) -> str:
-        """Get the effective tags file path, using default if not set."""
-        if self.tags_file:
-            return self.tags_file
+    def effective_seed_home(self) -> str:
+        """Get the effective seed home directory."""
         from pathlib import Path
 
-        return str(Path(self.data_home) / "collector" / "tags.json")
+        return str(Path(self.seed_home))
+
+    @property
+    def node_tags_file(self) -> str:
+        """Get the path to node_tags.json in seed_home."""
+        from pathlib import Path
+
+        return str(Path(self.effective_seed_home) / "node_tags.json")
+
+    @property
+    def members_file(self) -> str:
+        """Get the path to members.json in seed_home."""
+        from pathlib import Path
+
+        return str(Path(self.effective_seed_home) / "members.json")
 
     @field_validator("database_url")
     @classmethod
@@ -232,27 +244,12 @@ class WebSettings(CommonSettings):
         default=None, description="Discord server link"
     )
 
-    # Members file - default uses data_home/web/members.json
-    members_file: Optional[str] = Field(
-        default=None,
-        description="Path to members JSON file (default: {data_home}/web/members.json)",
-    )
-
     @property
     def web_data_dir(self) -> str:
         """Get the web data directory path."""
         from pathlib import Path
 
         return str(Path(self.data_home) / "web")
-
-    @property
-    def effective_members_file(self) -> str:
-        """Get the effective members file path, using default if not set."""
-        if self.members_file:
-            return self.members_file
-        from pathlib import Path
-
-        return str(Path(self.data_home) / "web" / "members.json")
 
 
 def get_common_settings() -> CommonSettings:

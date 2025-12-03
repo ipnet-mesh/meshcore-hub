@@ -104,6 +104,14 @@ class TestAPIEndpoints:
         data = response.json()
         assert "items" in data
 
+    def test_list_members(self, api_client: httpx.Client) -> None:
+        """Test listing members."""
+        response = api_client.get("/api/v1/members")
+        assert response.status_code == 200
+        data = response.json()
+        assert "items" in data
+        assert "total" in data
+
 
 class TestWebDashboard:
     """Test web dashboard pages."""

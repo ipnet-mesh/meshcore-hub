@@ -8,6 +8,7 @@ from meshcore_hub.common.models.advertisement import Advertisement
 from meshcore_hub.common.models.trace_path import TracePath
 from meshcore_hub.common.models.telemetry import Telemetry
 from meshcore_hub.common.models.event_log import EventLog
+from meshcore_hub.common.models.member import Member
 
 __all__ = [
     "Base",
@@ -19,4 +20,5 @@ __all__ = [
     "TracePath",
     "Telemetry",
     "EventLog",
+    "Member",
 ]

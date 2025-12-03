@@ -29,6 +29,12 @@ from meshcore_hub.common.schemas.commands import (
     SendChannelMessageCommand,
     SendAdvertCommand,
 )
+from meshcore_hub.common.schemas.members import (
+    MemberCreate,
+    MemberUpdate,
+    MemberRead,
+    MemberList,
+)
 
 __all__ = [
     # Events
@@ -56,4 +62,9 @@ __all__ = [
     "SendMessageCommand",
     "SendChannelMessageCommand",
     "SendAdvertCommand",
+    # Members
+    "MemberCreate",
+    "MemberUpdate",
+    "MemberRead",
+    "MemberList",
 ]
