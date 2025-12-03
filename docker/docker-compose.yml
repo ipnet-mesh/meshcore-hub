@@ -1,0 +1,290 @@
+# MeshCore Hub - Docker Compose Configuration
+#
+# Usage with profiles:
+#   docker compose --profile mqtt --profile collector --profile api up
+#   docker compose --profile all up
+#   docker compose --profile mock up  # For testing with mock devices
+#
+# Available profiles:
+#   - mqtt: MQTT broker (Eclipse Mosquitto)
+#   - interface-receiver: Interface in RECEIVER mode
+#   - interface-sender: Interface in SENDER mode
+#   - collector: Event collector and database storage
+#   - api: REST API server
+#   - web: Web dashboard
+#   - mock: All components with mock device (for testing)
+#   - all: All production components (requires real device)
+
+services:
+  # ==========================================================================
+  # MQTT Broker - Eclipse Mosquitto
+  # ==========================================================================
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: meshcore-mqtt
+    profiles:
+      - mqtt
+      - all
+      - mock
+    restart: unless-stopped
+    ports:
+      - "${MQTT_EXTERNAL_PORT:-1883}:1883"
+      - "${MQTT_WS_PORT:-9001}:9001"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-i", "healthcheck", "-W", "3"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ==========================================================================
+  # Interface Receiver - MeshCore device to MQTT bridge (events)
+  # ==========================================================================
+  interface-receiver:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: meshcore-interface-receiver
+    profiles:
+      - interface-receiver
+      - all
+    restart: unless-stopped
+    depends_on:
+      mqtt:
+        condition: service_healthy
+    devices:
+      - "${SERIAL_PORT:-/dev/ttyUSB0}:${SERIAL_PORT:-/dev/ttyUSB0}"
+    user: root  # Required for device access
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MQTT_HOST=mqtt
+      - MQTT_PORT=1883
+      - MQTT_USERNAME=${MQTT_USERNAME:-}
+      - MQTT_PASSWORD=${MQTT_PASSWORD:-}
+      - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
+      - SERIAL_PORT=${SERIAL_PORT:-/dev/ttyUSB0}
+      - SERIAL_BAUD=${SERIAL_BAUD:-115200}
+      - NODE_ADDRESS=${NODE_ADDRESS:-}
+    command: ["interface", "receiver"]
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "meshcore-hub"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ==========================================================================
+  # Interface Sender - MQTT to MeshCore device bridge (commands)
+  # ==========================================================================
+  interface-sender:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: meshcore-interface-sender
+    profiles:
+      - interface-sender
+      - all
+    restart: unless-stopped
+    depends_on:
+      mqtt:
+        condition: service_healthy
+    devices:
+      - "${SERIAL_PORT_SENDER:-/dev/ttyUSB1}:${SERIAL_PORT_SENDER:-/dev/ttyUSB1}"
+    user: root  # Required for device access
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MQTT_HOST=mqtt
+      - MQTT_PORT=1883
+      - MQTT_USERNAME=${MQTT_USERNAME:-}
+      - MQTT_PASSWORD=${MQTT_PASSWORD:-}
+      - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
+      - SERIAL_PORT=${SERIAL_PORT_SENDER:-/dev/ttyUSB1}
+      - SERIAL_BAUD=${SERIAL_BAUD:-115200}
+      - NODE_ADDRESS=${NODE_ADDRESS_SENDER:-}
+    command: ["interface", "sender"]
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "meshcore-hub"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ==========================================================================
+  # Interface Mock Receiver - For testing without real devices
+  # ==========================================================================
+  interface-mock-receiver:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: meshcore-interface-mock-receiver
+    profiles:
+      - mock
+    restart: unless-stopped
+    depends_on:
+      mqtt:
+        condition: service_healthy
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MQTT_HOST=mqtt
+      - MQTT_PORT=1883
+      - MQTT_USERNAME=${MQTT_USERNAME:-}
+      - MQTT_PASSWORD=${MQTT_PASSWORD:-}
+      - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
+      - MOCK_DEVICE=true
+      - NODE_ADDRESS=${NODE_ADDRESS:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+    command: ["interface", "receiver", "--mock"]
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "meshcore-hub"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ==========================================================================
+  # Collector - MQTT subscriber and database storage
+  # ==========================================================================
+  collector:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: meshcore-collector
+    profiles:
+      - collector
+      - all
+      - mock
+    restart: unless-stopped
+    depends_on:
+      mqtt:
+        condition: service_healthy
+    volumes:
+      - meshcore_data:/data
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MQTT_HOST=mqtt
+      - MQTT_PORT=1883
+      - MQTT_USERNAME=${MQTT_USERNAME:-}
+      - MQTT_PASSWORD=${MQTT_PASSWORD:-}
+      - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
+      - DATABASE_URL=sqlite:////data/meshcore.db
+    command: ["collector"]
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "meshcore-hub"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ==========================================================================
+  # API Server - REST API for querying data and sending commands
+  # ==========================================================================
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: meshcore-api
+    profiles:
+      - api
+      - all
+      - mock
+    restart: unless-stopped
+    depends_on:
+      mqtt:
+        condition: service_healthy
+      collector:
+        condition: service_started
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - meshcore_data:/data
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MQTT_HOST=mqtt
+      - MQTT_PORT=1883
+      - MQTT_USERNAME=${MQTT_USERNAME:-}
+      - MQTT_PASSWORD=${MQTT_PASSWORD:-}
+      - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
+      - DATABASE_URL=sqlite:////data/meshcore.db
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - API_READ_KEY=${API_READ_KEY:-}
+      - API_ADMIN_KEY=${API_ADMIN_KEY:-}
+    command: ["api"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ==========================================================================
+  # Web Dashboard - Web interface for network visualization
+  # ==========================================================================
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: meshcore-web
+    profiles:
+      - web
+      - all
+      - mock
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - API_BASE_URL=http://api:8000
+      - API_KEY=${API_READ_KEY:-}
+      - WEB_HOST=0.0.0.0
+      - WEB_PORT=8080
+      - NETWORK_NAME=${NETWORK_NAME:-MeshCore Network}
+      - NETWORK_CITY=${NETWORK_CITY:-}
+      - NETWORK_COUNTRY=${NETWORK_COUNTRY:-}
+      - NETWORK_LOCATION=${NETWORK_LOCATION:-}
+      - NETWORK_RADIO_CONFIG=${NETWORK_RADIO_CONFIG:-}
+      - NETWORK_CONTACT_EMAIL=${NETWORK_CONTACT_EMAIL:-}
+      - NETWORK_CONTACT_DISCORD=${NETWORK_CONTACT_DISCORD:-}
+      - MEMBERS_FILE=${MEMBERS_FILE:-}
+    volumes:
+      - ${MEMBERS_FILE_PATH:-./members.json}:/app/members.json:ro
+    command: ["web"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ==========================================================================
+  # Database Migrations - Run Alembic migrations
+  # ==========================================================================
+  db-migrate:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: meshcore-db-migrate
+    profiles:
+      - migrate
+    volumes:
+      - meshcore_data:/data
+    environment:
+      - DATABASE_URL=sqlite:////data/meshcore.db
+    command: ["db", "upgrade"]
+
+# ==========================================================================
+# Volumes
+# ==========================================================================
+volumes:
+  mosquitto_data:
+    name: meshcore_mosquitto_data
+  mosquitto_log:
+    name: meshcore_mosquitto_log
+  meshcore_data:
+    name: meshcore_data

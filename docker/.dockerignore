@@ -1,0 +1,58 @@
+# MeshCore Hub Docker Ignore File
+
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+venv
+.env
+*.egg-info
+dist
+build
+.eggs
+*.egg
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Testing
+.pytest_cache
+.coverage
+htmlcov
+.tox
+.nox
+
+# Documentation
+docs/_build
+*.md
+!README.md
+
+# Docker (avoid recursive)
+docker/
+
+# Development files
+.pre-commit-config.yaml
+.flake8
+mypy.ini
+
+# Data files
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
