@@ -14,6 +14,20 @@
 #   - web: Web dashboard
 #   - mock: All components with mock device (for testing)
 #   - all: All production components (requires real device)
+#   - migrate: Run database migrations
+#   - import-tags: Import node tags from JSON file
+#
+# Data Directory Structure:
+#   ./data/
+#   ├── collector/
+#   │   └── tags.json      # Node tags for import
+#   └── web/
+#       └── members.json   # Network members list
+#
+# Example data files are provided in ./example/data/
+#
+# To import tags:
+#   docker compose --profile import-tags run --rm import-tags
 
 services:
   # ==========================================================================
@@ -162,6 +176,8 @@ services:
         condition: service_healthy
     volumes:
       - meshcore_data:/data
+      # Mount collector data directory for tags.json (optional)
+      - ${COLLECTOR_DATA_PATH:-./data/collector}:/app/collector-data:ro
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - MQTT_HOST=${MQTT_HOST:-mqtt}
@@ -263,9 +279,10 @@ services:
       - NETWORK_RADIO_CONFIG=${NETWORK_RADIO_CONFIG:-}
       - NETWORK_CONTACT_EMAIL=${NETWORK_CONTACT_EMAIL:-}
       - NETWORK_CONTACT_DISCORD=${NETWORK_CONTACT_DISCORD:-}
-      - MEMBERS_FILE=${MEMBERS_FILE:-}
+      - MEMBERS_FILE=${MEMBERS_FILE:-/app/web-data/members.json}
     volumes:
-      - ${MEMBERS_FILE_PATH:-./example/data/members.json}:/app/members.json:ro
+      # Mount web data directory for members.json (optional)
+      - ${WEB_DATA_PATH:-./data/web}:/app/web-data:ro
     command: ["web"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
@@ -289,6 +306,24 @@ services:
     environment:
       - DATABASE_URL=sqlite:////data/meshcore.db
     command: ["db", "upgrade"]
+
+  # ==========================================================================
+  # Import Tags - Import node tags from JSON file
+  # ==========================================================================
+  import-tags:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: meshcore-import-tags
+    profiles:
+      - import-tags
+    volumes:
+      - meshcore_data:/data
+      - ${COLLECTOR_DATA_PATH:-./data/collector}:/app/collector-data:ro
+    environment:
+      - DATABASE_URL=sqlite:////data/meshcore.db
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    command: ["collector", "import-tags", "/app/collector-data/tags.json"]
 
 # ==========================================================================
 # Volumes

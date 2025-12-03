@@ -1,0 +1,28 @@
+{
+  "tags": [
+    {
+      "public_key": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "key": "location",
+      "value": "San Francisco, CA",
+      "value_type": "string"
+    },
+    {
+      "public_key": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "key": "role",
+      "value": "gateway",
+      "value_type": "string"
+    },
+    {
+      "public_key": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+      "key": "location",
+      "value": "Oakland, CA",
+      "value_type": "string"
+    },
+    {
+      "public_key": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+      "key": "altitude",
+      "value": "150",
+      "value_type": "number"
+    }
+  ]
+}

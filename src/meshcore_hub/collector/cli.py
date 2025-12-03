@@ -5,7 +5,8 @@ import click
 from meshcore_hub.common.logging import configure_logging
 
 
-@click.command("collector")
+@click.group(invoke_without_command=True)
+@click.pass_context
 @click.option(
     "--mqtt-host",
     type=str,
@@ -56,6 +57,7 @@ from meshcore_hub.common.logging import configure_logging
     help="Log level",
 )
 def collector(
+    ctx: click.Context,
     mqtt_host: str,
     mqtt_port: int,
     mqtt_username: str | None,
@@ -64,7 +66,7 @@ def collector(
     database_url: str,
     log_level: str,
 ) -> None:
-    """Run the collector component.
+    """Collector component for storing MeshCore events.
 
     The collector subscribes to MQTT broker and stores
     MeshCore events in the database for later retrieval.
@@ -75,6 +77,41 @@ def collector(
     - Trace path data
     - Telemetry responses
     - Informational events (battery, status, etc.)
+
+    When invoked without a subcommand, runs the collector service.
+    """
+    ctx.ensure_object(dict)
+    ctx.obj["mqtt_host"] = mqtt_host
+    ctx.obj["mqtt_port"] = mqtt_port
+    ctx.obj["mqtt_username"] = mqtt_username
+    ctx.obj["mqtt_password"] = mqtt_password
+    ctx.obj["prefix"] = prefix
+    ctx.obj["database_url"] = database_url
+    ctx.obj["log_level"] = log_level
+
+    # If no subcommand, run the collector service
+    if ctx.invoked_subcommand is None:
+        _run_collector_service(
+            mqtt_host=mqtt_host,
+            mqtt_port=mqtt_port,
+            mqtt_username=mqtt_username,
+            mqtt_password=mqtt_password,
+            prefix=prefix,
+            database_url=database_url,
+            log_level=log_level,
+        )
+
+
+def _run_collector_service(
+    mqtt_host: str,
+    mqtt_port: int,
+    mqtt_username: str | None,
+    mqtt_password: str | None,
+    prefix: str,
+    database_url: str,
+    log_level: str,
+) -> None:
+    """Run the collector service.
 
     Webhooks can be configured via environment variables:
     - WEBHOOK_ADVERTISEMENT_URL: Webhook for advertisement events
@@ -117,3 +154,94 @@ def collector(
         database_url=database_url,
         webhook_dispatcher=webhook_dispatcher,
     )
+
+
+@collector.command("run")
+@click.pass_context
+def run_cmd(ctx: click.Context) -> None:
+    """Run the collector service.
+
+    This is the default behavior when no subcommand is specified.
+    """
+    _run_collector_service(
+        mqtt_host=ctx.obj["mqtt_host"],
+        mqtt_port=ctx.obj["mqtt_port"],
+        mqtt_username=ctx.obj["mqtt_username"],
+        mqtt_password=ctx.obj["mqtt_password"],
+        prefix=ctx.obj["prefix"],
+        database_url=ctx.obj["database_url"],
+        log_level=ctx.obj["log_level"],
+    )
+
+
+@collector.command("import-tags")
+@click.argument("file", type=click.Path(exists=True))
+@click.option(
+    "--no-create-nodes",
+    is_flag=True,
+    default=False,
+    help="Skip tags for nodes that don't exist (default: create nodes)",
+)
+@click.pass_context
+def import_tags_cmd(
+    ctx: click.Context,
+    file: str,
+    no_create_nodes: bool,
+) -> None:
+    """Import node tags from a JSON file.
+
+    Reads a JSON file containing tag definitions and upserts them
+    into the database. Existing tags are updated, new tags are created.
+
+    FILE is the path to the JSON file containing tags.
+
+    Expected JSON format:
+    \b
+    {
+      "tags": [
+        {
+          "public_key": "64-char-hex-string",
+          "key": "tag-name",
+          "value": "tag-value",
+          "value_type": "string"
+        }
+      ]
+    }
+
+    Supported value_type: string, number, boolean, coordinate
+    """
+    configure_logging(level=ctx.obj["log_level"])
+
+    click.echo(f"Importing tags from: {file}")
+    click.echo(f"Database: {ctx.obj['database_url']}")
+
+    from meshcore_hub.common.database import DatabaseManager
+    from meshcore_hub.collector.tag_import import import_tags
+
+    # Initialize database
+    db = DatabaseManager(ctx.obj["database_url"])
+    db.create_tables()
+
+    # Import tags
+    stats = import_tags(
+        file_path=file,
+        db=db,
+        create_nodes=not no_create_nodes,
+    )
+
+    # Report results
+    click.echo("")
+    click.echo("Import complete:")
+    click.echo(f"  Total tags in file: {stats['total']}")
+    click.echo(f"  Tags created: {stats['created']}")
+    click.echo(f"  Tags updated: {stats['updated']}")
+    click.echo(f"  Tags skipped: {stats['skipped']}")
+    click.echo(f"  Nodes created: {stats['nodes_created']}")
+
+    if stats["errors"]:
+        click.echo("")
+        click.echo("Errors:")
+        for error in stats["errors"]:
+            click.echo(f"  - {error}", err=True)
+
+    db.dispose()
