@@ -267,13 +267,13 @@ This document tracks implementation progress for the MeshCore Hub project. Each 
 
 ### 3.3 Webhook Dispatcher (Optional based on Q10)
 
-- [ ] Create `collector/webhook.py`:
-  - [ ] `WebhookDispatcher` class
-  - [ ] Webhook configuration loading
-  - [ ] JSONPath filtering support
-  - [ ] Async HTTP POST sending
-  - [ ] Retry logic with backoff
-  - [ ] Error logging
+- [x] Create `collector/webhook.py`:
+  - [x] `WebhookDispatcher` class
+  - [x] Webhook configuration loading
+  - [x] JSONPath filtering support
+  - [x] Async HTTP POST sending
+  - [x] Retry logic with backoff
+  - [x] Error logging
 
 ### 3.4 Collector CLI
 
@@ -299,10 +299,10 @@ This document tracks implementation progress for the MeshCore Hub project. Each 
   - [x] `test_trace.py`
   - [x] `test_telemetry.py`
   - [x] `test_contacts.py`
-- [ ] Create `tests/test_collector/test_webhook.py`:
-  - [ ] Test webhook dispatching
-  - [ ] Test JSONPath filtering
-  - [ ] Test retry logic
+- [x] Create `tests/test_collector/test_webhook.py`:
+  - [x] Test webhook dispatching
+  - [x] Test JSONPath filtering
+  - [x] Test retry logic
 
 ---
 
@@ -672,12 +672,12 @@ This document tracks implementation progress for the MeshCore Hub project. Each 
 - [x] Add health check endpoint to Web:
   - [x] `GET /health` - basic health
   - [x] `GET /health/ready` - includes API connectivity
-- [ ] Add health check to Interface:
-  - [ ] Device connection status
-  - [ ] MQTT connection status
-- [ ] Add health check to Collector:
-  - [ ] MQTT connection status
-  - [ ] Database connection status
+- [x] Add health check to Interface:
+  - [x] Device connection status
+  - [x] MQTT connection status
+- [x] Add health check to Collector:
+  - [x] MQTT connection status
+  - [x] Database connection status
 
 ### 6.4 Database CLI Commands ✅
 
@@ -690,13 +690,13 @@ This document tracks implementation progress for the MeshCore Hub project. Each 
 
 ### 6.5 Documentation
 
-- [ ] Update `README.md`:
-  - [ ] Project description
-  - [ ] Quick start guide
-  - [ ] Docker deployment instructions
-  - [ ] Manual installation instructions
-  - [ ] Configuration reference
-  - [ ] CLI reference
+- [x] Update `README.md`:
+  - [x] Project description
+  - [x] Quick start guide
+  - [x] Docker deployment instructions
+  - [x] Manual installation instructions
+  - [x] Configuration reference
+  - [x] CLI reference
 - [ ] Create `docs/` directory (optional):
   - [ ] Architecture overview
   - [ ] API documentation link
@@ -738,11 +738,13 @@ This document tracks implementation progress for the MeshCore Hub project. Each 
 |-------|-------------|-----------|----------|
 | Phase 1: Foundation | 47 | 47 | 100% |
 | Phase 2: Interface | 35 | 35 | 100% |
-| Phase 3: Collector | 27 | 20 | 74% |
+| Phase 3: Collector | 27 | 27 | 100% |
 | Phase 4: API | 44 | 44 | 100% |
 | Phase 5: Web Dashboard | 40 | 40 | 100% |
-| Phase 6: Docker & Deployment | 28 | 24 | 86% |
-| **Total** | **221** | **210** | **95%** |
+| Phase 6: Docker & Deployment | 28 | 25 | 89% |
+| **Total** | **221** | **218** | **99%** |
+
+*Note: Remaining 3 tasks are optional (creating a `docs/` directory).*
 
 ---
 

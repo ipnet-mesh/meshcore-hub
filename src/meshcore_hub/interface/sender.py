@@ -12,6 +12,7 @@ import threading
 import time
 from typing import Any, Optional
 
+from meshcore_hub.common.health import HealthReporter
 from meshcore_hub.common.mqtt import MQTTClient, MQTTConfig
 from meshcore_hub.interface.device import (
     BaseMeshCoreDevice,
@@ -44,6 +45,7 @@ class Sender:
         self._shutdown_event = threading.Event()
         self._device_connected = False
         self._mqtt_connected = False
+        self._health_reporter: Optional[HealthReporter] = None
 
     @property
     def is_healthy(self) -> bool:
@@ -228,6 +230,14 @@ class Sender:
 
         self._running = True
 
+        # Start health reporter for Docker health checks
+        self._health_reporter = HealthReporter(
+            component="interface",
+            status_fn=self.get_health_status,
+            interval=10.0,
+        )
+        self._health_reporter.start()
+
     def run(self) -> None:
         """Run the sender event loop (blocking)."""
         if not self._running:
@@ -251,6 +261,11 @@ class Sender:
         logger.info("Stopping sender")
         self._running = False
         self._shutdown_event.set()
+
+        # Stop health reporter
+        if self._health_reporter:
+            self._health_reporter.stop()
+            self._health_reporter = None
 
         # Stop MQTT
         self.mqtt.stop()

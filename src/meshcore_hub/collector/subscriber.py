@@ -14,6 +14,7 @@ import time
 from typing import Any, Callable, Optional
 
 from meshcore_hub.common.database import DatabaseManager
+from meshcore_hub.common.health import HealthReporter
 from meshcore_hub.common.mqtt import MQTTClient, MQTTConfig
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,7 @@ class Subscriber:
         self._handlers: dict[str, EventHandler] = {}
         self._mqtt_connected = False
         self._db_connected = False
+        self._health_reporter: Optional[HealthReporter] = None
 
     @property
     def is_healthy(self) -> bool:
@@ -147,6 +149,14 @@ class Subscriber:
 
         self._running = True
 
+        # Start health reporter for Docker health checks
+        self._health_reporter = HealthReporter(
+            component="collector",
+            status_fn=self.get_health_status,
+            interval=10.0,
+        )
+        self._health_reporter.start()
+
     def run(self) -> None:
         """Run the subscriber event loop (blocking)."""
         if not self._running:
@@ -170,6 +180,11 @@ class Subscriber:
         logger.info("Stopping collector subscriber")
         self._running = False
         self._shutdown_event.set()
+
+        # Stop health reporter
+        if self._health_reporter:
+            self._health_reporter.stop()
+            self._health_reporter = None
 
         # Stop MQTT
         self.mqtt.stop()

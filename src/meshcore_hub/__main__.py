@@ -1,10 +1,13 @@
 """MeshCore Hub CLI entry point."""
 
+import sys
+
 import click
 from dotenv import load_dotenv
 
 from meshcore_hub import __version__
 from meshcore_hub.common.config import LogLevel
+from meshcore_hub.common.health import check_health
 from meshcore_hub.common.logging import configure_logging
 
 # Load .env file early so Click's envvar parameter picks up values
@@ -169,6 +172,62 @@ def db_history() -> None:
 
     alembic_cfg = Config("alembic.ini")
     command.history(alembic_cfg)
+
+
+# Health check commands for Docker HEALTHCHECK
+@cli.group()
+def health() -> None:
+    """Health check commands for component monitoring.
+
+    These commands are used by Docker HEALTHCHECK to monitor
+    container health. Each running component writes its health
+    status to a file, and these commands verify that status.
+    """
+    pass
+
+
+@health.command("interface")
+@click.option(
+    "--timeout",
+    type=int,
+    default=60,
+    help="Maximum age of health status in seconds",
+)
+def health_interface(timeout: int) -> None:
+    """Check interface component health status.
+
+    Returns exit code 0 if healthy, 1 if not.
+    """
+    is_healthy, message = check_health("interface", stale_threshold=timeout)
+
+    if is_healthy:
+        click.echo(f"Interface health: {message}")
+        sys.exit(0)
+    else:
+        click.echo(f"Interface unhealthy: {message}", err=True)
+        sys.exit(1)
+
+
+@health.command("collector")
+@click.option(
+    "--timeout",
+    type=int,
+    default=60,
+    help="Maximum age of health status in seconds",
+)
+def health_collector(timeout: int) -> None:
+    """Check collector component health status.
+
+    Returns exit code 0 if healthy, 1 if not.
+    """
+    is_healthy, message = check_health("collector", stale_threshold=timeout)
+
+    if is_healthy:
+        click.echo(f"Collector health: {message}")
+        sys.exit(0)
+    else:
+        click.echo(f"Collector unhealthy: {message}", err=True)
+        sys.exit(1)
 
 
 def main() -> None:

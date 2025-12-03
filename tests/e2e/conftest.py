@@ -1,4 +1,14 @@
-"""Fixtures for end-to-end tests."""
+"""Fixtures for end-to-end tests.
+
+These tests require Docker Compose services to be running.
+They are disabled by default and can be run with:
+
+    pytest -m e2e tests/e2e/
+
+Or with the --e2e flag:
+
+    pytest --e2e tests/e2e/
+"""
 
 import os
 import time
@@ -6,6 +16,44 @@ from typing import Generator
 
 import httpx
 import pytest
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Register the e2e marker."""
+    config.addinivalue_line(
+        "markers",
+        "e2e: mark test as end-to-end test requiring Docker services",
+    )
+
+
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item]
+) -> None:
+    """Auto-mark all tests in this directory as e2e and skip if --e2e not provided."""
+    # Check if e2e tests should run
+    run_e2e = config.getoption("--e2e", default=False)
+
+    skip_e2e = pytest.mark.skip(
+        reason="E2E tests disabled by default. Use --e2e to run them."
+    )
+
+    for item in items:
+        # Mark all tests in e2e directory
+        if "e2e" in str(item.fspath):
+            item.add_marker(pytest.mark.e2e)
+            if not run_e2e:
+                item.add_marker(skip_e2e)
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """Add --e2e option to pytest."""
+    parser.addoption(
+        "--e2e",
+        action="store_true",
+        default=False,
+        help="Run end-to-end tests (requires Docker services)",
+    )
+
 
 # E2E test configuration
 E2E_API_URL = os.environ.get("E2E_API_URL", "http://localhost:18000")

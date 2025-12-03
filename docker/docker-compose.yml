@@ -71,7 +71,7 @@ services:
       - NODE_ADDRESS=${NODE_ADDRESS:-}
     command: ["interface", "receiver"]
     healthcheck:
-      test: ["CMD", "pgrep", "-f", "meshcore-hub"]
+      test: ["CMD", "meshcore-hub", "health", "interface"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -107,7 +107,7 @@ services:
       - NODE_ADDRESS=${NODE_ADDRESS_SENDER:-}
     command: ["interface", "sender"]
     healthcheck:
-      test: ["CMD", "pgrep", "-f", "meshcore-hub"]
+      test: ["CMD", "meshcore-hub", "health", "interface"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -138,7 +138,7 @@ services:
       - NODE_ADDRESS=${NODE_ADDRESS:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
     command: ["interface", "receiver", "--mock"]
     healthcheck:
-      test: ["CMD", "pgrep", "-f", "meshcore-hub"]
+      test: ["CMD", "meshcore-hub", "health", "interface"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -172,7 +172,7 @@ services:
       - DATABASE_URL=sqlite:////data/meshcore.db
     command: ["collector"]
     healthcheck:
-      test: ["CMD", "pgrep", "-f", "meshcore-hub"]
+      test: ["CMD", "meshcore-hub", "health", "collector"]
       interval: 30s
       timeout: 10s
       retries: 3
