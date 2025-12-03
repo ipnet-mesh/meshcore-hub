@@ -15,24 +15,30 @@
 #   - mock: All components with mock device (for testing)
 #   - all: All production components (requires real device)
 #   - migrate: Run database migrations
-#   - import-tags: Import node tags from JSON file
+#   - seed: Import seed data (node_tags.json, members.json)
 #
 # Data Directory (DATA_HOME):
-#   The DATA_HOME environment variable controls where all service data is stored.
+#   The DATA_HOME environment variable controls where instance data is stored.
 #   Default: ./data (local) or /data (in containers)
 #
 #   Structure:
 #   ${DATA_HOME}/
-#   ├── collector/
-#   │   ├── meshcore.db    # SQLite database
-#   │   └── tags.json      # Node tags for import
-#   └── web/
-#       └── members.json   # Network members list
+#   └── collector/
+#       └── meshcore.db    # SQLite database
 #
-# Example data files are provided in ./example/data/
+# Seed Directory (SEED_HOME):
+#   The SEED_HOME environment variable controls where seed data files are read from.
+#   Default: ./seed (local) or /seed (in containers)
 #
-# To import tags:
-#   docker compose --profile import-tags run --rm import-tags
+#   Structure:
+#   ${SEED_HOME}/
+#   ├── node_tags.json     # Node tag definitions
+#   └── members.json       # Network member definitions
+#
+# Example seed files are provided in ./example/seed/
+#
+# To import seed data:
+#   docker compose --profile seed run --rm seed
 
 services:
   # ==========================================================================
@@ -180,7 +186,7 @@ services:
       mqtt:
         condition: service_healthy
     volumes:
-      # Mount data directory (contains collector/meshcore.db and collector/tags.json)
+      # Mount data directory (contains collector/meshcore.db)
       - ${DATA_HOME:-./data}:/data
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
@@ -275,16 +281,12 @@ services:
         condition: service_healthy
     ports:
       - "${WEB_PORT:-8080}:8080"
-    volumes:
-      # Mount data directory (uses web/members.json)
-      - ${DATA_HOME:-./data}:/data
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - API_BASE_URL=http://api:8000
       - API_KEY=${API_READ_KEY:-}
       - WEB_HOST=0.0.0.0
       - WEB_PORT=8080
-      - DATA_HOME=/data
       - NETWORK_NAME=${NETWORK_NAME:-MeshCore Network}
       - NETWORK_CITY=${NETWORK_CITY:-}
       - NETWORK_COUNTRY=${NETWORK_COUNTRY:-}
@@ -320,25 +322,28 @@ services:
     command: ["db", "upgrade"]
 
   # ==========================================================================
-  # Import Tags - Import node tags from JSON file
+  # Seed Data - Import node_tags.json and members.json from SEED_HOME
   # ==========================================================================
-  import-tags:
+  seed:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: meshcore-import-tags
+    container_name: meshcore-seed
     profiles:
-      - import-tags
+      - seed
     volumes:
-      # Mount data directory (uses collector/tags.json and collector/meshcore.db)
+      # Mount data directory for database
       - ${DATA_HOME:-./data}:/data
+      # Mount seed directory for seed files
+      - ${SEED_HOME:-./seed}:/seed
     environment:
       - DATA_HOME=/data
+      - SEED_HOME=/seed
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       # Explicitly unset to use DATA_HOME-based default path
       - DATABASE_URL=
-    # Uses default tags file: /data/collector/tags.json
-    command: ["collector", "import-tags"]
+    # Imports both node_tags.json and members.json if they exist
+    command: ["collector", "seed"]
 
 # ==========================================================================
 # Volumes
