@@ -90,7 +90,6 @@
                     <thead>
                         <tr>
                             <th>Node</th>
-                            <th>Type</th>
                             <th class="text-right">Received</th>
                         </tr>
                     </thead>
@@ -103,7 +102,6 @@
                                 <div class="text-xs opacity-50 font-mono">{{ ad.public_key[:12] }}...</div>
                                 {% endif %}
                             </td>
-                            <td>{{ ad.adv_type or '-' }}</td>
                             <td class="text-right text-sm opacity-70">{{ ad.received_at.split('T')[1][:8] if ad.received_at else '-' }}</td>
                         </tr>
                         {% endfor %}
