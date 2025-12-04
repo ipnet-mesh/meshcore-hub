@@ -1,6 +1,8 @@
 # Project
 /data/
 !example/data/
+/seed/
+!example/seed/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
