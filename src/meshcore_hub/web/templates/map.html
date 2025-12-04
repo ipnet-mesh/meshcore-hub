@@ -5,7 +5,7 @@
 {% block extra_head %}
 <style>
     #map {
-        height: calc(100vh - 250px);
+        height: calc(100vh - 350px);
         min-height: 400px;
         border-radius: var(--rounded-box);
     }
@@ -16,13 +16,67 @@
     .leaflet-popup-tip {
         background: oklch(var(--b1));
     }
+    .marker-chat {
+        background-color: oklch(var(--p));
+    }
+    .marker-repeater {
+        background-color: oklch(var(--s));
+    }
+    .marker-room {
+        background-color: oklch(var(--a));
+    }
+    .marker-default {
+        background-color: oklch(var(--n));
+    }
+    .marker-infra {
+        border: 3px solid gold !important;
+        box-shadow: 0 0 8px gold, 0 2px 4px rgba(0,0,0,0.3) !important;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="flex items-center justify-between mb-6">
     <h1 class="text-3xl font-bold">Node Map</h1>
-    <span id="node-count" class="badge badge-lg">Loading...</span>
+    <div class="flex items-center gap-2">
+        <span id="node-count" class="badge badge-lg">Loading...</span>
+        <span id="filtered-count" class="badge badge-lg badge-ghost hidden"></span>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card bg-base-100 shadow mb-6">
+    <div class="card-body py-4">
+        <div class="flex gap-4 flex-wrap items-end">
+            <div class="form-control">
+                <label class="label py-1">
+                    <span class="label-text">Node Type</span>
+                </label>
+                <select id="filter-type" class="select select-bordered select-sm">
+                    <option value="">All Types</option>
+                    <option value="chat">Chat</option>
+                    <option value="repeater">Repeater</option>
+                    <option value="room">Room</option>
+                </select>
+            </div>
+            <div class="form-control">
+                <label class="label py-1">
+                    <span class="label-text">Owner</span>
+                </label>
+                <select id="filter-owner" class="select select-bordered select-sm">
+                    <option value="">All Owners</option>
+                    <!-- Populated dynamically -->
+                </select>
+            </div>
+            <div class="form-control">
+                <label class="label cursor-pointer gap-2 py-1">
+                    <span class="label-text">Infrastructure Only</span>
+                    <input type="checkbox" id="filter-infra" class="checkbox checkbox-sm checkbox-primary" />
+                </label>
+            </div>
+            <button id="clear-filters" class="btn btn-ghost btn-sm">Clear Filters</button>
+        </div>
+    </div>
 </div>
 
 <div class="card bg-base-100 shadow-xl">
@@ -31,9 +85,33 @@
     </div>
 </div>
 
-<div class="mt-4 text-sm opacity-70">
-    <p>Nodes are placed on the map based on their <code>lat</code> and <code>lon</code> tags.</p>
-    <p>To add a node to the map, set its location tags via the API.</p>
+<!-- Legend -->
+<div class="mt-4 flex flex-wrap gap-4 items-center text-sm">
+    <span class="opacity-70">Legend:</span>
+    <div class="flex items-center gap-1">
+        <div class="w-3 h-3 rounded-full marker-chat"></div>
+        <span>Chat</span>
+    </div>
+    <div class="flex items-center gap-1">
+        <div class="w-3 h-3 rounded-full marker-repeater"></div>
+        <span>Repeater</span>
+    </div>
+    <div class="flex items-center gap-1">
+        <div class="w-3 h-3 rounded-full marker-room"></div>
+        <span>Room</span>
+    </div>
+    <div class="flex items-center gap-1">
+        <div class="w-3 h-3 rounded-full marker-default"></div>
+        <span>Other</span>
+    </div>
+    <div class="flex items-center gap-1">
+        <div class="w-3 h-3 rounded-full marker-default marker-infra"></div>
+        <span>Infrastructure</span>
+    </div>
+</div>
+
+<div class="mt-2 text-sm opacity-70">
+    <p>Nodes are placed on the map based on their <code>lat</code> and <code>lon</code> tags. Infrastructure nodes are tagged with <code>role: infra</code>.</p>
 </div>
 {% endblock %}
 
@@ -47,53 +125,182 @@
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
 
-    // Custom marker icon
-    const nodeIcon = L.divIcon({
-        className: 'custom-div-icon',
-        html: `<div style="background-color: oklch(var(--p)); width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
-        iconSize: [12, 12],
-        iconAnchor: [6, 6]
-    });
+    // Store all nodes and markers
+    let allNodes = [];
+    let allMembers = [];
+    let markers = [];
+    let mapCenter = { lat: {{ network_location[0] }}, lon: {{ network_location[1] }} };
+
+    // Get marker color class based on node type
+    function getMarkerClass(node) {
+        let baseClass = 'marker-default';
+        if (node.adv_type === 'chat') baseClass = 'marker-chat';
+        else if (node.adv_type === 'repeater') baseClass = 'marker-repeater';
+        else if (node.adv_type === 'room') baseClass = 'marker-room';
+
+        if (node.is_infra) baseClass += ' marker-infra';
+        return baseClass;
+    }
+
+    // Create marker icon for a node
+    function createNodeIcon(node) {
+        const markerClass = getMarkerClass(node);
+        return L.divIcon({
+            className: 'custom-div-icon',
+            html: `<div class="${markerClass}" style="width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
+            iconSize: [12, 12],
+            iconAnchor: [6, 6]
+        });
+    }
+
+    // Create popup content for a node
+    function createPopupContent(node) {
+        let ownerHtml = '';
+        if (node.owner) {
+            const ownerDisplay = node.owner.callsign
+                ? `${node.owner.name} (${node.owner.callsign})`
+                : node.owner.name;
+            ownerHtml = `<p><span class="opacity-70">Owner:</span> ${ownerDisplay}</p>`;
+        }
+
+        let roleHtml = '';
+        if (node.role) {
+            const roleClass = node.is_infra ? 'badge-warning' : 'badge-ghost';
+            roleHtml = `<p><span class="opacity-70">Role:</span> <span class="badge badge-xs ${roleClass}">${node.role}</span></p>`;
+        }
+
+        return `
+            <div class="p-2">
+                <h3 class="font-bold text-lg mb-2">${node.name}</h3>
+                <div class="space-y-1 text-sm">
+                    <p><span class="opacity-70">Type:</span> ${node.adv_type || 'Unknown'}</p>
+                    ${roleHtml}
+                    ${ownerHtml}
+                    <p><span class="opacity-70">Key:</span> <code class="text-xs">${node.public_key.substring(0, 16)}...</code></p>
+                    <p><span class="opacity-70">Location:</span> ${node.lat.toFixed(4)}, ${node.lon.toFixed(4)}</p>
+                    ${node.last_seen ? `<p><span class="opacity-70">Last seen:</span> ${node.last_seen.substring(0, 19).replace('T', ' ')}</p>` : ''}
+                </div>
+                <a href="/nodes/${node.public_key}" class="btn btn-primary btn-xs mt-3">View Details</a>
+            </div>
+        `;
+    }
+
+    // Clear all markers from map
+    function clearMarkers() {
+        markers.forEach(marker => map.removeLayer(marker));
+        markers = [];
+    }
+
+    // Apply filters and update map
+    function applyFilters() {
+        const typeFilter = document.getElementById('filter-type').value;
+        const ownerFilter = document.getElementById('filter-owner').value;
+        const infraOnly = document.getElementById('filter-infra').checked;
+
+        // Filter nodes
+        const filteredNodes = allNodes.filter(node => {
+            // Type filter
+            if (typeFilter && node.adv_type !== typeFilter) return false;
+
+            // Infrastructure filter
+            if (infraOnly && !node.is_infra) return false;
+
+            // Owner filter
+            if (ownerFilter) {
+                if (!node.owner || node.owner.id !== ownerFilter) return false;
+            }
+
+            return true;
+        });
+
+        // Clear existing markers
+        clearMarkers();
+
+        // Add filtered markers
+        filteredNodes.forEach(node => {
+            const marker = L.marker([node.lat, node.lon], { icon: createNodeIcon(node) }).addTo(map);
+            marker.bindPopup(createPopupContent(node));
+            markers.push(marker);
+        });
+
+        // Update counts
+        const countEl = document.getElementById('node-count');
+        const filteredEl = document.getElementById('filtered-count');
+
+        if (filteredNodes.length === allNodes.length) {
+            countEl.textContent = `${allNodes.length} nodes on map`;
+            filteredEl.classList.add('hidden');
+        } else {
+            countEl.textContent = `${allNodes.length} total`;
+            filteredEl.textContent = `${filteredNodes.length} shown`;
+            filteredEl.classList.remove('hidden');
+        }
+
+        // Fit bounds if we have filtered nodes
+        if (filteredNodes.length > 0) {
+            const bounds = L.latLngBounds(filteredNodes.map(n => [n.lat, n.lon]));
+            map.fitBounds(bounds, { padding: [50, 50] });
+        } else if (mapCenter.lat !== 0 || mapCenter.lon !== 0) {
+            map.setView([mapCenter.lat, mapCenter.lon], 10);
+        }
+    }
+
+    // Populate owner filter dropdown
+    function populateOwnerFilter() {
+        const select = document.getElementById('filter-owner');
+
+        // Get unique owners from nodes that have locations
+        const ownersWithNodes = new Set();
+        allNodes.forEach(node => {
+            if (node.owner) {
+                ownersWithNodes.add(node.owner.id);
+            }
+        });
+
+        // Filter members to only those who own nodes on the map
+        const relevantMembers = allMembers.filter(m => ownersWithNodes.has(m.id));
+
+        // Sort by name
+        relevantMembers.sort((a, b) => a.name.localeCompare(b.name));
+
+        // Add options
+        relevantMembers.forEach(member => {
+            const option = document.createElement('option');
+            option.value = member.id;
+            option.textContent = member.callsign
+                ? `${member.name} (${member.callsign})`
+                : member.name;
+            select.appendChild(option);
+        });
+    }
+
+    // Clear all filters
+    function clearFilters() {
+        document.getElementById('filter-type').value = '';
+        document.getElementById('filter-owner').value = '';
+        document.getElementById('filter-infra').checked = false;
+        applyFilters();
+    }
+
+    // Event listeners for filters
+    document.getElementById('filter-type').addEventListener('change', applyFilters);
+    document.getElementById('filter-owner').addEventListener('change', applyFilters);
+    document.getElementById('filter-infra').addEventListener('change', applyFilters);
+    document.getElementById('clear-filters').addEventListener('click', clearFilters);
 
     // Fetch and display nodes
     fetch('/map/data')
         .then(response => response.json())
         .then(data => {
-            const nodes = data.nodes;
-            const center = data.center;
+            allNodes = data.nodes;
+            allMembers = data.members || [];
+            mapCenter = data.center;
 
-            // Update node count
-            document.getElementById('node-count').textContent = `${nodes.length} nodes on map`;
+            // Populate owner filter
+            populateOwnerFilter();
 
-            // Add markers for each node
-            nodes.forEach(node => {
-                const marker = L.marker([node.lat, node.lon], { icon: nodeIcon }).addTo(map);
-
-                // Create popup content
-                const popupContent = `
-                    <div class="p-2">
-                        <h3 class="font-bold text-lg mb-2">${node.name}</h3>
-                        <div class="space-y-1 text-sm">
-                            <p><span class="opacity-70">Type:</span> ${node.adv_type || 'Unknown'}</p>
-                            <p><span class="opacity-70">Key:</span> <code class="text-xs">${node.public_key.substring(0, 16)}...</code></p>
-                            <p><span class="opacity-70">Location:</span> ${node.lat.toFixed(4)}, ${node.lon.toFixed(4)}</p>
-                            ${node.last_seen ? `<p><span class="opacity-70">Last seen:</span> ${node.last_seen.substring(0, 19).replace('T', ' ')}</p>` : ''}
-                        </div>
-                        <a href="/nodes/${node.public_key}" class="btn btn-primary btn-xs mt-3">View Details</a>
-                    </div>
-                `;
-
-                marker.bindPopup(popupContent);
-            });
-
-            // Fit bounds if we have nodes
-            if (nodes.length > 0) {
-                const bounds = L.latLngBounds(nodes.map(n => [n.lat, n.lon]));
-                map.fitBounds(bounds, { padding: [50, 50] });
-            } else if (center.lat !== 0 || center.lon !== 0) {
-                // Use network center if no nodes
-                map.setView([center.lat, center.lon], 10);
-            }
+            // Initial display
+            applyFilters();
         })
         .catch(error => {
             console.error('Error loading map data:', error);
