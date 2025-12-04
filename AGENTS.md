@@ -114,17 +114,15 @@ class NodeRead(BaseModel):
 ### SQLAlchemy Models
 
 ```python
-from sqlalchemy import String, DateTime, ForeignKey
+from sqlalchemy import String, DateTime, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from datetime import datetime
-from uuid import uuid4
+from typing import Optional
 
-from meshcore_hub.common.models.base import Base
+from meshcore_hub.common.models.base import Base, TimestampMixin, UUIDMixin
 
-class Node(Base):
+class Node(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "nodes"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     public_key: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     adv_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
@@ -132,6 +130,18 @@ class Node(Base):
 
     # Relationships
     tags: Mapped[list["NodeTag"]] = relationship(back_populates="node", cascade="all, delete-orphan")
+
+
+class Member(Base, UUIDMixin, TimestampMixin):
+    """Network member model - stores info about network operators."""
+    __tablename__ = "members"
+
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    callsign: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    role: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    contact: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    public_key: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
 ```
 
 ### FastAPI Routes
@@ -239,7 +249,12 @@ meshcore-hub/
 │   │   ├── mqtt.py           # MQTT utilities
 │   │   ├── logging.py        # Logging config
 │   │   ├── models/           # SQLAlchemy models
+│   │   │   ├── node.py       # Node model
+│   │   │   ├── member.py     # Network member model
+│   │   │   └── ...
 │   │   └── schemas/          # Pydantic schemas
+│   │       ├── members.py    # Member API schemas
+│   │       └── ...
 │   ├── interface/
 │   │   ├── cli.py
 │   │   ├── device.py         # MeshCore device wrapper
@@ -247,9 +262,10 @@ meshcore-hub/
 │   │   ├── receiver.py       # RECEIVER mode
 │   │   └── sender.py         # SENDER mode
 │   ├── collector/
-│   │   ├── cli.py
+│   │   ├── cli.py            # Collector CLI with seed commands
 │   │   ├── subscriber.py     # MQTT subscriber
-│   │   ├── tag_import.py     # Tag import from JSON
+│   │   ├── tag_import.py     # Tag import from YAML
+│   │   ├── member_import.py  # Member import from YAML
 │   │   ├── handlers/         # Event handlers
 │   │   └── webhook.py        # Webhook dispatcher
 │   ├── api/
@@ -258,11 +274,15 @@ meshcore-hub/
 │   │   ├── auth.py           # Authentication
 │   │   ├── dependencies.py
 │   │   ├── routes/           # API routes
+│   │   │   ├── members.py    # Member CRUD endpoints
+│   │   │   └── ...
 │   │   └── templates/        # Dashboard HTML
 │   └── web/
 │       ├── cli.py
 │       ├── app.py            # FastAPI app
 │       ├── routes/           # Page routes
+│       │   ├── members.py    # Members page
+│       │   └── ...
 │       ├── templates/        # Jinja2 templates
 │       └── static/           # CSS, JS
 ├── tests/
@@ -278,20 +298,17 @@ meshcore-hub/
 ├── etc/
 │   └── mosquitto.conf        # MQTT broker configuration
 ├── example/
-│   └── data/
-│       ├── collector/
-│       │   └── tags.json     # Example node tags data
-│       └── web/
-│           └── members.json  # Example network members data
+│   └── seed/                 # Example seed data files
+│       ├── node_tags.yaml    # Example node tags
+│       └── members.yaml      # Example network members
+├── seed/                     # Seed data directory (SEED_HOME)
+│   ├── node_tags.yaml        # Node tags for import
+│   └── members.yaml          # Network members for import
 ├── data/                     # Runtime data (gitignored, DATA_HOME default)
-│   ├── collector/            # Collector data
-│   │   ├── meshcore.db       # SQLite database
-│   │   └── tags.json         # Node tags for import
-│   └── web/                  # Web data
-│       └── members.json      # Network members list
+│   └── collector/            # Collector data
+│       └── meshcore.db       # SQLite database
 ├── Dockerfile                # Docker build configuration
-├── docker-compose.yml        # Docker Compose services (gitignored)
-└── docker-compose.yml.example  # Docker Compose template
+└── docker-compose.yml        # Docker Compose services
 ```
 
 ## MQTT Topic Structure
@@ -436,25 +453,38 @@ meshcore-hub interface --mode receiver --mock
 See [PLAN.md](PLAN.md#configuration-environment-variables) for complete list.
 
 Key variables:
-- `DATA_HOME` - Base directory for all service data (default: `./data`)
+- `DATA_HOME` - Base directory for runtime data (default: `./data`)
+- `SEED_HOME` - Directory containing seed data files (default: `./seed`)
 - `MQTT_HOST`, `MQTT_PORT`, `MQTT_PREFIX` - MQTT broker connection
 - `DATABASE_URL` - SQLAlchemy database URL (default: `sqlite:///{DATA_HOME}/collector/meshcore.db`)
 - `API_READ_KEY`, `API_ADMIN_KEY` - API authentication keys
 - `LOG_LEVEL` - Logging verbosity
 
-### Data Directory Structure
+### Directory Structure
 
-The `DATA_HOME` environment variable controls where all service data is stored:
+**Seed Data (`SEED_HOME`)** - Contains initial data files for database seeding:
+```
+${SEED_HOME}/
+├── node_tags.yaml    # Node tags (keyed by public_key)
+└── members.yaml      # Network members list
+```
+
+**Runtime Data (`DATA_HOME`)** - Contains runtime data (gitignored):
 ```
 ${DATA_HOME}/
-├── collector/
-│   ├── meshcore.db    # SQLite database
-│   └── tags.json      # Node tags for import
-└── web/
-    └── members.json   # Network members list
+└── collector/
+    └── meshcore.db   # SQLite database
 ```
 
 Services automatically create their subdirectories if they don't exist.
+
+### Automatic Seeding
+
+The collector automatically imports seed data on startup if YAML files exist in `SEED_HOME`:
+- `node_tags.yaml` - Node tag definitions (keyed by public_key)
+- `members.yaml` - Network member definitions
+
+Manual seeding can be triggered with: `meshcore-hub collector seed`
 
 ### Webhook Configuration
 

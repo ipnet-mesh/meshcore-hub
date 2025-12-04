@@ -66,45 +66,56 @@ MeshCore Hub provides a complete solution for monitoring, collecting, and intera
 
 ### Using Docker Compose (Recommended)
 
-Docker Compose supports **profiles** to selectively enable/disable components:
+Docker Compose runs core services by default and uses **profiles** for optional components:
+
+**Default Services (always run):**
+
+| Service | Description |
+|---------|-------------|
+| `mqtt` | Eclipse Mosquitto MQTT broker |
+| `collector` | MQTT subscriber + database storage (auto-seeds on startup) |
+| `api` | REST API server |
+| `web` | Web dashboard |
+
+**Optional Profiles:**
 
 | Profile | Services |
 |---------|----------|
-| `mqtt` | Eclipse Mosquitto MQTT broker |
 | `interface-receiver` | MeshCore device receiver (events to MQTT) |
 | `interface-sender` | MeshCore device sender (MQTT to device) |
-| `collector` | MQTT subscriber + database storage |
-| `api` | REST API server |
-| `web` | Web dashboard |
-| `mock` | All services with mock device (for testing) |
-| `all` | All production services |
+| `mock` | Mock device receiver (for testing without hardware) |
+| `migrate` | One-time database migration runner |
+| `seed` | One-time seed data import (also runs automatically on collector startup) |
 
 ```bash
 # Clone the repository
 git clone https://github.com/your-org/meshcore-hub.git
-cd meshcore-hub/docker
+cd meshcore-hub
 
 # Copy and configure environment
 cp .env.example .env
 # Edit .env with your settings (API keys, serial port, network info)
 
-# Option 1: Start all services with mock device (for testing)
+# Option 1: Start core services (mqtt, collector, api, web)
+docker compose up -d
+
+# Option 2: Start with mock device for testing
 docker compose --profile mock up -d
 
-# Option 2: Start specific services for production
-docker compose --profile mqtt --profile collector --profile api --profile web up -d
-
-# Option 3: Start all production services (requires real MeshCore device)
-docker compose --profile all up -d
+# Option 3: Start with real MeshCore device
+docker compose --profile interface-receiver up -d
 
 # View logs
 docker compose logs -f
 
-# Run database migrations
+# Run database migrations (one-time)
 docker compose --profile migrate up
 
+# Import seed data manually (also runs on collector startup)
+docker compose --profile seed up
+
 # Stop services
-docker compose --profile mock down
+docker compose down
 ```
 
 #### Serial Device Access
@@ -170,7 +181,8 @@ All components are configured via environment variables. Create a `.env` file or
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DATABASE_URL` | `sqlite:///./meshcore.db` | SQLAlchemy database URL |
+| `DATABASE_URL` | `sqlite:///{data_home}/collector/meshcore.db` | SQLAlchemy database URL |
+| `SEED_HOME` | `./seed` | Directory containing seed data files (node_tags.yaml, members.yaml) |
 
 #### Webhook Configuration
 
@@ -229,10 +241,12 @@ meshcore-hub interface --mode receiver --port /dev/ttyUSB0
 meshcore-hub interface --mode sender --mock  # Use mock device
 
 # Collector component
-meshcore-hub collector --database-url sqlite:///./data.db
-
-# Import node tags from JSON file
-meshcore-hub collector import-tags /path/to/tags.json
+meshcore-hub collector                          # Run collector (auto-seeds on startup)
+meshcore-hub collector seed                     # Import all seed data from SEED_HOME
+meshcore-hub collector import-tags              # Import node tags from SEED_HOME/node_tags.yaml
+meshcore-hub collector import-tags /path/to/file.yaml  # Import from specific file
+meshcore-hub collector import-members           # Import members from SEED_HOME/members.yaml
+meshcore-hub collector import-members /path/to/file.yaml  # Import from specific file
 
 # API component
 meshcore-hub api --host 0.0.0.0 --port 8000
@@ -246,73 +260,123 @@ meshcore-hub db downgrade    # Rollback one migration
 meshcore-hub db current      # Show current revision
 ```
 
+## Seed Data
+
+The collector supports seeding the database with node tags and network members on startup. Seed files are read from the `SEED_HOME` directory (default: `./seed`).
+
+### Automatic Seeding
+
+When the collector starts, it automatically imports seed data from YAML files if they exist:
+- `{SEED_HOME}/node_tags.yaml` - Node tag definitions
+- `{SEED_HOME}/members.yaml` - Network member definitions
+
+### Manual Seeding
+
+```bash
+# Native CLI
+meshcore-hub collector seed
+
+# With Docker Compose
+docker compose --profile seed up
+```
+
+### Directory Structure
+
+```
+seed/                          # SEED_HOME (seed data files)
+├── node_tags.yaml            # Node tags for import
+└── members.yaml              # Network members for import
+
+data/                          # DATA_HOME (runtime data)
+└── collector/
+    └── meshcore.db           # SQLite database
+```
+
+Example seed files are provided in `example/seed/`.
+
 ## Node Tags
 
 Node tags allow you to attach custom metadata to nodes (e.g., location, role, owner). Tags are stored in the database and returned with node data via the API.
 
-### Importing Tags from JSON
+### Node Tags YAML Format
 
-Tags can be bulk imported from a JSON file:
+Tags are keyed by public key in YAML format:
 
-```bash
-# Native CLI
-meshcore-hub collector import-tags /path/to/tags.json
+```yaml
+# Each key is a 64-character hex public key
+0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef:
+  friendly_name: Gateway Node
+  role: gateway
+  lat: 37.7749
+  lon: -122.4194
+  is_online: true
 
-# With Docker Compose
-docker compose --profile import-tags run --rm import-tags
+fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210:
+  friendly_name: Oakland Repeater
+  altitude: 150
+  location:
+    value: "37.8044,-122.2712"
+    type: coordinate
 ```
 
-### Tags JSON Format
+Tag values can be:
+- **YAML primitives** (auto-detected type): strings, numbers, booleans
+- **Explicit type** (for special types like coordinate):
+  ```yaml
+  location:
+    value: "37.7749,-122.4194"
+    type: coordinate
+  ```
 
-```json
-{
-  "tags": [
-    {
-      "public_key": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-      "key": "location",
-      "value": "San Francisco, CA",
-      "value_type": "string"
-    },
-    {
-      "public_key": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-      "key": "altitude",
-      "value": "150",
-      "value_type": "number"
-    }
-  ]
-}
+Supported types: `string`, `number`, `boolean`, `coordinate`
+
+### Import Tags Manually
+
+```bash
+# Import from default location ({SEED_HOME}/node_tags.yaml)
+meshcore-hub collector import-tags
+
+# Import from specific file
+meshcore-hub collector import-tags /path/to/node_tags.yaml
+
+# Skip tags for nodes that don't exist
+meshcore-hub collector import-tags --no-create-nodes
+```
+
+## Network Members
+
+Network members represent the people operating nodes in your network. Members can optionally be linked to nodes via their public key.
+
+### Members YAML Format
+
+```yaml
+members:
+  - name: John Doe
+    callsign: N0CALL
+    role: Network Operator
+    description: Example member entry
+    contact: john@example.com
+    public_key: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 ```
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `public_key` | Yes | 64-character hex public key of the node |
-| `key` | Yes | Tag name (max 100 characters) |
-| `value` | No | Tag value (stored as text) |
-| `value_type` | No | Type hint: `string`, `number`, `boolean`, or `coordinate` (default: `string`) |
+| `name` | Yes | Member's display name |
+| `callsign` | No | Amateur radio callsign |
+| `role` | No | Member's role in the network |
+| `description` | No | Additional description |
+| `contact` | No | Contact information |
+| `public_key` | No | Associated node public key (64-char hex) |
 
-### Import Options
+### Import Members Manually
 
 ```bash
-# Create nodes if they don't exist (default behavior)
-meshcore-hub collector import-tags tags.json
+# Import from default location ({SEED_HOME}/members.yaml)
+meshcore-hub collector import-members
 
-# Skip tags for nodes that don't exist
-meshcore-hub collector import-tags --no-create-nodes tags.json
+# Import from specific file
+meshcore-hub collector import-members /path/to/members.yaml
 ```
-
-### Data Directory Structure
-
-For Docker deployments, organize your data files:
-
-```
-data/
-├── collector/
-│   └── tags.json      # Node tags for import
-└── web/
-    └── members.json   # Network members list
-```
-
-Example files are provided in `example/data/`.
 
 ### Managing Tags via API
 
@@ -459,11 +523,13 @@ meshcore-hub/
 ├── alembic/                # Database migrations
 ├── etc/                    # Configuration files (mosquitto.conf)
 ├── example/                # Example files for testing
-│   └── data/               # Example data files (members.json)
-├── data/                   # Runtime data (gitignored)
+│   └── seed/               # Example seed data files
+│       ├── node_tags.yaml  # Example node tags
+│       └── members.yaml    # Example network members
+├── seed/                   # Seed data directory (SEED_HOME)
+├── data/                   # Runtime data directory (DATA_HOME, gitignored)
 ├── Dockerfile              # Docker build configuration
-├── docker-compose.yml      # Docker Compose services (gitignored)
-├── docker-compose.yml.example  # Docker Compose template
+├── docker-compose.yml      # Docker Compose services
 ├── PROMPT.md               # Project specification
 ├── SCHEMAS.md              # Event schema documentation
 ├── PLAN.md                 # Implementation plan
