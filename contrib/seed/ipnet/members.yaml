@@ -1,6 +1,22 @@
 # IPNet Network Members
 members:
   - name: Louis
-    callsign: Louis
+    callsign: louis
     role: admin
     description: IPNet Founder
+  - name: Mark
+    callsign: Mark
+    role: member
+    description: IPNet Member
+  - name: CCZ
+    callsign: CCZ
+    role: member
+    description: IPNet Member
+  - name: Walshie
+    callsign: Walshie86
+    role: member
+    description: IPNet Member
+  - name: Craig
+    callsign: M7XCN
+    role: member
+    description: IPNet Member
