@@ -31,11 +31,11 @@ class TestNodesListPage:
         """Test that nodes page displays node data from API."""
         response = client.get("/nodes")
         assert response.status_code == 200
-        # Check for node data from mock
+        # Check for node data from mock (names and public key prefixes)
         assert "Node One" in response.text
         assert "Node Two" in response.text
-        assert "REPEATER" in response.text
-        assert "CLIENT" in response.text
+        assert "abc123" in response.text
+        assert "def456" in response.text
 
     def test_nodes_displays_public_keys(
         self, client: TestClient, mock_http_client: MockHttpClient
