@@ -47,6 +47,8 @@ def handle_contact(
     # Device uses 'adv_name' for the advertised name
     name = payload.get("adv_name") or payload.get("name")
 
+    logger.info(f"Processing contact: {contact_key[:12]}... adv_name={name}")
+
     # Device uses numeric 'type' field, convert to string
     raw_type = payload.get("type")
     if raw_type is not None:
@@ -64,12 +66,14 @@ def handle_contact(
         if node:
             # Update existing node - always update name if we have one
             if name and name != node.name:
-                logger.debug(f"Updating node {contact_key[:12]}... name: {name}")
+                logger.info(
+                    f"Updating node {contact_key[:12]}... "
+                    f"name: {node.name!r} -> {name!r}"
+                )
                 node.name = name
             if node_type and not node.adv_type:
                 node.adv_type = node_type
             node.last_seen = now
-            logger.debug(f"Updated contact: {contact_key[:12]}... ({name})")
         else:
             # Create new node
             node = Node(
