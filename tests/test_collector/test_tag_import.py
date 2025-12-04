@@ -1,10 +1,10 @@
 """Tests for tag import functionality."""
 
-import json
 import tempfile
 from pathlib import Path
 
 import pytest
+import yaml
 from sqlalchemy import select
 
 from meshcore_hub.collector.tag_import import (
@@ -62,8 +62,8 @@ class TestLoadTagsFile:
             }
         }
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump(data, f)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(data, f)
             f.flush()
 
             result = load_tags_file(f.name)
@@ -84,8 +84,8 @@ class TestLoadTagsFile:
             }
         }
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump(data, f)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(data, f)
             f.flush()
 
             result = load_tags_file(f.name)
@@ -104,8 +104,8 @@ class TestLoadTagsFile:
             }
         }
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump(data, f)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(data, f)
             f.flush()
 
             result = load_tags_file(f.name)
@@ -118,15 +118,15 @@ class TestLoadTagsFile:
     def test_file_not_found(self):
         """Test loading non-existent file."""
         with pytest.raises(FileNotFoundError):
-            load_tags_file("/nonexistent/path/tags.json")
+            load_tags_file("/nonexistent/path/tags.yaml")
 
-    def test_invalid_json(self):
-        """Test loading invalid JSON file."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            f.write("invalid json {{{")
+    def test_invalid_yaml(self):
+        """Test loading invalid YAML file."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write("invalid: yaml: content: [unclosed")
             f.flush()
 
-            with pytest.raises(json.JSONDecodeError):
+            with pytest.raises(yaml.YAMLError):
                 load_tags_file(f.name)
 
         Path(f.name).unlink()
@@ -135,11 +135,11 @@ class TestLoadTagsFile:
         """Test loading file with invalid schema (not a dict)."""
         data = [{"public_key": "abc"}]
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump(data, f)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(data, f)
             f.flush()
 
-            with pytest.raises(ValueError, match="must contain a JSON object"):
+            with pytest.raises(ValueError, match="must contain a YAML mapping"):
                 load_tags_file(f.name)
 
         Path(f.name).unlink()
@@ -148,8 +148,8 @@ class TestLoadTagsFile:
         """Test loading file with invalid public key."""
         data = {"invalid_key": {"tag": "value"}}
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump(data, f)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(data, f)
             f.flush()
 
             with pytest.raises(ValueError, match="must be 64 characters"):
@@ -161,8 +161,8 @@ class TestLoadTagsFile:
         """Test loading empty tags file."""
         data: dict[str, dict[str, str]] = {}
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump(data, f)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(data, f)
             f.flush()
 
             result = load_tags_file(f.name)
@@ -195,8 +195,8 @@ class TestImportTags:
             },
         }
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump(data, f)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(data, f)
             f.flush()
             yield f.name
 
@@ -270,7 +270,7 @@ class TestImportTags:
 
     def test_import_nonexistent_file(self, db_manager):
         """Test import with non-existent file."""
-        stats = import_tags("/nonexistent/tags.json", db_manager)
+        stats = import_tags("/nonexistent/tags.yaml", db_manager)
 
         assert stats["total"] == 0
         assert len(stats["errors"]) == 1
@@ -280,8 +280,8 @@ class TestImportTags:
         """Test import with empty tags object."""
         data: dict[str, dict[str, str]] = {}
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump(data, f)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(data, f)
             f.flush()
 
             stats = import_tags(f.name, db_manager)
@@ -300,8 +300,8 @@ class TestImportTags:
             }
         }
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump(data, f)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(data, f)
             f.flush()
 
             import_tags(f.name, db_manager, create_nodes=True)
@@ -323,8 +323,8 @@ class TestImportTags:
             }
         }
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump(data, f)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(data, f)
             f.flush()
 
             stats = import_tags(f.name, db_manager, create_nodes=True)
@@ -339,16 +339,16 @@ class TestImportTags:
 
         Path(f.name).unlink()
 
-    def test_import_numeric_value_converted(self, db_manager):
-        """Test that numeric values are converted to strings."""
+    def test_import_numeric_value_detected(self, db_manager):
+        """Test that YAML numeric values are detected and stored with number type."""
         data = {
             "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef": {
                 "num_val": 42,
             }
         }
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump(data, f)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(data, f)
             f.flush()
 
             stats = import_tags(f.name, db_manager, create_nodes=True)
@@ -359,6 +359,34 @@ class TestImportTags:
             tag = session.execute(select(NodeTag)).scalar_one()
             assert tag.key == "num_val"
             assert tag.value == "42"
-            assert tag.value_type == "string"
+            assert tag.value_type == "number"
+
+        Path(f.name).unlink()
+
+    def test_import_boolean_value_detected(self, db_manager):
+        """Test that YAML boolean values are detected and stored with boolean type."""
+        data = {
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef": {
+                "is_active": True,
+                "is_disabled": False,
+            }
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(data, f)
+            f.flush()
+
+            stats = import_tags(f.name, db_manager, create_nodes=True)
+
+        assert stats["created"] == 2
+
+        with db_manager.session_scope() as session:
+            tags = session.execute(select(NodeTag)).scalars().all()
+            tag_dict = {t.key: t for t in tags}
+
+            assert tag_dict["is_active"].value == "true"
+            assert tag_dict["is_active"].value_type == "boolean"
+            assert tag_dict["is_disabled"].value == "false"
+            assert tag_dict["is_disabled"].value_type == "boolean"
 
         Path(f.name).unlink()

@@ -1,11 +1,11 @@
-"""Import node tags from JSON file."""
+"""Import node tags from YAML file."""
 
-import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import yaml
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 
@@ -64,33 +64,33 @@ def validate_public_key(public_key: str) -> str:
 
 
 def load_tags_file(file_path: str | Path) -> dict[str, dict[str, Any]]:
-    """Load and validate tags from a JSON file.
+    """Load and validate tags from a YAML file.
 
-    New format - dictionary keyed by public_key:
-    {
-      "0123456789abcdef...": {
-        "friendly_name": "My Node",
-        "location": {"value": "52.0,1.0", "type": "coordinate"},
-        "altitude": {"value": "150", "type": "number"}
-      }
-    }
+    YAML format - dictionary keyed by public_key:
+
+        0123456789abcdef...:
+          friendly_name: My Node
+          location:
+            value: "52.0,1.0"
+            type: coordinate
+          altitude:
+            value: "150"
+            type: number
 
     Shorthand is allowed - string values are auto-converted:
-    {
-      "0123456789abcdef...": {
-        "friendly_name": "My Node"
-      }
-    }
+
+        0123456789abcdef...:
+          friendly_name: My Node
 
     Args:
-        file_path: Path to the tags JSON file
+        file_path: Path to the tags YAML file
 
     Returns:
         Dictionary mapping public_key to tag dictionary
 
     Raises:
         FileNotFoundError: If file does not exist
-        json.JSONDecodeError: If file is not valid JSON
+        yaml.YAMLError: If file is not valid YAML
         ValueError: If file content is invalid
     """
     path = Path(file_path)
@@ -98,10 +98,10 @@ def load_tags_file(file_path: str | Path) -> dict[str, dict[str, Any]]:
         raise FileNotFoundError(f"Tags file not found: {file_path}")
 
     with open(path, "r") as f:
-        data = json.load(f)
+        data = yaml.safe_load(f)
 
     if not isinstance(data, dict):
-        raise ValueError("Tags file must contain a JSON object")
+        raise ValueError("Tags file must contain a YAML mapping")
 
     # Validate each entry
     validated: dict[str, dict[str, Any]] = {}
@@ -117,12 +117,24 @@ def load_tags_file(file_path: str | Path) -> dict[str, dict[str, Any]]:
         for tag_key, tag_value in tags.items():
             if isinstance(tag_value, dict):
                 # Full format with value and type
+                raw_value = tag_value.get("value")
+                # Convert value to string if it's not None
+                str_value = str(raw_value) if raw_value is not None else None
                 validated_tags[tag_key] = {
-                    "value": tag_value.get("value"),
+                    "value": str_value,
                     "type": tag_value.get("type", "string"),
                 }
+            elif isinstance(tag_value, bool):
+                # YAML boolean - must check before int since bool is subclass of int
+                validated_tags[tag_key] = {
+                    "value": str(tag_value).lower(),
+                    "type": "boolean",
+                }
+            elif isinstance(tag_value, (int, float)):
+                # YAML number (int or float)
+                validated_tags[tag_key] = {"value": str(tag_value), "type": "number"}
             elif isinstance(tag_value, str):
-                # Shorthand: just a string value
+                # String value
                 validated_tags[tag_key] = {"value": tag_value, "type": "string"}
             elif tag_value is None:
                 validated_tags[tag_key] = {"value": None, "type": "string"}
@@ -140,12 +152,12 @@ def import_tags(
     db: DatabaseManager,
     create_nodes: bool = True,
 ) -> dict[str, Any]:
-    """Import tags from a JSON file into the database.
+    """Import tags from a YAML file into the database.
 
     Performs upsert operations - existing tags are updated, new tags are created.
 
     Args:
-        file_path: Path to the tags JSON file
+        file_path: Path to the tags YAML file
         db: Database manager instance
         create_nodes: If True, create nodes that don't exist. If False, skip tags
                      for non-existent nodes.

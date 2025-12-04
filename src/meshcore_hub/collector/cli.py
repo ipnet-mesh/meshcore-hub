@@ -1,8 +1,13 @@
 """CLI for the Collector component."""
 
+from typing import TYPE_CHECKING
+
 import click
 
 from meshcore_hub.common.logging import configure_logging
+
+if TYPE_CHECKING:
+    from meshcore_hub.common.database import DatabaseManager
 
 
 @click.group(invoke_without_command=True)
@@ -137,6 +142,7 @@ def collector(
             database_url=effective_db_url,
             log_level=log_level,
             data_home=data_home or settings.data_home,
+            seed_home=settings.effective_seed_home,
         )
 
 
@@ -149,8 +155,12 @@ def _run_collector_service(
     database_url: str,
     log_level: str,
     data_home: str,
+    seed_home: str,
 ) -> None:
     """Run the collector service.
+
+    On startup, automatically seeds the database from YAML files in seed_home
+    if they exist.
 
     Webhooks can be configured via environment variables:
     - WEBHOOK_ADVERTISEMENT_URL: Webhook for advertisement events
@@ -168,20 +178,48 @@ def _run_collector_service(
 
     click.echo("Starting MeshCore Collector")
     click.echo(f"Data home: {data_home}")
+    click.echo(f"Seed home: {seed_home}")
     click.echo(f"MQTT: {mqtt_host}:{mqtt_port} (prefix: {prefix})")
     click.echo(f"Database: {database_url}")
 
+    # Initialize database and run seed import on startup
+    from meshcore_hub.common.database import DatabaseManager
+
+    db = DatabaseManager(database_url)
+    db.create_tables()
+
+    # Auto-seed from seed files on startup
+    click.echo("")
+    click.echo("Checking for seed files...")
+    seed_home_path = Path(seed_home)
+    node_tags_exists = (seed_home_path / "node_tags.yaml").exists()
+    members_exists = (seed_home_path / "members.yaml").exists()
+
+    if node_tags_exists or members_exists:
+        click.echo("Running seed import...")
+        _run_seed_import(
+            seed_home=seed_home,
+            db=db,
+            create_nodes=True,
+            verbose=True,
+        )
+    else:
+        click.echo(f"No seed files found in {seed_home}")
+
+    db.dispose()
+
     # Load webhook configuration from settings
-    from meshcore_hub.common.config import get_collector_settings
     from meshcore_hub.collector.webhook import (
         WebhookDispatcher,
         create_webhooks_from_settings,
     )
+    from meshcore_hub.common.config import get_collector_settings
 
     settings = get_collector_settings()
     webhooks = create_webhooks_from_settings(settings)
     webhook_dispatcher = WebhookDispatcher(webhooks) if webhooks else None
 
+    click.echo("")
     if webhook_dispatcher and webhook_dispatcher.webhooks:
         click.echo(f"Webhooks configured: {len(webhooks)}")
         for wh in webhooks:
@@ -191,6 +229,8 @@ def _run_collector_service(
 
     from meshcore_hub.collector.subscriber import run_collector
 
+    click.echo("")
+    click.echo("Starting MQTT subscriber...")
     run_collector(
         mqtt_host=mqtt_host,
         mqtt_port=mqtt_port,
@@ -218,6 +258,7 @@ def run_cmd(ctx: click.Context) -> None:
         database_url=ctx.obj["database_url"],
         log_level=ctx.obj["log_level"],
         data_home=ctx.obj["data_home"],
+        seed_home=ctx.obj["seed_home"],
     )
 
 
@@ -236,17 +277,15 @@ def seed_cmd(
     """Import seed data from SEED_HOME directory.
 
     Looks for the following files in SEED_HOME:
-    - node_tags.json: Node tag definitions (keyed by public_key)
-    - members.json: Network member definitions
+    - node_tags.yaml: Node tag definitions (keyed by public_key)
+    - members.yaml: Network member definitions
 
     Files that don't exist are skipped. This command is idempotent -
     existing records are updated, new records are created.
 
-    SEED_HOME defaults to {DATA_HOME}/collector but can be overridden
+    SEED_HOME defaults to ./seed but can be overridden
     with the --seed-home option or SEED_HOME environment variable.
     """
-    from pathlib import Path
-
     configure_logging(level=ctx.obj["log_level"])
 
     seed_home = ctx.obj["seed_home"]
@@ -254,50 +293,18 @@ def seed_cmd(
     click.echo(f"Database: {ctx.obj['database_url']}")
 
     from meshcore_hub.common.database import DatabaseManager
-    from meshcore_hub.collector.tag_import import import_tags
-    from meshcore_hub.collector.member_import import import_members
 
     # Initialize database
     db = DatabaseManager(ctx.obj["database_url"])
     db.create_tables()
 
-    # Track what was imported
-    imported_any = False
-
-    # Import node tags if file exists
-    node_tags_file = Path(seed_home) / "node_tags.json"
-    if node_tags_file.exists():
-        click.echo(f"\nImporting node tags from: {node_tags_file}")
-        stats = import_tags(
-            file_path=str(node_tags_file),
-            db=db,
-            create_nodes=not no_create_nodes,
-        )
-        click.echo(f"  Tags: {stats['created']} created, {stats['updated']} updated")
-        if stats["nodes_created"]:
-            click.echo(f"  Nodes created: {stats['nodes_created']}")
-        if stats["errors"]:
-            for error in stats["errors"]:
-                click.echo(f"  Error: {error}", err=True)
-        imported_any = True
-    else:
-        click.echo(f"\nNo node_tags.json found in {seed_home}")
-
-    # Import members if file exists
-    members_file = Path(seed_home) / "members.json"
-    if members_file.exists():
-        click.echo(f"\nImporting members from: {members_file}")
-        stats = import_members(
-            file_path=str(members_file),
-            db=db,
-        )
-        click.echo(f"  Members: {stats['created']} created, {stats['updated']} updated")
-        if stats["errors"]:
-            for error in stats["errors"]:
-                click.echo(f"  Error: {error}", err=True)
-        imported_any = True
-    else:
-        click.echo(f"\nNo members.json found in {seed_home}")
+    # Run seed import
+    imported_any = _run_seed_import(
+        seed_home=seed_home,
+        db=db,
+        create_nodes=not no_create_nodes,
+        verbose=True,
+    )
 
     if not imported_any:
         click.echo("\nNo seed files found. Nothing to import.")
@@ -305,6 +312,76 @@ def seed_cmd(
         click.echo("\nSeed import complete.")
 
     db.dispose()
+
+
+def _run_seed_import(
+    seed_home: str,
+    db: "DatabaseManager",
+    create_nodes: bool = True,
+    verbose: bool = False,
+) -> bool:
+    """Run seed import from SEED_HOME directory.
+
+    Args:
+        seed_home: Path to seed home directory
+        db: Database manager instance
+        create_nodes: If True, create nodes that don't exist
+        verbose: If True, output progress messages
+
+    Returns:
+        True if any files were imported, False otherwise
+    """
+    from pathlib import Path
+
+    from meshcore_hub.collector.member_import import import_members
+    from meshcore_hub.collector.tag_import import import_tags
+
+    imported_any = False
+
+    # Import node tags if file exists
+    node_tags_file = Path(seed_home) / "node_tags.yaml"
+    if node_tags_file.exists():
+        if verbose:
+            click.echo(f"\nImporting node tags from: {node_tags_file}")
+        stats = import_tags(
+            file_path=str(node_tags_file),
+            db=db,
+            create_nodes=create_nodes,
+        )
+        if verbose:
+            click.echo(
+                f"  Tags: {stats['created']} created, {stats['updated']} updated"
+            )
+            if stats["nodes_created"]:
+                click.echo(f"  Nodes created: {stats['nodes_created']}")
+            if stats["errors"]:
+                for error in stats["errors"]:
+                    click.echo(f"  Error: {error}", err=True)
+        imported_any = True
+    elif verbose:
+        click.echo(f"\nNo node_tags.yaml found in {seed_home}")
+
+    # Import members if file exists
+    members_file = Path(seed_home) / "members.yaml"
+    if members_file.exists():
+        if verbose:
+            click.echo(f"\nImporting members from: {members_file}")
+        stats = import_members(
+            file_path=str(members_file),
+            db=db,
+        )
+        if verbose:
+            click.echo(
+                f"  Members: {stats['created']} created, {stats['updated']} updated"
+            )
+            if stats["errors"]:
+                for error in stats["errors"]:
+                    click.echo(f"  Error: {error}", err=True)
+        imported_any = True
+    elif verbose:
+        click.echo(f"\nNo members.yaml found in {seed_home}")
+
+    return imported_any
 
 
 @collector.command("import-tags")
@@ -321,32 +398,32 @@ def import_tags_cmd(
     file: str | None,
     no_create_nodes: bool,
 ) -> None:
-    """Import node tags from a JSON file.
+    """Import node tags from a YAML file.
 
-    Reads a JSON file containing tag definitions and upserts them
+    Reads a YAML file containing tag definitions and upserts them
     into the database. Existing tags are updated, new tags are created.
 
-    FILE is the path to the JSON file containing tags.
-    If not provided, defaults to {SEED_HOME}/node_tags.json.
+    FILE is the path to the YAML file containing tags.
+    If not provided, defaults to {SEED_HOME}/node_tags.yaml.
 
-    Expected JSON format (keyed by public_key):
+    Expected YAML format (keyed by public_key):
+
     \b
-    {
-      "0123456789abcdef...": {
-        "friendly_name": "My Node",
-        "location": {"value": "52.0,1.0", "type": "coordinate"},
-        "altitude": {"value": "150", "type": "number"}
-      }
-    }
+    0123456789abcdef...:
+      friendly_name: My Node
+      location:
+        value: "52.0,1.0"
+        type: coordinate
+      altitude:
+        value: "150"
+        type: number
 
     Shorthand is also supported (string values with default type):
+
     \b
-    {
-      "0123456789abcdef...": {
-        "friendly_name": "My Node",
-        "role": "gateway"
-      }
-    }
+    0123456789abcdef...:
+      friendly_name: My Node
+      role: gateway
 
     Supported types: string, number, boolean, coordinate
     """
@@ -362,7 +439,7 @@ def import_tags_cmd(
     if not Path(tags_file).exists():
         click.echo(f"Tags file not found: {tags_file}")
         if not file:
-            click.echo("Specify a file path or create the default node_tags.json.")
+            click.echo("Specify a file path or create the default node_tags.yaml.")
         return
 
     click.echo(f"Importing tags from: {tags_file}")
@@ -407,33 +484,29 @@ def import_members_cmd(
     ctx: click.Context,
     file: str | None,
 ) -> None:
-    """Import network members from a JSON file.
+    """Import network members from a YAML file.
 
-    Reads a JSON file containing member definitions and upserts them
+    Reads a YAML file containing member definitions and upserts them
     into the database. Existing members (matched by name) are updated,
     new members are created.
 
-    FILE is the path to the JSON file containing members.
-    If not provided, defaults to {SEED_HOME}/members.json.
+    FILE is the path to the YAML file containing members.
+    If not provided, defaults to {SEED_HOME}/members.yaml.
 
-    Expected JSON format (list):
+    Expected YAML format (list):
+
     \b
-    [
-      {
-        "name": "John Doe",
-        "callsign": "N0CALL",
-        "role": "Network Operator",
-        "description": "Example member"
-      }
-    ]
+    - name: John Doe
+      callsign: N0CALL
+      role: Network Operator
+      description: Example member
 
     Or with "members" key:
+
     \b
-    {
-      "members": [
-        {"name": "John Doe", "callsign": "N0CALL", ...}
-      ]
-    }
+    members:
+      - name: John Doe
+        callsign: N0CALL
     """
     from pathlib import Path
 
@@ -447,7 +520,7 @@ def import_members_cmd(
     if not Path(members_file).exists():
         click.echo(f"Members file not found: {members_file}")
         if not file:
-            click.echo("Specify a file path or create the default members.json.")
+            click.echo("Specify a file path or create the default members.yaml.")
         return
 
     click.echo(f"Importing members from: {members_file}")

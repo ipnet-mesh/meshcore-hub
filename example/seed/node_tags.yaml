@@ -1,0 +1,29 @@
+# Example node tags seed file
+# Each key is a 64-character hex public key
+#
+# Tag values can be:
+# - YAML primitives (auto-detected type):
+#     friendly_name: Gateway Node  # string
+#     elevation: 150               # number
+#     is_online: true              # boolean
+#
+# - Explicit type (for special types like coordinate):
+#     location:
+#       value: "37.7749,-122.4194"
+#       type: coordinate
+#
+# Supported types: string, number, boolean, coordinate
+
+0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef:
+  friendly_name: Gateway Node
+  role: gateway
+  lat: 37.7749
+  lon: -122.4194
+  is_online: true
+
+fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210:
+  friendly_name: Oakland Repeater
+  lat: 37.8044
+  lon: -122.2712
+  altitude: 150
+  is_online: false

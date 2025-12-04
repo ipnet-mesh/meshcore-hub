@@ -38,3 +38,4 @@ repos:
           - fastapi>=0.100.0
           - alembic>=1.7.0
           - types-paho-mqtt>=1.6.0
+          - types-PyYAML>=6.0.0

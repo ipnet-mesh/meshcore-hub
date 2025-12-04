@@ -1,0 +1,311 @@
+# IPNet Network Node Tags
+# Uses YAML primitives: numbers, booleans, and strings are auto-detected
+
+# IP2 Area Nodes
+2337484665ced7e210007e9fd9db98ced0a24a6eab8b4cbe3a06b3a1cea33ca1:
+  friendly_name: IP2 Repeater 1
+  node_id: ip2-rep01.ipnt.uk
+  member_id: louis
+  area: IP2
+  lat: 52.0357627
+  lon: 1.132079
+  location_description: Fountains Road
+  hardware: Heltec V3
+  antenna: Paradar 8.5dBi Omni
+  elevation: 31
+  show_on_map: true
+  is_public: true
+  is_online: true
+  is_testing: false
+  mesh_role: repeater
+
+8cb01fff1afc099055af418ce5fc5e60384df9ff763c25dd7e6a5e0922e8df90:
+  friendly_name: IP2 Repeater 2
+  node_id: ip2-rep02.ipnt.uk
+  member_id: louis
+  area: IP2
+  lat: 52.0390682
+  lon: 1.1304141
+  location_description: Belstead Road
+  hardware: Heltec V3
+  antenna: McGill 6dBi Omni
+  elevation: 44
+  show_on_map: true
+  is_public: true
+  is_online: true
+  is_testing: false
+  mesh_role: repeater
+
+5b565df747913358e24d890b2227de9c35d09763746b6ec326c15ebbf9b8be3b:
+  friendly_name: IP2 Repeater 3
+  node_id: ip2-rep03.ipnt.uk
+  member_id: louis
+  area: IP2
+  lat: 52.046356
+  lon: 1.134661
+  location_description: Birkfield Drive
+  hardware: Heltec V3
+  antenna: Paradar 8.5dBi Omni
+  elevation: 52
+  show_on_map: true
+  is_public: true
+  is_online: true
+  is_testing: false
+  mesh_role: repeater
+
+780d0939f90b22d3bd7cbedcaf4e8d468a12c01886ab24b8cfa11eab2f5516c5:
+  friendly_name: IP2 Integration 1
+  node_id: ip2-int01.ipnt.uk
+  member_id: louis
+  area: IP2
+  lat: 52.0354539
+  lon: 1.1295338
+  location_description: Fountains Road
+  hardware: Heltec V3
+  antenna: Generic 5dBi Whip
+  elevation: 25
+  show_on_map: false
+  is_public: true
+  is_online: true
+  is_testing: false
+  mesh_role: integration
+
+30121dc60362c633c457ffa18f49b3e1d6823402c33709f32d7df70612250b96:
+  friendly_name: MeshBot
+  node_id: bot.ipnt.uk
+  member_id: louis
+  area: IP2
+  lat: 52.0354539
+  lon: 1.1295338
+  location_description: Fountains Road
+  hardware: Heltec V3
+  antenna: Generic 5dBi Whip
+  elevation: 25
+  show_on_map: false
+  is_public: true
+  is_online: true
+  is_testing: false
+  mesh_role: integration
+
+# IP3 Area Nodes
+9135986b83815ada92883358435cc6528c7db60cb647f9b6547739a1ce5eb1c8:
+  friendly_name: IP3 Repeater 1
+  node_id: ip3-rep01.ipnt.uk
+  member_id: markab
+  area: IP3
+  lat: 52.045803
+  lon: 1.204416
+  location_description: Brokehall
+  hardware: Heltec V3
+  antenna: Paradar 8.5dBi Omni
+  elevation: 42
+  show_on_map: true
+  is_public: true
+  is_online: true
+  is_testing: false
+  mesh_role: repeater
+
+e334ec5475789d542ed9e692fbeef7444a371fcc05adcbda1f47ba6a3191b459:
+  friendly_name: IP3 Repeater 2
+  node_id: ip3-rep02.ipnt.uk
+  member_id: ccz
+  area: IP3
+  lat: 52.03297
+  lon: 1.17543
+  location_description: Morland Road Allotments
+  hardware: Heltec T114
+  antenna: Unknown
+  elevation: 39
+  show_on_map: true
+  is_public: true
+  is_online: true
+  is_testing: false
+  mesh_role: repeater
+
+cc15fb33e98f2e098a543f516f770dc3061a1a6b30f79b84780663bf68ae6b53:
+  friendly_name: IP3 Repeater 3
+  node_id: ip3-rep03.ipnt.uk
+  member_id: ccz
+  area: IP3
+  lat: 52.04499
+  lon: 1.18149
+  location_description: Hatfield Road
+  hardware: Heltec V3
+  antenna: Unknown
+  elevation: 39
+  show_on_map: true
+  is_public: true
+  is_online: true
+  is_testing: false
+  mesh_role: repeater
+
+22309435fbd9dd1f14870a1895dc854779f6b2af72b08542f6105d264a493ebe:
+  friendly_name: IP3 Integration 1
+  node_id: ip3-int01.ipnt.uk
+  member_id: markab
+  area: IP3
+  lat: 52.045773
+  lon: 1.212808
+  location_description: Brokehall
+  hardware: Heltec V3
+  antenna: Generic 3dBi Whip
+  elevation: 37
+  show_on_map: false
+  is_public: true
+  is_online: false
+  is_testing: false
+  mesh_role: integration
+
+2a4f89e766dfa1758e35a69962c1f6d352b206a5e3562a589155a3ebfe7fc2bb:
+  friendly_name: IP3 Repeater 4
+  node_id: ip3-rep04.ipnt.uk
+  member_id: markab
+  area: IP3
+  lat: 52.046383
+  lon: 1.174542
+  location_description: Holywells
+  hardware: Sensecap Solar
+  antenna: Paradar 6.5dbi Omni
+  elevation: 21
+  show_on_map: true
+  is_public: true
+  is_online: true
+  is_testing: false
+  mesh_role: repeater
+
+e790b73b2d6e377dd0f575c847f3ef42232f610eb9a19af57083fc4f647309ac:
+  friendly_name: IP3 Repeater 5
+  node_id: ip3-rep05.ipnt.uk
+  member_id: markab
+  area: IP3
+  lat: 52.05252
+  lon: 1.17034
+  location_description: Back Hamlet
+  hardware: Heltec T114
+  antenna: Paradar 6.5dBi Omni
+  elevation: 38
+  show_on_map: true
+  is_public: true
+  is_online: true
+  is_testing: false
+  mesh_role: repeater
+
+20ed75ffc0f9777951716bb3d308d7f041fd2ad32fe2e998e600d0361e1fe2ac:
+  friendly_name: IP3 Repeater 6
+  node_id: ip3-rep06.ipnt.uk
+  member_id: ccz
+  area: IP3
+  lat: 52.04893
+  lon: 1.18965
+  location_description: Dover Road
+  hardware: Unknown
+  antenna: Generic 5dBi Whip
+  elevation: 38
+  show_on_map: true
+  is_public: true
+  is_online: true
+  is_testing: false
+  mesh_role: repeater
+
+69fb8431e7ab307513797544fab99ce53ce24c46ec2d3a11767fe70f2ca37b23:
+  friendly_name: IP3 Test Repeater 1
+  node_id: ip3-tst01.ipnt.uk
+  member_id: markab
+  area: IP3
+  lat: 52.041869
+  lon: 1.204789
+  location_description: Brokehall
+  hardware: Station G2
+  antenna: McGill 10dBi Panel
+  elevation: 37
+  show_on_map: true
+  is_public: true
+  is_online: false
+  is_testing: true
+  mesh_role: repeater
+
+# IP4 Area Nodes
+d3c20d962f7384c111fbafad6fbc1c1dc0e5c3ce802fb3ee11020e8d8207ed3a:
+  friendly_name: IP4 Repeater 1
+  node_id: ip4-rep01.ipnt.uk
+  member_id: markab
+  area: IP4
+  lat: 52.052445
+  lon: 1.156882
+  location_description: Wine Rack
+  hardware: Heltec T114
+  antenna: Generic 5dbi Whip
+  elevation: 50
+  show_on_map: true
+  is_public: true
+  is_online: true
+  is_testing: false
+  mesh_role: repeater
+
+b00ce9d218203e96d8557a4d59e06f5de59bbc4dcc4df9c870079d2cb8b5bd80:
+  friendly_name: IP4 Repeater 2
+  node_id: ip4-rep02.ipnt.uk
+  member_id: markab
+  area: IP4
+  lat: 52.06217
+  lon: 1.18332
+  location_description: Rushmere Road
+  hardware: Heltec V3
+  antenna: Paradar 5dbi Whip
+  elevation: 35
+  show_on_map: true
+  is_public: true
+  is_online: false
+  is_testing: false
+  mesh_role: repeater
+
+8accb6d0189ccaffb745ba54793e7fe3edd515edb45554325d957e48c1b9f3b3:
+  friendly_name: IP4 Repeater 3
+  node_id: ip4-rep03.ipnt.uk
+  member_id: craig
+  area: IP4
+  lat: 52.058
+  lon: 1.165
+  location_description: IP4 Area
+  hardware: Heltec v3
+  antenna: Generic Whip
+  elevation: 30
+  show_on_map: true
+  is_public: true
+  is_online: true
+  is_testing: false
+  mesh_role: repeater
+
+# IP8 Area Nodes
+bd7b5ac75f660675b39f368e1dbb6d1dbcefd8bd7a170e21a942954f67c8bf52:
+  friendly_name: IP8 Repeater 1
+  node_id: rep01.ip8.ipnt.uk
+  member_id: walshie86
+  area: IP8
+  lat: 52.033684
+  lon: 1.118384
+  location_description: Grove Hill
+  hardware: Heltec V3
+  antenna: McGill 3dBi Omni
+  elevation: 13
+  show_on_map: true
+  is_public: true
+  is_online: true
+  is_testing: false
+  mesh_role: repeater
+
+9cf300c40112ea34d0a59858270948b27ab6cd87e840de338f3ca782c17537b2:
+  friendly_name: IP8 Repeater 2
+  node_id: rep02.ip8.ipnt.uk
+  member_id: walshie86
+  area: IP8
+  lat: 52.035648
+  lon: 1.073271
+  location_description: Washbrook
+  hardware: Sensecap Solar
+  elevation: 13
+  show_on_map: true
+  is_public: true
+  is_online: true
+  is_testing: false
+  mesh_role: repeater

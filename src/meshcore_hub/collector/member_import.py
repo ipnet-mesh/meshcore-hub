@@ -1,10 +1,10 @@
-"""Import members from JSON file."""
+"""Import members from YAML file."""
 
-import json
 import logging
 from pathlib import Path
 from typing import Any, Optional
 
+import yaml
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 
@@ -38,24 +38,31 @@ class MemberData(BaseModel):
 
 
 def load_members_file(file_path: str | Path) -> list[dict[str, Any]]:
-    """Load and validate members from a JSON file.
+    """Load and validate members from a YAML file.
 
     Supports two formats:
     1. List of member objects:
-       [{"name": "Member 1", ...}, {"name": "Member 2", ...}]
+
+        - name: Member 1
+          callsign: M1
+        - name: Member 2
+          callsign: M2
 
     2. Object with "members" key:
-       {"members": [{"name": "Member 1", ...}, ...]}
+
+        members:
+          - name: Member 1
+            callsign: M1
 
     Args:
-        file_path: Path to the members JSON file
+        file_path: Path to the members YAML file
 
     Returns:
         List of validated member dictionaries
 
     Raises:
         FileNotFoundError: If file does not exist
-        json.JSONDecodeError: If file is not valid JSON
+        yaml.YAMLError: If file is not valid YAML
         ValueError: If file content is invalid
     """
     path = Path(file_path)
@@ -63,7 +70,7 @@ def load_members_file(file_path: str | Path) -> list[dict[str, Any]]:
         raise FileNotFoundError(f"Members file not found: {file_path}")
 
     with open(path, "r") as f:
-        data = json.load(f)
+        data = yaml.safe_load(f)
 
     # Handle both formats
     if isinstance(data, list):
@@ -73,7 +80,7 @@ def load_members_file(file_path: str | Path) -> list[dict[str, Any]]:
         if not isinstance(members_list, list):
             raise ValueError("'members' key must contain a list")
     else:
-        raise ValueError("Members file must be a list or an object with 'members' key")
+        raise ValueError("Members file must be a list or a mapping with 'members' key")
 
     # Validate each member
     validated: list[dict[str, Any]] = []
@@ -97,13 +104,13 @@ def import_members(
     file_path: str | Path,
     db: DatabaseManager,
 ) -> dict[str, Any]:
-    """Import members from a JSON file into the database.
+    """Import members from a YAML file into the database.
 
     Performs upsert operations based on name - existing members are updated,
     new members are created.
 
     Args:
-        file_path: Path to the members JSON file
+        file_path: Path to the members YAML file
         db: Database manager instance
 
     Returns:

@@ -80,7 +80,7 @@ class CollectorSettings(CommonSettings):
         description="SQLAlchemy database URL (default: sqlite:///{data_home}/collector/meshcore.db)",
     )
 
-    # Seed home directory - contains initial data files (node_tags.json, members.json)
+    # Seed home directory - contains initial data files (node_tags.yaml, members.yaml)
     seed_home: str = Field(
         default="./seed",
         description="Directory containing seed data files (default: ./seed)",
@@ -147,17 +147,17 @@ class CollectorSettings(CommonSettings):
 
     @property
     def node_tags_file(self) -> str:
-        """Get the path to node_tags.json in seed_home."""
+        """Get the path to node_tags.yaml in seed_home."""
         from pathlib import Path
 
-        return str(Path(self.effective_seed_home) / "node_tags.json")
+        return str(Path(self.effective_seed_home) / "node_tags.yaml")
 
     @property
     def members_file(self) -> str:
-        """Get the path to members.json in seed_home."""
+        """Get the path to members.yaml in seed_home."""
         from pathlib import Path
 
-        return str(Path(self.effective_seed_home) / "members.json")
+        return str(Path(self.effective_seed_home) / "members.yaml")
 
     @field_validator("database_url")
     @classmethod

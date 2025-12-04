@@ -64,8 +64,8 @@ class TestCollectorSettings:
         assert settings.seed_home == "./seed"
         assert settings.effective_seed_home == "seed"
         # node_tags_file and members_file are derived from effective_seed_home
-        assert settings.node_tags_file == "seed/node_tags.json"
-        assert settings.members_file == "seed/members.json"
+        assert settings.node_tags_file == "seed/node_tags.yaml"
+        assert settings.members_file == "seed/members.yaml"
 
     def test_custom_data_home(self) -> None:
         """Test that custom data_home affects effective paths."""
@@ -78,8 +78,8 @@ class TestCollectorSettings:
         assert settings.collector_data_dir == "/custom/data/collector"
         # seed_home is independent of data_home
         assert settings.effective_seed_home == "seed"
-        assert settings.node_tags_file == "seed/node_tags.json"
-        assert settings.members_file == "seed/members.json"
+        assert settings.node_tags_file == "seed/node_tags.yaml"
+        assert settings.members_file == "seed/members.yaml"
 
     def test_explicit_database_url_overrides(self) -> None:
         """Test that explicit database_url overrides the default."""
@@ -96,8 +96,8 @@ class TestCollectorSettings:
 
         assert settings.seed_home == "/seed/data"
         assert settings.effective_seed_home == "/seed/data"
-        assert settings.node_tags_file == "/seed/data/node_tags.json"
-        assert settings.members_file == "/seed/data/members.json"
+        assert settings.node_tags_file == "/seed/data/node_tags.yaml"
+        assert settings.members_file == "/seed/data/members.yaml"
 
 
 class TestAPISettings:
