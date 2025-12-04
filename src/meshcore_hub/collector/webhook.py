@@ -404,7 +404,7 @@ _dispatch_callback: Optional[Callable[[str, dict[str, Any], Optional[str]], None
 
 
 def set_dispatch_callback(
-    callback: Optional[Callable[[str, dict[str, Any], Optional[str]], None]]
+    callback: Optional[Callable[[str, dict[str, Any], Optional[str]], None]],
 ) -> None:
     """Set a callback for synchronous webhook dispatch.
 
