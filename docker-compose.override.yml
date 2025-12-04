@@ -1,0 +1,14 @@
+services:
+  api:
+    networks:
+      - default
+      - pangolin
+
+  web:
+    networks:
+      - default
+      - pangolin
+
+networks:
+  pangolin:
+    external: true
