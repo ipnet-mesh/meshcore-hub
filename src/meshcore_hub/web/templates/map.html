@@ -292,6 +292,25 @@
             allMembers = data.members || [];
             mapCenter = data.center;
 
+            // Log debug info
+            const debug = data.debug || {};
+            console.log('Map data loaded:', debug);
+
+            if (debug.error) {
+                document.getElementById('node-count').textContent = `Error: ${debug.error}`;
+                return;
+            }
+
+            if (debug.total_nodes === 0) {
+                document.getElementById('node-count').textContent = 'No nodes in database';
+                return;
+            }
+
+            if (debug.nodes_with_coords === 0) {
+                document.getElementById('node-count').textContent = `${debug.total_nodes} nodes (none have coordinates)`;
+                return;
+            }
+
             // Populate owner filter
             populateOwnerFilter();
 

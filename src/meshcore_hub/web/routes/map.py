@@ -31,6 +31,9 @@ async def map_data(request: Request) -> JSONResponse:
     nodes_with_location: list[dict[str, Any]] = []
     members_list: list[dict[str, Any]] = []
     members_by_key: dict[str, dict[str, Any]] = {}
+    error: str | None = None
+    total_nodes = 0
+    nodes_with_coords = 0
 
     try:
         # Fetch all members to build lookup by public_key
@@ -48,6 +51,10 @@ async def map_data(request: Request) -> JSONResponse:
                 members_list.append(member_info)
                 if member.get("public_key"):
                     members_by_key[member["public_key"]] = member_info
+        else:
+            logger.warning(
+                f"Failed to fetch members: status {members_response.status_code}"
+            )
 
         # Fetch all nodes from API
         response = await request.app.state.http_client.get(
@@ -56,6 +63,7 @@ async def map_data(request: Request) -> JSONResponse:
         if response.status_code == 200:
             data = response.json()
             nodes = data.get("items", [])
+            total_nodes = len(nodes)
 
             # Filter nodes with location tags
             for node in nodes:
@@ -83,6 +91,7 @@ async def map_data(request: Request) -> JSONResponse:
                         role = tag.get("value")
 
                 if lat is not None and lon is not None:
+                    nodes_with_coords += 1
                     # Use friendly_name, then node name, then public key prefix
                     display_name = (
                         friendly_name
@@ -107,12 +116,20 @@ async def map_data(request: Request) -> JSONResponse:
                             "owner": owner,
                         }
                     )
+        else:
+            error = f"API returned status {response.status_code}"
+            logger.warning(f"Failed to fetch nodes: {error}")
 
     except Exception as e:
+        error = str(e)
         logger.warning(f"Failed to fetch nodes for map: {e}")
 
     # Get network center location
     network_location = request.app.state.network_location
+
+    logger.info(
+        f"Map data: {total_nodes} total nodes, " f"{nodes_with_coords} with coordinates"
+    )
 
     return JSONResponse(
         {
@@ -121,6 +138,11 @@ async def map_data(request: Request) -> JSONResponse:
             "center": {
                 "lat": network_location[0],
                 "lon": network_location[1],
+            },
+            "debug": {
+                "total_nodes": total_nodes,
+                "nodes_with_coords": nodes_with_coords,
+                "error": error,
             },
         }
     )
