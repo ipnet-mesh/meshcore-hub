@@ -19,7 +19,7 @@ async def list_nodes(
     session: DbSession,
     search: Optional[str] = Query(None, description="Search in name or public key"),
     adv_type: Optional[str] = Query(None, description="Filter by advertisement type"),
-    limit: int = Query(50, ge=1, le=100, description="Page size"),
+    limit: int = Query(50, ge=1, le=500, description="Page size"),
     offset: int = Query(0, ge=0, description="Page offset"),
 ) -> NodeList:
     """List all nodes with pagination and filtering."""

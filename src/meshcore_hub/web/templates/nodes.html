@@ -69,16 +69,16 @@
                     <a href="/nodes/{{ node.public_key }}" class="link link-hover">{{ ns.friendly_name or node.name or '-' }}</a>
                 </td>
                 <td>
-                    {% if node.adv_type == 'chat' %}
-                    <span class="badge badge-primary badge-sm">chat</span>
-                    {% elif node.adv_type == 'repeater' %}
-                    <span class="badge badge-secondary badge-sm">repeater</span>
-                    {% elif node.adv_type == 'room' %}
-                    <span class="badge badge-accent badge-sm">room</span>
+                    {% if node.adv_type and node.adv_type|lower == 'chat' %}
+                    <span title="Chat">💬</span>
+                    {% elif node.adv_type and node.adv_type|lower == 'repeater' %}
+                    <span title="Repeater">📡</span>
+                    {% elif node.adv_type and node.adv_type|lower == 'room' %}
+                    <span title="Room">🪧</span>
                     {% elif node.adv_type %}
-                    <span class="badge badge-ghost badge-sm">{{ node.adv_type }}</span>
+                    <span title="{{ node.adv_type }}">📍</span>
                     {% else %}
-                    <span class="badge badge-ghost badge-sm">-</span>
+                    <span class="opacity-50">-</span>
                     {% endif %}
                 </td>
                 <td class="font-mono text-xs truncate-cell" title="{{ node.public_key }}">

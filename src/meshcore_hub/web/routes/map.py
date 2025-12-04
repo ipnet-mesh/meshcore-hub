@@ -124,20 +124,28 @@ async def map_data(request: Request) -> JSONResponse:
         error = str(e)
         logger.warning(f"Failed to fetch nodes for map: {e}")
 
-    # Get network center location
-    network_location = request.app.state.network_location
-
     logger.info(
         f"Map data: {total_nodes} total nodes, " f"{nodes_with_coords} with coordinates"
     )
+
+    # Calculate center from nodes, or use default (0, 0)
+    center_lat = 0.0
+    center_lon = 0.0
+    if nodes_with_location:
+        center_lat = sum(n["lat"] for n in nodes_with_location) / len(
+            nodes_with_location
+        )
+        center_lon = sum(n["lon"] for n in nodes_with_location) / len(
+            nodes_with_location
+        )
 
     return JSONResponse(
         {
             "nodes": nodes_with_location,
             "members": members_list,
             "center": {
-                "lat": network_location[0],
-                "lon": network_location[1],
+                "lat": center_lat,
+                "lon": center_lon,
             },
             "debug": {
                 "total_nodes": total_nodes,

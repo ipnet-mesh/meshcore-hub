@@ -53,7 +53,6 @@ def create_app(
     network_name: str | None = None,
     network_city: str | None = None,
     network_country: str | None = None,
-    network_location: tuple[float, float] | None = None,
     network_radio_config: str | None = None,
     network_contact_email: str | None = None,
     network_contact_discord: str | None = None,
@@ -71,7 +70,6 @@ def create_app(
         network_name: Display name for the network
         network_city: City where the network is located
         network_country: Country where the network is located
-        network_location: (lat, lon) tuple for map centering
         network_radio_config: Radio configuration description
         network_contact_email: Contact email address
         network_contact_discord: Discord invite/server info
@@ -101,7 +99,6 @@ def create_app(
     app.state.network_name = network_name or settings.network_name
     app.state.network_city = network_city or settings.network_city
     app.state.network_country = network_country or settings.network_country
-    app.state.network_location = network_location or (0.0, 0.0)
     app.state.network_radio_config = (
         network_radio_config or settings.network_radio_config
     )
@@ -168,7 +165,6 @@ def get_network_context(request: Request) -> dict:
         "network_name": request.app.state.network_name,
         "network_city": request.app.state.network_city,
         "network_country": request.app.state.network_country,
-        "network_location": request.app.state.network_location,
         "network_radio_config": radio_config,
         "network_contact_email": request.app.state.network_contact_email,
         "network_contact_discord": request.app.state.network_contact_discord,

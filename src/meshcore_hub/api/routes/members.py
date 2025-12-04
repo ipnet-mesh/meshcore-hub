@@ -20,7 +20,7 @@ router = APIRouter()
 async def list_members(
     _: RequireRead,
     session: DbSession,
-    limit: int = Query(default=50, ge=1, le=100),
+    limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> MemberList:
     """List all members with pagination."""

@@ -73,24 +73,24 @@
 <div class="mt-4 flex flex-wrap gap-4 items-center text-sm">
     <span class="opacity-70">Legend:</span>
     <div class="flex items-center gap-1">
-        <div class="w-3 h-3 rounded-full" style="background-color: oklch(var(--p));"></div>
+        <span class="text-lg">💬</span>
         <span>Chat</span>
     </div>
     <div class="flex items-center gap-1">
-        <div class="w-3 h-3 rounded-full" style="background-color: oklch(var(--s));"></div>
+        <span class="text-lg">📡</span>
         <span>Repeater</span>
     </div>
     <div class="flex items-center gap-1">
-        <div class="w-3 h-3 rounded-full" style="background-color: oklch(var(--a));"></div>
+        <span class="text-lg">🪧</span>
         <span>Room</span>
     </div>
     <div class="flex items-center gap-1">
-        <div class="w-3 h-3 rounded-full" style="background-color: oklch(var(--n));"></div>
+        <span class="text-lg">📍</span>
         <span>Other</span>
     </div>
     <div class="flex items-center gap-1">
-        <div class="w-3 h-3 rounded-full" style="background-color: oklch(var(--n)); border: 2px solid gold; box-shadow: 0 0 4px gold;"></div>
-        <span>Infrastructure</span>
+        <span class="text-lg" style="filter: drop-shadow(0 0 4px gold);">📡</span>
+        <span>Infrastructure (gold glow)</span>
     </div>
 </div>
 
@@ -101,8 +101,8 @@
 
 {% block extra_scripts %}
 <script>
-    // Initialize map
-    const map = L.map('map').setView([{{ network_location[0] }}, {{ network_location[1] }}], 10);
+    // Initialize map with world view (will be centered on nodes once loaded)
+    const map = L.map('map').setView([0, 0], 2);
 
     // Add tile layer
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -113,27 +113,44 @@
     let allNodes = [];
     let allMembers = [];
     let markers = [];
-    let mapCenter = { lat: {{ network_location[0] }}, lon: {{ network_location[1] }} };
+    let mapCenter = { lat: 0, lon: 0 };
 
-    // Get marker color based on node type
-    function getMarkerColor(node) {
-        if (node.adv_type === 'chat') return 'oklch(var(--p))';
-        if (node.adv_type === 'repeater') return 'oklch(var(--s))';
-        if (node.adv_type === 'room') return 'oklch(var(--a))';
-        return 'oklch(var(--n))';
+    // Normalize adv_type to lowercase for consistent comparison
+    function normalizeType(type) {
+        return type ? type.toLowerCase() : null;
+    }
+
+    // Get emoji marker based on node type
+    function getNodeEmoji(node) {
+        const type = normalizeType(node.adv_type);
+        if (type === 'chat') return '💬';
+        if (type === 'repeater') return '📡';
+        if (type === 'room') return '🪧';
+        return '📍';
+    }
+
+    // Get display name for node type
+    function getTypeDisplay(node) {
+        const type = normalizeType(node.adv_type);
+        if (type === 'chat') return 'Chat';
+        if (type === 'repeater') return 'Repeater';
+        if (type === 'room') return 'Room';
+        return type ? type.charAt(0).toUpperCase() + type.slice(1) : 'Unknown';
     }
 
     // Create marker icon for a node
     function createNodeIcon(node) {
-        const color = getMarkerColor(node);
-        const infraStyle = node.is_infra
-            ? 'border: 3px solid gold; box-shadow: 0 0 8px gold, 0 2px 4px rgba(0,0,0,0.3);'
-            : 'border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);';
+        const emoji = getNodeEmoji(node);
+        const infraGlow = node.is_infra ? 'filter: drop-shadow(0 0 4px gold);' : '';
+        const keyPrefix = node.public_key ? node.public_key.substring(0, 2).toLowerCase() : '';
         return L.divIcon({
             className: 'custom-div-icon',
-            html: `<div style="background-color: ${color}; width: 12px; height: 12px; border-radius: 50%; ${infraStyle}"></div>`,
-            iconSize: [12, 12],
-            iconAnchor: [6, 6]
+            html: `<div style="display: flex; align-items: center; gap: 2px;">
+                <span style="font-size: 24px; ${infraGlow} text-shadow: 0 0 3px #1a237e, 0 0 6px #1a237e, 0 1px 2px rgba(0,0,0,0.7);">${emoji}</span>
+                <span style="font-size: 10px; font-weight: bold; color: #000; background: rgba(255,255,255,0.9); padding: 1px 4px; border-radius: 3px; box-shadow: 0 1px 3px rgba(0,0,0,0.3);">${keyPrefix}</span>
+            </div>`,
+            iconSize: [52, 28],
+            iconAnchor: [14, 14]
         });
     }
 
@@ -153,11 +170,14 @@
             roleHtml = `<p><span class="opacity-70">Role:</span> <span class="badge badge-xs ${roleClass}">${node.role}</span></p>`;
         }
 
+        const emoji = getNodeEmoji(node);
+        const typeDisplay = getTypeDisplay(node);
+
         return `
             <div class="p-2">
-                <h3 class="font-bold text-lg mb-2">${node.name}</h3>
+                <h3 class="font-bold text-lg mb-2">${emoji} ${node.name}</h3>
                 <div class="space-y-1 text-sm">
-                    <p><span class="opacity-70">Type:</span> ${node.adv_type || 'Unknown'}</p>
+                    <p><span class="opacity-70">Type:</span> ${typeDisplay}</p>
                     ${roleHtml}
                     ${ownerHtml}
                     <p><span class="opacity-70">Key:</span> <code class="text-xs">${node.public_key.substring(0, 16)}...</code></p>
@@ -183,8 +203,8 @@
 
         // Filter nodes
         const filteredNodes = allNodes.filter(node => {
-            // Type filter
-            if (typeFilter && node.adv_type !== typeFilter) return false;
+            // Type filter (case-insensitive)
+            if (typeFilter && normalizeType(node.adv_type) !== typeFilter) return false;
 
             // Infrastructure filter
             if (infraOnly && !node.is_infra) return false;
@@ -295,6 +315,7 @@
             // Log debug info
             const debug = data.debug || {};
             console.log('Map data loaded:', debug);
+            console.log('Sample node data:', allNodes.length > 0 ? allNodes[0] : 'No nodes');
 
             if (debug.error) {
                 document.getElementById('node-count').textContent = `Error: ${debug.error}`;

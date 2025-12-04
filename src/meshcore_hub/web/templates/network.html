@@ -106,16 +106,16 @@
                                 {% endif %}
                             </td>
                             <td>
-                                {% if ad.adv_type == 'chat' %}
-                                <span class="badge badge-primary badge-xs">chat</span>
-                                {% elif ad.adv_type == 'repeater' %}
-                                <span class="badge badge-secondary badge-xs">repeater</span>
-                                {% elif ad.adv_type == 'room' %}
-                                <span class="badge badge-accent badge-xs">room</span>
+                                {% if ad.adv_type and ad.adv_type|lower == 'chat' %}
+                                <span title="Chat">💬</span>
+                                {% elif ad.adv_type and ad.adv_type|lower == 'repeater' %}
+                                <span title="Repeater">📡</span>
+                                {% elif ad.adv_type and ad.adv_type|lower == 'room' %}
+                                <span title="Room">🪧</span>
                                 {% elif ad.adv_type %}
-                                <span class="badge badge-ghost badge-xs">{{ ad.adv_type }}</span>
+                                <span title="{{ ad.adv_type }}">📍</span>
                                 {% else %}
-                                <span class="badge badge-ghost badge-xs">-</span>
+                                <span class="opacity-50">-</span>
                                 {% endif %}
                             </td>
                             <td class="text-right text-sm opacity-70">{{ ad.received_at.split('T')[1][:8] if ad.received_at else '-' }}</td>

@@ -61,20 +61,6 @@ import click
     help="Network country",
 )
 @click.option(
-    "--network-lat",
-    type=float,
-    default=None,
-    envvar="NETWORK_LAT",
-    help="Network center latitude",
-)
-@click.option(
-    "--network-lon",
-    type=float,
-    default=None,
-    envvar="NETWORK_LON",
-    help="Network center longitude",
-)
-@click.option(
     "--network-radio-config",
     type=str,
     default=None,
@@ -126,8 +112,6 @@ def web(
     network_name: str | None,
     network_city: str | None,
     network_country: str | None,
-    network_lat: float | None,
-    network_lon: float | None,
     network_radio_config: str | None,
     network_contact_email: str | None,
     network_contact_discord: str | None,
@@ -190,20 +174,8 @@ def web(
     effective_country = network_country or settings.network_country
     if effective_city and effective_country:
         click.echo(f"Location: {effective_city}, {effective_country}")
-    effective_lat = network_lat if network_lat is not None else 0.0
-    effective_lon = network_lon if network_lon is not None else 0.0
-    if effective_lat != 0.0 or effective_lon != 0.0:
-        click.echo(f"Map center: {effective_lat}, {effective_lon}")
     click.echo(f"Reload mode: {reload}")
     click.echo("=" * 50)
-
-    # Build network_location tuple only if explicitly provided
-    network_location: tuple[float, float] | None = None
-    if network_lat is not None or network_lon is not None:
-        network_location = (
-            network_lat if network_lat is not None else 0.0,
-            network_lon if network_lon is not None else 0.0,
-        )
 
     if reload:
         # For development, use uvicorn's reload feature
@@ -225,7 +197,6 @@ def web(
             network_name=network_name,
             network_city=network_city,
             network_country=network_country,
-            network_location=network_location,
             network_radio_config=network_radio_config,
             network_contact_email=network_contact_email,
             network_contact_discord=network_contact_discord,

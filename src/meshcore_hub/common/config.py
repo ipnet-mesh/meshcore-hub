@@ -231,9 +231,6 @@ class WebSettings(CommonSettings):
     network_country: Optional[str] = Field(
         default=None, description="Network country (ISO 3166-1 alpha-2)"
     )
-    network_location: Optional[str] = Field(
-        default=None, description="Network location (lat,lon)"
-    )
     network_radio_config: Optional[str] = Field(
         default=None, description="Radio configuration details"
     )
