@@ -84,8 +84,18 @@ class AdvertisementRead(BaseModel):
     received_by: Optional[str] = Field(
         default=None, description="Receiving interface node public key"
     )
+    receiver_name: Optional[str] = Field(default=None, description="Receiver node name")
+    receiver_friendly_name: Optional[str] = Field(
+        default=None, description="Receiver friendly name from tags"
+    )
     public_key: str = Field(..., description="Advertised public key")
     name: Optional[str] = Field(default=None, description="Advertised name")
+    node_name: Optional[str] = Field(
+        default=None, description="Node name from nodes table"
+    )
+    node_friendly_name: Optional[str] = Field(
+        default=None, description="Node friendly name from tags"
+    )
     adv_type: Optional[str] = Field(default=None, description="Node type")
     flags: Optional[int] = Field(default=None, description="Capability flags")
     received_at: datetime = Field(..., description="When received")
