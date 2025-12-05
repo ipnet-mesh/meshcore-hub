@@ -158,20 +158,19 @@
         </div>
     </div>
 
-    <!-- Quick Links Card -->
+    <!-- Network Activity Chart -->
     <div class="card bg-base-100 shadow-xl">
         <div class="card-body">
             <h2 class="card-title">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
                 </svg>
-                Quick Links
+                Network Activity
             </h2>
-            <ul class="menu bg-base-200 rounded-box">
-                <li><a href="/messages">Recent Messages</a></li>
-                <li><a href="/nodes">All Nodes</a></li>
-                <li><a href="/members">Network Members</a></li>
-            </ul>
+            <p class="text-sm opacity-70 mb-2">Advertisements received per day (last 7 days)</p>
+            <div class="h-48">
+                <canvas id="activityChart"></canvas>
+            </div>
         </div>
     </div>
 
@@ -216,4 +215,86 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function() {
+    const activityData = {{ activity_json | safe }};
+    const ctx = document.getElementById('activityChart');
+
+    if (ctx && activityData.data && activityData.data.length > 0) {
+        // Format dates for display (show only day/month)
+        const labels = activityData.data.map(d => {
+            const date = new Date(d.date);
+            return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        });
+        const counts = activityData.data.map(d => d.count);
+
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Advertisements',
+                    data: counts,
+                    borderColor: 'oklch(0.7 0.15 250)',
+                    backgroundColor: 'oklch(0.7 0.15 250 / 0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 2,
+                    pointHoverRadius: 5
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        backgroundColor: 'oklch(0.25 0 0)',
+                        titleColor: 'oklch(0.9 0 0)',
+                        bodyColor: 'oklch(0.9 0 0)',
+                        borderColor: 'oklch(0.4 0 0)',
+                        borderWidth: 1
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            color: 'oklch(0.4 0 0 / 0.2)'
+                        },
+                        ticks: {
+                            color: 'oklch(0.7 0 0)',
+                            maxRotation: 45,
+                            minRotation: 45,
+                            maxTicksLimit: 10
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'oklch(0.4 0 0 / 0.2)'
+                        },
+                        ticks: {
+                            color: 'oklch(0.7 0 0)',
+                            precision: 0
+                        }
+                    }
+                },
+                interaction: {
+                    mode: 'nearest',
+                    axis: 'x',
+                    intersect: false
+                }
+            }
+        });
+    }
+})();
+</script>
 {% endblock %}

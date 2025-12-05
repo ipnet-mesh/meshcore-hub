@@ -1,5 +1,6 @@
 """Network overview page route."""
 
+import json
 import logging
 
 from fastapi import APIRouter, Request
@@ -30,6 +31,11 @@ async def network_overview(request: Request) -> HTMLResponse:
         "channel_message_counts": {},
     }
 
+    # Fetch activity data for charts (7 days)
+    advert_activity = {"days": 7, "data": []}
+    message_activity = {"days": 7, "data": []}
+    node_count = {"days": 7, "data": []}
+
     try:
         response = await request.app.state.http_client.get("/api/v1/dashboard/stats")
         if response.status_code == 200:
@@ -38,6 +44,36 @@ async def network_overview(request: Request) -> HTMLResponse:
         logger.warning(f"Failed to fetch stats from API: {e}")
         context["api_error"] = str(e)
 
+    try:
+        response = await request.app.state.http_client.get(
+            "/api/v1/dashboard/activity", params={"days": 7}
+        )
+        if response.status_code == 200:
+            advert_activity = response.json()
+    except Exception as e:
+        logger.warning(f"Failed to fetch advertisement activity from API: {e}")
+
+    try:
+        response = await request.app.state.http_client.get(
+            "/api/v1/dashboard/message-activity", params={"days": 7}
+        )
+        if response.status_code == 200:
+            message_activity = response.json()
+    except Exception as e:
+        logger.warning(f"Failed to fetch message activity from API: {e}")
+
+    try:
+        response = await request.app.state.http_client.get(
+            "/api/v1/dashboard/node-count", params={"days": 7}
+        )
+        if response.status_code == 200:
+            node_count = response.json()
+    except Exception as e:
+        logger.warning(f"Failed to fetch node count from API: {e}")
+
     context["stats"] = stats
+    context["advert_activity_json"] = json.dumps(advert_activity)
+    context["message_activity_json"] = json.dumps(message_activity)
+    context["node_count_json"] = json.dumps(node_count)
 
     return templates.TemplateResponse("network.html", context)

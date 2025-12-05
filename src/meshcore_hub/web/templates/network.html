@@ -73,6 +73,57 @@
     </div>
 </div>
 
+<!-- Activity Charts -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <!-- Advertisements Chart -->
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title text-base">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+                </svg>
+                Advertisements
+            </h2>
+            <p class="text-xs opacity-70">Per day (last 7 days)</p>
+            <div class="h-32">
+                <canvas id="advertChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Messages Chart -->
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title text-base">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                </svg>
+                Messages
+            </h2>
+            <p class="text-xs opacity-70">Per day (last 7 days)</p>
+            <div class="h-32">
+                <canvas id="messageChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Node Count Chart -->
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title text-base">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+                Total Nodes
+            </h2>
+            <p class="text-xs opacity-70">Over time (last 7 days)</p>
+            <div class="h-32">
+                <canvas id="nodeChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Additional Stats -->
 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
     <!-- Recent Advertisements -->
@@ -184,4 +235,119 @@
         View Map
     </a>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function() {
+    const advertData = {{ advert_activity_json | safe }};
+    const messageData = {{ message_activity_json | safe }};
+    const nodeData = {{ node_count_json | safe }};
+
+    // Common chart options
+    const commonOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                mode: 'index',
+                intersect: false,
+                backgroundColor: 'oklch(0.25 0 0)',
+                titleColor: 'oklch(0.9 0 0)',
+                bodyColor: 'oklch(0.9 0 0)',
+                borderColor: 'oklch(0.4 0 0)',
+                borderWidth: 1
+            }
+        },
+        scales: {
+            x: {
+                grid: { color: 'oklch(0.4 0 0 / 0.2)' },
+                ticks: { color: 'oklch(0.7 0 0)', maxRotation: 45, minRotation: 45 }
+            },
+            y: {
+                beginAtZero: true,
+                grid: { color: 'oklch(0.4 0 0 / 0.2)' },
+                ticks: { color: 'oklch(0.7 0 0)', precision: 0 }
+            }
+        },
+        interaction: { mode: 'nearest', axis: 'x', intersect: false }
+    };
+
+    // Helper to format dates
+    function formatLabels(data) {
+        return data.map(d => {
+            const date = new Date(d.date);
+            return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        });
+    }
+
+    // Advertisements chart
+    const advertCtx = document.getElementById('advertChart');
+    if (advertCtx && advertData.data && advertData.data.length > 0) {
+        new Chart(advertCtx, {
+            type: 'line',
+            data: {
+                labels: formatLabels(advertData.data),
+                datasets: [{
+                    label: 'Advertisements',
+                    data: advertData.data.map(d => d.count),
+                    borderColor: 'oklch(0.7 0.15 250)',
+                    backgroundColor: 'oklch(0.7 0.15 250 / 0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 2,
+                    pointHoverRadius: 5
+                }]
+            },
+            options: commonOptions
+        });
+    }
+
+    // Messages chart
+    const messageCtx = document.getElementById('messageChart');
+    if (messageCtx && messageData.data && messageData.data.length > 0) {
+        new Chart(messageCtx, {
+            type: 'line',
+            data: {
+                labels: formatLabels(messageData.data),
+                datasets: [{
+                    label: 'Messages',
+                    data: messageData.data.map(d => d.count),
+                    borderColor: 'oklch(0.7 0.15 160)',
+                    backgroundColor: 'oklch(0.7 0.15 160 / 0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 2,
+                    pointHoverRadius: 5
+                }]
+            },
+            options: commonOptions
+        });
+    }
+
+    // Node count chart
+    const nodeCtx = document.getElementById('nodeChart');
+    if (nodeCtx && nodeData.data && nodeData.data.length > 0) {
+        new Chart(nodeCtx, {
+            type: 'line',
+            data: {
+                labels: formatLabels(nodeData.data),
+                datasets: [{
+                    label: 'Total Nodes',
+                    data: nodeData.data.map(d => d.count),
+                    borderColor: 'oklch(0.7 0.15 30)',
+                    backgroundColor: 'oklch(0.7 0.15 30 / 0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 2,
+                    pointHoverRadius: 5
+                }]
+            },
+            options: commonOptions
+        });
+    }
+})();
+</script>
 {% endblock %}

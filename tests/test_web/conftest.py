@@ -147,6 +147,57 @@ class MockHttpClient:
             },
         }
 
+        # Default activity response (for home page chart)
+        self._responses["GET:/api/v1/dashboard/activity"] = {
+            "status_code": 200,
+            "json": {
+                "days": 7,
+                "data": [
+                    {"date": "2024-01-01", "count": 10},
+                    {"date": "2024-01-02", "count": 15},
+                    {"date": "2024-01-03", "count": 8},
+                    {"date": "2024-01-04", "count": 12},
+                    {"date": "2024-01-05", "count": 20},
+                    {"date": "2024-01-06", "count": 5},
+                    {"date": "2024-01-07", "count": 18},
+                ],
+            },
+        }
+
+        # Default message activity response (for network page chart)
+        self._responses["GET:/api/v1/dashboard/message-activity"] = {
+            "status_code": 200,
+            "json": {
+                "days": 7,
+                "data": [
+                    {"date": "2024-01-01", "count": 5},
+                    {"date": "2024-01-02", "count": 8},
+                    {"date": "2024-01-03", "count": 3},
+                    {"date": "2024-01-04", "count": 10},
+                    {"date": "2024-01-05", "count": 7},
+                    {"date": "2024-01-06", "count": 2},
+                    {"date": "2024-01-07", "count": 9},
+                ],
+            },
+        }
+
+        # Default node count response (for network page chart)
+        self._responses["GET:/api/v1/dashboard/node-count"] = {
+            "status_code": 200,
+            "json": {
+                "days": 7,
+                "data": [
+                    {"date": "2024-01-01", "count": 5},
+                    {"date": "2024-01-02", "count": 6},
+                    {"date": "2024-01-03", "count": 7},
+                    {"date": "2024-01-04", "count": 8},
+                    {"date": "2024-01-05", "count": 9},
+                    {"date": "2024-01-06", "count": 9},
+                    {"date": "2024-01-07", "count": 10},
+                ],
+            },
+        }
+
         # Health check response
         self._responses["GET:/health"] = {
             "status_code": 200,

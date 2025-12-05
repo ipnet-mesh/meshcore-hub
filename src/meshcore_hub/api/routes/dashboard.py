@@ -11,7 +11,11 @@ from meshcore_hub.api.dependencies import DbSession
 from meshcore_hub.common.models import Advertisement, Message, Node, NodeTag
 from meshcore_hub.common.schemas.messages import (
     ChannelMessage,
+    DailyActivity,
+    DailyActivityPoint,
     DashboardStats,
+    MessageActivity,
+    NodeCountHistory,
     RecentAdvertisement,
 )
 
@@ -187,6 +191,152 @@ async def get_stats(
         channel_message_counts=channel_message_counts,
         channel_messages=channel_messages,
     )
+
+
+@router.get("/activity", response_model=DailyActivity)
+async def get_activity(
+    _: RequireRead,
+    session: DbSession,
+    days: int = 30,
+) -> DailyActivity:
+    """Get daily advertisement activity for the specified period.
+
+    Args:
+        days: Number of days to include (default 30, max 90)
+
+    Returns:
+        Daily advertisement counts for each day in the period
+    """
+    # Limit to max 90 days
+    days = min(days, 90)
+
+    now = datetime.now(timezone.utc)
+    start_date = (now - timedelta(days=days - 1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+
+    # Query advertisement counts grouped by date
+    # Use SQLite's date() function for grouping (returns string 'YYYY-MM-DD')
+    date_expr = func.date(Advertisement.received_at)
+
+    query = (
+        select(
+            date_expr.label("date"),
+            func.count().label("count"),
+        )
+        .where(Advertisement.received_at >= start_date)
+        .group_by(date_expr)
+        .order_by(date_expr)
+    )
+
+    results = session.execute(query).all()
+
+    # Build a dict of date -> count from results (date is already a string)
+    counts_by_date = {row.date: row.count for row in results}
+
+    # Generate all dates in the range, filling in zeros for missing days
+    data = []
+    for i in range(days):
+        date = start_date + timedelta(days=i)
+        date_str = date.strftime("%Y-%m-%d")
+        count = counts_by_date.get(date_str, 0)
+        data.append(DailyActivityPoint(date=date_str, count=count))
+
+    return DailyActivity(days=days, data=data)
+
+
+@router.get("/message-activity", response_model=MessageActivity)
+async def get_message_activity(
+    _: RequireRead,
+    session: DbSession,
+    days: int = 30,
+) -> MessageActivity:
+    """Get daily message activity for the specified period.
+
+    Args:
+        days: Number of days to include (default 30, max 90)
+
+    Returns:
+        Daily message counts for each day in the period
+    """
+    days = min(days, 90)
+
+    now = datetime.now(timezone.utc)
+    start_date = (now - timedelta(days=days - 1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+
+    # Query message counts grouped by date
+    date_expr = func.date(Message.received_at)
+
+    query = (
+        select(
+            date_expr.label("date"),
+            func.count().label("count"),
+        )
+        .where(Message.received_at >= start_date)
+        .group_by(date_expr)
+        .order_by(date_expr)
+    )
+
+    results = session.execute(query).all()
+    counts_by_date = {row.date: row.count for row in results}
+
+    # Generate all dates in the range, filling in zeros for missing days
+    data = []
+    for i in range(days):
+        date = start_date + timedelta(days=i)
+        date_str = date.strftime("%Y-%m-%d")
+        count = counts_by_date.get(date_str, 0)
+        data.append(DailyActivityPoint(date=date_str, count=count))
+
+    return MessageActivity(days=days, data=data)
+
+
+@router.get("/node-count", response_model=NodeCountHistory)
+async def get_node_count_history(
+    _: RequireRead,
+    session: DbSession,
+    days: int = 30,
+) -> NodeCountHistory:
+    """Get cumulative node count over time.
+
+    For each day, shows the total number of nodes that existed by that date
+    (based on their created_at timestamp).
+
+    Args:
+        days: Number of days to include (default 30, max 90)
+
+    Returns:
+        Cumulative node count for each day in the period
+    """
+    days = min(days, 90)
+
+    now = datetime.now(timezone.utc)
+    start_date = (now - timedelta(days=days - 1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+
+    # Get all nodes with their creation dates
+    # Count nodes created on or before each date
+    data = []
+    for i in range(days):
+        date = start_date + timedelta(days=i)
+        end_of_day = date.replace(hour=23, minute=59, second=59, microsecond=999999)
+        date_str = date.strftime("%Y-%m-%d")
+
+        # Count nodes created on or before this date
+        count = (
+            session.execute(
+                select(func.count())
+                .select_from(Node)
+                .where(Node.created_at <= end_of_day)
+            ).scalar()
+            or 0
+        )
+        data.append(DailyActivityPoint(date=date_str, count=count))
+
+    return NodeCountHistory(days=days, data=data)
 
 
 @router.get("/", response_class=HTMLResponse)

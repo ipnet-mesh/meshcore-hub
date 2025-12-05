@@ -223,3 +223,35 @@ class DashboardStats(BaseModel):
         default_factory=dict,
         description="Recent messages per channel (up to 5 each)",
     )
+
+
+class DailyActivityPoint(BaseModel):
+    """Schema for a single day's activity count."""
+
+    date: str = Field(..., description="Date in YYYY-MM-DD format")
+    count: int = Field(..., description="Count for this day")
+
+
+class DailyActivity(BaseModel):
+    """Schema for daily advertisement activity over a period."""
+
+    days: int = Field(..., description="Number of days in the period")
+    data: list[DailyActivityPoint] = Field(
+        ..., description="Daily advertisement counts"
+    )
+
+
+class MessageActivity(BaseModel):
+    """Schema for daily message activity over a period."""
+
+    days: int = Field(..., description="Number of days in the period")
+    data: list[DailyActivityPoint] = Field(..., description="Daily message counts")
+
+
+class NodeCountHistory(BaseModel):
+    """Schema for node count over time."""
+
+    days: int = Field(..., description="Number of days in the period")
+    data: list[DailyActivityPoint] = Field(
+        ..., description="Cumulative node count per day"
+    )
