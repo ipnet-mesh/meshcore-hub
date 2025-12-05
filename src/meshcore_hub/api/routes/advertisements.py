@@ -52,6 +52,7 @@ async def list_advertisements(
             ReceiverNode.id.label("receiver_id"),
             SourceNode.name.label("source_name"),
             SourceNode.id.label("source_id"),
+            SourceNode.adv_type.label("source_adv_type"),
         )
         .outerjoin(ReceiverNode, Advertisement.receiver_node_id == ReceiverNode.id)
         .outerjoin(SourceNode, Advertisement.node_id == SourceNode.id)
@@ -111,7 +112,7 @@ async def list_advertisements(
             "name": adv.name,
             "node_name": row.source_name,
             "node_friendly_name": _get_friendly_name(source_node),
-            "adv_type": adv.adv_type,
+            "adv_type": adv.adv_type or row.source_adv_type,
             "flags": adv.flags,
             "received_at": adv.received_at,
             "created_at": adv.created_at,
@@ -143,6 +144,7 @@ async def get_advertisement(
             ReceiverNode.id.label("receiver_id"),
             SourceNode.name.label("source_name"),
             SourceNode.id.label("source_id"),
+            SourceNode.adv_type.label("source_adv_type"),
         )
         .outerjoin(ReceiverNode, Advertisement.receiver_node_id == ReceiverNode.id)
         .outerjoin(SourceNode, Advertisement.node_id == SourceNode.id)
@@ -181,7 +183,7 @@ async def get_advertisement(
         "name": adv.name,
         "node_name": result.source_name,
         "node_friendly_name": _get_friendly_name(source_node),
-        "adv_type": adv.adv_type,
+        "adv_type": adv.adv_type or result.source_adv_type,
         "flags": adv.flags,
         "received_at": adv.received_at,
         "created_at": adv.created_at,
