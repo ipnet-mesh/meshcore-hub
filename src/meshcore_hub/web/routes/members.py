@@ -21,6 +21,15 @@ async def members_page(request: Request) -> HTMLResponse:
     # Fetch members from API
     members = []
 
+    def node_sort_key(node: dict) -> int:
+        """Sort nodes: repeater first, then chat, then others."""
+        role = (node.get("node_role") or "").lower()
+        if role == "repeater":
+            return 0
+        if role == "chat":
+            return 1
+        return 2
+
     try:
         response = await request.app.state.http_client.get(
             "/api/v1/members", params={"limit": 100}
@@ -28,6 +37,10 @@ async def members_page(request: Request) -> HTMLResponse:
         if response.status_code == 200:
             data = response.json()
             members = data.get("items", [])
+            # Sort nodes within each member (repeater first, then chat)
+            for member in members:
+                if member.get("nodes"):
+                    member["nodes"] = sorted(member["nodes"], key=node_sort_key)
     except Exception as e:
         logger.warning(f"Failed to fetch members from API: {e}")
         context["api_error"] = str(e)

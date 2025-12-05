@@ -30,6 +30,14 @@ class MemberNodeRead(BaseModel):
     node_role: Optional[str] = Field(default=None, description="Role of the node")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
+    # Node details (populated from nodes table if available)
+    node_name: Optional[str] = Field(default=None, description="Node's name from DB")
+    node_adv_type: Optional[str] = Field(
+        default=None, description="Node's advertisement type"
+    )
+    friendly_name: Optional[str] = Field(
+        default=None, description="Node's friendly name tag"
+    )
 
     class Config:
         from_attributes = True

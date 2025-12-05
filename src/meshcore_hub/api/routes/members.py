@@ -6,15 +6,60 @@ from sqlalchemy.orm import selectinload
 
 from meshcore_hub.api.auth import RequireAdmin, RequireRead
 from meshcore_hub.api.dependencies import DbSession
-from meshcore_hub.common.models import Member, MemberNode
+from meshcore_hub.common.models import Member, MemberNode, Node
 from meshcore_hub.common.schemas.members import (
     MemberCreate,
     MemberList,
+    MemberNodeRead,
     MemberRead,
     MemberUpdate,
 )
 
 router = APIRouter()
+
+
+def _enrich_member_nodes(
+    member: Member, node_info: dict[str, dict]
+) -> list[MemberNodeRead]:
+    """Enrich member nodes with node details from the database.
+
+    Args:
+        member: The member with nodes to enrich
+        node_info: Dict mapping public_key to node details
+
+    Returns:
+        List of MemberNodeRead with node details populated
+    """
+    enriched_nodes = []
+    for mn in member.nodes:
+        info = node_info.get(mn.public_key, {})
+        enriched_nodes.append(
+            MemberNodeRead(
+                public_key=mn.public_key,
+                node_role=mn.node_role,
+                created_at=mn.created_at,
+                updated_at=mn.updated_at,
+                node_name=info.get("name"),
+                node_adv_type=info.get("adv_type"),
+                friendly_name=info.get("friendly_name"),
+            )
+        )
+    return enriched_nodes
+
+
+def _member_to_read(member: Member, node_info: dict[str, dict]) -> MemberRead:
+    """Convert a Member model to MemberRead with enriched node data."""
+    return MemberRead(
+        id=member.id,
+        name=member.name,
+        callsign=member.callsign,
+        role=member.role,
+        description=member.description,
+        contact=member.contact,
+        nodes=_enrich_member_nodes(member, node_info),
+        created_at=member.created_at,
+        updated_at=member.updated_at,
+    )
 
 
 @router.get("", response_model=MemberList)
@@ -37,10 +82,37 @@ async def list_members(
         .limit(limit)
         .offset(offset)
     )
-    members = session.execute(query).scalars().all()
+    members = list(session.execute(query).scalars().all())
+
+    # Collect all public keys from member nodes
+    all_public_keys = set()
+    for m in members:
+        for mn in m.nodes:
+            all_public_keys.add(mn.public_key)
+
+    # Fetch node info for all public keys in one query
+    node_info: dict[str, dict] = {}
+    if all_public_keys:
+        node_query = (
+            select(Node)
+            .options(selectinload(Node.tags))
+            .where(Node.public_key.in_(all_public_keys))
+        )
+        nodes = session.execute(node_query).scalars().all()
+        for node in nodes:
+            friendly_name = None
+            for tag in node.tags:
+                if tag.key == "friendly_name":
+                    friendly_name = tag.value
+                    break
+            node_info[node.public_key] = {
+                "name": node.name,
+                "adv_type": node.adv_type,
+                "friendly_name": friendly_name,
+            }
 
     return MemberList(
-        items=[MemberRead.model_validate(m) for m in members],
+        items=[_member_to_read(m, node_info) for m in members],
         total=total,
         limit=limit,
         offset=offset,
@@ -62,7 +134,29 @@ async def get_member(
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
 
-    return MemberRead.model_validate(member)
+    # Fetch node info for member's nodes
+    node_info: dict[str, dict] = {}
+    public_keys = [mn.public_key for mn in member.nodes]
+    if public_keys:
+        node_query = (
+            select(Node)
+            .options(selectinload(Node.tags))
+            .where(Node.public_key.in_(public_keys))
+        )
+        nodes = session.execute(node_query).scalars().all()
+        for node in nodes:
+            friendly_name = None
+            for tag in node.tags:
+                if tag.key == "friendly_name":
+                    friendly_name = tag.value
+                    break
+            node_info[node.public_key] = {
+                "name": node.name,
+                "adv_type": node.adv_type,
+                "friendly_name": friendly_name,
+            }
+
+    return _member_to_read(member, node_info)
 
 
 @router.post("", response_model=MemberRead, status_code=201)

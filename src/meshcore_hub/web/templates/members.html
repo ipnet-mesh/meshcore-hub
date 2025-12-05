@@ -9,43 +9,55 @@
 </div>
 
 {% if members %}
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
     {% for member in members %}
     <div class="card bg-base-100 shadow-xl">
         <div class="card-body">
             <h2 class="card-title">
                 {{ member.name }}
                 {% if member.callsign %}
-                <span class="badge badge-secondary">{{ member.callsign }}</span>
+                <span class="badge badge-success">{{ member.callsign }}</span>
                 {% endif %}
             </h2>
-
-            {% if member.role %}
-            <p class="text-sm opacity-70">{{ member.role }}</p>
-            {% endif %}
 
             {% if member.description %}
             <p class="mt-2">{{ member.description }}</p>
             {% endif %}
 
-            {% if member.email or member.discord or member.website %}
-            <div class="card-actions justify-start mt-4">
-                {% if member.email %}
-                <a href="mailto:{{ member.email }}" class="btn btn-ghost btn-xs">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
-                    Email
-                </a>
-                {% endif %}
-                {% if member.website %}
-                <a href="{{ member.website }}" target="_blank" class="btn btn-ghost btn-xs">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-                    </svg>
-                    Website
-                </a>
-                {% endif %}
+            {% if member.contact %}
+            <p class="text-sm mt-2">
+                <span class="opacity-70">Contact:</span> {{ member.contact }}
+            </p>
+            {% endif %}
+
+            {% if member.nodes %}
+            <div class="mt-4 space-y-2">
+                    {% for node in member.nodes %}
+                    {% set adv_type = node.node_adv_type or node.node_role %}
+                    <a href="/nodes/{{ node.public_key }}" class="flex items-center gap-3 p-2 bg-base-200 rounded-lg hover:bg-base-300 transition-colors">
+                        <span class="text-lg" title="{{ adv_type or 'Unknown' }}">
+                            {% if adv_type and adv_type|lower == 'chat' %}
+                            💬
+                            {% elif adv_type and adv_type|lower == 'repeater' %}
+                            📡
+                            {% elif adv_type and adv_type|lower == 'room' %}
+                            🪧
+                            {% elif adv_type %}
+                            📍
+                            {% else %}
+                            📦
+                            {% endif %}
+                        </span>
+                        <div>
+                            {% if node.friendly_name or node.node_name %}
+                            <div class="font-medium text-sm">{{ node.friendly_name or node.node_name }}</div>
+                            <div class="font-mono text-xs opacity-60">{{ node.public_key[:12] }}...</div>
+                            {% else %}
+                            <div class="font-mono text-sm">{{ node.public_key[:12] }}...</div>
+                            {% endif %}
+                        </div>
+                    </a>
+                    {% endfor %}
             </div>
             {% endif %}
         </div>
@@ -59,31 +71,27 @@
     </svg>
     <div>
         <h3 class="font-bold">No members configured</h3>
-        <p class="text-sm">To display network members, provide a members JSON file using the <code>--members-file</code> option.</p>
+        <p class="text-sm">To display network members, create a members.yaml file in your seed directory.</p>
     </div>
 </div>
 
 <div class="mt-6 card bg-base-100 shadow-xl">
     <div class="card-body">
         <h2 class="card-title">Members File Format</h2>
-        <p class="mb-4">Create a JSON file with the following structure:</p>
-        <pre class="bg-base-200 p-4 rounded-box text-sm overflow-x-auto"><code>{
-  "members": [
-    {
-      "name": "John Doe",
-      "callsign": "AB1CD",
-      "role": "Network Admin",
-      "description": "Manages the main repeater node.",
-      "email": "john@example.com",
-      "website": "https://example.com"
-    },
-    {
-      "name": "Jane Smith",
-      "role": "Member",
-      "description": "Regular user in the downtown area."
-    }
-  ]
-}</code></pre>
+        <p class="mb-4">Create a YAML file at <code>$SEED_HOME/members.yaml</code> with the following structure:</p>
+        <pre class="bg-base-200 p-4 rounded-box text-sm overflow-x-auto"><code>members:
+  - name: John Doe
+    callsign: AB1CD
+    role: Network Admin
+    description: Manages the main repeater node.
+    contact: john@example.com
+    nodes:
+      - public_key: abc123def456...  # 64-char hex
+        node_role: repeater
+  - name: Jane Smith
+    role: Member
+    description: Regular user in the downtown area.</code></pre>
+        <p class="mt-4 text-sm opacity-70">Run <code>meshcore-hub collector seed</code> to import members, or they will be imported automatically on collector startup.</p>
     </div>
 </div>
 {% endif %}

@@ -321,6 +321,9 @@ def mock_http_client_with_members() -> MockHttpClient:
                             "node_role": "chat",
                             "created_at": "2024-01-01T00:00:00Z",
                             "updated_at": "2024-01-01T00:00:00Z",
+                            "node_name": "Alice's Node",
+                            "node_adv_type": "chat",
+                            "friendly_name": "Alice Chat",
                         }
                     ],
                     "created_at": "2024-01-01T00:00:00Z",

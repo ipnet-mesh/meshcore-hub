@@ -38,4 +38,19 @@ class TestMembersPage:
         assert "Bob" in response.text
         assert "W1ABC" in response.text
         assert "W2XYZ" in response.text
-        assert "Admin" in response.text
+
+    def test_members_with_nodes_shows_node_links(
+        self, client_with_members: TestClient
+    ) -> None:
+        """Test that members page shows associated nodes with links."""
+        response = client_with_members.get("/members")
+        assert response.status_code == 200
+        # Alice has a node associated - check for friendly name display
+        assert "Alice Chat" in response.text
+        # Check for partial public key underneath
+        assert "abc123def456" in response.text
+        # Check for link to node detail page (full public key)
+        assert (
+            "/nodes/abc123def456abc123def456abc123def456abc123def456abc123def456abc1"
+            in response.text
+        )

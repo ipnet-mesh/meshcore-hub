@@ -54,9 +54,7 @@ def upgrade() -> None:
     # Get all members with a public_key
     connection = op.get_bind()
     members_with_keys = connection.execute(
-        sa.text(
-            "SELECT id, public_key FROM members WHERE public_key IS NOT NULL"
-        )
+        sa.text("SELECT id, public_key FROM members WHERE public_key IS NOT NULL")
     ).fetchall()
 
     # Insert into member_nodes

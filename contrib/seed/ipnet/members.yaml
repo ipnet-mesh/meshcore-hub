@@ -1,22 +1,66 @@
 # IPNet Network Members
 members:
   - name: Louis
-    callsign: louis
+    callsign: Louis
     role: admin
     description: IPNet Founder
+    nodes:
+      # ip2-rep01
+      - public_key: 2337484665ced7e210007e9fd9db98ced0a24a6eab8b4cbe3a06b3a1cea33ca1
+        node_role: repeater
+      # ip2-rep02
+      - public_key: 8cb01fff1afc099055af418ce5fc5e60384df9ff763c25dd7e6a5e0922e8df90
+        node_role: repeater
+      # ip2-rep03
+      - public_key: 5b565df747913358e24d890b2227de9c35d09763746b6ec326c15ebbf9b8be3b
+        node_role: repeater
+      # ip2-sol01
+      - public_key: 87eb9487a1a4351e986e55627b2d09c4da61f94d080eaf4d7129caef89886e25
+        node_role: repeater
+      # personal chat node
+      - public_key: c6e0d85528b4b5d7f53aa7dded2b7e0b9c8f8a5c00acfaad47476ef5f3c7dc47
+        node_role: chat
   - name: Mark
     callsign: Mark
     role: member
     description: IPNet Member
+    nodes:
+      - public_key: 22309435fbd9dd1f14870a1895dc854779f6b2af72b08542f6105d264a493ebe
+        node_role: repeater
+      - public_key: 9135986b83815ada92883358435cc6528c7db60cb647f9b6547739a1ce5eb1c8
+        node_role: repeater
+      - public_key: 2a4f89e766dfa1758e35a69962c1f6d352b206a5e3562a589155a3ebfe7fc2bb
+        node_role: repeater
+      - public_key: e790b73b2d6e377dd0f575c847f3ef42232f610eb9a19af57083fc4f647309ac
+        node_role: repeater
+      - public_key: d3c20d962f7384c111fbafad6fbc1c1dc0e5c3ce802fb3ee11020e8d8207ed3a
+        node_role: repeater
+      - public_key: b00ce9d218203e96d8557a4d59e06f5de59bbc4dcc4df9c870079d2cb8b5bd80
+        node_role: repeater
   - name: CCZ
     callsign: CCZ
     role: member
+    nodes:
+      - public_key: e334ec5475789d542ed9e692fbeef7444a371fcc05adcbda1f47ba6a3191b459
+        node_role: repeater
+      - public_key: cc15fb33e98f2e098a543f516f770dc3061a1a6b30f79b84780663bf68ae6b53
+        node_role: repeater
+      - public_key: 20ed75ffc0f9777951716bb3d308d7f041fd2ad32fe2e998e600d0361e1fe2ac
+        node_role: repeater
     description: IPNet Member
   - name: Walshie
     callsign: Walshie86
     role: member
     description: IPNet Member
+    nodes:
+      - public_key: bd7b5ac75f660675b39f368e1dbb6d1dbcefd8bd7a170e21a942954f67c8bf52
+        node_role: repeater
+      - public_key: 9cf300c40112ea34d0a59858270948b27ab6cd87e840de338f3ca782c17537b2
+        node_role: repeater
   - name: Craig
     callsign: M7XCN
     role: member
     description: IPNet Member
+    nodes:
+      - public_key: 8accb6d0189ccaffb745ba54793e7fe3edd515edb45554325d957e48c1b9f3b3
+        node_role: repeater
