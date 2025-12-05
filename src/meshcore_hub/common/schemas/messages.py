@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 class MessageRead(BaseModel):
     """Schema for reading a message."""
 
-    receiver_public_key: Optional[str] = Field(
+    received_by: Optional[str] = Field(
         default=None, description="Receiving interface node public key"
     )
     message_type: str = Field(..., description="Message type (contact, channel)")
@@ -81,7 +81,7 @@ class MessageFilters(BaseModel):
 class AdvertisementRead(BaseModel):
     """Schema for reading an advertisement."""
 
-    receiver_public_key: Optional[str] = Field(
+    received_by: Optional[str] = Field(
         default=None, description="Receiving interface node public key"
     )
     public_key: str = Field(..., description="Advertised public key")
@@ -107,7 +107,7 @@ class AdvertisementList(BaseModel):
 class TracePathRead(BaseModel):
     """Schema for reading a trace path."""
 
-    receiver_public_key: Optional[str] = Field(
+    received_by: Optional[str] = Field(
         default=None, description="Receiving interface node public key"
     )
     initiator_tag: int = Field(..., description="Trace identifier")
@@ -140,7 +140,7 @@ class TracePathList(BaseModel):
 class TelemetryRead(BaseModel):
     """Schema for reading a telemetry record."""
 
-    receiver_public_key: Optional[str] = Field(
+    received_by: Optional[str] = Field(
         default=None, description="Receiving interface node public key"
     )
     node_public_key: str = Field(..., description="Reporting node public key")

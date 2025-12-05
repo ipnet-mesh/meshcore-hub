@@ -20,7 +20,7 @@ async def list_advertisements(
     _: RequireRead,
     session: DbSession,
     public_key: Optional[str] = Query(None, description="Filter by public key"),
-    receiver_public_key: Optional[str] = Query(
+    received_by: Optional[str] = Query(
         None, description="Filter by receiver node public key"
     ),
     since: Optional[datetime] = Query(None, description="Start timestamp"),
@@ -40,8 +40,8 @@ async def list_advertisements(
     if public_key:
         query = query.where(Advertisement.public_key == public_key)
 
-    if receiver_public_key:
-        query = query.where(ReceiverNode.public_key == receiver_public_key)
+    if received_by:
+        query = query.where(ReceiverNode.public_key == received_by)
 
     if since:
         query = query.where(Advertisement.received_at >= since)
@@ -59,13 +59,13 @@ async def list_advertisements(
     # Execute
     results = session.execute(query).all()
 
-    # Build response with receiver_public_key
+    # Build response with received_by
     items = []
     for adv, receiver_pk in results:
         data = {
             "id": adv.id,
             "receiver_node_id": adv.receiver_node_id,
-            "receiver_public_key": receiver_pk,
+            "received_by": receiver_pk,
             "node_id": adv.node_id,
             "public_key": adv.public_key,
             "name": adv.name,
@@ -106,7 +106,7 @@ async def get_advertisement(
     data = {
         "id": adv.id,
         "receiver_node_id": adv.receiver_node_id,
-        "receiver_public_key": receiver_pk,
+        "received_by": receiver_pk,
         "node_id": adv.node_id,
         "public_key": adv.public_key,
         "name": adv.name,

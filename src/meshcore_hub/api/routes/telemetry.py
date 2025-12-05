@@ -20,7 +20,7 @@ async def list_telemetry(
     _: RequireRead,
     session: DbSession,
     node_public_key: Optional[str] = Query(None, description="Filter by node"),
-    receiver_public_key: Optional[str] = Query(
+    received_by: Optional[str] = Query(
         None, description="Filter by receiver node public key"
     ),
     since: Optional[datetime] = Query(None, description="Start timestamp"),
@@ -40,8 +40,8 @@ async def list_telemetry(
     if node_public_key:
         query = query.where(Telemetry.node_public_key == node_public_key)
 
-    if receiver_public_key:
-        query = query.where(ReceiverNode.public_key == receiver_public_key)
+    if received_by:
+        query = query.where(ReceiverNode.public_key == received_by)
 
     if since:
         query = query.where(Telemetry.received_at >= since)
@@ -59,13 +59,13 @@ async def list_telemetry(
     # Execute
     results = session.execute(query).all()
 
-    # Build response with receiver_public_key
+    # Build response with received_by
     items = []
     for tel, receiver_pk in results:
         data = {
             "id": tel.id,
             "receiver_node_id": tel.receiver_node_id,
-            "receiver_public_key": receiver_pk,
+            "received_by": receiver_pk,
             "node_id": tel.node_id,
             "node_public_key": tel.node_public_key,
             "parsed_data": tel.parsed_data,
@@ -104,7 +104,7 @@ async def get_telemetry(
     data = {
         "id": tel.id,
         "receiver_node_id": tel.receiver_node_id,
-        "receiver_public_key": receiver_pk,
+        "received_by": receiver_pk,
         "node_id": tel.node_id,
         "node_public_key": tel.node_public_key,
         "parsed_data": tel.parsed_data,
