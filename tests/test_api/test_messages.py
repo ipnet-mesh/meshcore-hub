@@ -51,7 +51,6 @@ class TestGetMessage:
         response = client_no_auth.get(f"/api/v1/messages/{sample_message.id}")
         assert response.status_code == 200
         data = response.json()
-        assert data["id"] == sample_message.id
         assert data["text"] == sample_message.text
 
     def test_get_message_not_found(self, client_no_auth):

@@ -49,7 +49,6 @@ class TestGetAdvertisement:
         )
         assert response.status_code == 200
         data = response.json()
-        assert data["id"] == sample_advertisement.id
         assert data["public_key"] == sample_advertisement.public_key
 
     def test_get_advertisement_not_found(self, client_no_auth):

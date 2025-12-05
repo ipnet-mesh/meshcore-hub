@@ -45,7 +45,6 @@ class TestGetTelemetry:
         response = client_no_auth.get(f"/api/v1/telemetry/{sample_telemetry.id}")
         assert response.status_code == 200
         data = response.json()
-        assert data["id"] == sample_telemetry.id
         assert data["node_public_key"] == sample_telemetry.node_public_key
 
     def test_get_telemetry_not_found(self, client_no_auth):

@@ -113,8 +113,8 @@
                             <td>{{ adv.adv_type or '-' }}</td>
                             <td>{{ adv.name or '-' }}</td>
                             <td class="text-xs">
-                                {% if adv.receiver_public_key %}
-                                <span class="font-mono" title="{{ adv.receiver_public_key }}">{{ adv.receiver_public_key[:8] }}...</span>
+                                {% if adv.received_by %}
+                                <span class="font-mono" title="{{ adv.received_by }}">{{ adv.received_by[:8] }}...</span>
                                 {% else %}
                                 <span class="opacity-50">-</span>
                                 {% endif %}
@@ -156,8 +156,8 @@
                                 {% endif %}
                             </td>
                             <td class="text-xs">
-                                {% if tel.receiver_public_key %}
-                                <span class="font-mono" title="{{ tel.receiver_public_key }}">{{ tel.receiver_public_key[:8] }}...</span>
+                                {% if tel.received_by %}
+                                <span class="font-mono" title="{{ tel.received_by }}">{{ tel.received_by[:8] }}...</span>
                                 {% else %}
                                 <span class="opacity-50">-</span>
                                 {% endif %}

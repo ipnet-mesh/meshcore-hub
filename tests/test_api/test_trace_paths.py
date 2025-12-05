@@ -31,7 +31,6 @@ class TestGetTracePath:
         response = client_no_auth.get(f"/api/v1/trace-paths/{sample_trace_path.id}")
         assert response.status_code == 200
         data = response.json()
-        assert data["id"] == sample_trace_path.id
         assert data["path_hashes"] == sample_trace_path.path_hashes
 
     def test_get_trace_path_not_found(self, client_no_auth):

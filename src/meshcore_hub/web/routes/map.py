@@ -43,13 +43,14 @@ async def map_data(request: Request) -> JSONResponse:
         if members_response.status_code == 200:
             members_data = members_response.json()
             for member in members_data.get("items", []):
-                member_info = {
-                    "id": member.get("id"),
-                    "name": member.get("name"),
-                    "callsign": member.get("callsign"),
-                }
-                members_list.append(member_info)
+                # Only include members with public_key (required for node ownership)
                 if member.get("public_key"):
+                    member_info = {
+                        "public_key": member.get("public_key"),
+                        "name": member.get("name"),
+                        "callsign": member.get("callsign"),
+                    }
+                    members_list.append(member_info)
                     members_by_key[member["public_key"]] = member_info
         else:
             logger.warning(

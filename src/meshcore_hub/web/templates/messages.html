@@ -90,8 +90,8 @@
                     {{ msg.text or '-' }}
                 </td>
                 <td class="text-xs">
-                    {% if msg.receiver_public_key %}
-                    <span class="font-mono" title="{{ msg.receiver_public_key }}">{{ msg.receiver_public_key[:8] }}...</span>
+                    {% if msg.received_by %}
+                    <span class="font-mono" title="{{ msg.received_by }}">{{ msg.received_by[:8] }}...</span>
                     {% else %}
                     <span class="opacity-50">-</span>
                     {% endif %}

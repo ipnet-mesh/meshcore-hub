@@ -83,7 +83,6 @@ class MemberUpdate(BaseModel):
 class MemberRead(BaseModel):
     """Schema for reading a member."""
 
-    id: str = Field(..., description="Member UUID")
     name: str = Field(..., description="Member's display name")
     callsign: Optional[str] = Field(default=None, description="Amateur radio callsign")
     role: Optional[str] = Field(default=None, description="Member's role")

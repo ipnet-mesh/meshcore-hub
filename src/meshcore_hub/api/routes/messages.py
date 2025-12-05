@@ -22,7 +22,7 @@ async def list_messages(
     message_type: Optional[str] = Query(None, description="Filter by message type"),
     pubkey_prefix: Optional[str] = Query(None, description="Filter by sender prefix"),
     channel_idx: Optional[int] = Query(None, description="Filter by channel"),
-    receiver_public_key: Optional[str] = Query(
+    received_by: Optional[str] = Query(
         None, description="Filter by receiver node public key"
     ),
     since: Optional[datetime] = Query(None, description="Start timestamp"),
@@ -49,8 +49,8 @@ async def list_messages(
     if channel_idx is not None:
         query = query.where(Message.channel_idx == channel_idx)
 
-    if receiver_public_key:
-        query = query.where(ReceiverNode.public_key == receiver_public_key)
+    if received_by:
+        query = query.where(ReceiverNode.public_key == received_by)
 
     if since:
         query = query.where(Message.received_at >= since)
@@ -96,13 +96,13 @@ async def list_messages(
             for public_key, value in session.execute(friendly_name_query).all():
                 friendly_names[public_key[:12]] = value
 
-    # Build response with sender info and receiver_public_key
+    # Build response with sender info and received_by
     items = []
     for m, receiver_pk in results:
         msg_dict = {
             "id": m.id,
             "receiver_node_id": m.receiver_node_id,
-            "receiver_public_key": receiver_pk,
+            "received_by": receiver_pk,
             "message_type": m.message_type,
             "pubkey_prefix": m.pubkey_prefix,
             "sender_name": (
@@ -153,7 +153,7 @@ async def get_message(
     data = {
         "id": message.id,
         "receiver_node_id": message.receiver_node_id,
-        "receiver_public_key": receiver_pk,
+        "received_by": receiver_pk,
         "message_type": message.message_type,
         "pubkey_prefix": message.pubkey_prefix,
         "channel_idx": message.channel_idx,

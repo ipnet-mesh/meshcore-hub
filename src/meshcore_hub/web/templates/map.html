@@ -211,7 +211,7 @@
 
             // Owner filter
             if (ownerFilter) {
-                if (!node.owner || node.owner.id !== ownerFilter) return false;
+                if (!node.owner || node.owner.public_key !== ownerFilter) return false;
             }
 
             return true;
@@ -269,12 +269,12 @@
         const ownersWithNodes = new Set();
         allNodes.forEach(node => {
             if (node.owner) {
-                ownersWithNodes.add(node.owner.id);
+                ownersWithNodes.add(node.owner.public_key);
             }
         });
 
         // Filter members to only those who own nodes on the map
-        const relevantMembers = allMembers.filter(m => ownersWithNodes.has(m.id));
+        const relevantMembers = allMembers.filter(m => ownersWithNodes.has(m.public_key));
 
         // Sort by name
         relevantMembers.sort((a, b) => a.name.localeCompare(b.name));
@@ -282,7 +282,7 @@
         // Add options
         relevantMembers.forEach(member => {
             const option = document.createElement('option');
-            option.value = member.id;
+            option.value = member.public_key;
             option.textContent = member.callsign
                 ? `${member.name} (${member.callsign})`
                 : member.name;

@@ -41,8 +41,6 @@ class NodeTagUpdate(BaseModel):
 class NodeTagRead(BaseModel):
     """Schema for reading a node tag."""
 
-    id: str = Field(..., description="Tag UUID")
-    node_id: str = Field(..., description="Parent node UUID")
     key: str = Field(..., description="Tag name/key")
     value: Optional[str] = Field(default=None, description="Tag value")
     value_type: str = Field(..., description="Value type hint")
@@ -56,7 +54,6 @@ class NodeTagRead(BaseModel):
 class NodeRead(BaseModel):
     """Schema for reading a node."""
 
-    id: str = Field(..., description="Node UUID")
     public_key: str = Field(..., description="Node's 64-character hex public key")
     name: Optional[str] = Field(default=None, description="Node display name")
     adv_type: Optional[str] = Field(default=None, description="Advertisement type")
