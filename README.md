@@ -89,7 +89,7 @@ Docker Compose runs core services by default and uses **profiles** for optional 
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/meshcore-hub.git
+git clone https://github.com/ipnet-mesh/meshcore-hub.git
 cd meshcore-hub
 
 # Copy and configure environment
@@ -228,7 +228,6 @@ Webhook payload format:
 | `NETWORK_NAME` | `MeshCore Network` | Display name for the network |
 | `NETWORK_CITY` | *(none)* | City where network is located |
 | `NETWORK_COUNTRY` | *(none)* | Country code (ISO 3166-1 alpha-2) |
-| `NETWORK_LOCATION` | *(none)* | Center coordinates (lat,lon) |
 
 ## CLI Reference
 
@@ -449,7 +448,7 @@ curl -X POST \
 | GET | `/api/v1/trace-paths` | List trace paths |
 | POST | `/api/v1/commands/send-message` | Send direct message |
 | POST | `/api/v1/commands/send-channel-message` | Send channel message |
-| GET | `/api/v1/stats` | Get network statistics |
+| GET | `/api/v1/dashboard/stats` | Get network statistics |
 
 ## Development
 
@@ -457,7 +456,7 @@ curl -X POST \
 
 ```bash
 # Clone and setup
-git clone https://github.com/your-org/meshcore-hub.git
+git clone https://github.com/ipnet-mesh/meshcore-hub.git
 cd meshcore-hub
 python -m venv .venv
 source .venv/bin/activate
@@ -526,8 +525,8 @@ meshcore-hub/
 │   └── seed/               # Example seed data files
 │       ├── node_tags.yaml  # Example node tags
 │       └── members.yaml    # Example network members
-├── seed/                   # Seed data directory (SEED_HOME)
-├── data/                   # Runtime data directory (DATA_HOME, gitignored)
+├── seed/                   # Seed data directory (SEED_HOME, copy from example/seed/)
+├── data/                   # Runtime data directory (DATA_HOME, created at runtime)
 ├── Dockerfile              # Docker build configuration
 ├── docker-compose.yml      # Docker Compose services
 ├── PROMPT.md               # Project specification
@@ -557,7 +556,7 @@ meshcore-hub/
 
 ## License
 
-See [LICENSE](LICENSE) for details.
+This project is licensed under the GNU General Public License v3.0 or later (GPL-3.0-or-later). See [LICENSE](LICENSE) for details.
 
 ## Acknowledgments
 

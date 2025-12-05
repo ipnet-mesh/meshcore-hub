@@ -7,7 +7,7 @@ name = "meshcore-hub"
 version = "0.1.0"
 description = "Python monorepo for managing and orchestrating MeshCore mesh networks"
 readme = "README.md"
-license = {text = "MIT"}
+license = {text = "GPL-3.0-or-later"}
 requires-python = ">=3.11"
 authors = [
     {name = "MeshCore Hub Contributors"}
@@ -15,7 +15,7 @@ authors = [
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
@@ -63,10 +63,10 @@ postgres = [
 meshcore-hub = "meshcore_hub.__main__:main"
 
 [project.urls]
-Homepage = "https://github.com/meshcore-dev/meshcore-hub"
-Documentation = "https://github.com/meshcore-dev/meshcore-hub#readme"
-Repository = "https://github.com/meshcore-dev/meshcore-hub"
-Issues = "https://github.com/meshcore-dev/meshcore-hub/issues"
+Homepage = "https://github.com/ipnet-mesh/meshcore-hub"
+Documentation = "https://github.com/ipnet-mesh/meshcore-hub#readme"
+Repository = "https://github.com/ipnet-mesh/meshcore-hub"
+Issues = "https://github.com/ipnet-mesh/meshcore-hub/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

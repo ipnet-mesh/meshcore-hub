@@ -5,8 +5,8 @@ This document provides context and guidelines for AI coding assistants working o
 ## Agent Rules
 
 * You MUST use Python (version in `.python-version` file)
-* You MUST activate a Python virtual environment in the `venv` directory or create one if it does not exist:
-  - `ls ./venv` to check if it exists
+* You MUST activate a Python virtual environment in the `.venv` directory or create one if it does not exist:
+  - `ls ./.venv` to check if it exists
   - `python -m venv .venv` to create it
 * You MUST always activate the virtual environment before running any commands
   - `source .venv/bin/activate`
