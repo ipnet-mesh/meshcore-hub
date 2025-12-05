@@ -62,6 +62,90 @@ MeshCore Hub provides a complete solution for monitoring, collecting, and intera
 - **Web Dashboard**: Visualize network status, node locations, and message history
 - **Docker Ready**: Single image with all components, easy deployment
 
+## Getting Started
+
+### Simple Self-Hosted Setup
+
+The quickest way to get started is running the entire stack on a single machine with a connected MeshCore device.
+
+**Prerequisites:**
+1. Flash the [USB Companion firmware](https://meshcore.dev/) onto a compatible device (e.g., Heltec V3, T-Beam)
+2. Connect the device via USB to a machine that supports Docker or Python
+
+**Steps:**
+```bash
+# Clone the repository
+git clone https://github.com/ipnet-mesh/meshcore-hub.git
+cd meshcore-hub
+
+# Copy and configure environment
+cp .env.example .env
+# Edit .env: set SERIAL_PORT to your device (e.g., /dev/ttyUSB0 or /dev/ttyACM0)
+
+# Start the entire stack including the interface receiver
+docker compose --profile interface-receiver up -d
+
+# View the web dashboard
+open http://localhost:8080
+```
+
+This starts all services: MQTT broker, collector, API, web dashboard, and the interface receiver that bridges your MeshCore device to the system.
+
+### Distributed Community Setup
+
+For larger deployments, you can separate receiver nodes from the central infrastructure. This allows multiple community members to contribute receiver coverage while hosting the backend centrally.
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Community Members                             │
+│                                                                      │
+│  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐             │
+│  │ Raspberry Pi │   │ Raspberry Pi │   │   Any Linux  │             │
+│  │ + MeshCore   │   │ + MeshCore   │   │  + MeshCore  │             │
+│  │   Device     │   │   Device     │   │    Device    │             │
+│  └──────┬───────┘   └──────┬───────┘   └──────┬───────┘             │
+│         │                  │                  │                      │
+│         │ interface-receiver only             │                      │
+│         └──────────────────┼──────────────────┘                      │
+│                            │                                         │
+│                     MQTT (port 1883)                                 │
+│                            │                                         │
+└────────────────────────────┼─────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Community VPS / Server                            │
+│                                                                      │
+│  ┌──────────┐   ┌───────────┐   ┌─────────┐   ┌──────────────┐      │
+│  │   MQTT   │──▶│ Collector │──▶│   API   │◀──│ Web Dashboard│      │
+│  │  Broker  │   │           │   │         │   │   (public)   │      │
+│  └──────────┘   └───────────┘   └─────────┘   └──────────────┘      │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**On each receiver node (Raspberry Pi, etc.):**
+```bash
+# Only run the interface-receiver component
+# Configure .env with MQTT_HOST pointing to your central server
+MQTT_HOST=your-community-server.com
+SERIAL_PORT=/dev/ttyUSB0
+
+docker compose --profile interface-receiver up -d
+```
+
+**On the central server (VPS/cloud):**
+```bash
+# Run the core infrastructure (no interface needed)
+docker compose up -d
+```
+
+This architecture allows:
+- Multiple receivers for better RF coverage across a geographic area
+- Centralized data storage and web interface
+- Community members to contribute coverage with minimal setup
+- The central server to be hosted anywhere with internet access
+
 ## Quick Start
 
 ### Using Docker Compose (Recommended)
