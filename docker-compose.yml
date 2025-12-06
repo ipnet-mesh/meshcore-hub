@@ -1,10 +1,14 @@
 services:
   # ==========================================================================
-  # MQTT Broker - Eclipse Mosquitto
+  # MQTT Broker - Eclipse Mosquitto (optional, use --profile mqtt)
+  # Most users will connect to an external MQTT broker instead
   # ==========================================================================
   mqtt:
     image: eclipse-mosquitto:2
     container_name: meshcore-mqtt
+    profiles:
+      - all
+      - mqtt
     restart: unless-stopped
     ports:
       - "${MQTT_EXTERNAL_PORT:-1883}:1883"
@@ -24,17 +28,15 @@ services:
   # Interface Receiver - MeshCore device to MQTT bridge (events)
   # ==========================================================================
   interface-receiver:
-    image: ghcr.io/ipnet-mesh/meshcore-hub:main
+    image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile
     container_name: meshcore-interface-receiver
     profiles:
-      - interface-receiver
+      - all
+      - receiver
     restart: unless-stopped
-    depends_on:
-      mqtt:
-        condition: service_healthy
     devices:
       - "${SERIAL_PORT:-/dev/ttyUSB0}:${SERIAL_PORT:-/dev/ttyUSB0}"
     user: root  # Required for device access
@@ -60,17 +62,15 @@ services:
   # Interface Sender - MQTT to MeshCore device bridge (commands)
   # ==========================================================================
   interface-sender:
-    image: ghcr.io/ipnet-mesh/meshcore-hub:main
+    image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile
     container_name: meshcore-interface-sender
     profiles:
-      - interface-sender
+      - all
+      - sender
     restart: unless-stopped
-    depends_on:
-      mqtt:
-        condition: service_healthy
     devices:
       - "${SERIAL_PORT_SENDER:-/dev/ttyUSB1}:${SERIAL_PORT_SENDER:-/dev/ttyUSB1}"
     user: root  # Required for device access
@@ -96,17 +96,15 @@ services:
   # Interface Mock Receiver - For testing without real devices
   # ==========================================================================
   interface-mock-receiver:
-    image: ghcr.io/ipnet-mesh/meshcore-hub:main
+    image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile
     container_name: meshcore-interface-mock-receiver
     profiles:
+      - all
       - mock
     restart: unless-stopped
-    depends_on:
-      mqtt:
-        condition: service_healthy
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - MQTT_HOST=${MQTT_HOST:-mqtt}
@@ -128,15 +126,15 @@ services:
   # Collector - MQTT subscriber and database storage
   # ==========================================================================
   collector:
-    image: ghcr.io/ipnet-mesh/meshcore-hub:main
+    image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile
     container_name: meshcore-collector
+    profiles:
+      - all
+      - core
     restart: unless-stopped
-    depends_on:
-      mqtt:
-        condition: service_healthy
     volumes:
       - ${DATA_HOME:-./data}:/data
       - ${SEED_HOME:-./seed}:/seed
@@ -175,15 +173,16 @@ services:
   # API Server - REST API for querying data and sending commands
   # ==========================================================================
   api:
-    image: ghcr.io/ipnet-mesh/meshcore-hub:main
+    image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile
     container_name: meshcore-api
+    profiles:
+      - all
+      - core
     restart: unless-stopped
     depends_on:
-      mqtt:
-        condition: service_healthy
       collector:
         condition: service_started
     ports:
@@ -217,11 +216,14 @@ services:
   # Web Dashboard - Web interface for network visualization
   # ==========================================================================
   web:
-    image: ghcr.io/ipnet-mesh/meshcore-hub:main
+    image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile
     container_name: meshcore-web
+    profiles:
+      - all
+      - core
     restart: unless-stopped
     depends_on:
       api:
@@ -254,12 +256,13 @@ services:
   # Database Migrations - Run Alembic migrations
   # ==========================================================================
   db-migrate:
-    image: ghcr.io/ipnet-mesh/meshcore-hub:main
+    image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile
     container_name: meshcore-db-migrate
     profiles:
+      - all
       - migrate
     volumes:
       # Mount data directory (uses collector/meshcore.db)
@@ -274,12 +277,13 @@ services:
   # Seed Data - Import node_tags.json and members.json from SEED_HOME
   # ==========================================================================
   seed:
-    image: ghcr.io/ipnet-mesh/meshcore-hub:main
+    image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile
     container_name: meshcore-seed
     profiles:
+      - all
       - seed
     volumes:
       # Mount data directory for database (read-write)

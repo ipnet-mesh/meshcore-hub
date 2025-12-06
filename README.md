@@ -82,8 +82,8 @@ cd meshcore-hub
 cp .env.example .env
 # Edit .env: set SERIAL_PORT to your device (e.g., /dev/ttyUSB0 or /dev/ttyACM0)
 
-# Start the entire stack including the interface receiver
-docker compose --profile interface-receiver up -d
+# Start the entire stack with local MQTT broker
+docker compose --profile mqtt --profile core --profile receiver up -d
 
 # View the web dashboard
 open http://localhost:8080
@@ -105,7 +105,7 @@ For larger deployments, you can separate receiver nodes from the central infrast
 │  │   Device     │   │   Device     │   │    Device    │             │
 │  └──────┬───────┘   └──────┬───────┘   └──────┬───────┘             │
 │         │                  │                  │                      │
-│         │ interface-receiver only             │                      │
+│         │ receiver profile only               │                      │
 │         └──────────────────┼──────────────────┘                      │
 │                            │                                         │
 │                     MQTT (port 1883)                                 │
@@ -126,18 +126,21 @@ For larger deployments, you can separate receiver nodes from the central infrast
 
 **On each receiver node (Raspberry Pi, etc.):**
 ```bash
-# Only run the interface-receiver component
+# Only run the receiver component
 # Configure .env with MQTT_HOST pointing to your central server
 MQTT_HOST=your-community-server.com
 SERIAL_PORT=/dev/ttyUSB0
 
-docker compose --profile interface-receiver up -d
+docker compose --profile receiver up -d
 ```
 
 **On the central server (VPS/cloud):**
 ```bash
-# Run the core infrastructure (no interface needed)
-docker compose up -d
+# Run the core infrastructure with local MQTT broker
+docker compose --profile mqtt --profile core up -d
+
+# Or connect to an existing MQTT broker (set MQTT_HOST in .env)
+docker compose --profile core up -d
 ```
 
 This architecture allows:
@@ -150,26 +153,19 @@ This architecture allows:
 
 ### Using Docker Compose (Recommended)
 
-Docker Compose runs core services by default and uses **profiles** for optional components:
+Docker Compose uses **profiles** to select which services to run:
 
-**Default Services (always run):**
+| Profile | Services | Use Case |
+|---------|----------|----------|
+| `core` | collector, api, web | Central server infrastructure |
+| `receiver` | interface-receiver | Receiver node (events to MQTT) |
+| `sender` | interface-sender | Sender node (MQTT to device) |
+| `mqtt` | mosquitto broker | Local MQTT broker (optional) |
+| `mock` | interface-mock-receiver | Testing without hardware |
+| `migrate` | db-migrate | One-time database migration |
+| `seed` | seed | One-time seed data import |
 
-| Service | Description |
-|---------|-------------|
-| `mqtt` | Eclipse Mosquitto MQTT broker |
-| `collector` | MQTT subscriber + database storage (auto-seeds on startup) |
-| `api` | REST API server |
-| `web` | Web dashboard |
-
-**Optional Profiles:**
-
-| Profile | Services |
-|---------|----------|
-| `interface-receiver` | MeshCore device receiver (events to MQTT) |
-| `interface-sender` | MeshCore device sender (MQTT to device) |
-| `mock` | Mock device receiver (for testing without hardware) |
-| `migrate` | One-time database migration runner |
-| `seed` | One-time seed data import (also runs automatically on collector startup) |
+**Note:** Most deployments connect to an external MQTT broker. Add `--profile mqtt` only if you need a local broker.
 
 ```bash
 # Clone the repository
@@ -180,23 +176,23 @@ cd meshcore-hub
 cp .env.example .env
 # Edit .env with your settings (API keys, serial port, network info)
 
-# Option 1: Start core services (mqtt, collector, api, web)
-docker compose up -d
+# Create database schema
+docker compose --profile migrate run --rm db-migrate
 
-# Option 2: Start with mock device for testing
-docker compose --profile mock up -d
+# Seed the database
+docker compose --profile seed run --rm seed
 
-# Option 3: Start with real MeshCore device
-docker compose --profile interface-receiver up -d
+# Start core services with local MQTT broker
+docker compose --profile mqtt --profile core up -d
+
+# Or connect to external MQTT (configure MQTT_HOST in .env)
+docker compose --profile core up -d
+
+# Start just the receiver (connects to MQTT_HOST from .env)
+docker compose --profile receiver up -d
 
 # View logs
 docker compose logs -f
-
-# Run database migrations (one-time)
-docker compose --profile migrate up
-
-# Import seed data manually (also runs on collector startup)
-docker compose --profile seed up
 
 # Stop services
 docker compose down

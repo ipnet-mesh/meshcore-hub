@@ -20,6 +20,7 @@ from meshcore_hub.common.schemas.nodes import (
     NodeTagRead,
 )
 from meshcore_hub.common.schemas.messages import (
+    ReceiverInfo,
     MessageRead,
     MessageList,
     MessageFilters,
@@ -57,7 +58,8 @@ __all__ = [
     "NodeTagCreate",
     "NodeTagUpdate",
     "NodeTagRead",
-    # Messages
+    # Messages & Events
+    "ReceiverInfo",
     "MessageRead",
     "MessageList",
     "MessageFilters",

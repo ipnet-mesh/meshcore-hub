@@ -9,8 +9,8 @@ from sqlalchemy.orm import aliased, selectinload
 
 from meshcore_hub.api.auth import RequireRead
 from meshcore_hub.api.dependencies import DbSession
-from meshcore_hub.common.models import Message, Node, NodeTag
-from meshcore_hub.common.schemas.messages import MessageList, MessageRead
+from meshcore_hub.common.models import EventReceiver, Message, Node, NodeTag
+from meshcore_hub.common.schemas.messages import MessageList, MessageRead, ReceiverInfo
 
 router = APIRouter()
 
@@ -23,6 +23,75 @@ def _get_friendly_name(node: Optional[Node]) -> Optional[str]:
         if tag.key == "friendly_name":
             return tag.value
     return None
+
+
+def _fetch_receivers_for_events(
+    session: DbSession,
+    event_type: str,
+    event_hashes: list[str],
+) -> dict[str, list[ReceiverInfo]]:
+    """Fetch receiver info for a list of events by their hashes.
+
+    Args:
+        session: Database session
+        event_type: Type of event ('message', 'advertisement', etc.)
+        event_hashes: List of event hashes to fetch receivers for
+
+    Returns:
+        Dict mapping event_hash to list of ReceiverInfo objects
+    """
+    if not event_hashes:
+        return {}
+
+    # Query event_receivers with receiver node info
+    query = (
+        select(
+            EventReceiver.event_hash,
+            EventReceiver.snr,
+            EventReceiver.received_at,
+            Node.id.label("node_id"),
+            Node.public_key,
+            Node.name,
+        )
+        .join(Node, EventReceiver.receiver_node_id == Node.id)
+        .where(EventReceiver.event_type == event_type)
+        .where(EventReceiver.event_hash.in_(event_hashes))
+        .order_by(EventReceiver.received_at)
+    )
+
+    results = session.execute(query).all()
+
+    # Group by event_hash
+    receivers_by_hash: dict[str, list[ReceiverInfo]] = {}
+
+    # Get friendly names for receiver nodes
+    node_ids = [r.node_id for r in results]
+    friendly_names: dict[str, str] = {}
+    if node_ids:
+        fn_query = (
+            select(NodeTag.node_id, NodeTag.value)
+            .where(NodeTag.node_id.in_(node_ids))
+            .where(NodeTag.key == "friendly_name")
+        )
+        for node_id, value in session.execute(fn_query).all():
+            friendly_names[node_id] = value
+
+    for row in results:
+        if row.event_hash not in receivers_by_hash:
+            receivers_by_hash[row.event_hash] = []
+
+        receivers_by_hash[row.event_hash].append(
+            ReceiverInfo(
+                node_id=row.node_id,
+                public_key=row.public_key,
+                name=row.name,
+                friendly_name=friendly_names.get(row.node_id),
+                snr=row.snr,
+                received_at=row.received_at,
+            )
+        )
+
+    return receivers_by_hash
 
 
 @router.get("", response_model=MessageList)
@@ -126,6 +195,10 @@ async def list_messages(
         receivers = session.execute(receivers_query).scalars().all()
         receivers_by_id = {n.id: n for n in receivers}
 
+    # Fetch all receivers for these messages
+    event_hashes = [r[0].event_hash for r in results if r[0].event_hash]
+    receivers_by_hash = _fetch_receivers_for_events(session, "message", event_hashes)
+
     # Build response with sender info and received_by
     items = []
     for row in results:
@@ -159,6 +232,9 @@ async def list_messages(
             "sender_timestamp": m.sender_timestamp,
             "received_at": m.received_at,
             "created_at": m.created_at,
+            "receivers": (
+                receivers_by_hash.get(m.event_hash, []) if m.event_hash else []
+            ),
         }
         items.append(MessageRead(**msg_dict))
 
@@ -189,6 +265,15 @@ async def get_message(
         raise HTTPException(status_code=404, detail="Message not found")
 
     message, receiver_pk = result
+
+    # Fetch receivers for this message
+    receivers = []
+    if message.event_hash:
+        receivers_by_hash = _fetch_receivers_for_events(
+            session, "message", [message.event_hash]
+        )
+        receivers = receivers_by_hash.get(message.event_hash, [])
+
     data = {
         "id": message.id,
         "receiver_node_id": message.receiver_node_id,
@@ -204,5 +289,6 @@ async def get_message(
         "sender_timestamp": message.sender_timestamp,
         "received_at": message.received_at,
         "created_at": message.created_at,
+        "receivers": receivers,
     }
     return MessageRead(**data)

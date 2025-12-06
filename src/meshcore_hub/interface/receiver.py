@@ -197,17 +197,19 @@ class Receiver:
             logger.error(f"Failed to connect to MQTT broker: {e}")
             raise
 
-        # Connect to device
-        if not self.device.connect():
-            self._device_connected = False
-            logger.error("Failed to connect to MeshCore device")
-            self.mqtt.stop()
-            self.mqtt.disconnect()
-            self._mqtt_connected = False
-            raise RuntimeError("Failed to connect to MeshCore device")
+        # Device should already be connected (from create_receiver)
+        # but handle case where start() is called directly
+        if not self.device.is_connected:
+            if not self.device.connect():
+                self._device_connected = False
+                logger.error("Failed to connect to MeshCore device")
+                self.mqtt.stop()
+                self.mqtt.disconnect()
+                self._mqtt_connected = False
+                raise RuntimeError("Failed to connect to MeshCore device")
+            logger.info(f"Connected to MeshCore device: {self.device.public_key}")
 
         self._device_connected = True
-        logger.info(f"Connected to MeshCore device: {self.device.public_key}")
 
         # Initialize device: set time and send local advertisement
         self._initialize_device()
@@ -291,17 +293,22 @@ def create_receiver(
     Returns:
         Configured Receiver instance
     """
-    # Create device
+    # Create and connect device first to get public key
     device = create_device(port=port, baud=baud, mock=mock, node_address=node_address)
 
-    # Create MQTT client
+    if not device.connect():
+        raise RuntimeError("Failed to connect to MeshCore device")
+
+    logger.info(f"Connected to MeshCore device: {device.public_key}")
+
+    # Create MQTT client with device's public key for unique client ID
     mqtt_config = MQTTConfig(
         host=mqtt_host,
         port=mqtt_port,
         username=mqtt_username,
         password=mqtt_password,
         prefix=mqtt_prefix,
-        client_id=f"meshcore-receiver-{device.public_key[:8] if device.public_key else 'unknown'}",
+        client_id=f"meshcore-receiver-{device.public_key[:12] if device.public_key else 'unknown'}",
     )
     mqtt_client = MQTTClient(mqtt_config)
 

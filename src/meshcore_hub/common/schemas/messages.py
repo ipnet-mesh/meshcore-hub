@@ -6,6 +6,24 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 
+class ReceiverInfo(BaseModel):
+    """Information about a receiver that observed an event."""
+
+    node_id: str = Field(..., description="Receiver node UUID")
+    public_key: str = Field(..., description="Receiver node public key")
+    name: Optional[str] = Field(default=None, description="Receiver node name")
+    friendly_name: Optional[str] = Field(
+        default=None, description="Receiver friendly name from tags"
+    )
+    snr: Optional[float] = Field(
+        default=None, description="Signal-to-noise ratio at this receiver"
+    )
+    received_at: datetime = Field(..., description="When this receiver saw the event")
+
+    class Config:
+        from_attributes = True
+
+
 class MessageRead(BaseModel):
     """Schema for reading a message."""
 
@@ -37,6 +55,9 @@ class MessageRead(BaseModel):
     )
     received_at: datetime = Field(..., description="When received by interface")
     created_at: datetime = Field(..., description="Record creation timestamp")
+    receivers: list[ReceiverInfo] = Field(
+        default_factory=list, description="All receivers that observed this message"
+    )
 
     class Config:
         from_attributes = True
@@ -104,6 +125,10 @@ class AdvertisementRead(BaseModel):
     flags: Optional[int] = Field(default=None, description="Capability flags")
     received_at: datetime = Field(..., description="When received")
     created_at: datetime = Field(..., description="Record creation timestamp")
+    receivers: list[ReceiverInfo] = Field(
+        default_factory=list,
+        description="All receivers that observed this advertisement",
+    )
 
     class Config:
         from_attributes = True
@@ -137,6 +162,10 @@ class TracePathRead(BaseModel):
     hop_count: Optional[int] = Field(default=None, description="Total hops")
     received_at: datetime = Field(..., description="When received")
     created_at: datetime = Field(..., description="Record creation timestamp")
+    receivers: list[ReceiverInfo] = Field(
+        default_factory=list,
+        description="All receivers that observed this trace",
+    )
 
     class Config:
         from_attributes = True
@@ -163,6 +192,10 @@ class TelemetryRead(BaseModel):
     )
     received_at: datetime = Field(..., description="When received")
     created_at: datetime = Field(..., description="Record creation timestamp")
+    receivers: list[ReceiverInfo] = Field(
+        default_factory=list,
+        description="All receivers that observed this telemetry",
+    )
 
     class Config:
         from_attributes = True

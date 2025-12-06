@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, String
 from sqlalchemy.dialects.sqlite import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -66,6 +66,11 @@ class TracePath(Base, UUIDMixin, TimestampMixin):
         DateTime(timezone=True),
         default=utc_now,
         nullable=False,
+    )
+    event_hash: Mapped[Optional[str]] = mapped_column(
+        String(32),
+        nullable=True,
+        unique=True,
     )
 
     __table_args__ = (

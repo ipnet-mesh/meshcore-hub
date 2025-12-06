@@ -200,14 +200,16 @@ class Sender:
         """Start the sender."""
         logger.info("Starting SENDER mode")
 
-        # Connect to device first
-        if not self.device.connect():
-            self._device_connected = False
-            logger.error("Failed to connect to MeshCore device")
-            raise RuntimeError("Failed to connect to MeshCore device")
+        # Device should already be connected (from create_sender)
+        # but handle case where start() is called directly
+        if not self.device.is_connected:
+            if not self.device.connect():
+                self._device_connected = False
+                logger.error("Failed to connect to MeshCore device")
+                raise RuntimeError("Failed to connect to MeshCore device")
+            logger.info(f"Connected to MeshCore device: {self.device.public_key}")
 
         self._device_connected = True
-        logger.info(f"Connected to MeshCore device: {self.device.public_key}")
 
         # Connect to MQTT broker
         try:
@@ -307,17 +309,22 @@ def create_sender(
     Returns:
         Configured Sender instance
     """
-    # Create device
+    # Create and connect device first to get public key
     device = create_device(port=port, baud=baud, mock=mock, node_address=node_address)
 
-    # Create MQTT client
+    if not device.connect():
+        raise RuntimeError("Failed to connect to MeshCore device")
+
+    logger.info(f"Connected to MeshCore device: {device.public_key}")
+
+    # Create MQTT client with device's public key for unique client ID
     mqtt_config = MQTTConfig(
         host=mqtt_host,
         port=mqtt_port,
         username=mqtt_username,
         password=mqtt_password,
         prefix=mqtt_prefix,
-        client_id=f"meshcore-sender-{device.public_key[:8] if device.public_key else 'unknown'}",
+        client_id=f"meshcore-sender-{device.public_key[:12] if device.public_key else 'unknown'}",
     )
     mqtt_client = MQTTClient(mqtt_config)
 

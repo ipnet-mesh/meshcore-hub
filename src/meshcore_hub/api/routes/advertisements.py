@@ -9,8 +9,12 @@ from sqlalchemy.orm import aliased, selectinload
 
 from meshcore_hub.api.auth import RequireRead
 from meshcore_hub.api.dependencies import DbSession
-from meshcore_hub.common.models import Advertisement, Node
-from meshcore_hub.common.schemas.messages import AdvertisementList, AdvertisementRead
+from meshcore_hub.common.models import Advertisement, EventReceiver, Node, NodeTag
+from meshcore_hub.common.schemas.messages import (
+    AdvertisementList,
+    AdvertisementRead,
+    ReceiverInfo,
+)
 
 router = APIRouter()
 
@@ -23,6 +27,62 @@ def _get_friendly_name(node: Optional[Node]) -> Optional[str]:
         if tag.key == "friendly_name":
             return tag.value
     return None
+
+
+def _fetch_receivers_for_events(
+    session: DbSession,
+    event_type: str,
+    event_hashes: list[str],
+) -> dict[str, list[ReceiverInfo]]:
+    """Fetch receiver info for a list of events by their hashes."""
+    if not event_hashes:
+        return {}
+
+    query = (
+        select(
+            EventReceiver.event_hash,
+            EventReceiver.snr,
+            EventReceiver.received_at,
+            Node.id.label("node_id"),
+            Node.public_key,
+            Node.name,
+        )
+        .join(Node, EventReceiver.receiver_node_id == Node.id)
+        .where(EventReceiver.event_type == event_type)
+        .where(EventReceiver.event_hash.in_(event_hashes))
+        .order_by(EventReceiver.received_at)
+    )
+
+    results = session.execute(query).all()
+    receivers_by_hash: dict[str, list[ReceiverInfo]] = {}
+
+    node_ids = [r.node_id for r in results]
+    friendly_names: dict[str, str] = {}
+    if node_ids:
+        fn_query = (
+            select(NodeTag.node_id, NodeTag.value)
+            .where(NodeTag.node_id.in_(node_ids))
+            .where(NodeTag.key == "friendly_name")
+        )
+        for node_id, value in session.execute(fn_query).all():
+            friendly_names[node_id] = value
+
+    for row in results:
+        if row.event_hash not in receivers_by_hash:
+            receivers_by_hash[row.event_hash] = []
+
+        receivers_by_hash[row.event_hash].append(
+            ReceiverInfo(
+                node_id=row.node_id,
+                public_key=row.public_key,
+                name=row.name,
+                friendly_name=friendly_names.get(row.node_id),
+                snr=row.snr,
+                received_at=row.received_at,
+            )
+        )
+
+    return receivers_by_hash
 
 
 @router.get("", response_model=AdvertisementList)
@@ -97,6 +157,12 @@ async def list_advertisements(
         nodes = session.execute(nodes_query).scalars().all()
         nodes_by_id = {n.id: n for n in nodes}
 
+    # Fetch all receivers for these advertisements
+    event_hashes = [r[0].event_hash for r in results if r[0].event_hash]
+    receivers_by_hash = _fetch_receivers_for_events(
+        session, "advertisement", event_hashes
+    )
+
     # Build response with node details
     items = []
     for row in results:
@@ -116,6 +182,9 @@ async def list_advertisements(
             "flags": adv.flags,
             "received_at": adv.received_at,
             "created_at": adv.created_at,
+            "receivers": (
+                receivers_by_hash.get(adv.event_hash, []) if adv.event_hash else []
+            ),
         }
         items.append(AdvertisementRead(**data))
 
@@ -175,6 +244,14 @@ async def get_advertisement(
     receiver_node = nodes_by_id.get(result.receiver_id) if result.receiver_id else None
     source_node = nodes_by_id.get(result.source_id) if result.source_id else None
 
+    # Fetch receivers for this advertisement
+    receivers = []
+    if adv.event_hash:
+        receivers_by_hash = _fetch_receivers_for_events(
+            session, "advertisement", [adv.event_hash]
+        )
+        receivers = receivers_by_hash.get(adv.event_hash, [])
+
     data = {
         "received_by": result.receiver_pk,
         "receiver_name": result.receiver_name,
@@ -187,5 +264,6 @@ async def get_advertisement(
         "flags": adv.flags,
         "received_at": adv.received_at,
         "created_at": adv.created_at,
+        "receivers": receivers,
     }
     return AdvertisementRead(**data)

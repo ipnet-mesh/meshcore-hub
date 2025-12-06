@@ -76,6 +76,11 @@ class Message(Base, UUIDMixin, TimestampMixin):
         default=utc_now,
         nullable=False,
     )
+    event_hash: Mapped[Optional[str]] = mapped_column(
+        String(32),
+        nullable=True,
+        unique=True,
+    )
 
     __table_args__ = (
         Index("ix_messages_message_type", "message_type"),
