@@ -70,6 +70,11 @@ class InterfaceSettings(CommonSettings):
     # Mock device
     mock_device: bool = Field(default=False, description="Use mock device for testing")
 
+    # Device name
+    meshcore_device_name: Optional[str] = Field(
+        default=None, description="Device/node name (optional)"
+    )
+
 
 class CollectorSettings(CommonSettings):
     """Settings for the Collector component."""

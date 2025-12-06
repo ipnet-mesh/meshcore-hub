@@ -271,6 +271,17 @@ class MockMeshCoreDevice(BaseMeshCoreDevice):
         logger.info(f"Mock: Set device time to {timestamp}")
         return True
 
+    def set_name(self, name: str) -> bool:
+        """Set the mock device's node name."""
+        if not self._connected:
+            logger.error("Cannot set name: not connected")
+            return False
+
+        logger.info(f"Mock: Set device name to '{name}'")
+        # Update the mock config name
+        self.mock_config.name = name
+        return True
+
     def start_message_fetching(self) -> bool:
         """Start automatic message fetching (mock)."""
         if not self._connected:

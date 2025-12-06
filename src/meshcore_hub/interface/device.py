@@ -165,6 +165,18 @@ class BaseMeshCoreDevice(ABC):
         pass
 
     @abstractmethod
+    def set_name(self, name: str) -> bool:
+        """Set the device's node name.
+
+        Args:
+            name: Node name to set
+
+        Returns:
+            True if name was set successfully
+        """
+        pass
+
+    @abstractmethod
     def start_message_fetching(self) -> bool:
         """Start automatic message fetching.
 
@@ -516,6 +528,24 @@ class MeshCoreDevice(BaseMeshCoreDevice):
             return True
         except Exception as e:
             logger.error(f"Failed to set device time: {e}")
+            return False
+
+    def set_name(self, name: str) -> bool:
+        """Set the device's node name."""
+        if not self._connected or not self._mc:
+            logger.error("Cannot set name: not connected")
+            return False
+
+        try:
+
+            async def _set_name() -> None:
+                await self._mc.commands.set_name(name)
+
+            self._loop.run_until_complete(_set_name())
+            logger.info(f"Set device name to '{name}'")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to set device name: {e}")
             return False
 
     def start_message_fetching(self) -> bool:
