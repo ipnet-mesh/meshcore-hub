@@ -28,7 +28,7 @@ services:
   # Interface Receiver - MeshCore device to MQTT bridge (events)
   # ==========================================================================
   interface-receiver:
-    image: ghcr.io/ipnet-mesh/meshcore-hub:main
+    image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile
@@ -62,7 +62,7 @@ services:
   # Interface Sender - MQTT to MeshCore device bridge (commands)
   # ==========================================================================
   interface-sender:
-    image: ghcr.io/ipnet-mesh/meshcore-hub:main
+    image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile
@@ -96,7 +96,7 @@ services:
   # Interface Mock Receiver - For testing without real devices
   # ==========================================================================
   interface-mock-receiver:
-    image: ghcr.io/ipnet-mesh/meshcore-hub:main
+    image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile
@@ -126,7 +126,7 @@ services:
   # Collector - MQTT subscriber and database storage
   # ==========================================================================
   collector:
-    image: ghcr.io/ipnet-mesh/meshcore-hub:main
+    image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile
@@ -173,7 +173,7 @@ services:
   # API Server - REST API for querying data and sending commands
   # ==========================================================================
   api:
-    image: ghcr.io/ipnet-mesh/meshcore-hub:main
+    image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile
@@ -216,7 +216,7 @@ services:
   # Web Dashboard - Web interface for network visualization
   # ==========================================================================
   web:
-    image: ghcr.io/ipnet-mesh/meshcore-hub:main
+    image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile
@@ -256,7 +256,7 @@ services:
   # Database Migrations - Run Alembic migrations
   # ==========================================================================
   db-migrate:
-    image: ghcr.io/ipnet-mesh/meshcore-hub:main
+    image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile
@@ -277,7 +277,7 @@ services:
   # Seed Data - Import node_tags.json and members.json from SEED_HOME
   # ==========================================================================
   seed:
-    image: ghcr.io/ipnet-mesh/meshcore-hub:main
+    image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile
