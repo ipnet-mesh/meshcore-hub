@@ -235,6 +235,57 @@ meshcore-hub api
 meshcore-hub web
 ```
 
+## Updating an Existing Installation
+
+To update MeshCore Hub to the latest version:
+
+```bash
+# Navigate to your installation directory
+cd meshcore-hub
+
+# Pull the latest code
+git pull
+
+# Pull latest Docker images
+docker compose --profile all pull
+
+# Recreate and restart services
+# For receiver/sender only installs:
+docker compose --profile receiver up -d --force-recreate
+
+# For core services with MQTT:
+docker compose --profile mqtt --profile core up -d --force-recreate
+
+# For core services without local MQTT:
+docker compose --profile core up -d --force-recreate
+
+# For complete stack (all services):
+docker compose --profile mqtt --profile core --profile receiver up -d --force-recreate
+
+# View logs to verify update
+docker compose logs -f
+```
+
+**Note:** Database migrations run automatically on collector startup, so no manual migration step is needed when using Docker.
+
+For manual installations:
+
+```bash
+# Pull latest code
+git pull
+
+# Activate virtual environment
+source .venv/bin/activate
+
+# Update dependencies
+pip install -e ".[dev]"
+
+# Run database migrations
+meshcore-hub db upgrade
+
+# Restart your services
+```
+
 ## Configuration
 
 All components are configured via environment variables. Create a `.env` file or export variables:
