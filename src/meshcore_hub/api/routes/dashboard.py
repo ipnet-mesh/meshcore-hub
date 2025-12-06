@@ -8,6 +8,10 @@ from sqlalchemy import func, select
 
 from meshcore_hub.api.auth import RequireRead
 from meshcore_hub.api.dependencies import DbSession
+from meshcore_hub.common.hash_utils import (
+    compute_advertisement_hash,
+    compute_message_hash,
+)
 from meshcore_hub.common.models import Advertisement, Message, Node, NodeTag
 from meshcore_hub.common.schemas.messages import (
     ChannelMessage,
@@ -43,44 +47,109 @@ async def get_stats(
         or 0
     )
 
-    # Total messages
+    # Total messages (deduplicated by content hash)
+    distinct_messages = (
+        select(
+            Message.text,
+            Message.pubkey_prefix,
+            Message.channel_idx,
+            Message.sender_timestamp,
+            Message.txt_type,
+        )
+        .distinct()
+        .subquery()
+    )
     total_messages = (
-        session.execute(select(func.count()).select_from(Message)).scalar() or 0
+        session.execute(select(func.count()).select_from(distinct_messages)).scalar()
+        or 0
     )
 
-    # Messages today
+    # Messages today (deduplicated)
+    distinct_messages_today = (
+        select(
+            Message.text,
+            Message.pubkey_prefix,
+            Message.channel_idx,
+            Message.sender_timestamp,
+            Message.txt_type,
+        )
+        .where(Message.received_at >= today_start)
+        .distinct()
+        .subquery()
+    )
     messages_today = (
         session.execute(
-            select(func.count())
-            .select_from(Message)
-            .where(Message.received_at >= today_start)
+            select(func.count()).select_from(distinct_messages_today)
         ).scalar()
         or 0
     )
 
-    # Total advertisements
+    # Total advertisements (deduplicated by public_key + 5min time bucket)
+    distinct_advertisements = (
+        select(
+            Advertisement.public_key,
+            Advertisement.name,
+            Advertisement.adv_type,
+            Advertisement.flags,
+            (func.strftime("%s", Advertisement.received_at) / 300).label("time_bucket"),
+        )
+        .distinct()
+        .subquery()
+    )
     total_advertisements = (
-        session.execute(select(func.count()).select_from(Advertisement)).scalar() or 0
+        session.execute(
+            select(func.count()).select_from(distinct_advertisements)
+        ).scalar()
+        or 0
     )
 
-    # Advertisements in last 24h
+    # Advertisements in last 24h (deduplicated)
+    distinct_advertisements_24h = (
+        select(
+            Advertisement.public_key,
+            Advertisement.name,
+            Advertisement.adv_type,
+            Advertisement.flags,
+            (func.strftime("%s", Advertisement.received_at) / 300).label("time_bucket"),
+        )
+        .where(Advertisement.received_at >= yesterday)
+        .distinct()
+        .subquery()
+    )
     advertisements_24h = (
         session.execute(
-            select(func.count())
-            .select_from(Advertisement)
-            .where(Advertisement.received_at >= yesterday)
+            select(func.count()).select_from(distinct_advertisements_24h)
         ).scalar()
         or 0
     )
 
-    # Recent advertisements (last 10)
-    recent_ads = (
+    # Recent advertisements (last 10, deduplicated)
+    # Fetch more to ensure we have 10 unique after deduplication
+    recent_ads_raw = (
         session.execute(
-            select(Advertisement).order_by(Advertisement.received_at.desc()).limit(10)
+            select(Advertisement).order_by(Advertisement.received_at.desc()).limit(30)
         )
         .scalars()
         .all()
     )
+
+    # Deduplicate by hash
+    seen_ad_hashes: set[str] = set()
+    recent_ads = []
+    for ad in recent_ads_raw:
+        ad_hash = compute_advertisement_hash(
+            public_key=ad.public_key,
+            name=ad.name,
+            adv_type=ad.adv_type,
+            flags=ad.flags,
+            received_at=ad.received_at,
+            bucket_minutes=5,
+        )
+        if ad_hash not in seen_ad_hashes:
+            seen_ad_hashes.add(ad_hash)
+            recent_ads.append(ad)
+            if len(recent_ads) >= 10:
+                break
 
     # Get node names, adv_types, and friendly_name tags for the advertised nodes
     ad_public_keys = [ad.public_key for ad in recent_ads]
@@ -119,29 +188,57 @@ async def get_stats(
         for ad in recent_ads
     ]
 
-    # Channel message counts
-    channel_counts_query = (
-        select(Message.channel_idx, func.count())
+    # Channel message counts (deduplicated)
+    distinct_channel_messages = (
+        select(
+            Message.channel_idx,
+            Message.text,
+            Message.pubkey_prefix,
+            Message.sender_timestamp,
+            Message.txt_type,
+        )
         .where(Message.message_type == "channel")
         .where(Message.channel_idx.isnot(None))
-        .group_by(Message.channel_idx)
+        .distinct()
+        .subquery()
     )
+    channel_counts_query = select(
+        distinct_channel_messages.c.channel_idx, func.count()
+    ).group_by(distinct_channel_messages.c.channel_idx)
     channel_results = session.execute(channel_counts_query).all()
     channel_message_counts = {
         int(channel): int(count) for channel, count in channel_results
     }
 
-    # Get latest 5 messages for each channel that has messages
+    # Get latest 5 messages for each channel that has messages (deduplicated)
     channel_messages: dict[int, list[ChannelMessage]] = {}
     for channel_idx, _ in channel_results:
+        # Fetch more messages to deduplicate
         messages_query = (
             select(Message)
             .where(Message.message_type == "channel")
             .where(Message.channel_idx == channel_idx)
             .order_by(Message.received_at.desc())
-            .limit(5)
+            .limit(15)
         )
-        channel_msgs = session.execute(messages_query).scalars().all()
+        channel_msgs_raw = session.execute(messages_query).scalars().all()
+
+        # Deduplicate
+        seen_msg_hashes: set[str] = set()
+        channel_msgs = []
+        for m in channel_msgs_raw:
+            msg_hash = compute_message_hash(
+                text=m.text,
+                pubkey_prefix=m.pubkey_prefix,
+                channel_idx=m.channel_idx,
+                sender_timestamp=m.sender_timestamp,
+                txt_type=m.txt_type,
+            )
+            if msg_hash not in seen_msg_hashes:
+                seen_msg_hashes.add(msg_hash)
+                channel_msgs.append(m)
+                if len(channel_msgs) >= 5:
+                    break
 
         # Look up sender names for these messages
         msg_prefixes = [m.pubkey_prefix for m in channel_msgs if m.pubkey_prefix]

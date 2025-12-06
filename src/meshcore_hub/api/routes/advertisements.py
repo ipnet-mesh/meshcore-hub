@@ -9,6 +9,7 @@ from sqlalchemy.orm import aliased, selectinload
 
 from meshcore_hub.api.auth import RequireRead
 from meshcore_hub.api.dependencies import DbSession
+from meshcore_hub.common.hash_utils import compute_advertisement_hash
 from meshcore_hub.common.models import Advertisement, Node
 from meshcore_hub.common.schemas.messages import AdvertisementList, AdvertisementRead
 
@@ -35,6 +36,9 @@ async def list_advertisements(
     ),
     since: Optional[datetime] = Query(None, description="Start timestamp"),
     until: Optional[datetime] = Query(None, description="End timestamp"),
+    dedupe: bool = Query(
+        True, description="Deduplicate advertisements from multiple receivers"
+    ),
     limit: int = Query(50, ge=1, le=100, description="Page size"),
     offset: int = Query(0, ge=0, description="Page offset"),
 ) -> AdvertisementList:
@@ -70,12 +74,37 @@ async def list_advertisements(
     if until:
         query = query.where(Advertisement.received_at <= until)
 
-    # Get total count
-    count_query = select(func.count()).select_from(query.subquery())
-    total = session.execute(count_query).scalar() or 0
+    # When deduplicating, we need to fetch more results and compute distinct count
+    if dedupe:
+        # For deduplicated count, count distinct by public_key within time buckets
+        # We use a 5-minute time bucket for advertisements
+        distinct_subquery = (
+            select(
+                Advertisement.public_key,
+                Advertisement.name,
+                Advertisement.adv_type,
+                Advertisement.flags,
+                # Use date truncation for time bucketing (5 min = 300 seconds)
+                (func.strftime("%s", Advertisement.received_at) / 300).label(
+                    "time_bucket"
+                ),
+            )
+            .distinct()
+            .select_from(query.subquery())
+        )
+        count_query = select(func.count()).select_from(distinct_subquery.subquery())
+        total = session.execute(count_query).scalar() or 0
 
-    # Apply pagination
-    query = query.order_by(Advertisement.received_at.desc()).offset(offset).limit(limit)
+        # Fetch extra results to account for duplicates
+        fetch_limit = (limit + offset) * 3
+        query = query.order_by(Advertisement.received_at.desc()).limit(fetch_limit)
+    else:
+        # Standard count and pagination
+        count_query = select(func.count()).select_from(query.subquery())
+        total = session.execute(count_query).scalar() or 0
+        query = (
+            query.order_by(Advertisement.received_at.desc()).offset(offset).limit(limit)
+        )
 
     # Execute
     results = session.execute(query).all()
@@ -99,8 +128,25 @@ async def list_advertisements(
 
     # Build response with node details
     items = []
+    seen_hashes: set[str] = set()
+
     for row in results:
         adv = row[0]
+
+        # Compute hash for deduplication
+        if dedupe:
+            adv_hash = compute_advertisement_hash(
+                public_key=adv.public_key,
+                name=adv.name,
+                adv_type=adv.adv_type,
+                flags=adv.flags,
+                received_at=adv.received_at,
+                bucket_minutes=5,
+            )
+            if adv_hash in seen_hashes:
+                continue
+            seen_hashes.add(adv_hash)
+
         receiver_node = nodes_by_id.get(row.receiver_id) if row.receiver_id else None
         source_node = nodes_by_id.get(row.source_id) if row.source_id else None
 
@@ -118,6 +164,14 @@ async def list_advertisements(
             "created_at": adv.created_at,
         }
         items.append(AdvertisementRead(**data))
+
+        # Stop once we have enough items (for dedupe mode with pagination)
+        if dedupe and len(items) >= offset + limit:
+            break
+
+    # Apply offset for dedupe mode (we fetched from beginning)
+    if dedupe:
+        items = items[offset : offset + limit]
 
     return AdvertisementList(
         items=items,
