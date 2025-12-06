@@ -481,6 +481,7 @@ ${DATA_HOME}/
 | INTERFACE_MODE | RECEIVER | RECEIVER or SENDER |
 | SERIAL_PORT | /dev/ttyUSB0 | Serial port path |
 | SERIAL_BAUD | 115200 | Baud rate |
+| MESHCORE_DEVICE_NAME | *(none)* | Device/node name set on startup |
 | MOCK_DEVICE | false | Use mock device |
 
 ### Collector

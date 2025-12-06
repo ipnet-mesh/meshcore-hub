@@ -33,15 +33,18 @@ class Receiver:
         self,
         device: BaseMeshCoreDevice,
         mqtt_client: MQTTClient,
+        device_name: Optional[str] = None,
     ):
         """Initialize receiver.
 
         Args:
             device: MeshCore device instance
             mqtt_client: MQTT client instance
+            device_name: Optional device/node name to set on startup
         """
         self.device = device
         self.mqtt = mqtt_client
+        self.device_name = device_name
         self._running = False
         self._shutdown_event = threading.Event()
         self._device_connected = False
@@ -71,11 +74,14 @@ class Receiver:
             "device_public_key": self.device.public_key,
         }
 
-    def _initialize_device(self) -> None:
+    def _initialize_device(self, device_name: Optional[str] = None) -> None:
         """Initialize device after connection.
 
-        Sets the hardware clock, sends a local advertisement, starts message fetching,
-        and syncs the contact database.
+        Sets the hardware clock, optionally sets device name, sends a local advertisement,
+        starts message fetching, and syncs the contact database.
+
+        Args:
+            device_name: Optional device/node name to set
         """
         # Set device time to current Unix timestamp
         current_time = int(time.time())
@@ -83,6 +89,13 @@ class Receiver:
             logger.info(f"Synchronized device clock to {current_time}")
         else:
             logger.warning("Failed to synchronize device clock")
+
+        # Set device name if provided
+        if device_name:
+            if self.device.set_name(device_name):
+                logger.info(f"Set device name to '{device_name}'")
+            else:
+                logger.warning(f"Failed to set device name to '{device_name}'")
 
         # Send a flood advertisement to broadcast device name
         if self.device.send_advertisement(flood=True):
@@ -211,8 +224,8 @@ class Receiver:
 
         self._device_connected = True
 
-        # Initialize device: set time and send local advertisement
-        self._initialize_device()
+        # Initialize device: set time, optionally set name, and send local advertisement
+        self._initialize_device(device_name=self.device_name)
 
         self._running = True
 
@@ -271,6 +284,7 @@ def create_receiver(
     baud: int = 115200,
     mock: bool = False,
     node_address: Optional[str] = None,
+    device_name: Optional[str] = None,
     mqtt_host: str = "localhost",
     mqtt_port: int = 1883,
     mqtt_username: Optional[str] = None,
@@ -284,6 +298,7 @@ def create_receiver(
         baud: Baud rate
         mock: Use mock device
         node_address: Optional override for device public key/address
+        device_name: Optional device/node name to set on startup
         mqtt_host: MQTT broker host
         mqtt_port: MQTT broker port
         mqtt_username: MQTT username
@@ -312,7 +327,7 @@ def create_receiver(
     )
     mqtt_client = MQTTClient(mqtt_config)
 
-    return Receiver(device, mqtt_client)
+    return Receiver(device, mqtt_client, device_name=device_name)
 
 
 def run_receiver(
@@ -320,6 +335,7 @@ def run_receiver(
     baud: int = 115200,
     mock: bool = False,
     node_address: Optional[str] = None,
+    device_name: Optional[str] = None,
     mqtt_host: str = "localhost",
     mqtt_port: int = 1883,
     mqtt_username: Optional[str] = None,
@@ -335,6 +351,7 @@ def run_receiver(
         baud: Baud rate
         mock: Use mock device
         node_address: Optional override for device public key/address
+        device_name: Optional device/node name to set on startup
         mqtt_host: MQTT broker host
         mqtt_port: MQTT broker port
         mqtt_username: MQTT username
@@ -346,6 +363,7 @@ def run_receiver(
         baud=baud,
         mock=mock,
         node_address=node_address,
+        device_name=device_name,
         mqtt_host=mqtt_host,
         mqtt_port=mqtt_port,
         mqtt_username=mqtt_username,

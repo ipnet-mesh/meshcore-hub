@@ -52,6 +52,13 @@ def interface() -> None:
     help="Override for device public key/address (hex string)",
 )
 @click.option(
+    "--device-name",
+    type=str,
+    default=None,
+    envvar="MESHCORE_DEVICE_NAME",
+    help="Device/node name (optional)",
+)
+@click.option(
     "--mqtt-host",
     type=str,
     default="localhost",
@@ -99,6 +106,7 @@ def run(
     baud: int,
     mock: bool,
     node_address: str | None,
+    device_name: str | None,
     mqtt_host: str,
     mqtt_port: int,
     mqtt_username: str | None,
@@ -139,6 +147,7 @@ def run(
             baud=baud,
             mock=mock,
             node_address=node_address,
+            device_name=device_name,
             mqtt_host=mqtt_host,
             mqtt_port=mqtt_port,
             mqtt_username=mqtt_username,
@@ -153,6 +162,7 @@ def run(
             baud=baud,
             mock=mock,
             node_address=node_address,
+            device_name=device_name,
             mqtt_host=mqtt_host,
             mqtt_port=mqtt_port,
             mqtt_username=mqtt_username,
@@ -194,6 +204,13 @@ def run(
     help="Override for device public key/address (hex string)",
 )
 @click.option(
+    "--device-name",
+    type=str,
+    default=None,
+    envvar="MESHCORE_DEVICE_NAME",
+    help="Device/node name (optional)",
+)
+@click.option(
     "--mqtt-host",
     type=str,
     default="localhost",
@@ -233,6 +250,7 @@ def receiver(
     baud: int,
     mock: bool,
     node_address: str | None,
+    device_name: str | None,
     mqtt_host: str,
     mqtt_port: int,
     mqtt_username: str | None,
@@ -295,6 +313,13 @@ def receiver(
     help="Override for device public key/address (hex string)",
 )
 @click.option(
+    "--device-name",
+    type=str,
+    default=None,
+    envvar="MESHCORE_DEVICE_NAME",
+    help="Device/node name (optional)",
+)
+@click.option(
     "--mqtt-host",
     type=str,
     default="localhost",
@@ -334,6 +359,7 @@ def sender(
     baud: int,
     mock: bool,
     node_address: str | None,
+    device_name: str | None,
     mqtt_host: str,
     mqtt_port: int,
     mqtt_username: str | None,

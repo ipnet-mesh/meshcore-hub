@@ -306,6 +306,7 @@ All components are configured via environment variables. Create a `.env` file or
 | `INTERFACE_MODE` | `RECEIVER` | Operating mode (RECEIVER or SENDER) |
 | `SERIAL_PORT` | `/dev/ttyUSB0` | Serial port for MeshCore device |
 | `SERIAL_BAUD` | `115200` | Serial baud rate |
+| `MESHCORE_DEVICE_NAME` | *(none)* | Device/node name set on startup (broadcast in advertisements) |
 | `MOCK_DEVICE` | `false` | Use mock device for testing |
 
 ### Collector Settings
@@ -368,6 +369,7 @@ meshcore-hub --help
 
 # Interface component
 meshcore-hub interface --mode receiver --port /dev/ttyUSB0
+meshcore-hub interface --mode receiver --device-name "Gateway Node"  # Set device name
 meshcore-hub interface --mode sender --mock  # Use mock device
 
 # Collector component
