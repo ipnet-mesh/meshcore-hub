@@ -120,6 +120,24 @@
         return type ? type.toLowerCase() : null;
     }
 
+    // Format relative time (e.g., "2m", "1h", "2d")
+    function formatRelativeTime(lastSeenStr) {
+        if (!lastSeenStr) return null;
+
+        const lastSeen = new Date(lastSeenStr);
+        const now = new Date();
+        const diffMs = now - lastSeen;
+        const diffSec = Math.floor(diffMs / 1000);
+        const diffMin = Math.floor(diffSec / 60);
+        const diffHour = Math.floor(diffMin / 60);
+        const diffDay = Math.floor(diffHour / 24);
+
+        if (diffDay > 0) return `${diffDay}d`;
+        if (diffHour > 0) return `${diffHour}h`;
+        if (diffMin > 0) return `${diffMin}m`;
+        return '<1m';
+    }
+
     // Get emoji marker based on node type
     function getNodeEmoji(node) {
         const type = normalizeType(node.adv_type);
@@ -143,13 +161,15 @@
         const emoji = getNodeEmoji(node);
         const infraGlow = node.is_infra ? 'filter: drop-shadow(0 0 4px gold);' : '';
         const keyPrefix = node.public_key ? node.public_key.substring(0, 2).toLowerCase() : '';
+        const relativeTime = formatRelativeTime(node.last_seen);
+        const timeDisplay = relativeTime ? ` (${relativeTime})` : '';
         return L.divIcon({
             className: 'custom-div-icon',
             html: `<div style="display: flex; align-items: center; gap: 2px;">
                 <span style="font-size: 24px; ${infraGlow} text-shadow: 0 0 3px #1a237e, 0 0 6px #1a237e, 0 1px 2px rgba(0,0,0,0.7);">${emoji}</span>
-                <span style="font-size: 10px; font-weight: bold; color: #000; background: rgba(255,255,255,0.9); padding: 1px 4px; border-radius: 3px; box-shadow: 0 1px 3px rgba(0,0,0,0.3);">${keyPrefix}</span>
+                <span style="font-size: 10px; font-weight: bold; color: #000; background: rgba(255,255,255,0.9); padding: 1px 4px; border-radius: 3px; box-shadow: 0 1px 3px rgba(0,0,0,0.3);">${keyPrefix}${timeDisplay}</span>
             </div>`,
-            iconSize: [52, 28],
+            iconSize: [82, 28],
             iconAnchor: [14, 14]
         });
     }
