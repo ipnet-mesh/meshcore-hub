@@ -228,6 +228,26 @@ def _run_collector_service(
 
     from meshcore_hub.collector.subscriber import run_collector
 
+    # Show cleanup configuration
+    click.echo("")
+    click.echo("Cleanup configuration:")
+    if settings.data_retention_enabled:
+        click.echo(
+            f"  Event data: Enabled (retention: {settings.data_retention_days} days)"
+        )
+    else:
+        click.echo("  Event data: Disabled")
+
+    if settings.node_cleanup_enabled:
+        click.echo(
+            f"  Inactive nodes: Enabled (inactivity: {settings.node_cleanup_days} days)"
+        )
+    else:
+        click.echo("  Inactive nodes: Disabled")
+
+    if settings.data_retention_enabled or settings.node_cleanup_enabled:
+        click.echo(f"  Interval: {settings.data_retention_interval_hours} hours")
+
     click.echo("")
     click.echo("Starting MQTT subscriber...")
     run_collector(
@@ -238,6 +258,11 @@ def _run_collector_service(
         mqtt_prefix=prefix,
         database_url=database_url,
         webhook_dispatcher=webhook_dispatcher,
+        cleanup_enabled=settings.data_retention_enabled,
+        cleanup_retention_days=settings.data_retention_days,
+        cleanup_interval_hours=settings.data_retention_interval_hours,
+        node_cleanup_enabled=settings.node_cleanup_enabled,
+        node_cleanup_days=settings.node_cleanup_days,
     )
 
 
@@ -549,3 +574,90 @@ def import_members_cmd(
             click.echo(f"  - {error}", err=True)
 
     db.dispose()
+
+
+@collector.command("cleanup")
+@click.option(
+    "--retention-days",
+    type=int,
+    default=30,
+    envvar="DATA_RETENTION_DAYS",
+    help="Number of days to retain data (default: 30)",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Show what would be deleted without deleting",
+)
+@click.pass_context
+def cleanup_cmd(
+    ctx: click.Context,
+    retention_days: int,
+    dry_run: bool,
+) -> None:
+    """Manually run data cleanup to delete old events.
+
+    Deletes event data older than the retention period:
+    - Advertisements
+    - Messages (channel and direct)
+    - Telemetry
+    - Trace paths
+    - Event logs
+
+    Node records are never deleted - only event data.
+
+    Use --dry-run to preview what would be deleted without
+    actually deleting anything.
+    """
+    import asyncio
+
+    configure_logging(level=ctx.obj["log_level"])
+
+    click.echo(f"Database: {ctx.obj['database_url']}")
+    click.echo(f"Retention: {retention_days} days")
+    click.echo(f"Mode: {'DRY RUN' if dry_run else 'LIVE'}")
+    click.echo("")
+
+    if dry_run:
+        click.echo("Running in dry-run mode - no data will be deleted.")
+    else:
+        click.echo("WARNING: This will permanently delete old event data!")
+        if not click.confirm("Continue?"):
+            click.echo("Aborted.")
+            return
+
+    click.echo("")
+
+    from meshcore_hub.common.database import DatabaseManager
+    from meshcore_hub.collector.cleanup import cleanup_old_data
+
+    # Initialize database
+    db = DatabaseManager(ctx.obj["database_url"])
+
+    # Run cleanup
+    async def run_cleanup() -> None:
+        async with db.async_session() as session:
+            stats = await cleanup_old_data(
+                session,
+                retention_days,
+                dry_run=dry_run,
+            )
+
+            click.echo("")
+            click.echo("Cleanup results:")
+            click.echo(f"  Advertisements: {stats.advertisements_deleted}")
+            click.echo(f"  Messages: {stats.messages_deleted}")
+            click.echo(f"  Telemetry: {stats.telemetry_deleted}")
+            click.echo(f"  Trace paths: {stats.trace_paths_deleted}")
+            click.echo(f"  Event logs: {stats.event_logs_deleted}")
+            click.echo(f"  Total: {stats.total_deleted}")
+
+            if dry_run:
+                click.echo("")
+                click.echo("(Dry run - no data was actually deleted)")
+
+    asyncio.run(run_cleanup())
+    db.dispose()
+    click.echo("")
+    click.echo("Cleanup complete." if not dry_run else "Dry run complete.")

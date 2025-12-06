@@ -1,10 +1,11 @@
 """Database connection and session management."""
 
-from contextlib import contextmanager
-from typing import Generator
+from contextlib import asynccontextmanager, contextmanager
+from typing import AsyncGenerator, Generator
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from meshcore_hub.common.models.base import Base
@@ -100,6 +101,17 @@ class DatabaseManager:
         self.engine = create_database_engine(database_url, echo=echo)
         self.session_factory = create_session_factory(self.engine)
 
+        # Create async engine for async operations
+        async_url = database_url.replace("sqlite://", "sqlite+aiosqlite://")
+        self.async_engine = create_async_engine(async_url, echo=echo)
+        from sqlalchemy.ext.asyncio import async_sessionmaker
+
+        self.async_session_factory = async_sessionmaker(
+            self.async_engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+        )
+
     def create_tables(self) -> None:
         """Create all database tables."""
         create_tables(self.engine)
@@ -137,6 +149,21 @@ class DatabaseManager:
             raise
         finally:
             session.close()
+
+    @asynccontextmanager
+    async def async_session(self) -> AsyncGenerator[AsyncSession, None]:
+        """Provide an async session context manager.
+
+        Yields:
+            AsyncSession instance
+
+        Example:
+            async with db.async_session() as session:
+                result = await session.execute(select(Node))
+                await session.commit()
+        """
+        async with self.async_session_factory() as session:
+            yield session
 
     def dispose(self) -> None:
         """Dispose of the database engine and connection pool."""

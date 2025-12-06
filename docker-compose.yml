@@ -161,6 +161,12 @@ services:
       - WEBHOOK_TIMEOUT=${WEBHOOK_TIMEOUT:-10.0}
       - WEBHOOK_MAX_RETRIES=${WEBHOOK_MAX_RETRIES:-3}
       - WEBHOOK_RETRY_BACKOFF=${WEBHOOK_RETRY_BACKOFF:-2.0}
+      # Data retention and cleanup configuration
+      - DATA_RETENTION_ENABLED=${DATA_RETENTION_ENABLED:-true}
+      - DATA_RETENTION_DAYS=${DATA_RETENTION_DAYS:-30}
+      - DATA_RETENTION_INTERVAL_HOURS=${DATA_RETENTION_INTERVAL_HOURS:-24}
+      - NODE_CLEANUP_ENABLED=${NODE_CLEANUP_ENABLED:-true}
+      - NODE_CLEANUP_DAYS=${NODE_CLEANUP_DAYS:-7}
     command: ["collector"]
     healthcheck:
       test: ["CMD", "meshcore-hub", "health", "collector"]

@@ -264,6 +264,7 @@ meshcore-hub/
 │   ├── collector/
 │   │   ├── cli.py            # Collector CLI with seed commands
 │   │   ├── subscriber.py     # MQTT subscriber
+│   │   ├── cleanup.py        # Data retention/cleanup service
 │   │   ├── tag_import.py     # Tag import from YAML
 │   │   ├── member_import.py  # Member import from YAML
 │   │   ├── handlers/         # Event handlers
@@ -501,6 +502,48 @@ The collector supports forwarding events to external HTTP endpoints:
 | `WEBHOOK_TIMEOUT` | Request timeout (default: 10.0s) |
 | `WEBHOOK_MAX_RETRIES` | Max retries on failure (default: 3) |
 | `WEBHOOK_RETRY_BACKOFF` | Exponential backoff multiplier (default: 2.0) |
+
+### Data Retention / Cleanup Configuration
+
+The collector supports automatic cleanup of old event data and inactive nodes:
+
+**Event Data Cleanup:**
+
+| Variable | Description |
+|----------|-------------|
+| `DATA_RETENTION_ENABLED` | Enable automatic event data cleanup (default: true) |
+| `DATA_RETENTION_DAYS` | Days to retain event data (default: 30) |
+| `DATA_RETENTION_INTERVAL_HOURS` | Hours between cleanup runs (default: 24) |
+
+When enabled, the collector automatically deletes event data older than the retention period:
+- Advertisements
+- Messages (channel and direct)
+- Telemetry
+- Trace paths
+- Event logs
+
+**Node Cleanup:**
+
+| Variable | Description |
+|----------|-------------|
+| `NODE_CLEANUP_ENABLED` | Enable automatic cleanup of inactive nodes (default: true) |
+| `NODE_CLEANUP_DAYS` | Remove nodes not seen for this many days (default: 7) |
+
+When enabled, the collector automatically removes nodes where:
+- `last_seen` is older than the configured number of days
+- Nodes with `last_seen=NULL` (never seen on network) are **NOT** removed
+- Nodes created via tag import that have never been seen on the mesh are preserved
+
+**Note:** Both event data and node cleanup run on the same schedule (DATA_RETENTION_INTERVAL_HOURS).
+
+Manual cleanup can be triggered at any time with:
+```bash
+# Dry run to see what would be deleted
+meshcore-hub collector cleanup --retention-days 30 --dry-run
+
+# Live cleanup
+meshcore-hub collector cleanup --retention-days 30
+```
 
 Webhook payload structure:
 ```json
