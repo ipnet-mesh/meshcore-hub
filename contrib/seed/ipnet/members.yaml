@@ -35,7 +35,11 @@ members:
         node_role: repeater
       - public_key: d3c20d962f7384c111fbafad6fbc1c1dc0e5c3ce802fb3ee11020e8d8207ed3a
         node_role: repeater
+      - public_key: cd4497d3c2fa2a1df565ae9d1cb8bf87aeaded34059421b63abeaec203f9eda8
+        node_role: repeater
       - public_key: b00ce9d218203e96d8557a4d59e06f5de59bbc4dcc4df9c870079d2cb8b5bd80
+        node_role: repeater
+      - public_key: 69fb8431e7ab307513797544fab99ce53ce24c46ec2d3a11767fe70f2ca37b23
         node_role: repeater
   - name: CCZ
     callsign: CCZ

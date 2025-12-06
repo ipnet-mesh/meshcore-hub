@@ -181,7 +181,7 @@ ebb16e6c328b3f2fa5bc46a8c3efc8e9ad1960ee49a76dfa85abddbf7911e2ca:
   role: infra
 
 # IP4 Area Nodes
-d3c20d962f7384c111fbafad6fbc1c1dc0e5c3ce802fb3ee11020e8d8207ed3a:
+c464e725906e956b0cc113f4eb3ae320db66209d0b7cf1924e258b0f86147cae:
   friendly_name: IP4 Repeater 1
   node_id: ip4-rep01.ipnt.uk
   member_id: markab
@@ -194,7 +194,7 @@ d3c20d962f7384c111fbafad6fbc1c1dc0e5c3ce802fb3ee11020e8d8207ed3a:
   elevation: 50
   role: infra
 
-b00ce9d218203e96d8557a4d59e06f5de59bbc4dcc4df9c870079d2cb8b5bd80:
+cd4497d3c2fa2a1df565ae9d1cb8bf87aeaded34059421b63abeaec203f9eda8:
   friendly_name: IP4 Repeater 2
   node_id: ip4-rep02.ipnt.uk
   member_id: markab
