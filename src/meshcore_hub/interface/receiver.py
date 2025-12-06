@@ -84,9 +84,9 @@ class Receiver:
         else:
             logger.warning("Failed to synchronize device clock")
 
-        # Send a local (non-flood) advertisement to announce presence
-        if self.device.send_advertisement(flood=False):
-            logger.info("Sent local advertisement")
+        # Send a flood advertisement to broadcast device name
+        if self.device.send_advertisement(flood=True):
+            logger.info("Sent flood advertisement")
         else:
             logger.warning("Failed to send local advertisement")
 
