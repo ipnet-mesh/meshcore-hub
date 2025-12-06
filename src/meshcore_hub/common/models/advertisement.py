@@ -61,12 +61,10 @@ class Advertisement(Base, UUIDMixin, TimestampMixin):
     event_hash: Mapped[Optional[str]] = mapped_column(
         String(32),
         nullable=True,
+        unique=True,
     )
 
-    __table_args__ = (
-        Index("ix_advertisements_received_at", "received_at"),
-        Index("ix_advertisements_event_hash", "event_hash"),
-    )
+    __table_args__ = (Index("ix_advertisements_received_at", "received_at"),)
 
     def __repr__(self) -> str:
         return f"<Advertisement(id={self.id}, public_key={self.public_key[:12]}..., name={self.name})>"

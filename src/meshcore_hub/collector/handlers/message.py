@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from meshcore_hub.common.database import DatabaseManager
 from meshcore_hub.common.hash_utils import compute_message_hash
@@ -162,6 +163,27 @@ def _handle_message(
                 snr=snr,
                 received_at=now,
             )
+
+        # Flush to check for duplicate constraint violation (race condition)
+        try:
+            session.flush()
+        except IntegrityError:
+            # Race condition: another request inserted the same event_hash
+            session.rollback()
+            logger.debug(
+                f"Duplicate message skipped (race condition, hash={event_hash[:8]}...)"
+            )
+            # Re-add receiver to existing event in a new transaction
+            if receiver_node:
+                add_event_receiver(
+                    session=session,
+                    event_type="message",
+                    event_hash=event_hash,
+                    receiver_node_id=receiver_node.id,
+                    snr=snr,
+                    received_at=now,
+                )
+            return
 
     if message_type == "contact":
         logger.info(

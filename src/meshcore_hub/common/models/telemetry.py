@@ -57,12 +57,10 @@ class Telemetry(Base, UUIDMixin, TimestampMixin):
     event_hash: Mapped[Optional[str]] = mapped_column(
         String(32),
         nullable=True,
+        unique=True,
     )
 
-    __table_args__ = (
-        Index("ix_telemetry_received_at", "received_at"),
-        Index("ix_telemetry_event_hash", "event_hash"),
-    )
+    __table_args__ = (Index("ix_telemetry_received_at", "received_at"),)
 
     def __repr__(self) -> str:
         return (

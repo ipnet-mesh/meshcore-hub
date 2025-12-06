@@ -70,12 +70,12 @@ class TracePath(Base, UUIDMixin, TimestampMixin):
     event_hash: Mapped[Optional[str]] = mapped_column(
         String(32),
         nullable=True,
+        unique=True,
     )
 
     __table_args__ = (
         Index("ix_trace_paths_initiator_tag", "initiator_tag"),
         Index("ix_trace_paths_received_at", "received_at"),
-        Index("ix_trace_paths_event_hash", "event_hash"),
     )
 
     def __repr__(self) -> str:

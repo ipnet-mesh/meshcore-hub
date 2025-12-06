@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from meshcore_hub.common.database import DatabaseManager
 from meshcore_hub.common.hash_utils import compute_trace_hash
@@ -110,5 +111,26 @@ def handle_trace_data(
                 snr=None,
                 received_at=now,
             )
+
+        # Flush to check for duplicate constraint violation (race condition)
+        try:
+            session.flush()
+        except IntegrityError:
+            # Race condition: another request inserted the same event_hash
+            session.rollback()
+            logger.debug(
+                f"Duplicate trace skipped (race condition, tag={initiator_tag})"
+            )
+            # Re-add receiver to existing event in a new transaction
+            if receiver_node:
+                add_event_receiver(
+                    session=session,
+                    event_type="trace",
+                    event_hash=event_hash,
+                    receiver_node_id=receiver_node.id,
+                    snr=None,
+                    received_at=now,
+                )
+            return
 
     logger.info(f"Stored trace data: tag={initiator_tag}, hops={hop_count}")

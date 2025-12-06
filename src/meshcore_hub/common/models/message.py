@@ -79,6 +79,7 @@ class Message(Base, UUIDMixin, TimestampMixin):
     event_hash: Mapped[Optional[str]] = mapped_column(
         String(32),
         nullable=True,
+        unique=True,
     )
 
     __table_args__ = (
@@ -86,7 +87,6 @@ class Message(Base, UUIDMixin, TimestampMixin):
         Index("ix_messages_pubkey_prefix", "pubkey_prefix"),
         Index("ix_messages_channel_idx", "channel_idx"),
         Index("ix_messages_received_at", "received_at"),
-        Index("ix_messages_event_hash", "event_hash"),
     )
 
     def __repr__(self) -> str:
