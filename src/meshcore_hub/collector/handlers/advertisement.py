@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import select
 
 from meshcore_hub.common.database import DatabaseManager
+from meshcore_hub.common.hash_utils import compute_advertisement_hash
 from meshcore_hub.common.models import Advertisement, Node
 
 logger = logging.getLogger(__name__)
@@ -40,7 +41,31 @@ def handle_advertisement(
     flags = payload.get("flags")
     now = datetime.now(timezone.utc)
 
+    # Compute event hash for deduplication (5-minute time bucket)
+    event_hash = compute_advertisement_hash(
+        public_key=adv_public_key,
+        name=name,
+        adv_type=adv_type,
+        flags=flags,
+        received_at=now,
+        bucket_minutes=5,
+    )
+
     with db.session_scope() as session:
+        # Check if advertisement with same hash already exists
+        existing = session.execute(
+            select(Advertisement.id).where(Advertisement.event_hash == event_hash)
+        ).scalar_one_or_none()
+
+        if existing:
+            logger.debug(f"Duplicate advertisement skipped (hash={event_hash[:8]}...)")
+            # Still update node last_seen even for duplicate advertisements
+            node_query = select(Node).where(Node.public_key == adv_public_key)
+            node = session.execute(node_query).scalar_one_or_none()
+            if node:
+                node.last_seen = now
+            return
+
         # Find or create receiver node
         receiver_node = None
         if public_key:
@@ -91,6 +116,7 @@ def handle_advertisement(
             adv_type=adv_type,
             flags=flags,
             received_at=now,
+            event_hash=event_hash,
         )
         session.add(advertisement)
 

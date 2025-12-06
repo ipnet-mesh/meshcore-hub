@@ -9,7 +9,6 @@ from sqlalchemy.orm import aliased, selectinload
 
 from meshcore_hub.api.auth import RequireRead
 from meshcore_hub.api.dependencies import DbSession
-from meshcore_hub.common.hash_utils import compute_message_hash
 from meshcore_hub.common.models import Message, Node, NodeTag
 from meshcore_hub.common.schemas.messages import MessageList, MessageRead
 
@@ -39,9 +38,6 @@ async def list_messages(
     since: Optional[datetime] = Query(None, description="Start timestamp"),
     until: Optional[datetime] = Query(None, description="End timestamp"),
     search: Optional[str] = Query(None, description="Search in message text"),
-    dedupe: bool = Query(
-        True, description="Deduplicate messages from multiple receivers"
-    ),
     limit: int = Query(50, ge=1, le=100, description="Page size"),
     offset: int = Query(0, ge=0, description="Page offset"),
 ) -> MessageList:
@@ -78,33 +74,12 @@ async def list_messages(
     if search:
         query = query.where(Message.text.ilike(f"%{search}%"))
 
-    # When deduplicating, we need to fetch more results to ensure we have enough
-    # after removing duplicates, and compute distinct count differently
-    if dedupe:
-        # For deduplicated count, we need to count distinct content
-        # Use a subquery that groups by content-identifying fields
-        distinct_subquery = (
-            select(
-                Message.text,
-                Message.pubkey_prefix,
-                Message.channel_idx,
-                Message.sender_timestamp,
-                Message.txt_type,
-            )
-            .distinct()
-            .select_from(query.subquery())
-        )
-        count_query = select(func.count()).select_from(distinct_subquery.subquery())
-        total = session.execute(count_query).scalar() or 0
+    # Get total count
+    count_query = select(func.count()).select_from(query.subquery())
+    total = session.execute(count_query).scalar() or 0
 
-        # Fetch extra results to account for duplicates (3x limit + offset)
-        fetch_limit = (limit + offset) * 3
-        query = query.order_by(Message.received_at.desc()).limit(fetch_limit)
-    else:
-        # Standard count and pagination
-        count_query = select(func.count()).select_from(query.subquery())
-        total = session.execute(count_query).scalar() or 0
-        query = query.order_by(Message.received_at.desc()).offset(offset).limit(limit)
+    # Apply pagination
+    query = query.order_by(Message.received_at.desc()).offset(offset).limit(limit)
 
     # Execute
     results = session.execute(query).all()
@@ -153,24 +128,8 @@ async def list_messages(
 
     # Build response with sender info and received_by
     items = []
-    seen_hashes: set[str] = set()
-
     for row in results:
         m = row[0]
-
-        # Compute hash for deduplication
-        if dedupe:
-            msg_hash = compute_message_hash(
-                text=m.text,
-                pubkey_prefix=m.pubkey_prefix,
-                channel_idx=m.channel_idx,
-                sender_timestamp=m.sender_timestamp,
-                txt_type=m.txt_type,
-            )
-            if msg_hash in seen_hashes:
-                continue
-            seen_hashes.add(msg_hash)
-
         receiver_pk = row.receiver_pk
         receiver_name = row.receiver_name
         receiver_node = (
@@ -202,14 +161,6 @@ async def list_messages(
             "created_at": m.created_at,
         }
         items.append(MessageRead(**msg_dict))
-
-        # Stop once we have enough items (for dedupe mode with pagination)
-        if dedupe and len(items) >= offset + limit:
-            break
-
-    # Apply offset for dedupe mode (we fetched from beginning)
-    if dedupe:
-        items = items[offset : offset + limit]
 
     return MessageList(
         items=items,

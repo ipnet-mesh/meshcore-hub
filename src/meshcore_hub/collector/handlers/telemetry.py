@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import select
 
 from meshcore_hub.common.database import DatabaseManager
+from meshcore_hub.common.hash_utils import compute_telemetry_hash
 from meshcore_hub.common.models import Node, Telemetry
 
 logger = logging.getLogger(__name__)
@@ -49,7 +50,26 @@ def handle_telemetry(
             except ValueError:
                 lpp_bytes = lpp_data.encode()
 
+    # Compute event hash for deduplication (5-minute time bucket)
+    event_hash = compute_telemetry_hash(
+        node_public_key=node_public_key,
+        parsed_data=parsed_data,
+        received_at=now,
+        bucket_minutes=5,
+    )
+
     with db.session_scope() as session:
+        # Check if telemetry with same hash already exists
+        existing = session.execute(
+            select(Telemetry.id).where(Telemetry.event_hash == event_hash)
+        ).scalar_one_or_none()
+
+        if existing:
+            logger.debug(
+                f"Duplicate telemetry skipped (node={node_public_key[:12]}...)"
+            )
+            return
+
         # Find receiver node
         receiver_node = None
         if public_key:
@@ -92,6 +112,7 @@ def handle_telemetry(
             lpp_data=lpp_bytes,
             parsed_data=parsed_data,
             received_at=now,
+            event_hash=event_hash,
         )
         session.add(telemetry)
 

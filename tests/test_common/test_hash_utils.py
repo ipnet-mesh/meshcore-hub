@@ -2,8 +2,6 @@
 
 from datetime import datetime, timezone
 
-import pytest
-
 from meshcore_hub.common.hash_utils import (
     compute_advertisement_hash,
     compute_message_hash,

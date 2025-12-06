@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import select
 
 from meshcore_hub.common.database import DatabaseManager
+from meshcore_hub.common.hash_utils import compute_trace_hash
 from meshcore_hub.common.models import Node, TracePath
 
 logger = logging.getLogger(__name__)
@@ -40,7 +41,19 @@ def handle_trace_data(
     snr_values = payload.get("snr_values")
     hop_count = payload.get("hop_count")
 
+    # Compute event hash for deduplication (initiator_tag is unique per trace)
+    event_hash = compute_trace_hash(initiator_tag=initiator_tag)
+
     with db.session_scope() as session:
+        # Check if trace with same hash already exists
+        existing = session.execute(
+            select(TracePath.id).where(TracePath.event_hash == event_hash)
+        ).scalar_one_or_none()
+
+        if existing:
+            logger.debug(f"Duplicate trace skipped (tag={initiator_tag})")
+            return
+
         # Find receiver node
         receiver_node = None
         if public_key:
@@ -69,6 +82,7 @@ def handle_trace_data(
             snr_values=snr_values,
             hop_count=hop_count,
             received_at=now,
+            event_hash=event_hash,
         )
         session.add(trace_path)
 

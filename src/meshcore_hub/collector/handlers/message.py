@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import select
 
 from meshcore_hub.common.database import DatabaseManager
+from meshcore_hub.common.hash_utils import compute_message_hash
 from meshcore_hub.common.models import Message, Node
 
 logger = logging.getLogger(__name__)
@@ -84,7 +85,25 @@ def _handle_message(
         except (ValueError, OSError):
             pass
 
+    # Compute event hash for deduplication
+    event_hash = compute_message_hash(
+        text=text,
+        pubkey_prefix=pubkey_prefix,
+        channel_idx=channel_idx,
+        sender_timestamp=sender_timestamp,
+        txt_type=txt_type,
+    )
+
     with db.session_scope() as session:
+        # Check if message with same hash already exists
+        existing = session.execute(
+            select(Message.id).where(Message.event_hash == event_hash)
+        ).scalar_one_or_none()
+
+        if existing:
+            logger.debug(f"Duplicate message skipped (hash={event_hash[:8]}...)")
+            return
+
         # Find receiver node
         receiver_node = None
         if public_key:
@@ -115,6 +134,7 @@ def _handle_message(
             snr=snr,
             sender_timestamp=sender_timestamp,
             received_at=now,
+            event_hash=event_hash,
         )
         session.add(message)
 
