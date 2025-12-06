@@ -1,10 +1,16 @@
 services:
   # ==========================================================================
   # MQTT Broker - Eclipse Mosquitto
+  # Included in all profiles that need it (receiver, sender, core, mock)
   # ==========================================================================
   mqtt:
     image: eclipse-mosquitto:2
     container_name: meshcore-mqtt
+    profiles:
+      - receiver
+      - sender
+      - core
+      - mock
     restart: unless-stopped
     ports:
       - "${MQTT_EXTERNAL_PORT:-1883}:1883"
@@ -30,7 +36,7 @@ services:
       dockerfile: Dockerfile
     container_name: meshcore-interface-receiver
     profiles:
-      - interface-receiver
+      - receiver
     restart: unless-stopped
     depends_on:
       mqtt:
@@ -66,7 +72,7 @@ services:
       dockerfile: Dockerfile
     container_name: meshcore-interface-sender
     profiles:
-      - interface-sender
+      - sender
     restart: unless-stopped
     depends_on:
       mqtt:
@@ -133,6 +139,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: meshcore-collector
+    profiles:
+      - core
     restart: unless-stopped
     depends_on:
       mqtt:
@@ -180,6 +188,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: meshcore-api
+    profiles:
+      - core
     restart: unless-stopped
     depends_on:
       mqtt:
@@ -222,6 +232,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: meshcore-web
+    profiles:
+      - core
     restart: unless-stopped
     depends_on:
       api:

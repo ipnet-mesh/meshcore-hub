@@ -83,7 +83,7 @@ cp .env.example .env
 # Edit .env: set SERIAL_PORT to your device (e.g., /dev/ttyUSB0 or /dev/ttyACM0)
 
 # Start the entire stack including the interface receiver
-docker compose --profile interface-receiver up -d
+docker compose --profile core --profile receiver up -d
 
 # View the web dashboard
 open http://localhost:8080
@@ -105,7 +105,7 @@ For larger deployments, you can separate receiver nodes from the central infrast
 │  │   Device     │   │   Device     │   │    Device    │             │
 │  └──────┬───────┘   └──────┬───────┘   └──────┬───────┘             │
 │         │                  │                  │                      │
-│         │ interface-receiver only             │                      │
+│         │ receiver profile only               │                      │
 │         └──────────────────┼──────────────────┘                      │
 │                            │                                         │
 │                     MQTT (port 1883)                                 │
@@ -126,18 +126,18 @@ For larger deployments, you can separate receiver nodes from the central infrast
 
 **On each receiver node (Raspberry Pi, etc.):**
 ```bash
-# Only run the interface-receiver component
+# Only run the receiver component
 # Configure .env with MQTT_HOST pointing to your central server
 MQTT_HOST=your-community-server.com
 SERIAL_PORT=/dev/ttyUSB0
 
-docker compose --profile interface-receiver up -d
+docker compose --profile receiver up -d
 ```
 
 **On the central server (VPS/cloud):**
 ```bash
 # Run the core infrastructure (no interface needed)
-docker compose up -d
+docker compose --profile core up -d
 ```
 
 This architecture allows:
@@ -150,26 +150,16 @@ This architecture allows:
 
 ### Using Docker Compose (Recommended)
 
-Docker Compose runs core services by default and uses **profiles** for optional components:
+Docker Compose uses **profiles** to select which services to run:
 
-**Default Services (always run):**
-
-| Service | Description |
-|---------|-------------|
-| `mqtt` | Eclipse Mosquitto MQTT broker |
-| `collector` | MQTT subscriber + database storage (auto-seeds on startup) |
-| `api` | REST API server |
-| `web` | Web dashboard |
-
-**Optional Profiles:**
-
-| Profile | Services |
-|---------|----------|
-| `interface-receiver` | MeshCore device receiver (events to MQTT) |
-| `interface-sender` | MeshCore device sender (MQTT to device) |
-| `mock` | Mock device receiver (for testing without hardware) |
-| `migrate` | One-time database migration runner |
-| `seed` | One-time seed data import (also runs automatically on collector startup) |
+| Profile | Services | Use Case |
+|---------|----------|----------|
+| `core` | mqtt, collector, api, web | Central server infrastructure |
+| `receiver` | mqtt, interface-receiver | Receiver node (events to MQTT) |
+| `sender` | mqtt, interface-sender | Sender node (MQTT to device) |
+| `mock` | mqtt, interface-mock-receiver | Testing without hardware |
+| `migrate` | db-migrate | One-time database migration |
+| `seed` | seed | One-time seed data import |
 
 ```bash
 # Clone the repository
@@ -187,10 +177,10 @@ docker compose --profile migrate run --rm db-migrate
 docker compose --profile seed run --rm seed
 
 # Start core services (mqtt, collector, api, web)
-docker compose up -d
+docker compose --profile core up -d
 
-# Start sender/receiver interface
-docker compose --profile interface-receiver up -d
+# Or start just the receiver (for distributed setups)
+docker compose --profile receiver up -d
 
 # View logs
 docker compose logs -f
