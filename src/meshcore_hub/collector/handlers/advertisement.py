@@ -41,14 +41,13 @@ def handle_advertisement(
     flags = payload.get("flags")
     now = datetime.now(timezone.utc)
 
-    # Compute event hash for deduplication (5-minute time bucket)
+    # Compute event hash for deduplication (30-second time bucket)
     event_hash = compute_advertisement_hash(
         public_key=adv_public_key,
         name=name,
         adv_type=adv_type,
         flags=flags,
         received_at=now,
-        bucket_minutes=5,
     )
 
     with db.session_scope() as session:

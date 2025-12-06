@@ -206,14 +206,16 @@ class Subscriber:
         """Start the subscriber."""
         logger.info("Starting collector subscriber")
 
-        # Create database tables if needed
+        # Verify database connection (schema managed by Alembic migrations)
         try:
-            self.db.create_tables()
+            # Test connection by getting a session
+            session = self.db.get_session()
+            session.close()
             self._db_connected = True
-            logger.info("Database initialized")
+            logger.info("Database connection verified")
         except Exception as e:
             self._db_connected = False
-            logger.error(f"Failed to initialize database: {e}")
+            logger.error(f"Failed to connect to database: {e}")
             raise
 
         # Connect to MQTT broker

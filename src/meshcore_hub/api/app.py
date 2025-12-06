@@ -32,10 +32,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Get database URL from app state
     database_url = getattr(app.state, "database_url", "sqlite:///./meshcore.db")
 
-    # Initialize database
+    # Initialize database (schema managed by Alembic migrations)
     logger.info(f"Initializing database: {database_url}")
     _db_manager = DatabaseManager(database_url)
-    _db_manager.create_tables()
 
     yield
 

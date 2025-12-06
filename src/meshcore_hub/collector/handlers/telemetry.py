@@ -50,12 +50,11 @@ def handle_telemetry(
             except ValueError:
                 lpp_bytes = lpp_data.encode()
 
-    # Compute event hash for deduplication (5-minute time bucket)
+    # Compute event hash for deduplication (30-second time bucket)
     event_hash = compute_telemetry_hash(
         node_public_key=node_public_key,
         parsed_data=parsed_data,
         received_at=now,
-        bucket_minutes=5,
     )
 
     with db.session_scope() as session:

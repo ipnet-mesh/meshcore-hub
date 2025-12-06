@@ -180,23 +180,20 @@ cd meshcore-hub
 cp .env.example .env
 # Edit .env with your settings (API keys, serial port, network info)
 
-# Option 1: Start core services (mqtt, collector, api, web)
+# Create database schema
+docker compose --profile migrate run --rm db-migrate
+
+# Seed the database
+docker compose --profile seed run --rm seed
+
+# Start core services (mqtt, collector, api, web)
 docker compose up -d
 
-# Option 2: Start with mock device for testing
-docker compose --profile mock up -d
-
-# Option 3: Start with real MeshCore device
+# Start sender/receiver interface
 docker compose --profile interface-receiver up -d
 
 # View logs
 docker compose logs -f
-
-# Run database migrations (one-time)
-docker compose --profile migrate up
-
-# Import seed data manually (also runs on collector startup)
-docker compose --profile seed up
 
 # Stop services
 docker compose down

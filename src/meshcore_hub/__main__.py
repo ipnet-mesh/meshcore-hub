@@ -174,6 +174,40 @@ def db_history() -> None:
     command.history(alembic_cfg)
 
 
+@db.command("stamp")
+@click.option(
+    "--revision",
+    type=str,
+    default="head",
+    help="Target revision to stamp (default: head)",
+)
+@click.option(
+    "--database-url",
+    type=str,
+    default=None,
+    envvar="DATABASE_URL",
+    help="Database connection URL",
+)
+def db_stamp(revision: str, database_url: str | None) -> None:
+    """Stamp database with revision without running migrations.
+
+    Use this to mark an existing database as up-to-date when the schema
+    was created before Alembic migrations were introduced.
+    """
+    import os
+    from alembic import command
+    from alembic.config import Config
+
+    click.echo(f"Stamping database with revision: {revision}")
+
+    alembic_cfg = Config("alembic.ini")
+    if database_url:
+        os.environ["DATABASE_URL"] = database_url
+
+    command.stamp(alembic_cfg, revision)
+    click.echo("Database stamped successfully.")
+
+
 # Health check commands for Docker HEALTHCHECK
 @cli.group()
 def health() -> None:

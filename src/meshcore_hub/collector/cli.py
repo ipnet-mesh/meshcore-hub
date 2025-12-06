@@ -182,11 +182,10 @@ def _run_collector_service(
     click.echo(f"MQTT: {mqtt_host}:{mqtt_port} (prefix: {prefix})")
     click.echo(f"Database: {database_url}")
 
-    # Initialize database and run seed import on startup
+    # Initialize database (schema managed by Alembic migrations)
     from meshcore_hub.common.database import DatabaseManager
 
     db = DatabaseManager(database_url)
-    db.create_tables()
 
     # Auto-seed from seed files on startup
     click.echo("")
@@ -294,9 +293,8 @@ def seed_cmd(
 
     from meshcore_hub.common.database import DatabaseManager
 
-    # Initialize database
+    # Initialize database (schema managed by Alembic migrations)
     db = DatabaseManager(ctx.obj["database_url"])
-    db.create_tables()
 
     # Run seed import
     imported_any = _run_seed_import(
@@ -448,9 +446,8 @@ def import_tags_cmd(
     from meshcore_hub.common.database import DatabaseManager
     from meshcore_hub.collector.tag_import import import_tags
 
-    # Initialize database
+    # Initialize database (schema managed by Alembic migrations)
     db = DatabaseManager(ctx.obj["database_url"])
-    db.create_tables()
 
     # Import tags
     stats = import_tags(
@@ -529,9 +526,8 @@ def import_members_cmd(
     from meshcore_hub.common.database import DatabaseManager
     from meshcore_hub.collector.member_import import import_members
 
-    # Initialize database
+    # Initialize database (schema managed by Alembic migrations)
     db = DatabaseManager(ctx.obj["database_url"])
-    db.create_tables()
 
     # Import members
     stats = import_members(

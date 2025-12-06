@@ -49,7 +49,7 @@ def compute_advertisement_hash(
     adv_type: Optional[str] = None,
     flags: Optional[int] = None,
     received_at: Optional[datetime] = None,
-    bucket_minutes: int = 5,
+    bucket_seconds: int = 30,
 ) -> str:
     """Compute a deterministic hash for an advertisement.
 
@@ -62,7 +62,7 @@ def compute_advertisement_hash(
         adv_type: Node type
         flags: Capability flags
         received_at: When received (used for time bucketing)
-        bucket_minutes: Time bucket size in minutes (default 5)
+        bucket_seconds: Time bucket size in seconds (default 30)
 
     Returns:
         32-character hex hash string
@@ -71,7 +71,6 @@ def compute_advertisement_hash(
     time_bucket = ""
     if received_at:
         # Round down to nearest bucket
-        bucket_seconds = bucket_minutes * 60
         epoch = int(received_at.timestamp())
         bucket_epoch = (epoch // bucket_seconds) * bucket_seconds
         time_bucket = str(bucket_epoch)
@@ -105,7 +104,7 @@ def compute_telemetry_hash(
     node_public_key: str,
     parsed_data: Optional[dict] = None,
     received_at: Optional[datetime] = None,
-    bucket_minutes: int = 5,
+    bucket_seconds: int = 30,
 ) -> str:
     """Compute a deterministic hash for a telemetry record.
 
@@ -115,7 +114,7 @@ def compute_telemetry_hash(
         node_public_key: Reporting node's public key
         parsed_data: Decoded sensor readings
         received_at: When received (used for time bucketing)
-        bucket_minutes: Time bucket size in minutes (default 5)
+        bucket_seconds: Time bucket size in seconds (default 30)
 
     Returns:
         32-character hex hash string
@@ -123,7 +122,6 @@ def compute_telemetry_hash(
     # Bucket the time
     time_bucket = ""
     if received_at:
-        bucket_seconds = bucket_minutes * 60
         epoch = int(received_at.timestamp())
         bucket_epoch = (epoch // bucket_seconds) * bucket_seconds
         time_bucket = str(bucket_epoch)
