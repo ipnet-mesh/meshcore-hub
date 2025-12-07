@@ -2,6 +2,8 @@
 
 Python 3.11+ platform for managing and orchestrating MeshCore mesh networks.
 
+![MeshCore Hub Web Dashboard](docs/images/web.png)
+
 ## Overview
 
 MeshCore Hub provides a complete solution for monitoring, collecting, and interacting with MeshCore mesh networks. It consists of multiple components that work together:
