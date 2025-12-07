@@ -21,9 +21,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Build argument for version (set via CI or manually)
-ARG SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0+docker
-
 # Copy project files
 WORKDIR /app
 COPY pyproject.toml README.md ./
@@ -31,9 +28,13 @@ COPY src/ ./src/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
 
-# Install the package with version from build arg
-RUN pip install --upgrade pip && \
-    SETUPTOOLS_SCM_PRETEND_VERSION=${SETUPTOOLS_SCM_PRETEND_VERSION} pip install .
+# Build argument for version (set via CI or manually)
+ARG BUILD_VERSION=dev
+
+# Set version in _version.py and install the package
+RUN sed -i "s/__version__ = \"dev\"/__version__ = \"${BUILD_VERSION}\"/" src/meshcore_hub/_version.py && \
+    pip install --upgrade pip && \
+    pip install .
 
 # =============================================================================
 # Stage 2: Runtime - Final production image

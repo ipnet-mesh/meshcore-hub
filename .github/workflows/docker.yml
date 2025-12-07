@@ -59,13 +59,13 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            SETUPTOOLS_SCM_PRETEND_VERSION=${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('0.0.0.dev0+g{0}', github.sha) }}
+            BUILD_VERSION=${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Test Docker image
         if: github.event_name == 'pull_request'
         run: |
-          docker build -t meshcore-hub-test --build-arg SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0.dev0+g${{ github.sha }} -f Dockerfile .
+          docker build -t meshcore-hub-test --build-arg BUILD_VERSION=${{ github.ref_name }} -f Dockerfile .
           docker run --rm meshcore-hub-test --version
           docker run --rm meshcore-hub-test --help
