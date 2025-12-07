@@ -210,7 +210,8 @@ def import_tags(
                             node = Node(
                                 public_key=public_key,
                                 first_seen=now,
-                                last_seen=now,
+                                # last_seen is intentionally left unset (None)
+                                # It will be set when the node is actually seen via events
                             )
                             session.add(node)
                             session.flush()

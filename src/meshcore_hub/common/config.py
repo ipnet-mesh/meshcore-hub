@@ -126,6 +126,29 @@ class CollectorSettings(CommonSettings):
         default=2.0, description="Retry backoff multiplier"
     )
 
+    # Data retention / cleanup settings
+    data_retention_enabled: bool = Field(
+        default=True, description="Enable automatic event data cleanup"
+    )
+    data_retention_days: int = Field(
+        default=30, description="Number of days to retain event data", ge=1
+    )
+    data_retention_interval_hours: int = Field(
+        default=24,
+        description="Hours between automatic cleanup runs (applies to both events and nodes)",
+        ge=1,
+    )
+
+    # Node cleanup settings
+    node_cleanup_enabled: bool = Field(
+        default=True, description="Enable automatic cleanup of inactive nodes"
+    )
+    node_cleanup_days: int = Field(
+        default=7,
+        description="Remove nodes not seen for this many days (last_seen)",
+        ge=1,
+    )
+
     @property
     def collector_data_dir(self) -> str:
         """Get the collector data directory path."""

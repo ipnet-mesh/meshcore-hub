@@ -6,6 +6,7 @@ The subscriber:
 3. Routes events to appropriate handlers
 4. Persists data to database
 5. Dispatches events to configured webhooks
+6. Performs scheduled data cleanup if enabled
 """
 
 import asyncio
@@ -14,6 +15,7 @@ import signal
 import threading
 import time
 import uuid
+from datetime import datetime, timezone
 from typing import Any, Callable, Optional, TYPE_CHECKING
 
 from meshcore_hub.common.database import DatabaseManager
@@ -38,6 +40,11 @@ class Subscriber:
         mqtt_client: MQTTClient,
         db_manager: DatabaseManager,
         webhook_dispatcher: Optional["WebhookDispatcher"] = None,
+        cleanup_enabled: bool = False,
+        cleanup_retention_days: int = 30,
+        cleanup_interval_hours: int = 24,
+        node_cleanup_enabled: bool = False,
+        node_cleanup_days: int = 90,
     ):
         """Initialize subscriber.
 
@@ -45,6 +52,11 @@ class Subscriber:
             mqtt_client: MQTT client instance
             db_manager: Database manager instance
             webhook_dispatcher: Optional webhook dispatcher for event forwarding
+            cleanup_enabled: Enable automatic event data cleanup
+            cleanup_retention_days: Number of days to retain event data
+            cleanup_interval_hours: Hours between cleanup runs
+            node_cleanup_enabled: Enable automatic cleanup of inactive nodes
+            node_cleanup_days: Remove nodes not seen for this many days
         """
         self.mqtt = mqtt_client
         self.db = db_manager
@@ -59,6 +71,14 @@ class Subscriber:
         self._webhook_queue: list[tuple[str, dict[str, Any], str]] = []
         self._webhook_lock = threading.Lock()
         self._webhook_thread: Optional[threading.Thread] = None
+        # Data cleanup
+        self._cleanup_enabled = cleanup_enabled
+        self._cleanup_retention_days = cleanup_retention_days
+        self._cleanup_interval_hours = cleanup_interval_hours
+        self._node_cleanup_enabled = node_cleanup_enabled
+        self._node_cleanup_days = node_cleanup_days
+        self._cleanup_thread: Optional[threading.Thread] = None
+        self._last_cleanup: Optional[datetime] = None
 
     @property
     def is_healthy(self) -> bool:
@@ -202,6 +222,115 @@ class Subscriber:
             if self._webhook_thread.is_alive():
                 logger.warning("Webhook processor thread did not stop cleanly")
 
+    def _start_cleanup_scheduler(self) -> None:
+        """Start background thread for periodic data cleanup."""
+        if not self._cleanup_enabled and not self._node_cleanup_enabled:
+            logger.info("Data cleanup and node cleanup are both disabled")
+            return
+
+        logger.info(
+            "Starting cleanup scheduler (interval_hours=%d)",
+            self._cleanup_interval_hours,
+        )
+        if self._cleanup_enabled:
+            logger.info(
+                "  Event data cleanup: ENABLED (retention_days=%d)",
+                self._cleanup_retention_days,
+            )
+        else:
+            logger.info("  Event data cleanup: DISABLED")
+
+        if self._node_cleanup_enabled:
+            logger.info(
+                "  Node cleanup: ENABLED (inactivity_days=%d)", self._node_cleanup_days
+            )
+        else:
+            logger.info("  Node cleanup: DISABLED")
+
+        def run_cleanup_loop() -> None:
+            """Run async cleanup tasks in background thread."""
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            try:
+                while self._running:
+                    # Check if cleanup is due
+                    now = datetime.now(timezone.utc)
+                    should_run = False
+
+                    if self._last_cleanup is None:
+                        # First run
+                        should_run = True
+                    else:
+                        # Check if interval has passed
+                        hours_since_last = (
+                            now - self._last_cleanup
+                        ).total_seconds() / 3600
+                        should_run = hours_since_last >= self._cleanup_interval_hours
+
+                    if should_run:
+                        try:
+                            logger.info("Starting scheduled cleanup")
+                            from meshcore_hub.collector.cleanup import (
+                                cleanup_old_data,
+                                cleanup_inactive_nodes,
+                            )
+
+                            # Get async session and run cleanup
+                            async def run_cleanup() -> None:
+                                async with self.db.async_session() as session:
+                                    # Run event data cleanup if enabled
+                                    if self._cleanup_enabled:
+                                        stats = await cleanup_old_data(
+                                            session,
+                                            self._cleanup_retention_days,
+                                            dry_run=False,
+                                        )
+                                        logger.info(
+                                            "Event cleanup completed: %s", stats
+                                        )
+
+                                    # Run node cleanup if enabled
+                                    if self._node_cleanup_enabled:
+                                        nodes_deleted = await cleanup_inactive_nodes(
+                                            session,
+                                            self._node_cleanup_days,
+                                            dry_run=False,
+                                        )
+                                        logger.info(
+                                            "Node cleanup completed: %d nodes deleted",
+                                            nodes_deleted,
+                                        )
+
+                            loop.run_until_complete(run_cleanup())
+                            self._last_cleanup = now
+
+                        except Exception as e:
+                            logger.error(f"Cleanup error: {e}", exc_info=True)
+
+                    # Sleep for 1 hour before next check
+                    for _ in range(3600):
+                        if not self._running:
+                            break
+                        time.sleep(1)
+
+            finally:
+                loop.close()
+                logger.info("Cleanup scheduler stopped")
+
+        self._cleanup_thread = threading.Thread(
+            target=run_cleanup_loop, daemon=True, name="cleanup-scheduler"
+        )
+        self._cleanup_thread.start()
+
+    def _stop_cleanup_scheduler(self) -> None:
+        """Stop the cleanup scheduler thread."""
+        if self._cleanup_thread and self._cleanup_thread.is_alive():
+            # Thread will exit when self._running becomes False
+            self._cleanup_thread.join(timeout=5.0)
+            if self._cleanup_thread.is_alive():
+                logger.warning("Cleanup scheduler thread did not stop cleanly")
+
     def start(self) -> None:
         """Start the subscriber."""
         logger.info("Starting collector subscriber")
@@ -239,6 +368,9 @@ class Subscriber:
         # Start webhook processor if configured
         self._start_webhook_processor()
 
+        # Start cleanup scheduler if configured
+        self._start_cleanup_scheduler()
+
         # Start health reporter for Docker health checks
         self._health_reporter = HealthReporter(
             component="collector",
@@ -271,6 +403,9 @@ class Subscriber:
         self._running = False
         self._shutdown_event.set()
 
+        # Stop cleanup scheduler
+        self._stop_cleanup_scheduler()
+
         # Stop webhook processor
         self._stop_webhook_processor()
 
@@ -295,6 +430,11 @@ def create_subscriber(
     mqtt_prefix: str = "meshcore",
     database_url: str = "sqlite:///./meshcore.db",
     webhook_dispatcher: Optional["WebhookDispatcher"] = None,
+    cleanup_enabled: bool = False,
+    cleanup_retention_days: int = 30,
+    cleanup_interval_hours: int = 24,
+    node_cleanup_enabled: bool = False,
+    node_cleanup_days: int = 90,
 ) -> Subscriber:
     """Create a configured subscriber instance.
 
@@ -306,6 +446,11 @@ def create_subscriber(
         mqtt_prefix: MQTT topic prefix
         database_url: Database connection URL
         webhook_dispatcher: Optional webhook dispatcher for event forwarding
+        cleanup_enabled: Enable automatic event data cleanup
+        cleanup_retention_days: Number of days to retain event data
+        cleanup_interval_hours: Hours between cleanup runs
+        node_cleanup_enabled: Enable automatic cleanup of inactive nodes
+        node_cleanup_days: Remove nodes not seen for this many days
 
     Returns:
         Configured Subscriber instance
@@ -326,7 +471,16 @@ def create_subscriber(
     db_manager = DatabaseManager(database_url)
 
     # Create subscriber
-    subscriber = Subscriber(mqtt_client, db_manager, webhook_dispatcher)
+    subscriber = Subscriber(
+        mqtt_client,
+        db_manager,
+        webhook_dispatcher,
+        cleanup_enabled=cleanup_enabled,
+        cleanup_retention_days=cleanup_retention_days,
+        cleanup_interval_hours=cleanup_interval_hours,
+        node_cleanup_enabled=node_cleanup_enabled,
+        node_cleanup_days=node_cleanup_days,
+    )
 
     # Register handlers
     from meshcore_hub.collector.handlers import register_all_handlers
@@ -344,6 +498,11 @@ def run_collector(
     mqtt_prefix: str = "meshcore",
     database_url: str = "sqlite:///./meshcore.db",
     webhook_dispatcher: Optional["WebhookDispatcher"] = None,
+    cleanup_enabled: bool = False,
+    cleanup_retention_days: int = 30,
+    cleanup_interval_hours: int = 24,
+    node_cleanup_enabled: bool = False,
+    node_cleanup_days: int = 90,
 ) -> None:
     """Run the collector (blocking).
 
@@ -355,6 +514,11 @@ def run_collector(
         mqtt_prefix: MQTT topic prefix
         database_url: Database connection URL
         webhook_dispatcher: Optional webhook dispatcher for event forwarding
+        cleanup_enabled: Enable automatic event data cleanup
+        cleanup_retention_days: Number of days to retain event data
+        cleanup_interval_hours: Hours between cleanup runs
+        node_cleanup_enabled: Enable automatic cleanup of inactive nodes
+        node_cleanup_days: Remove nodes not seen for this many days
     """
     subscriber = create_subscriber(
         mqtt_host=mqtt_host,
@@ -364,6 +528,11 @@ def run_collector(
         mqtt_prefix=mqtt_prefix,
         database_url=database_url,
         webhook_dispatcher=webhook_dispatcher,
+        cleanup_enabled=cleanup_enabled,
+        cleanup_retention_days=cleanup_retention_days,
+        cleanup_interval_hours=cleanup_interval_hours,
+        node_cleanup_enabled=node_cleanup_enabled,
+        node_cleanup_days=node_cleanup_days,
     )
 
     # Set up signal handlers
