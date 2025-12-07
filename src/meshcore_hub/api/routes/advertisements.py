@@ -19,12 +19,12 @@ from meshcore_hub.common.schemas.messages import (
 router = APIRouter()
 
 
-def _get_friendly_name(node: Optional[Node]) -> Optional[str]:
-    """Extract friendly_name tag from a node's tags."""
+def _get_tag_name(node: Optional[Node]) -> Optional[str]:
+    """Extract name tag from a node's tags."""
     if not node or not node.tags:
         return None
     for tag in node.tags:
-        if tag.key == "friendly_name":
+        if tag.key == "name":
             return tag.value
     return None
 
@@ -57,15 +57,15 @@ def _fetch_receivers_for_events(
     receivers_by_hash: dict[str, list[ReceiverInfo]] = {}
 
     node_ids = [r.node_id for r in results]
-    friendly_names: dict[str, str] = {}
+    tag_names: dict[str, str] = {}
     if node_ids:
-        fn_query = (
+        tag_query = (
             select(NodeTag.node_id, NodeTag.value)
             .where(NodeTag.node_id.in_(node_ids))
-            .where(NodeTag.key == "friendly_name")
+            .where(NodeTag.key == "name")
         )
-        for node_id, value in session.execute(fn_query).all():
-            friendly_names[node_id] = value
+        for node_id, value in session.execute(tag_query).all():
+            tag_names[node_id] = value
 
     for row in results:
         if row.event_hash not in receivers_by_hash:
@@ -76,7 +76,7 @@ def _fetch_receivers_for_events(
                 node_id=row.node_id,
                 public_key=row.public_key,
                 name=row.name,
-                friendly_name=friendly_names.get(row.node_id),
+                tag_name=tag_names.get(row.node_id),
                 snr=row.snr,
                 received_at=row.received_at,
             )
@@ -173,11 +173,11 @@ async def list_advertisements(
         data = {
             "received_by": row.receiver_pk,
             "receiver_name": row.receiver_name,
-            "receiver_friendly_name": _get_friendly_name(receiver_node),
+            "receiver_tag_name": _get_tag_name(receiver_node),
             "public_key": adv.public_key,
             "name": adv.name,
             "node_name": row.source_name,
-            "node_friendly_name": _get_friendly_name(source_node),
+            "node_tag_name": _get_tag_name(source_node),
             "adv_type": adv.adv_type or row.source_adv_type,
             "flags": adv.flags,
             "received_at": adv.received_at,
@@ -255,11 +255,11 @@ async def get_advertisement(
     data = {
         "received_by": result.receiver_pk,
         "receiver_name": result.receiver_name,
-        "receiver_friendly_name": _get_friendly_name(receiver_node),
+        "receiver_tag_name": _get_tag_name(receiver_node),
         "public_key": adv.public_key,
         "name": adv.name,
         "node_name": result.source_name,
-        "node_friendly_name": _get_friendly_name(source_node),
+        "node_tag_name": _get_tag_name(source_node),
         "adv_type": adv.adv_type or result.source_adv_type,
         "flags": adv.flags,
         "received_at": adv.received_at,

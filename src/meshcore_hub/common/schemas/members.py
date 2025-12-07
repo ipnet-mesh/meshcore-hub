@@ -35,9 +35,7 @@ class MemberNodeRead(BaseModel):
     node_adv_type: Optional[str] = Field(
         default=None, description="Node's advertisement type"
     )
-    friendly_name: Optional[str] = Field(
-        default=None, description="Node's friendly name tag"
-    )
+    tag_name: Optional[str] = Field(default=None, description="Node's name tag")
 
     class Config:
         from_attributes = True

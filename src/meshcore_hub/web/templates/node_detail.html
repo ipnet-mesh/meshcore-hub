@@ -8,13 +8,13 @@
         <li><a href="/">Home</a></li>
         <li><a href="/nodes">Nodes</a></li>
         {% if node %}
-        {% set ns = namespace(friendly_name=none) %}
+        {% set ns = namespace(tag_name=none) %}
         {% for tag in node.tags or [] %}
-            {% if tag.key == 'friendly_name' %}
-                {% set ns.friendly_name = tag.value %}
+            {% if tag.key == 'name' %}
+                {% set ns.tag_name = tag.value %}
             {% endif %}
         {% endfor %}
-        <li>{{ ns.friendly_name or node.name or public_key[:12] + '...' }}</li>
+        <li>{{ ns.tag_name or node.name or public_key[:12] + '...' }}</li>
         {% else %}
         <li>Not Found</li>
         {% endif %}
@@ -31,17 +31,17 @@
 {% endif %}
 
 {% if node %}
-{% set ns = namespace(friendly_name=none) %}
+{% set ns = namespace(tag_name=none) %}
 {% for tag in node.tags or [] %}
-    {% if tag.key == 'friendly_name' %}
-        {% set ns.friendly_name = tag.value %}
+    {% if tag.key == 'name' %}
+        {% set ns.tag_name = tag.value %}
     {% endif %}
 {% endfor %}
 <!-- Node Info Card -->
 <div class="card bg-base-100 shadow-xl mb-6">
     <div class="card-body">
         <h1 class="card-title text-2xl">
-            {{ ns.friendly_name or node.name or 'Unnamed Node' }}
+            {{ ns.tag_name or node.name or 'Unnamed Node' }}
             {% if node.adv_type %}
             <span class="badge badge-secondary">{{ node.adv_type }}</span>
             {% endif %}
@@ -125,8 +125,8 @@
                             <td>
                                 {% if adv.received_by %}
                                 <a href="/nodes/{{ adv.received_by }}" class="link link-hover">
-                                    {% if adv.receiver_friendly_name or adv.receiver_name %}
-                                    <div class="font-medium text-sm">{{ adv.receiver_friendly_name or adv.receiver_name }}</div>
+                                    {% if adv.receiver_tag_name or adv.receiver_name %}
+                                    <div class="font-medium text-sm">{{ adv.receiver_tag_name or adv.receiver_name }}</div>
                                     <div class="text-xs font-mono opacity-70">{{ adv.received_by[:16] }}...</div>
                                     {% else %}
                                     <span class="font-mono text-xs">{{ adv.received_by[:16] }}...</span>
@@ -175,8 +175,8 @@
                             <td>
                                 {% if tel.received_by %}
                                 <a href="/nodes/{{ tel.received_by }}" class="link link-hover">
-                                    {% if tel.receiver_friendly_name or tel.receiver_name %}
-                                    <div class="font-medium text-sm">{{ tel.receiver_friendly_name or tel.receiver_name }}</div>
+                                    {% if tel.receiver_tag_name or tel.receiver_name %}
+                                    <div class="font-medium text-sm">{{ tel.receiver_tag_name or tel.receiver_name }}</div>
                                     <div class="text-xs font-mono opacity-70">{{ tel.received_by[:16] }}...</div>
                                     {% else %}
                                     <span class="font-mono text-xs">{{ tel.received_by[:16] }}...</span>

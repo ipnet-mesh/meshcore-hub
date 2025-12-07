@@ -41,7 +41,7 @@ def _enrich_member_nodes(
                 updated_at=mn.updated_at,
                 node_name=info.get("name"),
                 node_adv_type=info.get("adv_type"),
-                friendly_name=info.get("friendly_name"),
+                tag_name=info.get("tag_name"),
             )
         )
     return enriched_nodes
@@ -100,15 +100,15 @@ async def list_members(
         )
         nodes = session.execute(node_query).scalars().all()
         for node in nodes:
-            friendly_name = None
+            tag_name = None
             for tag in node.tags:
-                if tag.key == "friendly_name":
-                    friendly_name = tag.value
+                if tag.key == "name":
+                    tag_name = tag.value
                     break
             node_info[node.public_key] = {
                 "name": node.name,
                 "adv_type": node.adv_type,
-                "friendly_name": friendly_name,
+                "tag_name": tag_name,
             }
 
     return MemberList(
@@ -145,15 +145,15 @@ async def get_member(
         )
         nodes = session.execute(node_query).scalars().all()
         for node in nodes:
-            friendly_name = None
+            tag_name = None
             for tag in node.tags:
-                if tag.key == "friendly_name":
-                    friendly_name = tag.value
+                if tag.key == "name":
+                    tag_name = tag.value
                     break
             node_info[node.public_key] = {
                 "name": node.name,
                 "adv_type": node.adv_type,
-                "friendly_name": friendly_name,
+                "tag_name": tag_name,
             }
 
     return _member_to_read(member, node_info)

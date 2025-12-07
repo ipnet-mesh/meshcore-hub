@@ -12,9 +12,7 @@ class ReceiverInfo(BaseModel):
     node_id: str = Field(..., description="Receiver node UUID")
     public_key: str = Field(..., description="Receiver node public key")
     name: Optional[str] = Field(default=None, description="Receiver node name")
-    friendly_name: Optional[str] = Field(
-        default=None, description="Receiver friendly name from tags"
-    )
+    tag_name: Optional[str] = Field(default=None, description="Receiver name from tags")
     snr: Optional[float] = Field(
         default=None, description="Signal-to-noise ratio at this receiver"
     )
@@ -31,8 +29,8 @@ class MessageRead(BaseModel):
         default=None, description="Receiving interface node public key"
     )
     receiver_name: Optional[str] = Field(default=None, description="Receiver node name")
-    receiver_friendly_name: Optional[str] = Field(
-        default=None, description="Receiver friendly name from tags"
+    receiver_tag_name: Optional[str] = Field(
+        default=None, description="Receiver name from tags"
     )
     message_type: str = Field(..., description="Message type (contact, channel)")
     pubkey_prefix: Optional[str] = Field(
@@ -41,8 +39,8 @@ class MessageRead(BaseModel):
     sender_name: Optional[str] = Field(
         default=None, description="Sender's advertised node name"
     )
-    sender_friendly_name: Optional[str] = Field(
-        default=None, description="Sender's friendly name from node tags"
+    sender_tag_name: Optional[str] = Field(
+        default=None, description="Sender's name from node tags"
     )
     channel_idx: Optional[int] = Field(default=None, description="Channel index")
     text: str = Field(..., description="Message content")
@@ -110,16 +108,16 @@ class AdvertisementRead(BaseModel):
         default=None, description="Receiving interface node public key"
     )
     receiver_name: Optional[str] = Field(default=None, description="Receiver node name")
-    receiver_friendly_name: Optional[str] = Field(
-        default=None, description="Receiver friendly name from tags"
+    receiver_tag_name: Optional[str] = Field(
+        default=None, description="Receiver name from tags"
     )
     public_key: str = Field(..., description="Advertised public key")
     name: Optional[str] = Field(default=None, description="Advertised name")
     node_name: Optional[str] = Field(
         default=None, description="Node name from nodes table"
     )
-    node_friendly_name: Optional[str] = Field(
-        default=None, description="Node friendly name from tags"
+    node_tag_name: Optional[str] = Field(
+        default=None, description="Node name from tags"
     )
     adv_type: Optional[str] = Field(default=None, description="Node type")
     flags: Optional[int] = Field(default=None, description="Capability flags")
@@ -215,7 +213,7 @@ class RecentAdvertisement(BaseModel):
 
     public_key: str = Field(..., description="Node public key")
     name: Optional[str] = Field(default=None, description="Node name")
-    friendly_name: Optional[str] = Field(default=None, description="Friendly name tag")
+    tag_name: Optional[str] = Field(default=None, description="Name tag")
     adv_type: Optional[str] = Field(default=None, description="Node type")
     received_at: datetime = Field(..., description="When received")
 
@@ -225,8 +223,8 @@ class ChannelMessage(BaseModel):
 
     text: str = Field(..., description="Message text")
     sender_name: Optional[str] = Field(default=None, description="Sender name")
-    sender_friendly_name: Optional[str] = Field(
-        default=None, description="Sender friendly name"
+    sender_tag_name: Optional[str] = Field(
+        default=None, description="Sender name from tags"
     )
     pubkey_prefix: Optional[str] = Field(
         default=None, description="Sender public key prefix"

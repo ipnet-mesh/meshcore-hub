@@ -57,17 +57,17 @@
         </thead>
         <tbody>
             {% for node in nodes %}
-            {% set ns = namespace(friendly_name=none) %}
+            {% set ns = namespace(tag_name=none) %}
             {% for tag in node.tags or [] %}
-                {% if tag.key == 'friendly_name' %}
-                    {% set ns.friendly_name = tag.value %}
+                {% if tag.key == 'name' %}
+                    {% set ns.tag_name = tag.value %}
                 {% endif %}
             {% endfor %}
             <tr class="hover">
                 <td>
                     <a href="/nodes/{{ node.public_key }}" class="link link-hover">
-                        {% if ns.friendly_name or node.name %}
-                        <div class="font-medium">{{ ns.friendly_name or node.name }}</div>
+                        {% if ns.tag_name or node.name %}
+                        <div class="font-medium">{{ ns.tag_name or node.name }}</div>
                         <div class="text-xs font-mono opacity-70">{{ node.public_key[:16] }}...</div>
                         {% else %}
                         <span class="font-mono text-sm">{{ node.public_key[:16] }}...</span>

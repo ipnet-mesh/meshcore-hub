@@ -78,8 +78,8 @@
                     {% if msg.message_type == 'channel' %}
                     <span class="font-mono">CH{{ msg.channel_idx }}</span>
                     {% else %}
-                        {% if msg.sender_friendly_name or msg.sender_name %}
-                        <span class="font-medium">{{ msg.sender_friendly_name or msg.sender_name }}</span>
+                        {% if msg.sender_tag_name or msg.sender_name %}
+                        <span class="font-medium">{{ msg.sender_tag_name or msg.sender_name }}</span>
                         {% else %}
                         <span class="font-mono text-xs">{{ (msg.pubkey_prefix or '-')[:12] }}</span>
                         {% endif %}
@@ -96,7 +96,7 @@
                             {% for recv in msg.receivers %}
                             <li>
                                 <a href="/nodes/{{ recv.public_key }}" class="text-sm">
-                                    <span class="flex-1">{{ recv.friendly_name or recv.name or recv.public_key[:12] + '...' }}</span>
+                                    <span class="flex-1">{{ recv.tag_name or recv.name or recv.public_key[:12] + '...' }}</span>
                                     {% if recv.snr is not none %}
                                     <span class="badge badge-ghost badge-xs">{{ "%.1f"|format(recv.snr) }}</span>
                                     {% endif %}
@@ -107,8 +107,8 @@
                     </div>
                     {% elif msg.receivers and msg.receivers|length == 1 %}
                     <a href="/nodes/{{ msg.receivers[0].public_key }}" class="link link-hover">
-                        {% if msg.receivers[0].friendly_name or msg.receivers[0].name %}
-                        <div class="font-medium">{{ msg.receivers[0].friendly_name or msg.receivers[0].name }}</div>
+                        {% if msg.receivers[0].tag_name or msg.receivers[0].name %}
+                        <div class="font-medium">{{ msg.receivers[0].tag_name or msg.receivers[0].name }}</div>
                         <div class="text-xs font-mono opacity-70">{{ msg.receivers[0].public_key[:16] }}...</div>
                         {% else %}
                         <span class="font-mono text-sm">{{ msg.receivers[0].public_key[:16] }}...</span>
@@ -116,8 +116,8 @@
                     </a>
                     {% elif msg.received_by %}
                     <a href="/nodes/{{ msg.received_by }}" class="link link-hover">
-                        {% if msg.receiver_friendly_name or msg.receiver_name %}
-                        <div class="font-medium">{{ msg.receiver_friendly_name or msg.receiver_name }}</div>
+                        {% if msg.receiver_tag_name or msg.receiver_name %}
+                        <div class="font-medium">{{ msg.receiver_tag_name or msg.receiver_name }}</div>
                         <div class="text-xs font-mono opacity-70">{{ msg.received_by[:16] }}...</div>
                         {% else %}
                         <span class="font-mono text-sm">{{ msg.received_by[:16] }}...</span>

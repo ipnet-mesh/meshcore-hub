@@ -383,8 +383,11 @@ def _run_seed_import(
             file_path=str(node_tags_file),
             db=db,
             create_nodes=create_nodes,
+            clear_existing=True,
         )
         if verbose:
+            if stats["deleted"]:
+                click.echo(f"  Deleted {stats['deleted']} existing tags")
             click.echo(
                 f"  Tags: {stats['created']} created, {stats['updated']} updated"
             )
@@ -428,16 +431,24 @@ def _run_seed_import(
     default=False,
     help="Skip tags for nodes that don't exist (default: create nodes)",
 )
+@click.option(
+    "--clear-existing",
+    is_flag=True,
+    default=False,
+    help="Delete all existing tags before importing",
+)
 @click.pass_context
 def import_tags_cmd(
     ctx: click.Context,
     file: str | None,
     no_create_nodes: bool,
+    clear_existing: bool,
 ) -> None:
     """Import node tags from a YAML file.
 
     Reads a YAML file containing tag definitions and upserts them
-    into the database. Existing tags are updated, new tags are created.
+    into the database. By default, existing tags are updated and new tags are created.
+    Use --clear-existing to delete all tags before importing.
 
     FILE is the path to the YAML file containing tags.
     If not provided, defaults to {SEED_HOME}/node_tags.yaml.
@@ -492,11 +503,14 @@ def import_tags_cmd(
         file_path=tags_file,
         db=db,
         create_nodes=not no_create_nodes,
+        clear_existing=clear_existing,
     )
 
     # Report results
     click.echo("")
     click.echo("Import complete:")
+    if stats["deleted"]:
+        click.echo(f"  Tags deleted: {stats['deleted']}")
     click.echo(f"  Total tags in file: {stats['total']}")
     click.echo(f"  Tags created: {stats['created']}")
     click.echo(f"  Tags updated: {stats['updated']}")

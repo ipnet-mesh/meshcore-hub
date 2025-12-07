@@ -390,3 +390,64 @@ class TestImportTags:
             assert tag_dict["is_disabled"].value_type == "boolean"
 
         Path(f.name).unlink()
+
+    def test_import_with_clear_existing(self, db_manager):
+        """Test that clear_existing deletes all tags before importing."""
+        # Create initial tags
+        initial_data = {
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef": {
+                "old_tag": "old_value",
+                "shared_tag": "old_value",
+            },
+            "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef": {
+                "another_old_tag": "value",
+            },
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(initial_data, f)
+            f.flush()
+            initial_file = f.name
+
+        stats1 = import_tags(initial_file, db_manager, create_nodes=True)
+        assert stats1["created"] == 3
+        assert stats1["deleted"] == 0
+
+        # Verify initial tags exist
+        with db_manager.session_scope() as session:
+            tags = session.execute(select(NodeTag)).scalars().all()
+            assert len(tags) == 3
+
+        # Import new tags with clear_existing=True
+        new_data = {
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef": {
+                "new_tag": "new_value",
+                "shared_tag": "new_value",
+            }
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(new_data, f)
+            f.flush()
+            new_file = f.name
+
+        stats2 = import_tags(
+            new_file, db_manager, create_nodes=True, clear_existing=True
+        )
+        assert stats2["deleted"] == 3  # All 3 old tags deleted
+        assert stats2["created"] == 2  # 2 new tags created
+        assert stats2["updated"] == 0  # No updates when clearing
+
+        # Verify only new tags exist
+        with db_manager.session_scope() as session:
+            tags = session.execute(select(NodeTag)).scalars().all()
+            tag_dict = {t.key: t for t in tags}
+            assert len(tags) == 2
+            assert "new_tag" in tag_dict
+            assert "shared_tag" in tag_dict
+            assert tag_dict["shared_tag"].value == "new_value"
+            assert "old_tag" not in tag_dict
+            assert "another_old_tag" not in tag_dict
+
+        Path(initial_file).unlink()
+        Path(new_file).unlink()

@@ -7,7 +7,7 @@ from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 
 from meshcore_hub.common.database import DatabaseManager
 from meshcore_hub.common.models import Node, NodeTag
@@ -151,16 +151,19 @@ def import_tags(
     file_path: str | Path,
     db: DatabaseManager,
     create_nodes: bool = True,
+    clear_existing: bool = False,
 ) -> dict[str, Any]:
     """Import tags from a YAML file into the database.
 
     Performs upsert operations - existing tags are updated, new tags are created.
+    Optionally clears all existing tags before import.
 
     Args:
         file_path: Path to the tags YAML file
         db: Database manager instance
         create_nodes: If True, create nodes that don't exist. If False, skip tags
                      for non-existent nodes.
+        clear_existing: If True, delete all existing tags before importing.
 
     Returns:
         Dictionary with import statistics:
@@ -169,6 +172,7 @@ def import_tags(
         - updated: Number of existing tags updated
         - skipped: Number of tags skipped (node not found and create_nodes=False)
         - nodes_created: Number of new nodes created
+        - deleted: Number of existing tags deleted (if clear_existing=True)
         - errors: List of error messages
     """
     stats: dict[str, Any] = {
@@ -177,6 +181,7 @@ def import_tags(
         "updated": 0,
         "skipped": 0,
         "nodes_created": 0,
+        "deleted": 0,
         "errors": [],
     }
 
@@ -194,6 +199,15 @@ def import_tags(
     now = datetime.now(timezone.utc)
 
     with db.session_scope() as session:
+        # Clear all existing tags if requested
+        if clear_existing:
+            delete_count = (
+                session.execute(select(func.count()).select_from(NodeTag)).scalar() or 0
+            )
+            session.execute(delete(NodeTag))
+            stats["deleted"] = delete_count
+            logger.info(f"Deleted {delete_count} existing tags")
+
         # Cache nodes by public_key to reduce queries
         node_cache: dict[str, Node] = {}
 
@@ -232,24 +246,8 @@ def import_tags(
                         tag_value = tag_data.get("value")
                         tag_type = tag_data.get("type", "string")
 
-                        # Find or create tag
-                        tag_query = select(NodeTag).where(
-                            NodeTag.node_id == node.id,
-                            NodeTag.key == tag_key,
-                        )
-                        existing_tag = session.execute(tag_query).scalar_one_or_none()
-
-                        if existing_tag:
-                            # Update existing tag
-                            existing_tag.value = tag_value
-                            existing_tag.value_type = tag_type
-                            stats["updated"] += 1
-                            logger.debug(
-                                f"Updated tag {tag_key}={tag_value} "
-                                f"for {public_key[:12]}..."
-                            )
-                        else:
-                            # Create new tag
+                        if clear_existing:
+                            # When clearing, always create new tags
                             new_tag = NodeTag(
                                 node_id=node.id,
                                 key=tag_key,
@@ -262,6 +260,39 @@ def import_tags(
                                 f"Created tag {tag_key}={tag_value} "
                                 f"for {public_key[:12]}..."
                             )
+                        else:
+                            # Find or create tag
+                            tag_query = select(NodeTag).where(
+                                NodeTag.node_id == node.id,
+                                NodeTag.key == tag_key,
+                            )
+                            existing_tag = session.execute(
+                                tag_query
+                            ).scalar_one_or_none()
+
+                            if existing_tag:
+                                # Update existing tag
+                                existing_tag.value = tag_value
+                                existing_tag.value_type = tag_type
+                                stats["updated"] += 1
+                                logger.debug(
+                                    f"Updated tag {tag_key}={tag_value} "
+                                    f"for {public_key[:12]}..."
+                                )
+                            else:
+                                # Create new tag
+                                new_tag = NodeTag(
+                                    node_id=node.id,
+                                    key=tag_key,
+                                    value=tag_value,
+                                    value_type=tag_type,
+                                )
+                                session.add(new_tag)
+                                stats["created"] += 1
+                                logger.debug(
+                                    f"Created tag {tag_key}={tag_value} "
+                                    f"for {public_key[:12]}..."
+                                )
 
                     except Exception as e:
                         error_msg = f"Error processing tag {tag_key} for {public_key[:12]}...: {e}"

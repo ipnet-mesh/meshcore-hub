@@ -82,11 +82,11 @@ async def get_stats(
         .all()
     )
 
-    # Get node names, adv_types, and friendly_name tags for the advertised nodes
+    # Get node names, adv_types, and name tags for the advertised nodes
     ad_public_keys = [ad.public_key for ad in recent_ads]
     node_names: dict[str, str] = {}
     node_adv_types: dict[str, str] = {}
-    friendly_names: dict[str, str] = {}
+    tag_names: dict[str, str] = {}
     if ad_public_keys:
         # Get node names and adv_types from Node table
         node_query = select(Node.public_key, Node.name, Node.adv_type).where(
@@ -98,21 +98,21 @@ async def get_stats(
             if adv_type:
                 node_adv_types[public_key] = adv_type
 
-        # Get friendly_name tags
-        friendly_name_query = (
+        # Get name tags
+        tag_name_query = (
             select(Node.public_key, NodeTag.value)
             .join(NodeTag, Node.id == NodeTag.node_id)
             .where(Node.public_key.in_(ad_public_keys))
-            .where(NodeTag.key == "friendly_name")
+            .where(NodeTag.key == "name")
         )
-        for public_key, value in session.execute(friendly_name_query).all():
-            friendly_names[public_key] = value
+        for public_key, value in session.execute(tag_name_query).all():
+            tag_names[public_key] = value
 
     recent_advertisements = [
         RecentAdvertisement(
             public_key=ad.public_key,
             name=ad.name or node_names.get(ad.public_key),
-            friendly_name=friendly_names.get(ad.public_key),
+            tag_name=tag_names.get(ad.public_key),
             adv_type=ad.adv_type or node_adv_types.get(ad.public_key),
             received_at=ad.received_at,
         )
@@ -146,7 +146,7 @@ async def get_stats(
         # Look up sender names for these messages
         msg_prefixes = [m.pubkey_prefix for m in channel_msgs if m.pubkey_prefix]
         msg_sender_names: dict[str, str] = {}
-        msg_friendly_names: dict[str, str] = {}
+        msg_tag_names: dict[str, str] = {}
         if msg_prefixes:
             for prefix in set(msg_prefixes):
                 sender_node_query = select(Node.public_key, Node.name).where(
@@ -156,14 +156,14 @@ async def get_stats(
                     if name:
                         msg_sender_names[public_key[:12]] = name
 
-                sender_friendly_query = (
+                sender_tag_query = (
                     select(Node.public_key, NodeTag.value)
                     .join(NodeTag, Node.id == NodeTag.node_id)
                     .where(Node.public_key.startswith(prefix))
-                    .where(NodeTag.key == "friendly_name")
+                    .where(NodeTag.key == "name")
                 )
-                for public_key, value in session.execute(sender_friendly_query).all():
-                    msg_friendly_names[public_key[:12]] = value
+                for public_key, value in session.execute(sender_tag_query).all():
+                    msg_tag_names[public_key[:12]] = value
 
         channel_messages[int(channel_idx)] = [
             ChannelMessage(
@@ -171,8 +171,8 @@ async def get_stats(
                 sender_name=(
                     msg_sender_names.get(m.pubkey_prefix) if m.pubkey_prefix else None
                 ),
-                sender_friendly_name=(
-                    msg_friendly_names.get(m.pubkey_prefix) if m.pubkey_prefix else None
+                sender_tag_name=(
+                    msg_tag_names.get(m.pubkey_prefix) if m.pubkey_prefix else None
                 ),
                 pubkey_prefix=m.pubkey_prefix,
                 received_at=m.received_at,

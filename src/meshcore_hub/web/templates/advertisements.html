@@ -49,8 +49,8 @@
             <tr class="hover">
                 <td>
                     <a href="/nodes/{{ ad.public_key }}" class="link link-hover">
-                        {% if ad.node_friendly_name or ad.node_name or ad.name %}
-                        <div class="font-medium">{{ ad.node_friendly_name or ad.node_name or ad.name }}</div>
+                        {% if ad.node_tag_name or ad.node_name or ad.name %}
+                        <div class="font-medium">{{ ad.node_tag_name or ad.node_name or ad.name }}</div>
                         <div class="text-xs font-mono opacity-70">{{ ad.public_key[:16] }}...</div>
                         {% else %}
                         <span class="font-mono text-sm">{{ ad.public_key[:16] }}...</span>
@@ -80,7 +80,7 @@
                             {% for recv in ad.receivers %}
                             <li>
                                 <a href="/nodes/{{ recv.public_key }}" class="text-sm">
-                                    {{ recv.friendly_name or recv.name or recv.public_key[:12] + '...' }}
+                                    {{ recv.tag_name or recv.name or recv.public_key[:12] + '...' }}
                                 </a>
                             </li>
                             {% endfor %}
@@ -88,8 +88,8 @@
                     </div>
                     {% elif ad.receivers and ad.receivers|length == 1 %}
                     <a href="/nodes/{{ ad.receivers[0].public_key }}" class="link link-hover">
-                        {% if ad.receivers[0].friendly_name or ad.receivers[0].name %}
-                        <div class="font-medium">{{ ad.receivers[0].friendly_name or ad.receivers[0].name }}</div>
+                        {% if ad.receivers[0].tag_name or ad.receivers[0].name %}
+                        <div class="font-medium">{{ ad.receivers[0].tag_name or ad.receivers[0].name }}</div>
                         <div class="text-xs font-mono opacity-70">{{ ad.receivers[0].public_key[:16] }}...</div>
                         {% else %}
                         <span class="font-mono text-sm">{{ ad.receivers[0].public_key[:16] }}...</span>
@@ -97,8 +97,8 @@
                     </a>
                     {% elif ad.received_by %}
                     <a href="/nodes/{{ ad.received_by }}" class="link link-hover">
-                        {% if ad.receiver_friendly_name or ad.receiver_name %}
-                        <div class="font-medium">{{ ad.receiver_friendly_name or ad.receiver_name }}</div>
+                        {% if ad.receiver_tag_name or ad.receiver_name %}
+                        <div class="font-medium">{{ ad.receiver_tag_name or ad.receiver_name }}</div>
                         <div class="text-xs font-mono opacity-70">{{ ad.received_by[:16] }}...</div>
                         {% else %}
                         <span class="font-mono text-sm">{{ ad.received_by[:16] }}...</span>
