@@ -290,6 +290,7 @@ def create_receiver(
     mqtt_username: Optional[str] = None,
     mqtt_password: Optional[str] = None,
     mqtt_prefix: str = "meshcore",
+    mqtt_tls: bool = False,
 ) -> Receiver:
     """Create a configured receiver instance.
 
@@ -304,6 +305,7 @@ def create_receiver(
         mqtt_username: MQTT username
         mqtt_password: MQTT password
         mqtt_prefix: MQTT topic prefix
+        mqtt_tls: Enable TLS/SSL for MQTT connection
 
     Returns:
         Configured Receiver instance
@@ -324,6 +326,7 @@ def create_receiver(
         password=mqtt_password,
         prefix=mqtt_prefix,
         client_id=f"meshcore-receiver-{device.public_key[:12] if device.public_key else 'unknown'}",
+        tls=mqtt_tls,
     )
     mqtt_client = MQTTClient(mqtt_config)
 
@@ -341,6 +344,7 @@ def run_receiver(
     mqtt_username: Optional[str] = None,
     mqtt_password: Optional[str] = None,
     mqtt_prefix: str = "meshcore",
+    mqtt_tls: bool = False,
 ) -> None:
     """Run the receiver (blocking).
 
@@ -357,6 +361,7 @@ def run_receiver(
         mqtt_username: MQTT username
         mqtt_password: MQTT password
         mqtt_prefix: MQTT topic prefix
+        mqtt_tls: Enable TLS/SSL for MQTT connection
     """
     receiver = create_receiver(
         port=port,
@@ -369,6 +374,7 @@ def run_receiver(
         mqtt_username=mqtt_username,
         mqtt_password=mqtt_password,
         mqtt_prefix=mqtt_prefix,
+        mqtt_tls=mqtt_tls,
     )
 
     # Set up signal handlers

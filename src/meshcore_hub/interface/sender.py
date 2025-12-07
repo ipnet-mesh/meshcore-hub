@@ -293,6 +293,7 @@ def create_sender(
     mqtt_username: Optional[str] = None,
     mqtt_password: Optional[str] = None,
     mqtt_prefix: str = "meshcore",
+    mqtt_tls: bool = False,
 ) -> Sender:
     """Create a configured sender instance.
 
@@ -307,6 +308,7 @@ def create_sender(
         mqtt_username: MQTT username
         mqtt_password: MQTT password
         mqtt_prefix: MQTT topic prefix
+        mqtt_tls: Enable TLS/SSL for MQTT connection
 
     Returns:
         Configured Sender instance
@@ -327,6 +329,7 @@ def create_sender(
         password=mqtt_password,
         prefix=mqtt_prefix,
         client_id=f"meshcore-sender-{device.public_key[:12] if device.public_key else 'unknown'}",
+        tls=mqtt_tls,
     )
     mqtt_client = MQTTClient(mqtt_config)
 
@@ -344,6 +347,7 @@ def run_sender(
     mqtt_username: Optional[str] = None,
     mqtt_password: Optional[str] = None,
     mqtt_prefix: str = "meshcore",
+    mqtt_tls: bool = False,
 ) -> None:
     """Run the sender (blocking).
 
@@ -360,6 +364,7 @@ def run_sender(
         mqtt_username: MQTT username
         mqtt_password: MQTT password
         mqtt_prefix: MQTT topic prefix
+        mqtt_tls: Enable TLS/SSL for MQTT connection
     """
     sender = create_sender(
         port=port,
@@ -372,6 +377,7 @@ def run_sender(
         mqtt_username=mqtt_username,
         mqtt_password=mqtt_password,
         mqtt_prefix=mqtt_prefix,
+        mqtt_tls=mqtt_tls,
     )
 
     # Set up signal handlers

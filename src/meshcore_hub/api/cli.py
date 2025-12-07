@@ -68,6 +68,13 @@ import click
     help="MQTT topic prefix",
 )
 @click.option(
+    "--mqtt-tls",
+    is_flag=True,
+    default=False,
+    envvar="MQTT_TLS",
+    help="Enable TLS/SSL for MQTT connection",
+)
+@click.option(
     "--cors-origins",
     type=str,
     default=None,
@@ -92,6 +99,7 @@ def api(
     mqtt_host: str,
     mqtt_port: int,
     mqtt_prefix: str,
+    mqtt_tls: bool,
     cors_origins: str | None,
     reload: bool,
 ) -> None:
@@ -171,6 +179,7 @@ def api(
             mqtt_host=mqtt_host,
             mqtt_port=mqtt_port,
             mqtt_prefix=mqtt_prefix,
+            mqtt_tls=mqtt_tls,
             cors_origins=origins_list,
         )
 

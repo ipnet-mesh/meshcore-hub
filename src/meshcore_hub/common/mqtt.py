@@ -23,6 +23,7 @@ class MQTTConfig:
     client_id: Optional[str] = None
     keepalive: int = 60
     clean_session: bool = True
+    tls: bool = False
 
 
 class TopicBuilder:
@@ -130,6 +131,11 @@ class MQTTClient:
         )
         self._connected = False
         self._message_handlers: dict[str, list[MessageHandler]] = {}
+
+        # Set up TLS if enabled
+        if config.tls:
+            self._client.tls_set()
+            logger.debug("TLS/SSL enabled for MQTT connection")
 
         # Set up authentication if provided
         if config.username:
@@ -344,6 +350,7 @@ def create_mqtt_client(
     password: Optional[str] = None,
     prefix: str = "meshcore",
     client_id: Optional[str] = None,
+    tls: bool = False,
 ) -> MQTTClient:
     """Create and configure an MQTT client.
 
@@ -354,6 +361,7 @@ def create_mqtt_client(
         password: MQTT password (optional)
         prefix: Topic prefix
         client_id: Client identifier (optional)
+        tls: Enable TLS/SSL connection (optional)
 
     Returns:
         Configured MQTTClient instance
@@ -365,5 +373,6 @@ def create_mqtt_client(
         password=password,
         prefix=prefix,
         client_id=client_id,
+        tls=tls,
     )
     return MQTTClient(config)

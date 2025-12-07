@@ -52,6 +52,7 @@ def create_app(
     mqtt_host: str = "localhost",
     mqtt_port: int = 1883,
     mqtt_prefix: str = "meshcore",
+    mqtt_tls: bool = False,
     cors_origins: list[str] | None = None,
 ) -> FastAPI:
     """Create and configure the FastAPI application.
@@ -63,6 +64,7 @@ def create_app(
         mqtt_host: MQTT broker host
         mqtt_port: MQTT broker port
         mqtt_prefix: MQTT topic prefix
+        mqtt_tls: Enable TLS/SSL for MQTT connection
         cors_origins: Allowed CORS origins
 
     Returns:
@@ -85,6 +87,7 @@ def create_app(
     app.state.mqtt_host = mqtt_host
     app.state.mqtt_port = mqtt_port
     app.state.mqtt_prefix = mqtt_prefix
+    app.state.mqtt_tls = mqtt_tls
 
     # Configure CORS
     if cors_origins is None:

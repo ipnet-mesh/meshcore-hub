@@ -48,6 +48,13 @@ if TYPE_CHECKING:
     help="MQTT topic prefix",
 )
 @click.option(
+    "--mqtt-tls",
+    is_flag=True,
+    default=False,
+    envvar="MQTT_TLS",
+    help="Enable TLS/SSL for MQTT connection",
+)
+@click.option(
     "--data-home",
     type=str,
     default=None,
@@ -82,6 +89,7 @@ def collector(
     mqtt_username: str | None,
     mqtt_password: str | None,
     prefix: str,
+    mqtt_tls: bool,
     data_home: str | None,
     seed_home: str | None,
     database_url: str | None,
@@ -125,6 +133,7 @@ def collector(
     ctx.obj["mqtt_username"] = mqtt_username
     ctx.obj["mqtt_password"] = mqtt_password
     ctx.obj["prefix"] = prefix
+    ctx.obj["mqtt_tls"] = mqtt_tls
     ctx.obj["data_home"] = data_home or settings.data_home
     ctx.obj["seed_home"] = settings.effective_seed_home
     ctx.obj["database_url"] = effective_db_url
@@ -139,6 +148,7 @@ def collector(
             mqtt_username=mqtt_username,
             mqtt_password=mqtt_password,
             prefix=prefix,
+            mqtt_tls=mqtt_tls,
             database_url=effective_db_url,
             log_level=log_level,
             data_home=data_home or settings.data_home,
@@ -152,6 +162,7 @@ def _run_collector_service(
     mqtt_username: str | None,
     mqtt_password: str | None,
     prefix: str,
+    mqtt_tls: bool,
     database_url: str,
     log_level: str,
     data_home: str,
@@ -236,6 +247,7 @@ def _run_collector_service(
         mqtt_username=mqtt_username,
         mqtt_password=mqtt_password,
         mqtt_prefix=prefix,
+        mqtt_tls=mqtt_tls,
         database_url=database_url,
         webhook_dispatcher=webhook_dispatcher,
     )
@@ -254,6 +266,7 @@ def run_cmd(ctx: click.Context) -> None:
         mqtt_username=ctx.obj["mqtt_username"],
         mqtt_password=ctx.obj["mqtt_password"],
         prefix=ctx.obj["prefix"],
+        mqtt_tls=ctx.obj["mqtt_tls"],
         database_url=ctx.obj["database_url"],
         log_level=ctx.obj["log_level"],
         data_home=ctx.obj["data_home"],

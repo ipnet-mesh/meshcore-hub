@@ -94,6 +94,13 @@ def interface() -> None:
     help="MQTT topic prefix",
 )
 @click.option(
+    "--mqtt-tls",
+    is_flag=True,
+    default=False,
+    envvar="MQTT_TLS",
+    help="Enable TLS/SSL for MQTT connection",
+)
+@click.option(
     "--log-level",
     type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]),
     default="INFO",
@@ -112,6 +119,7 @@ def run(
     mqtt_username: str | None,
     mqtt_password: str | None,
     prefix: str,
+    mqtt_tls: bool,
     log_level: str,
 ) -> None:
     """Run the interface component.
@@ -153,6 +161,7 @@ def run(
             mqtt_username=mqtt_username,
             mqtt_password=mqtt_password,
             mqtt_prefix=prefix,
+            mqtt_tls=mqtt_tls,
         )
     elif mode_upper == "SENDER":
         from meshcore_hub.interface.sender import run_sender
@@ -168,6 +177,7 @@ def run(
             mqtt_username=mqtt_username,
             mqtt_password=mqtt_password,
             mqtt_prefix=prefix,
+            mqtt_tls=mqtt_tls,
         )
     else:
         click.echo(f"Unknown mode: {mode}", err=True)
@@ -245,6 +255,13 @@ def run(
     envvar="MQTT_PREFIX",
     help="MQTT topic prefix",
 )
+@click.option(
+    "--mqtt-tls",
+    is_flag=True,
+    default=False,
+    envvar="MQTT_TLS",
+    help="Enable TLS/SSL for MQTT connection",
+)
 def receiver(
     port: str,
     baud: int,
@@ -256,6 +273,7 @@ def receiver(
     mqtt_username: str | None,
     mqtt_password: str | None,
     prefix: str,
+    mqtt_tls: bool,
 ) -> None:
     """Run interface in RECEIVER mode.
 
@@ -280,6 +298,7 @@ def receiver(
         mqtt_username=mqtt_username,
         mqtt_password=mqtt_password,
         mqtt_prefix=prefix,
+        mqtt_tls=mqtt_tls,
     )
 
 
@@ -354,6 +373,13 @@ def receiver(
     envvar="MQTT_PREFIX",
     help="MQTT topic prefix",
 )
+@click.option(
+    "--mqtt-tls",
+    is_flag=True,
+    default=False,
+    envvar="MQTT_TLS",
+    help="Enable TLS/SSL for MQTT connection",
+)
 def sender(
     port: str,
     baud: int,
@@ -365,6 +391,7 @@ def sender(
     mqtt_username: str | None,
     mqtt_password: str | None,
     prefix: str,
+    mqtt_tls: bool,
 ) -> None:
     """Run interface in SENDER mode.
 
@@ -389,4 +416,5 @@ def sender(
         mqtt_username=mqtt_username,
         mqtt_password=mqtt_password,
         mqtt_prefix=prefix,
+        mqtt_tls=mqtt_tls,
     )

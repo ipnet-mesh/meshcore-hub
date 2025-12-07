@@ -47,6 +47,7 @@ services:
       - MQTT_USERNAME=${MQTT_USERNAME:-}
       - MQTT_PASSWORD=${MQTT_PASSWORD:-}
       - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
+      - MQTT_TLS=${MQTT_TLS:-false}
       - SERIAL_PORT=${SERIAL_PORT:-/dev/ttyUSB0}
       - SERIAL_BAUD=${SERIAL_BAUD:-115200}
       - NODE_ADDRESS=${NODE_ADDRESS:-}
@@ -81,6 +82,7 @@ services:
       - MQTT_USERNAME=${MQTT_USERNAME:-}
       - MQTT_PASSWORD=${MQTT_PASSWORD:-}
       - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
+      - MQTT_TLS=${MQTT_TLS:-false}
       - SERIAL_PORT=${SERIAL_PORT_SENDER:-/dev/ttyUSB1}
       - SERIAL_BAUD=${SERIAL_BAUD:-115200}
       - NODE_ADDRESS=${NODE_ADDRESS_SENDER:-}
@@ -112,6 +114,7 @@ services:
       - MQTT_USERNAME=${MQTT_USERNAME:-}
       - MQTT_PASSWORD=${MQTT_PASSWORD:-}
       - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
+      - MQTT_TLS=${MQTT_TLS:-false}
       - MOCK_DEVICE=true
       - NODE_ADDRESS=${NODE_ADDRESS:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
     command: ["interface", "receiver", "--mock"]
@@ -145,6 +148,7 @@ services:
       - MQTT_USERNAME=${MQTT_USERNAME:-}
       - MQTT_PASSWORD=${MQTT_PASSWORD:-}
       - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
+      - MQTT_TLS=${MQTT_TLS:-false}
       - DATA_HOME=/data
       - SEED_HOME=/seed
       # Explicitly unset to use DATA_HOME-based default path
@@ -197,6 +201,7 @@ services:
       - MQTT_USERNAME=${MQTT_USERNAME:-}
       - MQTT_PASSWORD=${MQTT_PASSWORD:-}
       - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
+      - MQTT_TLS=${MQTT_TLS:-false}
       - DATA_HOME=/data
       # Explicitly unset to use DATA_HOME-based default path
       - DATABASE_URL=

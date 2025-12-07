@@ -52,6 +52,9 @@ class CommonSettings(BaseSettings):
         default=None, description="MQTT password (optional)"
     )
     mqtt_prefix: str = Field(default="meshcore", description="MQTT topic prefix")
+    mqtt_tls: bool = Field(
+        default=False, description="Enable TLS/SSL for MQTT connection"
+    )
 
 
 class InterfaceSettings(CommonSettings):
