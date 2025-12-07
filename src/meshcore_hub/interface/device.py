@@ -193,8 +193,21 @@ class BaseMeshCoreDevice(ABC):
 
         Triggers a CONTACTS event with all stored contacts from the device.
 
+        Note: This should only be called before the event loop is running.
+
         Returns:
             True if request was sent successfully
+        """
+        pass
+
+    @abstractmethod
+    def schedule_get_contacts(self) -> bool:
+        """Schedule a get_contacts request on the event loop.
+
+        This is safe to call from event handlers while the event loop is running.
+
+        Returns:
+            True if request was scheduled successfully
         """
         pass
 
@@ -567,7 +580,12 @@ class MeshCoreDevice(BaseMeshCoreDevice):
             return False
 
     def get_contacts(self) -> bool:
-        """Fetch contacts from device contact database."""
+        """Fetch contacts from device contact database.
+
+        Note: This method should only be called before the event loop is running
+        (e.g., during initialization). For calling during event processing,
+        use schedule_get_contacts() instead.
+        """
         if not self._connected or not self._mc:
             logger.error("Cannot get contacts: not connected")
             return False
@@ -582,6 +600,31 @@ class MeshCoreDevice(BaseMeshCoreDevice):
             return True
         except Exception as e:
             logger.error(f"Failed to get contacts: {e}")
+            return False
+
+    def schedule_get_contacts(self) -> bool:
+        """Schedule a get_contacts request on the event loop.
+
+        This is safe to call from event handlers while the event loop is running.
+        The request is scheduled as a task on the event loop.
+
+        Returns:
+            True if request was scheduled, False if device not connected
+        """
+        if not self._connected or not self._mc:
+            logger.error("Cannot get contacts: not connected")
+            return False
+
+        try:
+
+            async def _get_contacts() -> None:
+                await self._mc.commands.get_contacts()
+
+            asyncio.run_coroutine_threadsafe(_get_contacts(), self._loop)
+            logger.info("Scheduled contact sync request")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to schedule get contacts: {e}")
             return False
 
     def run(self) -> None:

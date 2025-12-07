@@ -144,8 +144,23 @@ class Receiver:
 
             logger.debug(f"Published {event_name} event to MQTT")
 
+            # Trigger contact sync on advertisements
+            if event_type == EventType.ADVERTISEMENT:
+                self._sync_contacts()
+
         except Exception as e:
             logger.error(f"Failed to publish event to MQTT: {e}")
+
+    def _sync_contacts(self) -> None:
+        """Request contact sync from device.
+
+        Called when advertisements are received to ensure contact database
+        stays current with all nodes on the mesh.
+        """
+        logger.info("Advertisement received, triggering contact sync")
+        success = self.device.schedule_get_contacts()
+        if not success:
+            logger.warning("Contact sync request failed")
 
     def _publish_contacts(self, payload: dict[str, Any]) -> None:
         """Publish each contact as a separate MQTT message.

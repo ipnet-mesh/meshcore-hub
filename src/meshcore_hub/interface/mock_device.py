@@ -292,7 +292,10 @@ class MockMeshCoreDevice(BaseMeshCoreDevice):
         return True
 
     def get_contacts(self) -> bool:
-        """Fetch contacts from mock device contact database."""
+        """Fetch contacts from mock device contact database.
+
+        Note: This should only be called before the event loop is running.
+        """
         if not self._connected:
             logger.error("Cannot get contacts: not connected")
             return False
@@ -317,6 +320,14 @@ class MockMeshCoreDevice(BaseMeshCoreDevice):
 
         threading.Thread(target=send_contacts, daemon=True).start()
         return True
+
+    def schedule_get_contacts(self) -> bool:
+        """Schedule a get_contacts request.
+
+        For the mock device, this is the same as get_contacts() since we
+        don't have a real async event loop. The contacts are sent via a thread.
+        """
+        return self.get_contacts()
 
     def run(self) -> None:
         """Run the mock device event loop."""

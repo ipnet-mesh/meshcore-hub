@@ -624,6 +624,20 @@ On startup, the receiver performs these initialization steps:
 1. Set device clock to current Unix timestamp
 2. Send a local (non-flood) advertisement
 3. Start automatic message fetching
+4. Sync the device's contact database
+
+### Contact Sync Behavior
+
+The receiver syncs the device's contact database in two scenarios:
+
+1. **Startup**: Initial sync when receiver starts
+2. **Advertisement Events**: Automatic sync triggered whenever an advertisement is received from the mesh
+
+Since advertisements are typically received every ~20 minutes, contact sync happens automatically without manual intervention. Each contact from the device is published individually to MQTT:
+- Topic: `{prefix}/{device_public_key}/event/contact`
+- Payload: `{public_key, adv_name, type}`
+
+This ensures the collector's database stays current with all nodes discovered on the mesh network.
 
 ## References
 
