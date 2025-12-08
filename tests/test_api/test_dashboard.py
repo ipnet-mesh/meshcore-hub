@@ -1,5 +1,11 @@
 """Tests for dashboard API routes."""
 
+from datetime import datetime, timedelta, timezone
+
+import pytest
+
+from meshcore_hub.common.models import Advertisement, Message, Node
+
 
 class TestDashboardStats:
     """Tests for GET /dashboard/stats endpoint."""
@@ -63,6 +69,21 @@ class TestDashboardHtml:
 class TestDashboardActivity:
     """Tests for GET /dashboard/activity endpoint."""
 
+    @pytest.fixture
+    def past_advertisement(self, api_db_session):
+        """Create an advertisement from yesterday (since today is excluded)."""
+        yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+        advert = Advertisement(
+            public_key="abc123def456abc123def456abc123de",
+            name="TestNode",
+            adv_type="REPEATER",
+            received_at=yesterday,
+        )
+        api_db_session.add(advert)
+        api_db_session.commit()
+        api_db_session.refresh(advert)
+        return advert
+
     def test_get_activity_empty(self, client_no_auth):
         """Test getting activity with empty database."""
         response = client_no_auth.get("/api/v1/dashboard/activity")
@@ -91,8 +112,12 @@ class TestDashboardActivity:
         assert data["days"] == 90
         assert len(data["data"]) == 90
 
-    def test_get_activity_with_data(self, client_no_auth, sample_advertisement):
-        """Test getting activity with advertisement in database."""
+    def test_get_activity_with_data(self, client_no_auth, past_advertisement):
+        """Test getting activity with advertisement in database.
+
+        Note: Activity endpoints exclude today's data to avoid showing
+        incomplete stats early in the day.
+        """
         response = client_no_auth.get("/api/v1/dashboard/activity")
         assert response.status_code == 200
         data = response.json()
@@ -103,6 +128,21 @@ class TestDashboardActivity:
 
 class TestMessageActivity:
     """Tests for GET /dashboard/message-activity endpoint."""
+
+    @pytest.fixture
+    def past_message(self, api_db_session):
+        """Create a message from yesterday (since today is excluded)."""
+        yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+        message = Message(
+            message_type="direct",
+            pubkey_prefix="abc123",
+            text="Hello World",
+            received_at=yesterday,
+        )
+        api_db_session.add(message)
+        api_db_session.commit()
+        api_db_session.refresh(message)
+        return message
 
     def test_get_message_activity_empty(self, client_no_auth):
         """Test getting message activity with empty database."""
@@ -132,8 +172,12 @@ class TestMessageActivity:
         assert data["days"] == 90
         assert len(data["data"]) == 90
 
-    def test_get_message_activity_with_data(self, client_no_auth, sample_message):
-        """Test getting message activity with message in database."""
+    def test_get_message_activity_with_data(self, client_no_auth, past_message):
+        """Test getting message activity with message in database.
+
+        Note: Activity endpoints exclude today's data to avoid showing
+        incomplete stats early in the day.
+        """
         response = client_no_auth.get("/api/v1/dashboard/message-activity")
         assert response.status_code == 200
         data = response.json()
@@ -144,6 +188,23 @@ class TestMessageActivity:
 
 class TestNodeCountHistory:
     """Tests for GET /dashboard/node-count endpoint."""
+
+    @pytest.fixture
+    def past_node(self, api_db_session):
+        """Create a node from yesterday (since today is excluded)."""
+        yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+        node = Node(
+            public_key="abc123def456abc123def456abc123de",
+            name="Test Node",
+            adv_type="REPEATER",
+            first_seen=yesterday,
+            last_seen=yesterday,
+            created_at=yesterday,
+        )
+        api_db_session.add(node)
+        api_db_session.commit()
+        api_db_session.refresh(node)
+        return node
 
     def test_get_node_count_empty(self, client_no_auth):
         """Test getting node count with empty database."""
@@ -173,8 +234,12 @@ class TestNodeCountHistory:
         assert data["days"] == 90
         assert len(data["data"]) == 90
 
-    def test_get_node_count_with_data(self, client_no_auth, sample_node):
-        """Test getting node count with node in database."""
+    def test_get_node_count_with_data(self, client_no_auth, past_node):
+        """Test getting node count with node in database.
+
+        Note: Activity endpoints exclude today's data to avoid showing
+        incomplete stats early in the day.
+        """
         response = client_no_auth.get("/api/v1/dashboard/node-count")
         assert response.status_code == 200
         data = response.json()

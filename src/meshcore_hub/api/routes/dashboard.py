@@ -228,15 +228,15 @@ async def get_activity(
         days: Number of days to include (default 30, max 90)
 
     Returns:
-        Daily advertisement counts for each day in the period
+        Daily advertisement counts for each day in the period (excluding today)
     """
     # Limit to max 90 days
     days = min(days, 90)
 
     now = datetime.now(timezone.utc)
-    start_date = (now - timedelta(days=days - 1)).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
+    # End at start of today (exclude today's incomplete data)
+    end_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_date = end_date - timedelta(days=days)
 
     # Query advertisement counts grouped by date
     # Use SQLite's date() function for grouping (returns string 'YYYY-MM-DD')
@@ -248,6 +248,7 @@ async def get_activity(
             func.count().label("count"),
         )
         .where(Advertisement.received_at >= start_date)
+        .where(Advertisement.received_at < end_date)
         .group_by(date_expr)
         .order_by(date_expr)
     )
@@ -280,14 +281,14 @@ async def get_message_activity(
         days: Number of days to include (default 30, max 90)
 
     Returns:
-        Daily message counts for each day in the period
+        Daily message counts for each day in the period (excluding today)
     """
     days = min(days, 90)
 
     now = datetime.now(timezone.utc)
-    start_date = (now - timedelta(days=days - 1)).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
+    # End at start of today (exclude today's incomplete data)
+    end_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_date = end_date - timedelta(days=days)
 
     # Query message counts grouped by date
     date_expr = func.date(Message.received_at)
@@ -298,6 +299,7 @@ async def get_message_activity(
             func.count().label("count"),
         )
         .where(Message.received_at >= start_date)
+        .where(Message.received_at < end_date)
         .group_by(date_expr)
         .order_by(date_expr)
     )
@@ -331,14 +333,14 @@ async def get_node_count_history(
         days: Number of days to include (default 30, max 90)
 
     Returns:
-        Cumulative node count for each day in the period
+        Cumulative node count for each day in the period (excluding today)
     """
     days = min(days, 90)
 
     now = datetime.now(timezone.utc)
-    start_date = (now - timedelta(days=days - 1)).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
+    # End at start of today (exclude today's incomplete data)
+    end_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_date = end_date - timedelta(days=days)
 
     # Get all nodes with their creation dates
     # Count nodes created on or before each date
