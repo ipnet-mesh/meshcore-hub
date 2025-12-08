@@ -73,15 +73,17 @@ def handle_contact(
                 node.name = name
             if node_type and not node.adv_type:
                 node.adv_type = node_type
-            node.last_seen = now
+            # Do NOT update last_seen for contact sync - only advertisement events
+            # should update last_seen since that's when the node was actually seen
         else:
-            # Create new node
+            # Create new node from contact database
+            # Set last_seen=None since we haven't actually seen this node advertise yet
             node = Node(
                 public_key=contact_key,
                 name=name,
                 adv_type=node_type,
                 first_seen=now,
-                last_seen=now,
+                last_seen=None,  # Will be set when we receive an advertisement
             )
             session.add(node)
             logger.info(f"Created node from contact: {contact_key[:12]}... ({name})")

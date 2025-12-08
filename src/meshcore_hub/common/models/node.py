@@ -52,10 +52,10 @@ class Node(Base, UUIDMixin, TimestampMixin):
         default=utc_now,
         nullable=False,
     )
-    last_seen: Mapped[datetime] = mapped_column(
+    last_seen: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),
-        default=utc_now,
-        nullable=False,
+        default=None,
+        nullable=True,
     )
 
     # Relationships
