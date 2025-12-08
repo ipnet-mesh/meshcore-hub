@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import aliased, selectinload
 
 from meshcore_hub.api.auth import RequireRead
@@ -89,6 +89,9 @@ def _fetch_receivers_for_events(
 async def list_advertisements(
     _: RequireRead,
     session: DbSession,
+    search: Optional[str] = Query(
+        None, description="Search in name tag, node name, or public key"
+    ),
     public_key: Optional[str] = Query(None, description="Filter by public key"),
     received_by: Optional[str] = Query(
         None, description="Filter by receiver node public key"
@@ -117,6 +120,22 @@ async def list_advertisements(
         .outerjoin(ReceiverNode, Advertisement.receiver_node_id == ReceiverNode.id)
         .outerjoin(SourceNode, Advertisement.node_id == SourceNode.id)
     )
+
+    if search:
+        # Search in public key, advertisement name, node name, or name tag
+        search_pattern = f"%{search}%"
+        query = query.where(
+            or_(
+                Advertisement.public_key.ilike(search_pattern),
+                Advertisement.name.ilike(search_pattern),
+                SourceNode.name.ilike(search_pattern),
+                SourceNode.id.in_(
+                    select(NodeTag.node_id).where(
+                        NodeTag.key == "name", NodeTag.value.ilike(search_pattern)
+                    )
+                ),
+            )
+        )
 
     if public_key:
         query = query.where(Advertisement.public_key == public_key)

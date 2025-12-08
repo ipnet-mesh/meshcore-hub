@@ -23,11 +23,11 @@
         <form method="GET" action="/advertisements" class="flex gap-4 flex-wrap items-end">
             <div class="form-control">
                 <label class="label py-1">
-                    <span class="label-text">Public Key</span>
+                    <span class="label-text">Search</span>
                 </label>
-                <input type="text" name="public_key" value="{{ public_key }}" placeholder="Filter by public key..." class="input input-bordered input-sm w-80" />
+                <input type="text" name="search" value="{{ search }}" placeholder="Search by name, ID, or public key..." class="input input-bordered input-sm w-80" />
             </div>
-            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+            <button type="submit" class="btn btn-primary btn-sm">Search</button>
             <a href="/advertisements" class="btn btn-ghost btn-sm">Clear</a>
         </form>
     </div>
@@ -126,7 +126,7 @@
 <div class="flex justify-center mt-6">
     <div class="join">
         {% if page > 1 %}
-        <a href="?page={{ page - 1 }}&public_key={{ public_key }}&limit={{ limit }}" class="join-item btn btn-sm">Previous</a>
+        <a href="?page={{ page - 1 }}&search={{ search }}&limit={{ limit }}" class="join-item btn btn-sm">Previous</a>
         {% else %}
         <button class="join-item btn btn-sm btn-disabled">Previous</button>
         {% endif %}
@@ -135,14 +135,14 @@
             {% if p == page %}
             <button class="join-item btn btn-sm btn-active">{{ p }}</button>
             {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
-            <a href="?page={{ p }}&public_key={{ public_key }}&limit={{ limit }}" class="join-item btn btn-sm">{{ p }}</a>
+            <a href="?page={{ p }}&search={{ search }}&limit={{ limit }}" class="join-item btn btn-sm">{{ p }}</a>
             {% elif p == 2 or p == total_pages - 1 %}
             <button class="join-item btn btn-sm btn-disabled">...</button>
             {% endif %}
         {% endfor %}
 
         {% if page < total_pages %}
-        <a href="?page={{ page + 1 }}&public_key={{ public_key }}&limit={{ limit }}" class="join-item btn btn-sm">Next</a>
+        <a href="?page={{ page + 1 }}&search={{ search }}&limit={{ limit }}" class="join-item btn btn-sm">Next</a>
         {% else %}
         <button class="join-item btn btn-sm btn-disabled">Next</button>
         {% endif %}

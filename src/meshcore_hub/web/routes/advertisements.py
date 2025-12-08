@@ -14,7 +14,7 @@ router = APIRouter()
 @router.get("/advertisements", response_class=HTMLResponse)
 async def advertisements_list(
     request: Request,
-    public_key: str | None = Query(None, description="Filter by public key"),
+    search: str | None = Query(None, description="Search term"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(50, ge=1, le=100, description="Items per page"),
 ) -> HTMLResponse:
@@ -28,8 +28,8 @@ async def advertisements_list(
 
     # Build query params
     params: dict[str, int | str] = {"limit": limit, "offset": offset}
-    if public_key:
-        params["public_key"] = public_key
+    if search:
+        params["search"] = search
 
     # Fetch advertisements from API
     advertisements = []
@@ -57,7 +57,7 @@ async def advertisements_list(
             "page": page,
             "limit": limit,
             "total_pages": total_pages,
-            "public_key": public_key or "",
+            "search": search or "",
         }
     )
 
