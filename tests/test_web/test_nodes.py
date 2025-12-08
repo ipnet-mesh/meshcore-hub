@@ -91,7 +91,8 @@ class TestNodeDetailPage:
         assert response.status_code == 200
         # Should display node details
         assert "Node One" in response.text
-        assert "REPEATER" in response.text
+        # Node type is shown as emoji with title attribute
+        assert 'title="Repeater"' in response.text
 
     def test_node_detail_displays_public_key(
         self, client: TestClient, mock_http_client: MockHttpClient
