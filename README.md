@@ -45,13 +45,13 @@ flowchart TB
     Database --> API
     API <--- Web["Web Dashboard"]
 
-    style Devices fill:#e1f5fe,stroke:#0288d1
-    style Interfaces fill:#fff3e0,stroke:#f57c00
-    style MQTT fill:#f3e5f5,stroke:#7b1fa2
-    style Collector fill:#e8f5e9,stroke:#388e3c
-    style Database fill:#fce4ec,stroke:#c2185b
-    style API fill:#e3f2fd,stroke:#1976d2
-    style Web fill:#fff8e1,stroke:#ffa000
+    style Devices fill:none,stroke:#0288d1,stroke-width:2px
+    style Interfaces fill:none,stroke:#f57c00,stroke-width:2px
+    style MQTT fill:none,stroke:#7b1fa2,stroke-width:3px
+    style Collector fill:none,stroke:#388e3c,stroke-width:2px
+    style Database fill:none,stroke:#c2185b,stroke-width:2px
+    style API fill:none,stroke:#1976d2,stroke-width:2px
+    style Web fill:none,stroke:#ffa000,stroke-width:2px
 ```
 
 ## Features
@@ -119,12 +119,12 @@ flowchart TB
     R2 -->|MQTT port 1883| MQTT
     R3 -->|MQTT port 1883| MQTT
 
-    style Community fill:#e1f5fe,stroke:#0288d1
-    style Server fill:#e8f5e9,stroke:#388e3c
-    style MQTT fill:#f3e5f5,stroke:#7b1fa2
-    style Collector fill:#fff3e0,stroke:#f57c00
-    style API fill:#e3f2fd,stroke:#1976d2
-    style Web fill:#fff8e1,stroke:#ffa000
+    style Community fill:none,stroke:#0288d1,stroke-width:2px
+    style Server fill:none,stroke:#388e3c,stroke-width:2px
+    style MQTT fill:none,stroke:#7b1fa2,stroke-width:3px
+    style Collector fill:none,stroke:#f57c00,stroke-width:2px
+    style API fill:none,stroke:#1976d2,stroke-width:2px
+    style Web fill:none,stroke:#ffa000,stroke-width:2px
 ```
 
 **On each receiver node (Raspberry Pi, etc.):**
