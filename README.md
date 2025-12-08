@@ -18,35 +18,39 @@ MeshCore Hub provides a complete solution for monitoring, collecting, and intera
 ## Architecture
 
 ```mermaid
-flowchart TB
+flowchart LR
     subgraph Devices["MeshCore Devices"]
-        D1["MeshCore Device 1"]
-        D2["MeshCore Device 2"]
-        D3["MeshCore Device 3"]
+        D1["Device 1"]
+        D2["Device 2"]
+        D3["Device 3"]
     end
 
     subgraph Interfaces["Interface Layer"]
-        I1["Interface (RECEIVER)"]
-        I2["Interface (RECEIVER)"]
-        I3["Interface (SENDER)"]
+        I1["RECEIVER"]
+        I2["RECEIVER"]
+        I3["SENDER"]
     end
 
-    D1 -->|Serial/USB| I1
-    D2 -->|Serial/USB| I2
-    D3 -->|Serial/USB| I3
+    D1 -->|Serial| I1
+    D2 -->|Serial| I2
+    D3 -->|Serial| I3
 
     I1 -->|Publish| MQTT
     I2 -->|Publish| MQTT
     MQTT -->|Subscribe| I3
 
     MQTT["MQTT Broker"]
+
+    subgraph Backend["Backend Services"]
+        Collector --> Database --> API
+    end
+
     MQTT --> Collector
-    Collector --> Database
-    Database --> API
-    API <--- Web["Web Dashboard"]
+    API --> Web["Web Dashboard"]
 
     style Devices fill:none,stroke:#0288d1,stroke-width:2px
     style Interfaces fill:none,stroke:#f57c00,stroke-width:2px
+    style Backend fill:none,stroke:#388e3c,stroke-width:2px
     style MQTT fill:none,stroke:#7b1fa2,stroke-width:3px
     style Collector fill:none,stroke:#388e3c,stroke-width:2px
     style Database fill:none,stroke:#c2185b,stroke-width:2px
