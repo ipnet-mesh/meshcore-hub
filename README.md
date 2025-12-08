@@ -122,7 +122,7 @@ flowchart TB
     style Community fill:none,stroke:#0288d1,stroke-width:2px
     style Server fill:none,stroke:#388e3c,stroke-width:2px
     style MQTT fill:none,stroke:#7b1fa2,stroke-width:3px
-    style Collector fill:none,stroke:#f57c00,stroke-width:2px
+    style Collector fill:none,stroke:#388e3c,stroke-width:2px
     style API fill:none,stroke:#1976d2,stroke-width:2px
     style Web fill:none,stroke:#ffa000,stroke-width:2px
 ```
