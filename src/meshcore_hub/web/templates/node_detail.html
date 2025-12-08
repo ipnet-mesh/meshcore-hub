@@ -2,6 +2,22 @@
 
 {% block title %}{{ network_name }} - Node Details{% endblock %}
 
+{% block extra_head %}
+<style>
+    #node-map {
+        height: 300px;
+        border-radius: var(--rounded-box);
+    }
+    .leaflet-popup-content-wrapper {
+        background: oklch(var(--b1));
+        color: oklch(var(--bc));
+    }
+    .leaflet-popup-tip {
+        background: oklch(var(--b1));
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="breadcrumbs text-sm mb-4">
     <ul>
@@ -41,10 +57,18 @@
 <div class="card bg-base-100 shadow-xl mb-6">
     <div class="card-body">
         <h1 class="card-title text-2xl">
-            {{ ns.tag_name or node.name or 'Unnamed Node' }}
             {% if node.adv_type %}
-            <span class="badge badge-secondary">{{ node.adv_type }}</span>
+                {% if node.adv_type|lower == 'chat' %}
+                <span title="Chat">💬</span>
+                {% elif node.adv_type|lower == 'repeater' %}
+                <span title="Repeater">📡</span>
+                {% elif node.adv_type|lower == 'room' %}
+                <span title="Room">🪧</span>
+                {% else %}
+                <span title="{{ node.adv_type }}">📍</span>
+                {% endif %}
             {% endif %}
+            {{ ns.tag_name or node.name or 'Unnamed Node' }}
         </h1>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
@@ -61,32 +85,55 @@
             </div>
         </div>
 
-        <!-- Tags -->
-        {% if node.tags %}
-        <div class="mt-6">
-            <h3 class="font-semibold opacity-70 mb-2">Tags</h3>
-            <div class="overflow-x-auto">
-                <table class="table table-compact w-full">
-                    <thead>
-                        <tr>
-                            <th>Key</th>
-                            <th>Value</th>
-                            <th>Type</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for tag in node.tags %}
-                        <tr>
-                            <td class="font-mono">{{ tag.key }}</td>
-                            <td>{{ tag.value }}</td>
-                            <td class="opacity-70">{{ tag.value_type or 'string' }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+        <!-- Tags and Map Grid -->
+        {% set ns_map = namespace(lat=none, lon=none) %}
+        {% for tag in node.tags or [] %}
+            {% if tag.key == 'lat' %}
+                {% set ns_map.lat = tag.value %}
+            {% elif tag.key == 'lon' %}
+                {% set ns_map.lon = tag.value %}
+            {% endif %}
+        {% endfor %}
+
+        <div class="grid grid-cols-1 {% if ns_map.lat and ns_map.lon %}lg:grid-cols-2{% endif %} gap-6 mt-6">
+            <!-- Tags -->
+            {% if node.tags %}
+            <div>
+                <h3 class="font-semibold opacity-70 mb-2">Tags</h3>
+                <div class="overflow-x-auto">
+                    <table class="table table-compact w-full">
+                        <thead>
+                            <tr>
+                                <th>Key</th>
+                                <th>Value</th>
+                                <th>Type</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for tag in node.tags %}
+                            <tr>
+                                <td class="font-mono">{{ tag.key }}</td>
+                                <td>{{ tag.value }}</td>
+                                <td class="opacity-70">{{ tag.value_type or 'string' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
+            {% endif %}
+
+            <!-- Location Map -->
+            {% if ns_map.lat and ns_map.lon %}
+            <div>
+                <h3 class="font-semibold opacity-70 mb-2">Location</h3>
+                <div id="node-map" class="mb-2"></div>
+                <div class="text-sm opacity-70">
+                    <p>Coordinates: {{ ns_map.lat }}, {{ ns_map.lon }}</p>
+                </div>
+            </div>
+            {% endif %}
         </div>
-        {% endif %}
     </div>
 </div>
 
@@ -206,5 +253,69 @@
     <span>Node not found: {{ public_key }}</span>
 </div>
 <a href="/nodes" class="btn btn-primary mt-4">Back to Nodes</a>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+{% if node %}
+{% set ns_map = namespace(lat=none, lon=none, name=none) %}
+{% for tag in node.tags or [] %}
+    {% if tag.key == 'lat' %}
+        {% set ns_map.lat = tag.value %}
+    {% elif tag.key == 'lon' %}
+        {% set ns_map.lon = tag.value %}
+    {% elif tag.key == 'name' %}
+        {% set ns_map.name = tag.value %}
+    {% endif %}
+{% endfor %}
+{% if ns_map.lat and ns_map.lon %}
+<script>
+    // Initialize map centered on the node's location
+    const nodeLat = {{ ns_map.lat }};
+    const nodeLon = {{ ns_map.lon }};
+    const nodeName = {{ (ns_map.name or node.name or 'Unnamed Node') | tojson }};
+    const nodeType = {{ (node.adv_type or '') | tojson }};
+    const publicKey = {{ node.public_key | tojson }};
+
+    const map = L.map('node-map').setView([nodeLat, nodeLon], 15);
+
+    // Add tile layer
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    // Get emoji marker based on node type
+    function getNodeEmoji(type) {
+        const normalizedType = type ? type.toLowerCase() : null;
+        if (normalizedType === 'chat') return '💬';
+        if (normalizedType === 'repeater') return '📡';
+        if (normalizedType === 'room') return '🪧';
+        return '📍';
+    }
+
+    // Create marker icon (just the emoji, no label)
+    const emoji = getNodeEmoji(nodeType);
+    const icon = L.divIcon({
+        className: 'custom-div-icon',
+        html: `<span style="font-size: 32px; text-shadow: 0 0 3px #1a237e, 0 0 6px #1a237e, 0 1px 2px rgba(0,0,0,0.7);">${emoji}</span>`,
+        iconSize: [32, 32],
+        iconAnchor: [16, 16]
+    });
+
+    // Add marker
+    const marker = L.marker([nodeLat, nodeLon], { icon: icon }).addTo(map);
+
+    // Add popup (shown on click, not by default)
+    marker.bindPopup(`
+        <div class="p-2">
+            <h3 class="font-bold text-lg mb-2">${emoji} ${nodeName}</h3>
+            <div class="space-y-1 text-sm">
+                ${nodeType ? `<p><span class="opacity-70">Type:</span> ${nodeType}</p>` : ''}
+                <p><span class="opacity-70">Coordinates:</span> ${nodeLat.toFixed(4)}, ${nodeLon.toFixed(4)}</p>
+            </div>
+        </div>
+    `);
+</script>
+{% endif %}
 {% endif %}
 {% endblock %}
