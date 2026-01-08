@@ -16,6 +16,7 @@ async def nodes_list(
     request: Request,
     search: str | None = Query(None, description="Search term"),
     adv_type: str | None = Query(None, description="Filter by node type"),
+    member_id: str | None = Query(None, description="Filter by member"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
 ) -> HTMLResponse:
@@ -33,12 +34,22 @@ async def nodes_list(
         params["search"] = search
     if adv_type:
         params["adv_type"] = adv_type
+    if member_id:
+        params["member_id"] = member_id
 
     # Fetch nodes from API
     nodes = []
     total = 0
+    members = []
 
     try:
+        # Fetch members for dropdown
+        members_response = await request.app.state.http_client.get(
+            "/api/v1/members", params={"limit": 100}
+        )
+        if members_response.status_code == 200:
+            members = members_response.json().get("items", [])
+
         response = await request.app.state.http_client.get(
             "/api/v1/nodes", params=params
         )
@@ -62,6 +73,8 @@ async def nodes_list(
             "total_pages": total_pages,
             "search": search or "",
             "adv_type": adv_type or "",
+            "member_id": member_id or "",
+            "members": members,
         }
     )
 

@@ -1,6 +1,6 @@
 # MeshCore Hub
 
-Python 3.11+ platform for managing and orchestrating MeshCore mesh networks.
+Python 3.13+ platform for managing and orchestrating MeshCore mesh networks.
 
 ![MeshCore Hub Web Dashboard](docs/images/web.png)
 

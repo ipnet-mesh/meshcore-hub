@@ -22,6 +22,7 @@ async def list_nodes(
         None, description="Search in name tag, node name, or public key"
     ),
     adv_type: Optional[str] = Query(None, description="Filter by advertisement type"),
+    member_id: Optional[str] = Query(None, description="Filter by member_id tag value"),
     limit: int = Query(50, ge=1, le=500, description="Page size"),
     offset: int = Query(0, ge=0, description="Page offset"),
 ) -> NodeList:
@@ -47,6 +48,16 @@ async def list_nodes(
 
     if adv_type:
         query = query.where(Node.adv_type == adv_type)
+
+    if member_id:
+        # Filter nodes that have a member_id tag with the specified value
+        query = query.where(
+            Node.id.in_(
+                select(NodeTag.node_id).where(
+                    NodeTag.key == "member_id", NodeTag.value == member_id
+                )
+            )
+        )
 
     # Get total count
     count_query = select(func.count()).select_from(query.subquery())

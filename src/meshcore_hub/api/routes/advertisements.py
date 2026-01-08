@@ -96,6 +96,9 @@ async def list_advertisements(
     received_by: Optional[str] = Query(
         None, description="Filter by receiver node public key"
     ),
+    member_id: Optional[str] = Query(
+        None, description="Filter by member_id tag value of source node"
+    ),
     since: Optional[datetime] = Query(None, description="Start timestamp"),
     until: Optional[datetime] = Query(None, description="End timestamp"),
     limit: int = Query(50, ge=1, le=100, description="Page size"),
@@ -142,6 +145,16 @@ async def list_advertisements(
 
     if received_by:
         query = query.where(ReceiverNode.public_key == received_by)
+
+    if member_id:
+        # Filter advertisements from nodes that have a member_id tag with the specified value
+        query = query.where(
+            SourceNode.id.in_(
+                select(NodeTag.node_id).where(
+                    NodeTag.key == "member_id", NodeTag.value == member_id
+                )
+            )
+        )
 
     if since:
         query = query.where(Advertisement.received_at >= since)

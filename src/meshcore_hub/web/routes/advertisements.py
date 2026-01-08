@@ -15,6 +15,8 @@ router = APIRouter()
 async def advertisements_list(
     request: Request,
     search: str | None = Query(None, description="Search term"),
+    member_id: str | None = Query(None, description="Filter by member"),
+    public_key: str | None = Query(None, description="Filter by node public key"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(50, ge=1, le=100, description="Items per page"),
 ) -> HTMLResponse:
@@ -30,12 +32,41 @@ async def advertisements_list(
     params: dict[str, int | str] = {"limit": limit, "offset": offset}
     if search:
         params["search"] = search
+    if member_id:
+        params["member_id"] = member_id
+    if public_key:
+        params["public_key"] = public_key
 
     # Fetch advertisements from API
     advertisements = []
     total = 0
+    members = []
+    nodes = []
 
     try:
+        # Fetch members for dropdown
+        members_response = await request.app.state.http_client.get(
+            "/api/v1/members", params={"limit": 100}
+        )
+        if members_response.status_code == 200:
+            members = members_response.json().get("items", [])
+
+        # Fetch nodes for dropdown
+        nodes_response = await request.app.state.http_client.get(
+            "/api/v1/nodes", params={"limit": 500}
+        )
+        if nodes_response.status_code == 200:
+            nodes = nodes_response.json().get("items", [])
+
+            # Sort nodes alphabetically by display name
+            def get_node_display_name(node: dict) -> str:
+                for tag in node.get("tags") or []:
+                    if tag.get("key") == "name":
+                        return str(tag.get("value", "")).lower()
+                return str(node.get("name") or node.get("public_key", "")).lower()
+
+            nodes.sort(key=get_node_display_name)
+
         response = await request.app.state.http_client.get(
             "/api/v1/advertisements", params=params
         )
@@ -58,6 +89,10 @@ async def advertisements_list(
             "limit": limit,
             "total_pages": total_pages,
             "search": search or "",
+            "member_id": member_id or "",
+            "public_key": public_key or "",
+            "members": members,
+            "nodes": nodes,
         }
     )
 

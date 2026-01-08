@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import pagination %}
 
 {% block title %}{{ network_name }} - Messages{% endblock %}
 
@@ -42,8 +43,10 @@
                     {% endfor %}
                 </select>
             </div>
-            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
-            <a href="/messages" class="btn btn-ghost btn-sm">Clear</a>
+            <div class="flex gap-2 w-full sm:w-auto">
+                <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+                <a href="/messages" class="btn btn-ghost btn-sm">Clear</a>
+            </div>
         </form>
     </div>
 </div>
@@ -162,32 +165,5 @@
     </table>
 </div>
 
-<!-- Pagination -->
-{% if total_pages > 1 %}
-<div class="flex justify-center mt-6">
-    <div class="join">
-        {% if page > 1 %}
-        <a href="?page={{ page - 1 }}&message_type={{ message_type }}&channel_idx={{ channel_idx or '' }}&limit={{ limit }}" class="join-item btn btn-sm">Previous</a>
-        {% else %}
-        <button class="join-item btn btn-sm btn-disabled">Previous</button>
-        {% endif %}
-
-        {% for p in range(1, total_pages + 1) %}
-            {% if p == page %}
-            <button class="join-item btn btn-sm btn-active">{{ p }}</button>
-            {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
-            <a href="?page={{ p }}&message_type={{ message_type }}&channel_idx={{ channel_idx or '' }}&limit={{ limit }}" class="join-item btn btn-sm">{{ p }}</a>
-            {% elif p == 2 or p == total_pages - 1 %}
-            <button class="join-item btn btn-sm btn-disabled">...</button>
-            {% endif %}
-        {% endfor %}
-
-        {% if page < total_pages %}
-        <a href="?page={{ page + 1 }}&message_type={{ message_type }}&channel_idx={{ channel_idx or '' }}&limit={{ limit }}" class="join-item btn btn-sm">Next</a>
-        {% else %}
-        <button class="join-item btn btn-sm btn-disabled">Next</button>
-        {% endif %}
-    </div>
-</div>
-{% endif %}
+{{ pagination(page, total_pages, {"message_type": message_type, "channel_idx": channel_idx, "limit": limit}) }}
 {% endblock %}
