@@ -329,6 +329,30 @@ class MockMeshCoreDevice(BaseMeshCoreDevice):
         """
         return self.get_contacts()
 
+    def remove_contact(self, public_key: str) -> bool:
+        """Remove a contact from the mock device's contact database."""
+        if not self._connected:
+            logger.error("Cannot remove contact: not connected")
+            return False
+
+        # Find and remove the contact from mock_config.nodes
+        for i, node in enumerate(self.mock_config.nodes):
+            if node.public_key == public_key:
+                del self.mock_config.nodes[i]
+                logger.info(f"Mock: Removed contact {public_key[:12]}...")
+                return True
+
+        logger.warning(f"Mock: Contact {public_key[:12]}... not found")
+        return True  # Return True even if not found (idempotent)
+
+    def schedule_remove_contact(self, public_key: str) -> bool:
+        """Schedule a remove_contact request.
+
+        For the mock device, this is the same as remove_contact() since we
+        don't have a real async event loop.
+        """
+        return self.remove_contact(public_key)
+
     def run(self) -> None:
         """Run the mock device event loop."""
         self._running = True

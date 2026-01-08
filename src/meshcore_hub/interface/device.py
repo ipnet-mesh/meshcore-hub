@@ -212,6 +212,32 @@ class BaseMeshCoreDevice(ABC):
         pass
 
     @abstractmethod
+    def remove_contact(self, public_key: str) -> bool:
+        """Remove a contact from the device's contact database.
+
+        Args:
+            public_key: The 64-character hex public key of the contact to remove
+
+        Returns:
+            True if contact was removed successfully
+        """
+        pass
+
+    @abstractmethod
+    def schedule_remove_contact(self, public_key: str) -> bool:
+        """Schedule a remove_contact request on the event loop.
+
+        This is safe to call from event handlers while the event loop is running.
+
+        Args:
+            public_key: The 64-character hex public key of the contact to remove
+
+        Returns:
+            True if request was scheduled successfully
+        """
+        pass
+
+    @abstractmethod
     def run(self) -> None:
         """Run the device event loop (blocking)."""
         pass
@@ -625,6 +651,54 @@ class MeshCoreDevice(BaseMeshCoreDevice):
             return True
         except Exception as e:
             logger.error(f"Failed to schedule get contacts: {e}")
+            return False
+
+    def remove_contact(self, public_key: str) -> bool:
+        """Remove a contact from the device's contact database.
+
+        Note: This method should only be called before the event loop is running
+        (e.g., during initialization). For calling during event processing,
+        use schedule_remove_contact() instead.
+        """
+        if not self._connected or not self._mc:
+            logger.error("Cannot remove contact: not connected")
+            return False
+
+        try:
+
+            async def _remove_contact() -> None:
+                await self._mc.commands.remove_contact(public_key)
+
+            self._loop.run_until_complete(_remove_contact())
+            logger.info(f"Removed contact {public_key[:12]}...")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to remove contact: {e}")
+            return False
+
+    def schedule_remove_contact(self, public_key: str) -> bool:
+        """Schedule a remove_contact request on the event loop.
+
+        This is safe to call from event handlers while the event loop is running.
+        The request is scheduled as a task on the event loop.
+
+        Returns:
+            True if request was scheduled, False if device not connected
+        """
+        if not self._connected or not self._mc:
+            logger.error("Cannot remove contact: not connected")
+            return False
+
+        try:
+
+            async def _remove_contact() -> None:
+                await self._mc.commands.remove_contact(public_key)
+
+            asyncio.run_coroutine_threadsafe(_remove_contact(), self._loop)
+            logger.debug(f"Scheduled removal of contact {public_key[:12]}...")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to schedule remove contact: {e}")
             return False
 
     def run(self) -> None:

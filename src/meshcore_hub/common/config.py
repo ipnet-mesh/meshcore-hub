@@ -78,6 +78,17 @@ class InterfaceSettings(CommonSettings):
         default=None, description="Device/node name (optional)"
     )
 
+    # Contact cleanup settings
+    contact_cleanup_enabled: bool = Field(
+        default=True,
+        description="Enable automatic removal of stale contacts from companion node",
+    )
+    contact_cleanup_days: int = Field(
+        default=7,
+        description="Remove contacts not advertised for this many days",
+        ge=1,
+    )
+
 
 class CollectorSettings(CommonSettings):
     """Settings for the Collector component."""

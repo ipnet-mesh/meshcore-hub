@@ -18,7 +18,7 @@ This document provides context and guidelines for AI coding assistants working o
 
 ## Project Overview
 
-MeshCore Hub is a Python 3.11+ monorepo for managing and orchestrating MeshCore mesh networks. It consists of five main components:
+MeshCore Hub is a Python 3.13+ monorepo for managing and orchestrating MeshCore mesh networks. It consists of five main components:
 
 - **meshcore_interface**: Serial/USB interface to MeshCore companion nodes, publishes/subscribes to MQTT
 - **meshcore_collector**: Collects MeshCore events from MQTT and stores them in a database
@@ -37,7 +37,7 @@ MeshCore Hub is a Python 3.11+ monorepo for managing and orchestrating MeshCore 
 
 | Category | Technology |
 |----------|------------|
-| Language | Python 3.11+ |
+| Language | Python 3.13+ |
 | Package Management | pip with pyproject.toml |
 | CLI Framework | Click |
 | Configuration | Pydantic Settings |
@@ -545,6 +545,22 @@ When enabled, the collector automatically removes nodes where:
 
 **Note:** Both event data and node cleanup run on the same schedule (DATA_RETENTION_INTERVAL_HOURS).
 
+**Contact Cleanup (Interface RECEIVER):**
+
+The interface RECEIVER mode can automatically remove stale contacts from the MeshCore companion node's contact database. This prevents the companion node from resyncing old/dead contacts back to the collector, freeing up memory on the device (typically limited to ~100 contacts).
+
+| Variable | Description |
+|----------|-------------|
+| `CONTACT_CLEANUP_ENABLED` | Enable automatic removal of stale contacts (default: true) |
+| `CONTACT_CLEANUP_DAYS` | Remove contacts not advertised for this many days (default: 7) |
+
+When enabled, during each contact sync the receiver checks each contact's `last_advert` timestamp:
+- Contacts with `last_advert` older than `CONTACT_CLEANUP_DAYS` are removed from the device
+- Stale contacts are not published to MQTT (preventing collector database pollution)
+- Contacts without a `last_advert` timestamp are preserved (no removal without data)
+
+This cleanup runs automatically whenever the receiver syncs contacts (on startup and after each advertisement event).
+
 Manual cleanup can be triggered at any time with:
 ```bash
 # Dry run to see what would be deleted
@@ -571,6 +587,10 @@ Webhook payload structure:
 2. **Database Migration Errors**: Ensure `DATA_HOME` is writable, run `meshcore-hub db upgrade`
 3. **Import Errors**: Ensure package is installed with `pip install -e .`
 4. **Type Errors**: Run `pre-commit run --all-files` to check type annotations and other issues
+5. **NixOS greenlet errors**: On NixOS, the pre-built greenlet wheel may fail with `libstdc++.so.6` errors. Rebuild from source:
+   ```bash
+   pip install --no-binary greenlet greenlet
+   ```
 
 ### Debugging
 

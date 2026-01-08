@@ -20,6 +20,9 @@ from meshcore_hub.interface.device import (
     create_device,
 )
 
+# Default contact cleanup settings
+DEFAULT_CONTACT_CLEANUP_DAYS = 7
+
 logger = logging.getLogger(__name__)
 
 
@@ -34,6 +37,8 @@ class Receiver:
         device: BaseMeshCoreDevice,
         mqtt_client: MQTTClient,
         device_name: Optional[str] = None,
+        contact_cleanup_enabled: bool = True,
+        contact_cleanup_days: int = DEFAULT_CONTACT_CLEANUP_DAYS,
     ):
         """Initialize receiver.
 
@@ -41,10 +46,14 @@ class Receiver:
             device: MeshCore device instance
             mqtt_client: MQTT client instance
             device_name: Optional device/node name to set on startup
+            contact_cleanup_enabled: Whether to remove stale contacts from device
+            contact_cleanup_days: Remove contacts not advertised for this many days
         """
         self.device = device
         self.mqtt = mqtt_client
         self.device_name = device_name
+        self.contact_cleanup_enabled = contact_cleanup_enabled
+        self.contact_cleanup_days = contact_cleanup_days
         self._running = False
         self._shutdown_event = threading.Event()
         self._device_connected = False
@@ -167,6 +176,8 @@ class Receiver:
 
         The device returns contacts as a dict keyed by public_key.
         We split this into individual 'contact' events for cleaner processing.
+        Stale contacts (not advertised for > contact_cleanup_days) are removed
+        from the device and not published.
 
         Args:
             payload: Dict of contacts keyed by public_key
@@ -188,10 +199,36 @@ class Receiver:
             return
 
         device_key = self.device.public_key  # Capture for type narrowing
-        count = 0
+        current_time = int(time.time())
+        stale_threshold = current_time - (self.contact_cleanup_days * 24 * 60 * 60)
+
+        published_count = 0
+        removed_count = 0
+
         for contact in contacts:
             if not isinstance(contact, dict):
                 continue
+
+            public_key = contact.get("public_key")
+            if not public_key:
+                continue
+
+            # Check if contact is stale based on last_advert timestamp
+            # Only check if cleanup is enabled and last_advert exists
+            if self.contact_cleanup_enabled:
+                last_advert = contact.get("last_advert")
+                if last_advert is not None and last_advert > 0:
+                    if last_advert < stale_threshold:
+                        # Contact is stale - remove from device
+                        adv_name = contact.get("adv_name", contact.get("name", ""))
+                        logger.info(
+                            f"Removing stale contact {public_key[:12]}... "
+                            f"({adv_name}) - last advertised "
+                            f"{(current_time - last_advert) // 86400} days ago"
+                        )
+                        self.device.schedule_remove_contact(public_key)
+                        removed_count += 1
+                        continue  # Don't publish stale contacts
 
             try:
                 self.mqtt.publish_event(
@@ -199,11 +236,17 @@ class Receiver:
                     "contact",  # Use singular 'contact' for individual events
                     contact,
                 )
-                count += 1
+                published_count += 1
             except Exception as e:
                 logger.error(f"Failed to publish contact event: {e}")
 
-        logger.info(f"Published {count} contact events to MQTT")
+        if removed_count > 0:
+            logger.info(
+                f"Contact sync: published {published_count}, "
+                f"removed {removed_count} stale contacts"
+            )
+        else:
+            logger.info(f"Published {published_count} contact events to MQTT")
 
     def start(self) -> None:
         """Start the receiver."""
@@ -306,6 +349,8 @@ def create_receiver(
     mqtt_password: Optional[str] = None,
     mqtt_prefix: str = "meshcore",
     mqtt_tls: bool = False,
+    contact_cleanup_enabled: bool = True,
+    contact_cleanup_days: int = DEFAULT_CONTACT_CLEANUP_DAYS,
 ) -> Receiver:
     """Create a configured receiver instance.
 
@@ -321,6 +366,8 @@ def create_receiver(
         mqtt_password: MQTT password
         mqtt_prefix: MQTT topic prefix
         mqtt_tls: Enable TLS/SSL for MQTT connection
+        contact_cleanup_enabled: Whether to remove stale contacts from device
+        contact_cleanup_days: Remove contacts not advertised for this many days
 
     Returns:
         Configured Receiver instance
@@ -345,7 +392,13 @@ def create_receiver(
     )
     mqtt_client = MQTTClient(mqtt_config)
 
-    return Receiver(device, mqtt_client, device_name=device_name)
+    return Receiver(
+        device,
+        mqtt_client,
+        device_name=device_name,
+        contact_cleanup_enabled=contact_cleanup_enabled,
+        contact_cleanup_days=contact_cleanup_days,
+    )
 
 
 def run_receiver(
@@ -360,6 +413,8 @@ def run_receiver(
     mqtt_password: Optional[str] = None,
     mqtt_prefix: str = "meshcore",
     mqtt_tls: bool = False,
+    contact_cleanup_enabled: bool = True,
+    contact_cleanup_days: int = DEFAULT_CONTACT_CLEANUP_DAYS,
 ) -> None:
     """Run the receiver (blocking).
 
@@ -377,6 +432,8 @@ def run_receiver(
         mqtt_password: MQTT password
         mqtt_prefix: MQTT topic prefix
         mqtt_tls: Enable TLS/SSL for MQTT connection
+        contact_cleanup_enabled: Whether to remove stale contacts from device
+        contact_cleanup_days: Remove contacts not advertised for this many days
     """
     receiver = create_receiver(
         port=port,
@@ -390,6 +447,8 @@ def run_receiver(
         mqtt_password=mqtt_password,
         mqtt_prefix=mqtt_prefix,
         mqtt_tls=mqtt_tls,
+        contact_cleanup_enabled=contact_cleanup_enabled,
+        contact_cleanup_days=contact_cleanup_days,
     )
 
     # Set up signal handlers

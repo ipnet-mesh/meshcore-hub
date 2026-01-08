@@ -101,6 +101,19 @@ def interface() -> None:
     help="Enable TLS/SSL for MQTT connection",
 )
 @click.option(
+    "--contact-cleanup/--no-contact-cleanup",
+    default=True,
+    envvar="CONTACT_CLEANUP_ENABLED",
+    help="Enable/disable automatic removal of stale contacts (RECEIVER mode only)",
+)
+@click.option(
+    "--contact-cleanup-days",
+    type=int,
+    default=7,
+    envvar="CONTACT_CLEANUP_DAYS",
+    help="Remove contacts not advertised for this many days (RECEIVER mode only)",
+)
+@click.option(
     "--log-level",
     type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]),
     default="INFO",
@@ -120,6 +133,8 @@ def run(
     mqtt_password: str | None,
     prefix: str,
     mqtt_tls: bool,
+    contact_cleanup: bool,
+    contact_cleanup_days: int,
     log_level: str,
 ) -> None:
     """Run the interface component.
@@ -162,6 +177,8 @@ def run(
             mqtt_password=mqtt_password,
             mqtt_prefix=prefix,
             mqtt_tls=mqtt_tls,
+            contact_cleanup_enabled=contact_cleanup,
+            contact_cleanup_days=contact_cleanup_days,
         )
     elif mode_upper == "SENDER":
         from meshcore_hub.interface.sender import run_sender
@@ -262,6 +279,19 @@ def run(
     envvar="MQTT_TLS",
     help="Enable TLS/SSL for MQTT connection",
 )
+@click.option(
+    "--contact-cleanup/--no-contact-cleanup",
+    default=True,
+    envvar="CONTACT_CLEANUP_ENABLED",
+    help="Enable/disable automatic removal of stale contacts",
+)
+@click.option(
+    "--contact-cleanup-days",
+    type=int,
+    default=7,
+    envvar="CONTACT_CLEANUP_DAYS",
+    help="Remove contacts not advertised for this many days",
+)
 def receiver(
     port: str,
     baud: int,
@@ -274,6 +304,8 @@ def receiver(
     mqtt_password: str | None,
     prefix: str,
     mqtt_tls: bool,
+    contact_cleanup: bool,
+    contact_cleanup_days: int,
 ) -> None:
     """Run interface in RECEIVER mode.
 
@@ -293,12 +325,15 @@ def receiver(
         baud=baud,
         mock=mock,
         node_address=node_address,
+        device_name=device_name,
         mqtt_host=mqtt_host,
         mqtt_port=mqtt_port,
         mqtt_username=mqtt_username,
         mqtt_password=mqtt_password,
         mqtt_prefix=prefix,
         mqtt_tls=mqtt_tls,
+        contact_cleanup_enabled=contact_cleanup,
+        contact_cleanup_days=contact_cleanup_days,
     )
 
 
