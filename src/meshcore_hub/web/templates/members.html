@@ -50,7 +50,7 @@
                             📦
                             {% endif %}
                         </span>
-                        <div>
+                        <div class="flex-1 min-w-0">
                             {% if display_name %}
                             <div class="font-medium text-sm">{{ display_name }}</div>
                             <div class="font-mono text-xs opacity-60">{{ node.public_key[:12] }}...</div>
@@ -58,6 +58,9 @@
                             <div class="font-mono text-sm">{{ node.public_key[:12] }}...</div>
                             {% endif %}
                         </div>
+                        {% if node.last_seen %}
+                        <time class="text-xs opacity-60 whitespace-nowrap" datetime="{{ node.last_seen }}" title="{{ node.last_seen[:19].replace('T', ' ') }}" data-relative-time>-</time>
+                        {% endif %}
                     </a>
                     {% endfor %}
             </div>

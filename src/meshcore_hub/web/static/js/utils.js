@@ -56,8 +56,23 @@ function populateReceiverTooltips() {
     });
 }
 
+/**
+ * Populate <time> elements with data-relative-time attribute
+ * Uses the datetime attribute as the timestamp source
+ */
+function populateRelativeTimeElements() {
+    document.querySelectorAll('time[data-relative-time]').forEach(el => {
+        const timestamp = el.getAttribute('datetime');
+        if (timestamp) {
+            const relTime = formatRelativeTime(timestamp);
+            el.textContent = relTime ? `${relTime} ago` : '';
+        }
+    });
+}
+
 // Auto-populate when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     populateRelativeTimestamps();
     populateReceiverTooltips();
+    populateRelativeTimeElements();
 });
