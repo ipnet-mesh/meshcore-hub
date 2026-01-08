@@ -48,8 +48,58 @@
     </div>
 </div>
 
-<!-- Messages Table -->
-<div class="overflow-x-auto overflow-y-visible bg-base-100 rounded-box shadow">
+<!-- Messages List - Mobile Card View -->
+<div class="lg:hidden space-y-3">
+    {% for msg in messages %}
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body p-3">
+            <div class="flex items-start justify-between gap-2">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="text-lg flex-shrink-0" title="{{ msg.message_type|capitalize }}">
+                        {% if msg.message_type == 'channel' %}📻{% else %}👤{% endif %}
+                    </span>
+                    <div class="min-w-0">
+                        <div class="font-medium text-sm truncate">
+                            {% if msg.message_type == 'channel' %}
+                            <span class="font-mono">CH{{ msg.channel_idx }}</span>
+                            {% else %}
+                                {% if msg.sender_tag_name or msg.sender_name %}
+                                {{ msg.sender_tag_name or msg.sender_name }}
+                                {% else %}
+                                <span class="font-mono text-xs">{{ (msg.pubkey_prefix or '-')[:12] }}</span>
+                                {% endif %}
+                            {% endif %}
+                        </div>
+                        <div class="text-xs opacity-60">
+                            {{ msg.received_at[:16].replace('T', ' ') if msg.received_at else '-' }}
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    {% if msg.snr is not none %}
+                    <span class="badge badge-ghost badge-xs">{{ "%.1f"|format(msg.snr) }}dB</span>
+                    {% endif %}
+                    {% if msg.receivers and msg.receivers|length >= 1 %}
+                    <div class="flex gap-0.5">
+                        {% for recv in msg.receivers %}
+                        <a href="/nodes/{{ recv.public_key }}" class="text-sm hover:opacity-70" title="{{ recv.tag_name or recv.name or recv.public_key[:12] }}">📡</a>
+                        {% endfor %}
+                    </div>
+                    {% elif msg.received_by %}
+                    <a href="/nodes/{{ msg.received_by }}" class="text-sm hover:opacity-70" title="{{ msg.receiver_tag_name or msg.receiver_name or msg.received_by[:12] }}">📡</a>
+                    {% endif %}
+                </div>
+            </div>
+            <p class="text-sm mt-2 break-words whitespace-pre-wrap">{{ msg.text or '-' }}</p>
+        </div>
+    </div>
+    {% else %}
+    <div class="text-center py-8 opacity-70">No messages found.</div>
+    {% endfor %}
+</div>
+
+<!-- Messages Table - Desktop View -->
+<div class="hidden lg:block overflow-x-auto overflow-y-visible bg-base-100 rounded-box shadow">
     <table class="table table-zebra">
         <thead>
             <tr>
