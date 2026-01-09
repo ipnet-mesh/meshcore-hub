@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import DateTime, Index, Integer, String
+from sqlalchemy import DateTime, Float, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from meshcore_hub.common.models.base import Base, TimestampMixin, UUIDMixin, utc_now
@@ -23,6 +23,8 @@ class Node(Base, UUIDMixin, TimestampMixin):
         flags: Capability/status flags bitmask
         first_seen: Timestamp of first advertisement
         last_seen: Timestamp of most recent activity
+        lat: GPS latitude coordinate (if available)
+        lon: GPS longitude coordinate (if available)
         created_at: Record creation timestamp
         updated_at: Record update timestamp
     """
@@ -55,6 +57,14 @@ class Node(Base, UUIDMixin, TimestampMixin):
     last_seen: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),
         default=None,
+        nullable=True,
+    )
+    lat: Mapped[Optional[float]] = mapped_column(
+        Float,
+        nullable=True,
+    )
+    lon: Mapped[Optional[float]] = mapped_column(
+        Float,
         nullable=True,
     )
 

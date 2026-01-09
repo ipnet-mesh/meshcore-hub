@@ -62,6 +62,8 @@ class NodeRead(BaseModel):
     last_seen: Optional[datetime] = Field(
         default=None, description="Last activity timestamp"
     )
+    lat: Optional[float] = Field(default=None, description="GPS latitude coordinate")
+    lon: Optional[float] = Field(default=None, description="GPS longitude coordinate")
     created_at: datetime = Field(..., description="Record creation timestamp")
     updated_at: datetime = Field(..., description="Record update timestamp")
     tags: list[NodeTagRead] = Field(default_factory=list, description="Node tags")
