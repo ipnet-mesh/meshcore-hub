@@ -47,6 +47,10 @@ def handle_contact(
     # Device uses 'adv_name' for the advertised name
     name = payload.get("adv_name") or payload.get("name")
 
+    # GPS coordinates (optional)
+    lat = payload.get("adv_lat")
+    lon = payload.get("adv_lon")
+
     logger.info(f"Processing contact: {contact_key[:12]}... adv_name={name}")
 
     # Device uses numeric 'type' field, convert to string
@@ -73,6 +77,11 @@ def handle_contact(
                 node.name = name
             if node_type and not node.adv_type:
                 node.adv_type = node_type
+            # Update GPS coordinates if provided
+            if lat is not None:
+                node.lat = lat
+            if lon is not None:
+                node.lon = lon
             # Do NOT update last_seen for contact sync - only advertisement events
             # should update last_seen since that's when the node was actually seen
         else:
@@ -84,6 +93,8 @@ def handle_contact(
                 adv_type=node_type,
                 first_seen=now,
                 last_seen=None,  # Will be set when we receive an advertisement
+                lat=lat,
+                lon=lon,
             )
             session.add(node)
             logger.info(f"Created node from contact: {contact_key[:12]}... ({name})")
