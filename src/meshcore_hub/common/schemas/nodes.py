@@ -38,6 +38,17 @@ class NodeTagUpdate(BaseModel):
     )
 
 
+class NodeTagMove(BaseModel):
+    """Schema for moving a node tag to a different node."""
+
+    new_public_key: str = Field(
+        ...,
+        min_length=64,
+        max_length=64,
+        description="Public key of the destination node",
+    )
+
+
 class NodeTagRead(BaseModel):
     """Schema for reading a node tag."""
 

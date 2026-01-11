@@ -255,6 +255,18 @@ class MockHttpClient:
         key = f"POST:{path}"
         return self._create_response(key)
 
+    async def put(
+        self, path: str, json: dict | None = None, params: dict | None = None
+    ) -> Response:
+        """Mock PUT request."""
+        key = f"PUT:{path}"
+        return self._create_response(key)
+
+    async def delete(self, path: str, params: dict | None = None) -> Response:
+        """Mock DELETE request."""
+        key = f"DELETE:{path}"
+        return self._create_response(key)
+
     async def aclose(self) -> None:
         """Mock close method."""
         pass

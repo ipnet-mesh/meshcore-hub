@@ -6,7 +6,12 @@ from sqlalchemy import select
 from meshcore_hub.api.auth import RequireAdmin, RequireRead
 from meshcore_hub.api.dependencies import DbSession
 from meshcore_hub.common.models import Node, NodeTag
-from meshcore_hub.common.schemas.nodes import NodeTagCreate, NodeTagRead, NodeTagUpdate
+from meshcore_hub.common.schemas.nodes import (
+    NodeTagCreate,
+    NodeTagMove,
+    NodeTagRead,
+    NodeTagUpdate,
+)
 
 router = APIRouter()
 
@@ -124,6 +129,58 @@ async def update_node_tag(
     if tag.value_type is not None:
         node_tag.value_type = tag.value_type
 
+    session.commit()
+    session.refresh(node_tag)
+
+    return NodeTagRead.model_validate(node_tag)
+
+
+@router.put("/nodes/{public_key}/tags/{key}/move", response_model=NodeTagRead)
+async def move_node_tag(
+    _: RequireAdmin,
+    session: DbSession,
+    public_key: str,
+    key: str,
+    data: NodeTagMove,
+) -> NodeTagRead:
+    """Move a node tag to a different node."""
+    # Find source node
+    source_query = select(Node).where(Node.public_key == public_key)
+    source_node = session.execute(source_query).scalar_one_or_none()
+
+    if not source_node:
+        raise HTTPException(status_code=404, detail="Source node not found")
+
+    # Find tag
+    tag_query = select(NodeTag).where(
+        (NodeTag.node_id == source_node.id) & (NodeTag.key == key)
+    )
+    node_tag = session.execute(tag_query).scalar_one_or_none()
+
+    if not node_tag:
+        raise HTTPException(status_code=404, detail="Tag not found")
+
+    # Find destination node
+    dest_query = select(Node).where(Node.public_key == data.new_public_key)
+    dest_node = session.execute(dest_query).scalar_one_or_none()
+
+    if not dest_node:
+        raise HTTPException(status_code=404, detail="Destination node not found")
+
+    # Check if tag already exists on destination node
+    conflict_query = select(NodeTag).where(
+        (NodeTag.node_id == dest_node.id) & (NodeTag.key == key)
+    )
+    conflict = session.execute(conflict_query).scalar_one_or_none()
+
+    if conflict:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Tag '{key}' already exists on destination node",
+        )
+
+    # Move tag to destination node
+    node_tag.node_id = dest_node.id
     session.commit()
     session.refresh(node_tag)
 
