@@ -55,6 +55,20 @@ def _get_auth_context(request: Request) -> dict:
     }
 
 
+def _is_authenticated(request: Request) -> bool:
+    """Check if user is authenticated via OAuth2Proxy headers."""
+    return bool(
+        request.headers.get("X-Forwarded-User")
+        or request.headers.get("X-Forwarded-Email")
+    )
+
+
+def _require_auth(request: Request) -> None:
+    """Require authentication, raise 403 if not authenticated."""
+    if not _is_authenticated(request):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+
 @router.get("/", response_class=HTMLResponse)
 async def admin_home(request: Request) -> HTMLResponse:
     """Render the admin page with OAuth2Proxy user info."""
@@ -64,6 +78,12 @@ async def admin_home(request: Request) -> HTMLResponse:
     context = get_network_context(request)
     context["request"] = request
     context.update(_get_auth_context(request))
+
+    # Check if user is authenticated
+    if not _is_authenticated(request):
+        return templates.TemplateResponse(
+            "admin/access_denied.html", context, status_code=403
+        )
 
     return templates.TemplateResponse("admin/index.html", context)
 
@@ -82,6 +102,12 @@ async def admin_node_tags(
     context = get_network_context(request)
     context["request"] = request
     context.update(_get_auth_context(request))
+
+    # Check if user is authenticated
+    if not _is_authenticated(request):
+        return templates.TemplateResponse(
+            "admin/access_denied.html", context, status_code=403
+        )
 
     # Flash messages from redirects
     context["message"] = message
@@ -146,6 +172,7 @@ async def admin_create_node_tag(
 ) -> RedirectResponse:
     """Create a new node tag."""
     _check_admin_enabled(request)
+    _require_auth(request)
 
     try:
         response = await request.app.state.http_client.post(
@@ -187,6 +214,7 @@ async def admin_update_node_tag(
 ) -> RedirectResponse:
     """Update an existing node tag."""
     _check_admin_enabled(request)
+    _require_auth(request)
 
     try:
         response = await request.app.state.http_client.put(
@@ -224,6 +252,7 @@ async def admin_move_node_tag(
 ) -> RedirectResponse:
     """Move a node tag to a different node."""
     _check_admin_enabled(request)
+    _require_auth(request)
 
     try:
         response = await request.app.state.http_client.put(
@@ -263,6 +292,7 @@ async def admin_delete_node_tag(
 ) -> RedirectResponse:
     """Delete a node tag."""
     _check_admin_enabled(request)
+    _require_auth(request)
 
     try:
         response = await request.app.state.http_client.delete(
