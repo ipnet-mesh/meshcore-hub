@@ -249,7 +249,9 @@ services:
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - API_BASE_URL=http://api:8000
-      - API_KEY=${API_READ_KEY:-}
+      # Use ADMIN key to allow write operations from admin interface
+      # Falls back to READ key if ADMIN key is not set
+      - API_KEY=${API_ADMIN_KEY:-${API_READ_KEY:-}}
       - WEB_HOST=0.0.0.0
       - WEB_PORT=8080
       - WEB_ADMIN_ENABLED=${WEB_ADMIN_ENABLED:-false}
