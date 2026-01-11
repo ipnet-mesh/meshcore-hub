@@ -97,6 +97,10 @@ async def admin_node_tags(
         if response.status_code == 200:
             data = response.json()
             nodes = data.get("items", [])
+            # Sort nodes alphabetically by name (unnamed nodes at the end)
+            nodes.sort(
+                key=lambda n: (n.get("name") is None, (n.get("name") or "").lower())
+            )
     except Exception as e:
         logger.exception("Failed to fetch nodes: %s", e)
         context["error"] = "Failed to fetch nodes"
