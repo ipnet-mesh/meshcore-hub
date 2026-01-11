@@ -114,7 +114,7 @@
                 <a href="{{ network_contact_github }}" target="_blank" rel="noopener noreferrer" class="link link-hover">GitHub</a>
                 {% endif %}
             </p>
-            <p class="text-xs opacity-50 mt-2">Powered by <a href="https://github.com/ipnet-mesh/meshcore-hub" target="_blank" rel="noopener noreferrer" class="link link-hover">MeshCore Hub</a> {{ version }}</p>
+            <p class="text-xs opacity-50 mt-2">{% if admin_enabled %}<a href="/a/" class="link link-hover">Admin</a> | {% endif %}Powered by <a href="https://github.com/ipnet-mesh/meshcore-hub" target="_blank" rel="noopener noreferrer" class="link link-hover">MeshCore Hub</a> {{ version }}</p>
         </aside>
     </footer>
 

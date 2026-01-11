@@ -3,7 +3,7 @@
 {% block title %}{{ network_name }} - Admin{% endblock %}
 
 {% block content %}
-<div class="flex items-center justify-between mb-6">
+<div class="flex items-center justify-between mb-4">
     <div>
         <h1 class="text-3xl font-bold">Admin</h1>
         <div class="text-sm breadcrumbs">
@@ -16,8 +16,28 @@
     <a href="/oauth2/sign_out" class="btn btn-outline btn-sm">Sign Out</a>
 </div>
 
+<!-- Authenticated User Info -->
+<div class="flex flex-wrap items-center gap-4 text-sm opacity-70 mb-6">
+    {% if auth_username or auth_user %}
+    <span class="flex items-center gap-1.5">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        </svg>
+        {{ auth_username or auth_user }}
+    </span>
+    {% endif %}
+    {% if auth_email %}
+    <span class="flex items-center gap-1.5">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        </svg>
+        {{ auth_email }}
+    </span>
+    {% endif %}
+</div>
+
 <!-- Navigation Cards -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
     <a href="/a/node-tags" class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow">
         <div class="card-body">
             <h2 class="card-title">
@@ -29,34 +49,5 @@
             <p>Manage custom tags and metadata for network nodes.</p>
         </div>
     </a>
-</div>
-
-<!-- Auth Info -->
-<div class="card bg-base-100 shadow-xl">
-    <div class="card-body">
-        <h2 class="card-title">Authenticated User</h2>
-        <div class="overflow-x-auto">
-            <table class="table">
-                <tbody>
-                    <tr>
-                        <th class="w-64">X-Forwarded-User</th>
-                        <td>{{ auth_user or '-' }}</td>
-                    </tr>
-                    <tr>
-                        <th>X-Forwarded-Preferred-Username</th>
-                        <td>{{ auth_username or '-' }}</td>
-                    </tr>
-                    <tr>
-                        <th>X-Forwarded-Email</th>
-                        <td>{{ auth_email or '-' }}</td>
-                    </tr>
-                    <tr>
-                        <th>X-Forwarded-Groups</th>
-                        <td>{{ auth_groups or '-' }}</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
 </div>
 {% endblock %}

@@ -175,5 +175,6 @@ def get_network_context(request: Request) -> dict:
         "network_contact_discord": request.app.state.network_contact_discord,
         "network_contact_github": request.app.state.network_contact_github,
         "network_welcome_text": request.app.state.network_welcome_text,
+        "admin_enabled": request.app.state.admin_enabled,
         "version": __version__,
     }
