@@ -19,7 +19,7 @@ class TagValue(BaseModel):
     """Schema for a tag value with type."""
 
     value: str | None = None
-    type: str = Field(default="string", pattern=r"^(string|number|boolean|coordinate)$")
+    type: str = Field(default="string", pattern=r"^(string|number|boolean)$")
 
 
 class NodeTags(BaseModel):

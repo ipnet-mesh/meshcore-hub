@@ -7,12 +7,12 @@
 #     elevation: 150               # number
 #     is_online: true              # boolean
 #
-# - Explicit type (for special types like coordinate):
-#     location:
-#       value: "37.7749,-122.4194"
-#       type: coordinate
+# - Explicit type (when you need to force a specific type):
+#     altitude:
+#       value: "150"
+#       type: number
 #
-# Supported types: string, number, boolean, coordinate
+# Supported types: string, number, boolean
 
 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef:
   friendly_name: Gateway Node

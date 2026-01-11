@@ -118,12 +118,18 @@ async def node_detail(request: Request, public_key: str) -> HTMLResponse:
         logger.warning(f"Failed to fetch node details from API: {e}")
         context["api_error"] = str(e)
 
+    # Check if admin editing is available
+    admin_enabled = getattr(request.app.state, "admin_enabled", False)
+    auth_user = request.headers.get("X-Forwarded-User")
+
     context.update(
         {
             "node": node,
             "advertisements": advertisements,
             "telemetry": telemetry,
             "public_key": public_key,
+            "admin_enabled": admin_enabled,
+            "is_authenticated": bool(auth_user),
         }
     )
 

@@ -97,9 +97,10 @@
 
         <div class="grid grid-cols-1 {% if ns_map.lat and ns_map.lon %}lg:grid-cols-2{% endif %} gap-6 mt-6">
             <!-- Tags -->
-            {% if node.tags %}
+            {% if node.tags or (admin_enabled and is_authenticated) %}
             <div>
                 <h3 class="font-semibold opacity-70 mb-2">Tags</h3>
+                {% if node.tags %}
                 <div class="overflow-x-auto">
                     <table class="table table-compact w-full">
                         <thead>
@@ -120,6 +121,14 @@
                         </tbody>
                     </table>
                 </div>
+                {% else %}
+                <p class="text-sm opacity-70 mb-2">No tags defined.</p>
+                {% endif %}
+                {% if admin_enabled and is_authenticated %}
+                <div class="mt-3">
+                    <a href="/a/node-tags?public_key={{ node.public_key }}" class="btn btn-sm btn-outline">{% if node.tags %}Edit Tags{% else %}Add Tags{% endif %}</a>
+                </div>
+                {% endif %}
             </div>
             {% endif %}
 

@@ -55,14 +55,14 @@ class TestNodeModel:
     def test_node_tags_relationship(self, db_session) -> None:
         """Test node-tag relationship."""
         node = Node(public_key="b" * 64, name="Tagged Node")
-        tag = NodeTag(key="location", value="51.5,-0.1", value_type="coordinate")
+        tag = NodeTag(key="altitude", value="150", value_type="number")
         node.tags.append(tag)
 
         db_session.add(node)
         db_session.commit()
 
         assert len(node.tags) == 1
-        assert node.tags[0].key == "location"
+        assert node.tags[0].key == "altitude"
 
 
 class TestMessageModel:

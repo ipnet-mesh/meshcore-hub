@@ -19,7 +19,7 @@ class NodeTagCreate(BaseModel):
         default=None,
         description="Tag value",
     )
-    value_type: Literal["string", "number", "boolean", "coordinate"] = Field(
+    value_type: Literal["string", "number", "boolean"] = Field(
         default="string",
         description="Value type hint",
     )
@@ -32,9 +32,20 @@ class NodeTagUpdate(BaseModel):
         default=None,
         description="Tag value",
     )
-    value_type: Optional[Literal["string", "number", "boolean", "coordinate"]] = Field(
+    value_type: Optional[Literal["string", "number", "boolean"]] = Field(
         default=None,
         description="Value type hint",
+    )
+
+
+class NodeTagMove(BaseModel):
+    """Schema for moving a node tag to a different node."""
+
+    new_public_key: str = Field(
+        ...,
+        min_length=64,
+        max_length=64,
+        description="Public key of the destination node",
     )
 
 

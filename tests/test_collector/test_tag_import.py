@@ -99,7 +99,7 @@ class TestLoadTagsFile:
         """Test loading file with full format (value and type)."""
         data = {
             "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef": {
-                "location": {"value": "52.0,1.0", "type": "coordinate"},
+                "is_active": {"value": "true", "type": "boolean"},
                 "altitude": {"value": "150", "type": "number"},
             }
         }
@@ -110,7 +110,7 @@ class TestLoadTagsFile:
 
             result = load_tags_file(f.name)
             key = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-            assert result[key]["location"]["type"] == "coordinate"
+            assert result[key]["is_active"]["type"] == "boolean"
             assert result[key]["altitude"]["type"] == "number"
 
         Path(f.name).unlink()

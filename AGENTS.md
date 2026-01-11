@@ -487,7 +487,7 @@ The database can be seeded with node tags and network members from YAML files in
 - `node_tags.yaml` - Node tag definitions (keyed by public_key)
 - `members.yaml` - Network member definitions
 
-Seeding is a separate process from the collector and must be run explicitly:
+**Important:** Seeding is NOT automatic and must be run explicitly. This prevents seed files from overwriting user changes made via the admin UI.
 
 ```bash
 # Native CLI
@@ -496,6 +496,8 @@ meshcore-hub collector seed
 # With Docker Compose
 docker compose --profile seed up
 ```
+
+**Note:** Once the admin UI is enabled (`WEB_ADMIN_ENABLED=true`), tags should be managed through the web interface rather than seed files.
 
 ### Webhook Configuration
 

@@ -139,7 +139,7 @@ services:
       - core
     restart: unless-stopped
     depends_on:
-      seed:
+      db-migrate:
         condition: service_completed_successfully
     volumes:
       - ${DATA_HOME:-./data}:/data
@@ -196,7 +196,7 @@ services:
       - core
     restart: unless-stopped
     depends_on:
-      seed:
+      db-migrate:
         condition: service_completed_successfully
       collector:
         condition: service_started
@@ -249,7 +249,9 @@ services:
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - API_BASE_URL=http://api:8000
-      - API_KEY=${API_READ_KEY:-}
+      # Use ADMIN key to allow write operations from admin interface
+      # Falls back to READ key if ADMIN key is not set
+      - API_KEY=${API_ADMIN_KEY:-${API_READ_KEY:-}}
       - WEB_HOST=0.0.0.0
       - WEB_PORT=8080
       - WEB_ADMIN_ENABLED=${WEB_ADMIN_ENABLED:-false}
@@ -293,7 +295,10 @@ services:
     command: ["db", "upgrade"]
 
   # ==========================================================================
-  # Seed Data - Import node_tags.json and members.json from SEED_HOME
+  # Seed Data - Import node_tags.yaml and members.yaml from SEED_HOME
+  # NOTE: This is NOT run automatically. Use --profile seed to run explicitly.
+  # Since tags are now managed via the admin UI, automatic seeding would
+  # overwrite user changes.
   # ==========================================================================
   seed:
     image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
@@ -302,8 +307,6 @@ services:
       dockerfile: Dockerfile
     container_name: meshcore-seed
     profiles:
-      - all
-      - core
       - seed
     restart: "no"
     depends_on:
@@ -320,7 +323,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       # Explicitly unset to use DATA_HOME-based default path
       - DATABASE_URL=
-    # Imports both node_tags.json and members.json if they exist
+    # Imports both node_tags.yaml and members.yaml if they exist
     command: ["collector", "seed"]
 
 # ==========================================================================

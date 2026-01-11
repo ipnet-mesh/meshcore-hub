@@ -21,7 +21,7 @@ class NodeTag(Base, UUIDMixin, TimestampMixin):
         node_id: Foreign key to nodes table
         key: Tag name/key
         value: Tag value (stored as text, can be JSON for typed values)
-        value_type: Type hint (string, number, boolean, coordinate)
+        value_type: Type hint (string, number, boolean)
         created_at: Record creation timestamp
         updated_at: Record update timestamp
     """

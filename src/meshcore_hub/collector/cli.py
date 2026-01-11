@@ -433,12 +433,12 @@ def import_tags_cmd(
     \b
     0123456789abcdef...:
       friendly_name: My Node
-      location:
-        value: "52.0,1.0"
-        type: coordinate
       altitude:
         value: "150"
         type: number
+      active:
+        value: "true"
+        type: boolean
 
     Shorthand is also supported (string values with default type):
 
@@ -447,7 +447,7 @@ def import_tags_cmd(
       friendly_name: My Node
       role: gateway
 
-    Supported types: string, number, boolean, coordinate
+    Supported types: string, number, boolean
     """
     from pathlib import Path
 

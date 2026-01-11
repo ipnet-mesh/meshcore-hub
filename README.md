@@ -471,21 +471,18 @@ Tags are keyed by public key in YAML format:
 fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210:
   friendly_name: Oakland Repeater
   altitude: 150
-  location:
-    value: "37.8044,-122.2712"
-    type: coordinate
 ```
 
 Tag values can be:
 - **YAML primitives** (auto-detected type): strings, numbers, booleans
-- **Explicit type** (for special types like coordinate):
+- **Explicit type** (when you need to force a specific type):
   ```yaml
-  location:
-    value: "37.7749,-122.4194"
-    type: coordinate
+  altitude:
+    value: "150"
+    type: number
   ```
 
-Supported types: `string`, `number`, `boolean`, `coordinate`
+Supported types: `string`, `number`, `boolean`
 
 ### Import Tags Manually
 
