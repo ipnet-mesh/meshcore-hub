@@ -50,6 +50,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 def create_app(
     api_url: str | None = None,
     api_key: str | None = None,
+    admin_enabled: bool | None = None,
     network_name: str | None = None,
     network_city: str | None = None,
     network_country: str | None = None,
@@ -67,6 +68,7 @@ def create_app(
     Args:
         api_url: Base URL of the MeshCore Hub API
         api_key: API key for authentication
+        admin_enabled: Enable admin interface at /a/
         network_name: Display name for the network
         network_city: City where the network is located
         network_country: Country where the network is located
@@ -96,6 +98,9 @@ def create_app(
     # Store configuration in app state (use args if provided, else settings)
     app.state.api_url = api_url or settings.api_base_url
     app.state.api_key = api_key or settings.api_key
+    app.state.admin_enabled = (
+        admin_enabled if admin_enabled is not None else settings.web_admin_enabled
+    )
     app.state.network_name = network_name or settings.network_name
     app.state.network_city = network_city or settings.network_city
     app.state.network_country = network_country or settings.network_country

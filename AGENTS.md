@@ -458,6 +458,7 @@ Key variables:
 - `MQTT_HOST`, `MQTT_PORT`, `MQTT_PREFIX` - MQTT broker connection
 - `MQTT_TLS` - Enable TLS/SSL for MQTT (default: `false`)
 - `API_READ_KEY`, `API_ADMIN_KEY` - API authentication keys
+- `WEB_ADMIN_ENABLED` - Enable admin interface at /a/ (default: `false`, requires auth proxy)
 - `LOG_LEVEL` - Logging verbosity
 
 The database defaults to `sqlite:///{DATA_HOME}/collector/meshcore.db` and does not typically need to be configured.

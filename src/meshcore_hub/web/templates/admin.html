@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}{{ network_name }} - Admin{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-3xl font-bold">Admin</h1>
+    <a href="/oauth2/sign_out" class="btn btn-outline btn-sm">Sign Out</a>
+</div>
+
+<div class="card bg-base-100 shadow-xl">
+    <div class="card-body">
+        <h2 class="card-title">Authenticated User</h2>
+        <div class="overflow-x-auto">
+            <table class="table">
+                <tbody>
+                    <tr>
+                        <th class="w-64">X-Forwarded-User</th>
+                        <td>{{ auth_user or '-' }}</td>
+                    </tr>
+                    <tr>
+                        <th>X-Forwarded-Preferred-Username</th>
+                        <td>{{ auth_username or '-' }}</td>
+                    </tr>
+                    <tr>
+                        <th>X-Forwarded-Email</th>
+                        <td>{{ auth_email or '-' }}</td>
+                    </tr>
+                    <tr>
+                        <th>X-Forwarded-Groups</th>
+                        <td>{{ auth_groups or '-' }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

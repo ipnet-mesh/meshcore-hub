@@ -9,6 +9,7 @@ from meshcore_hub.web.routes.messages import router as messages_router
 from meshcore_hub.web.routes.advertisements import router as advertisements_router
 from meshcore_hub.web.routes.map import router as map_router
 from meshcore_hub.web.routes.members import router as members_router
+from meshcore_hub.web.routes.admin import router as admin_router
 
 # Create main web router
 web_router = APIRouter()
@@ -21,5 +22,6 @@ web_router.include_router(messages_router)
 web_router.include_router(advertisements_router)
 web_router.include_router(map_router)
 web_router.include_router(members_router)
+web_router.include_router(admin_router)
 
 __all__ = ["web_router"]

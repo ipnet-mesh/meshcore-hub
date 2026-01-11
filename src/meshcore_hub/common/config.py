@@ -253,6 +253,12 @@ class WebSettings(CommonSettings):
     web_host: str = Field(default="0.0.0.0", description="Web server host")
     web_port: int = Field(default=8080, description="Web server port")
 
+    # Admin interface (disabled by default for security)
+    web_admin_enabled: bool = Field(
+        default=False,
+        description="Enable admin interface at /a/ (requires OAuth2Proxy in front)",
+    )
+
     # API connection
     api_base_url: str = Field(
         default="http://localhost:8000",
