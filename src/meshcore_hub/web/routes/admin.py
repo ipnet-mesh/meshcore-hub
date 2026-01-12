@@ -391,3 +391,201 @@ async def admin_delete_all_tags(
         redirect_url = _build_redirect_url(public_key, error="Failed to delete tags")
 
     return RedirectResponse(url=redirect_url, status_code=303)
+
+
+def _build_members_redirect_url(
+    message: Optional[str] = None,
+    error: Optional[str] = None,
+) -> str:
+    """Build a properly encoded redirect URL for members page with optional message/error."""
+    params: dict[str, str] = {}
+    if message:
+        params["message"] = message
+    if error:
+        params["error"] = error
+    if params:
+        return f"/a/members?{urlencode(params)}"
+    return "/a/members"
+
+
+@router.get("/members", response_class=HTMLResponse)
+async def admin_members(
+    request: Request,
+    message: Optional[str] = Query(None),
+    error: Optional[str] = Query(None),
+) -> HTMLResponse:
+    """Admin page for managing members."""
+    _check_admin_enabled(request)
+
+    templates = get_templates(request)
+    context = get_network_context(request)
+    context["request"] = request
+    context.update(_get_auth_context(request))
+
+    # Check if user is authenticated
+    if not _is_authenticated(request):
+        return templates.TemplateResponse(
+            "admin/access_denied.html", context, status_code=403
+        )
+
+    # Flash messages from redirects
+    context["message"] = message
+    context["error"] = error
+
+    # Fetch all members
+    members = []
+    try:
+        response = await request.app.state.http_client.get(
+            "/api/v1/members",
+            params={"limit": 1000},
+        )
+        if response.status_code == 200:
+            data = response.json()
+            members = data.get("items", [])
+            # Sort members alphabetically by name
+            members.sort(key=lambda m: m.get("name", "").lower())
+    except Exception as e:
+        logger.exception("Failed to fetch members: %s", e)
+        context["error"] = "Failed to fetch members"
+
+    context["members"] = members
+
+    return templates.TemplateResponse("admin/members.html", context)
+
+
+@router.post("/members", response_class=RedirectResponse)
+async def admin_create_member(
+    request: Request,
+    name: str = Form(...),
+    member_id: str = Form(...),
+    callsign: Optional[str] = Form(None),
+    role: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    contact: Optional[str] = Form(None),
+) -> RedirectResponse:
+    """Create a new member."""
+    _check_admin_enabled(request)
+    _require_auth(request)
+
+    try:
+        # Build request payload
+        payload = {
+            "name": name,
+            "member_id": member_id,
+        }
+        if callsign:
+            payload["callsign"] = callsign
+        if role:
+            payload["role"] = role
+        if description:
+            payload["description"] = description
+        if contact:
+            payload["contact"] = contact
+
+        response = await request.app.state.http_client.post(
+            "/api/v1/members",
+            json=payload,
+        )
+        if response.status_code == 201:
+            redirect_url = _build_members_redirect_url(
+                message=f"Member '{name}' created successfully"
+            )
+        elif response.status_code == 409:
+            redirect_url = _build_members_redirect_url(
+                error=f"Member ID '{member_id}' already exists"
+            )
+        else:
+            redirect_url = _build_members_redirect_url(
+                error=_get_error_detail(response)
+            )
+    except Exception as e:
+        logger.exception("Failed to create member: %s", e)
+        redirect_url = _build_members_redirect_url(error="Failed to create member")
+
+    return RedirectResponse(url=redirect_url, status_code=303)
+
+
+@router.post("/members/update", response_class=RedirectResponse)
+async def admin_update_member(
+    request: Request,
+    id: str = Form(...),
+    name: Optional[str] = Form(None),
+    member_id: Optional[str] = Form(None),
+    callsign: Optional[str] = Form(None),
+    role: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    contact: Optional[str] = Form(None),
+) -> RedirectResponse:
+    """Update an existing member."""
+    _check_admin_enabled(request)
+    _require_auth(request)
+
+    try:
+        # Build update payload (only include non-None fields)
+        payload: dict[str, str | None] = {}
+        if name is not None:
+            payload["name"] = name
+        if member_id is not None:
+            payload["member_id"] = member_id
+        if callsign is not None:
+            payload["callsign"] = callsign if callsign else None
+        if role is not None:
+            payload["role"] = role if role else None
+        if description is not None:
+            payload["description"] = description if description else None
+        if contact is not None:
+            payload["contact"] = contact if contact else None
+
+        response = await request.app.state.http_client.put(
+            f"/api/v1/members/{id}",
+            json=payload,
+        )
+        if response.status_code == 200:
+            redirect_url = _build_members_redirect_url(
+                message="Member updated successfully"
+            )
+        elif response.status_code == 404:
+            redirect_url = _build_members_redirect_url(error="Member not found")
+        elif response.status_code == 409:
+            redirect_url = _build_members_redirect_url(
+                error=f"Member ID '{member_id}' already exists"
+            )
+        else:
+            redirect_url = _build_members_redirect_url(
+                error=_get_error_detail(response)
+            )
+    except Exception as e:
+        logger.exception("Failed to update member: %s", e)
+        redirect_url = _build_members_redirect_url(error="Failed to update member")
+
+    return RedirectResponse(url=redirect_url, status_code=303)
+
+
+@router.post("/members/delete", response_class=RedirectResponse)
+async def admin_delete_member(
+    request: Request,
+    id: str = Form(...),
+) -> RedirectResponse:
+    """Delete a member."""
+    _check_admin_enabled(request)
+    _require_auth(request)
+
+    try:
+        response = await request.app.state.http_client.delete(
+            f"/api/v1/members/{id}",
+        )
+        if response.status_code == 204:
+            redirect_url = _build_members_redirect_url(
+                message="Member deleted successfully"
+            )
+        elif response.status_code == 404:
+            redirect_url = _build_members_redirect_url(error="Member not found")
+        else:
+            redirect_url = _build_members_redirect_url(
+                error=_get_error_detail(response)
+            )
+    except Exception as e:
+        logger.exception("Failed to delete member: %s", e)
+        redirect_url = _build_members_redirect_url(error="Failed to delete member")
+
+    return RedirectResponse(url=redirect_url, status_code=303)
