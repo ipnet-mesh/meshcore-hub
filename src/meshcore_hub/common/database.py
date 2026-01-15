@@ -98,6 +98,15 @@ class DatabaseManager:
             echo: Enable SQL query logging
         """
         self.database_url = database_url
+
+        # Ensure parent directory exists for SQLite databases
+        if database_url.startswith("sqlite:///"):
+            from pathlib import Path
+
+            # Extract path from sqlite:///path/to/db.sqlite
+            db_path = Path(database_url.replace("sqlite:///", ""))
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+
         self.engine = create_database_engine(database_url, echo=echo)
         self.session_factory = create_session_factory(self.engine)
 
