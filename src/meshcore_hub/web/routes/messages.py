@@ -15,7 +15,6 @@ router = APIRouter()
 async def messages_list(
     request: Request,
     message_type: str | None = Query(None, description="Filter by message type"),
-    channel_idx: str | None = Query(None, description="Filter by channel"),
     search: str | None = Query(None, description="Search in message text"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(50, ge=1, le=100, description="Items per page"),
@@ -28,20 +27,10 @@ async def messages_list(
     # Calculate offset
     offset = (page - 1) * limit
 
-    # Parse channel_idx, treating empty string as None
-    channel_idx_int: int | None = None
-    if channel_idx and channel_idx.strip():
-        try:
-            channel_idx_int = int(channel_idx)
-        except ValueError:
-            logger.warning(f"Invalid channel_idx value: {channel_idx}")
-
     # Build query params
     params: dict[str, int | str] = {"limit": limit, "offset": offset}
     if message_type:
         params["message_type"] = message_type
-    if channel_idx_int is not None:
-        params["channel_idx"] = channel_idx_int
 
     # Fetch messages from API
     messages = []
@@ -70,7 +59,6 @@ async def messages_list(
             "limit": limit,
             "total_pages": total_pages,
             "message_type": message_type or "",
-            "channel_idx": channel_idx_int,
             "search": search or "",
         }
     )

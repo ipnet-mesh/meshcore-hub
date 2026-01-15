@@ -28,19 +28,8 @@
                 </label>
                 <select name="message_type" class="select select-bordered select-sm">
                     <option value="">All Types</option>
-                    <option value="direct" {% if message_type == 'direct' %}selected{% endif %}>Direct</option>
+                    <option value="contact" {% if message_type == 'contact' %}selected{% endif %}>Direct</option>
                     <option value="channel" {% if message_type == 'channel' %}selected{% endif %}>Channel</option>
-                </select>
-            </div>
-            <div class="form-control">
-                <label class="label py-1">
-                    <span class="label-text">Channel</span>
-                </label>
-                <select name="channel_idx" class="select select-bordered select-sm">
-                    <option value="">All Channels</option>
-                    {% for i in range(8) %}
-                    <option value="{{ i }}" {% if channel_idx == i %}selected{% endif %}>Channel {{ i }}</option>
-                    {% endfor %}
                 </select>
             </div>
             <div class="flex gap-2 w-full sm:w-auto">
@@ -64,7 +53,7 @@
                     <div class="min-w-0">
                         <div class="font-medium text-sm truncate">
                             {% if msg.message_type == 'channel' %}
-                            <span class="font-mono">CH{{ msg.channel_idx }}</span>
+                            <span class="opacity-60">Public</span>
                             {% else %}
                                 {% if msg.sender_tag_name or msg.sender_name %}
                                 {{ msg.sender_tag_name or msg.sender_name }}
@@ -105,7 +94,7 @@
             <tr>
                 <th>Type</th>
                 <th>Time</th>
-                <th>From/Channel</th>
+                <th>From</th>
                 <th>Message</th>
                 <th>Receivers</th>
             </tr>
@@ -121,7 +110,7 @@
                 </td>
                 <td class="text-sm whitespace-nowrap">
                     {% if msg.message_type == 'channel' %}
-                    <span class="font-mono">CH{{ msg.channel_idx }}</span>
+                    <span class="opacity-60">Public</span>
                     {% else %}
                         {% if msg.sender_tag_name or msg.sender_name %}
                         <span class="font-medium">{{ msg.sender_tag_name or msg.sender_name }}</span>
@@ -154,5 +143,5 @@
     </table>
 </div>
 
-{{ pagination(page, total_pages, {"message_type": message_type, "channel_idx": channel_idx, "limit": limit}) }}
+{{ pagination(page, total_pages, {"message_type": message_type, "limit": limit}) }}
 {% endblock %}
