@@ -49,7 +49,7 @@ def compute_advertisement_hash(
     adv_type: Optional[str] = None,
     flags: Optional[int] = None,
     received_at: Optional[datetime] = None,
-    bucket_seconds: int = 30,
+    bucket_seconds: int = 120,
 ) -> str:
     """Compute a deterministic hash for an advertisement.
 
@@ -104,7 +104,7 @@ def compute_telemetry_hash(
     node_public_key: str,
     parsed_data: Optional[dict] = None,
     received_at: Optional[datetime] = None,
-    bucket_seconds: int = 30,
+    bucket_seconds: int = 120,
 ) -> str:
     """Compute a deterministic hash for a telemetry record.
 
