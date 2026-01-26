@@ -87,7 +87,7 @@ async def node_short_link(prefix: str) -> RedirectResponse:
     return RedirectResponse(url=f"/nodes/{prefix}", status_code=302)
 
 
-@router.get("/nodes/{public_key}")
+@router.get("/nodes/{public_key}", response_model=None)
 async def node_detail(
     request: Request, public_key: str
 ) -> HTMLResponse | RedirectResponse:
