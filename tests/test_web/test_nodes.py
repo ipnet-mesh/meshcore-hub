@@ -123,7 +123,7 @@ class TestNodesPageAPIErrors:
     def test_node_detail_handles_not_found(
         self, web_app: Any, mock_http_client: MockHttpClient
     ) -> None:
-        """Test that node detail page handles 404 from API."""
+        """Test that node detail page returns 404 when node not found."""
         mock_http_client.set_response(
             "GET",
             "/api/v1/nodes/nonexistent",
@@ -132,8 +132,9 @@ class TestNodesPageAPIErrors:
         )
         web_app.state.http_client = mock_http_client
 
-        client = TestClient(web_app, raise_server_exceptions=True)
+        client = TestClient(web_app, raise_server_exceptions=False)
         response = client.get("/nodes/nonexistent")
 
-        # Should still return 200 (page renders but shows no node)
-        assert response.status_code == 200
+        # Should return 404 with custom error page
+        assert response.status_code == 404
+        assert "Page Not Found" in response.text
