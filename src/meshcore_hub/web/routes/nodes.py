@@ -2,7 +2,7 @@
 
 import logging
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from meshcore_hub.web.app import get_network_context, get_templates
@@ -81,10 +81,22 @@ async def nodes_list(
     return templates.TemplateResponse("nodes.html", context)
 
 
-@router.get("/n/{public_key}", response_class=RedirectResponse)
-async def node_short_link(public_key: str) -> RedirectResponse:
-    """Redirect short link to full node detail page."""
-    return RedirectResponse(url=f"/nodes/{public_key}", status_code=301)
+@router.get("/n/{prefix}")
+async def node_short_link(request: Request, prefix: str) -> RedirectResponse:
+    """Redirect short link to full node detail page.
+
+    Looks up the node by prefix and redirects to the canonical URL
+    with the full public key.
+    """
+    try:
+        response = await request.app.state.http_client.get(f"/api/v1/nodes/{prefix}")
+        if response.status_code == 200:
+            node = response.json()
+            return RedirectResponse(url=f"/nodes/{node['public_key']}", status_code=302)
+    except Exception as e:
+        logger.warning(f"Failed to look up node for short link: {e}")
+
+    raise HTTPException(status_code=404, detail="Node not found")
 
 
 @router.get("/nodes/{public_key}", response_class=HTMLResponse)
