@@ -117,6 +117,8 @@ async def node_detail(request: Request, public_key: str) -> HTMLResponse:
         )
         if response.status_code == 200:
             node = response.json()
+        else:
+            raise HTTPException(status_code=404, detail="Node not found")
 
         # Fetch recent advertisements for this node
         response = await request.app.state.http_client.get(
