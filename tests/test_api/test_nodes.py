@@ -146,6 +146,54 @@ class TestGetNode:
         response = client_no_auth.get("/api/v1/nodes/nonexistent123")
         assert response.status_code == 404
 
+    def test_get_node_by_prefix(self, client_no_auth, sample_node):
+        """Test getting a node by public key prefix."""
+        prefix = sample_node.public_key[:8]  # First 8 chars
+        response = client_no_auth.get(f"/api/v1/nodes/{prefix}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["public_key"] == sample_node.public_key
+
+    def test_get_node_by_single_char_prefix(self, client_no_auth, sample_node):
+        """Test getting a node by single character prefix."""
+        prefix = sample_node.public_key[0]
+        response = client_no_auth.get(f"/api/v1/nodes/{prefix}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["public_key"] == sample_node.public_key
+
+    def test_get_node_prefix_returns_first_alphabetically(
+        self, client_no_auth, api_db_session
+    ):
+        """Test that prefix match returns first node alphabetically."""
+        from datetime import datetime, timezone
+
+        from meshcore_hub.common.models import Node
+
+        # Create two nodes with same prefix but different suffixes
+        # abc... should come before abd...
+        node_a = Node(
+            public_key="abc0000000000000000000000000000000000000000000000000000000000000",
+            name="Node A",
+            adv_type="REPEATER",
+            first_seen=datetime.now(timezone.utc),
+        )
+        node_b = Node(
+            public_key="abc1111111111111111111111111111111111111111111111111111111111111",
+            name="Node B",
+            adv_type="REPEATER",
+            first_seen=datetime.now(timezone.utc),
+        )
+        api_db_session.add(node_a)
+        api_db_session.add(node_b)
+        api_db_session.commit()
+
+        # Request with prefix should return first alphabetically
+        response = client_no_auth.get("/api/v1/nodes/abc")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["public_key"] == node_a.public_key
+
 
 class TestNodeTags:
     """Tests for node tag endpoints."""

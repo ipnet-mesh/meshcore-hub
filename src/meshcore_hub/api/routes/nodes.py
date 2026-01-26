@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Path, Query
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
@@ -81,10 +81,24 @@ async def list_nodes(
 async def get_node(
     _: RequireRead,
     session: DbSession,
-    public_key: str,
+    public_key: str = Path(
+        description="Full public key or prefix. If multiple nodes match the prefix, "
+        "the first one (alphabetically) is returned."
+    ),
 ) -> NodeRead:
-    """Get a single node by public key."""
-    query = select(Node).where(Node.public_key == public_key)
+    """Get a single node by public key or prefix.
+
+    Supports prefix matching - you can provide any number of leading characters
+    of a public key. If multiple nodes match the prefix, the first one
+    (alphabetically by public_key) is returned.
+    """
+    query = (
+        select(Node)
+        .options(selectinload(Node.tags))
+        .where(Node.public_key.startswith(public_key))
+        .order_by(Node.public_key)
+        .limit(1)
+    )
     node = session.execute(query).scalar_one_or_none()
 
     if not node:
