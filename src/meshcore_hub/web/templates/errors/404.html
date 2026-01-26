@@ -3,33 +3,23 @@
 {% block title %}Page Not Found - {{ network_name }}{% endblock %}
 
 {% block content %}
-<div class="hero min-h-[60vh]">
-    <div class="hero-content text-center">
-        <div class="max-w-md">
-            <div class="text-9xl font-bold text-primary opacity-20">404</div>
-            <h1 class="text-4xl font-bold -mt-8">Page Not Found</h1>
-            <p class="py-6 text-base-content/70">
-                {% if detail %}
-                {{ detail }}
-                {% else %}
-                The page you're looking for doesn't exist or has been moved.
-                {% endif %}
-            </p>
-            <div class="flex gap-4 justify-center">
-                <a href="/" class="btn btn-primary">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                    </svg>
-                    Go Home
-                </a>
-                <a href="/nodes" class="btn btn-outline">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                    </svg>
-                    Browse Nodes
-                </a>
-            </div>
-        </div>
+<div class="flex flex-col items-center justify-center min-h-[50vh] text-center px-4">
+    <div class="text-8xl font-light text-base-content/20 mb-2">404</div>
+    <h1 class="text-2xl font-semibold mb-3">Page Not Found</h1>
+    <p class="text-base-content/60 mb-8 max-w-sm">
+        {% if detail %}
+        {{ detail }}
+        {% else %}
+        The page you're looking for doesn't exist or has been moved.
+        {% endif %}
+    </p>
+    <div class="flex gap-3">
+        <a href="/" class="btn btn-sm btn-ghost">
+            Back to Home
+        </a>
+        <a href="/nodes" class="btn btn-sm btn-ghost">
+            Browse Nodes
+        </a>
     </div>
 </div>
 {% endblock %}
