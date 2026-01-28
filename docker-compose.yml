@@ -142,7 +142,7 @@ services:
       db-migrate:
         condition: service_completed_successfully
     volumes:
-      - ${DATA_HOME:-./data}:/data
+      - hub_data:/data
       - ${SEED_HOME:-./seed}:/seed
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
@@ -154,8 +154,6 @@ services:
       - MQTT_TLS=${MQTT_TLS:-false}
       - DATA_HOME=/data
       - SEED_HOME=/seed
-      # Explicitly unset to use DATA_HOME-based default path
-      - DATABASE_URL=
       # Webhook configuration
       - WEBHOOK_ADVERTISEMENT_URL=${WEBHOOK_ADVERTISEMENT_URL:-}
       - WEBHOOK_ADVERTISEMENT_SECRET=${WEBHOOK_ADVERTISEMENT_SECRET:-}
@@ -203,8 +201,7 @@ services:
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
-      # Mount data directory (uses collector/meshcore.db)
-      - ${DATA_HOME:-./data}:/data
+      - hub_data:/data
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - MQTT_HOST=${MQTT_HOST:-mqtt}
@@ -214,8 +211,6 @@ services:
       - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
       - MQTT_TLS=${MQTT_TLS:-false}
       - DATA_HOME=/data
-      # Explicitly unset to use DATA_HOME-based default path
-      - DATABASE_URL=
       - API_HOST=0.0.0.0
       - API_PORT=8000
       - API_READ_KEY=${API_READ_KEY:-}
@@ -286,12 +281,9 @@ services:
       - migrate
     restart: "no"
     volumes:
-      # Mount data directory (uses collector/meshcore.db)
-      - ${DATA_HOME:-./data}:/data
+      - hub_data:/data
     environment:
       - DATA_HOME=/data
-      # Explicitly unset to use DATA_HOME-based default path
-      - DATABASE_URL=
     command: ["db", "upgrade"]
 
   # ==========================================================================
@@ -309,20 +301,13 @@ services:
     profiles:
       - seed
     restart: "no"
-    depends_on:
-      db-migrate:
-        condition: service_completed_successfully
     volumes:
-      # Mount data directory for database (read-write)
-      - ${DATA_HOME:-./data}:/data
-      # Mount seed directory for seed files (read-only)
+      - hub_data:/data
       - ${SEED_HOME:-./seed}:/seed:ro
     environment:
       - DATA_HOME=/data
       - SEED_HOME=/seed
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      # Explicitly unset to use DATA_HOME-based default path
-      - DATABASE_URL=
     # Imports both node_tags.yaml and members.yaml if they exist
     command: ["collector", "seed"]
 
@@ -330,6 +315,8 @@ services:
 # Volumes
 # ==========================================================================
 volumes:
+  hub_data:
+    name: meshcore_hub_data
   mosquitto_data:
     name: meshcore_mosquitto_data
   mosquitto_log:
