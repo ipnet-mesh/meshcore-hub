@@ -23,6 +23,7 @@ async def list_nodes(
     ),
     adv_type: Optional[str] = Query(None, description="Filter by advertisement type"),
     member_id: Optional[str] = Query(None, description="Filter by member_id tag value"),
+    role: Optional[str] = Query(None, description="Filter by role tag value"),
     limit: int = Query(50, ge=1, le=500, description="Page size"),
     offset: int = Query(0, ge=0, description="Page offset"),
 ) -> NodeList:
@@ -55,6 +56,16 @@ async def list_nodes(
             Node.id.in_(
                 select(NodeTag.node_id).where(
                     NodeTag.key == "member_id", NodeTag.value == member_id
+                )
+            )
+        )
+
+    if role:
+        # Filter nodes that have a role tag with the specified value
+        query = query.where(
+            Node.id.in_(
+                select(NodeTag.node_id).where(
+                    NodeTag.key == "role", NodeTag.value == role
                 )
             )
         )

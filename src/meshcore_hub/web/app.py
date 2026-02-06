@@ -7,7 +7,7 @@ from typing import AsyncGenerator
 
 import httpx
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -153,9 +153,70 @@ def create_app(
             return {"status": "not_ready", "api": str(e)}
 
     @app.get("/robots.txt", response_class=PlainTextResponse)
-    async def robots_txt() -> str:
+    async def robots_txt(request: Request) -> str:
         """Serve robots.txt to control search engine crawling."""
-        return "User-agent: *\nAllow: /\n"
+        base_url = str(request.base_url).rstrip("/")
+        return f"User-agent: *\nAllow: /\n\nSitemap: {base_url}/sitemap.xml\n"
+
+    @app.get("/sitemap.xml")
+    async def sitemap_xml(request: Request) -> Response:
+        """Generate dynamic sitemap including all node pages."""
+        base_url = str(request.base_url).rstrip("/")
+
+        # Static pages
+        static_pages = [
+            ("", "daily", "1.0"),
+            ("/network", "hourly", "0.9"),
+            ("/nodes", "hourly", "0.9"),
+            ("/advertisements", "hourly", "0.8"),
+            ("/messages", "hourly", "0.8"),
+            ("/map", "daily", "0.7"),
+            ("/members", "weekly", "0.6"),
+        ]
+
+        urls = []
+        for path, changefreq, priority in static_pages:
+            urls.append(
+                f"  <url>\n"
+                f"    <loc>{base_url}{path}</loc>\n"
+                f"    <changefreq>{changefreq}</changefreq>\n"
+                f"    <priority>{priority}</priority>\n"
+                f"  </url>"
+            )
+
+        # Fetch infrastructure nodes for dynamic pages
+        try:
+            response = await request.app.state.http_client.get(
+                "/api/v1/nodes", params={"limit": 500, "role": "infra"}
+            )
+            if response.status_code == 200:
+                nodes = response.json().get("items", [])
+                for node in nodes:
+                    public_key = node.get("public_key")
+                    if public_key:
+                        # Use 8-char prefix (route handles redirect to full key)
+                        urls.append(
+                            f"  <url>\n"
+                            f"    <loc>{base_url}/nodes/{public_key[:8]}</loc>\n"
+                            f"    <changefreq>daily</changefreq>\n"
+                            f"    <priority>0.5</priority>\n"
+                            f"  </url>"
+                        )
+            else:
+                logger.warning(
+                    f"Failed to fetch nodes for sitemap: {response.status_code}"
+                )
+        except Exception as e:
+            logger.warning(f"Failed to fetch nodes for sitemap: {e}")
+
+        xml = (
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+            + "\n".join(urls)
+            + "\n</urlset>"
+        )
+
+        return Response(content=xml, media_type="application/xml")
 
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(
