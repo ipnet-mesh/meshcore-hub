@@ -164,7 +164,7 @@ def create_app(
     async def robots_txt(request: Request) -> str:
         """Serve robots.txt to control search engine crawling."""
         base_url = _get_https_base_url(request)
-        return f"User-agent: *\nAllow: /\n\nSitemap: {base_url}/sitemap.xml\n"
+        return f"User-agent: *\nDisallow:\n\nSitemap: {base_url}/sitemap.xml\n"
 
     @app.get("/sitemap.xml")
     async def sitemap_xml(request: Request) -> Response:
