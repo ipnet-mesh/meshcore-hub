@@ -338,6 +338,55 @@ The collector automatically cleans up old event data and inactive nodes:
 | `NETWORK_CONTACT_EMAIL` | *(none)* | Contact email address |
 | `NETWORK_CONTACT_DISCORD` | *(none)* | Discord server link |
 | `NETWORK_CONTACT_GITHUB` | *(none)* | GitHub repository URL |
+| `PAGES_HOME` | `./pages` | Directory containing custom markdown pages |
+
+### Custom Pages
+
+The web dashboard supports custom markdown pages for adding static content like "About Us", "Getting Started", or "FAQ" pages. Pages are stored as markdown files with YAML frontmatter.
+
+**Setup:**
+```bash
+# Create pages directory
+mkdir -p pages
+
+# Create a custom page
+cat > pages/about.md << 'EOF'
+---
+title: About Us
+slug: about
+menu_order: 10
+---
+
+# About Our Network
+
+Welcome to our MeshCore mesh network!
+
+## Getting Started
+
+1. Get a compatible LoRa device
+2. Flash MeshCore firmware
+3. Configure your radio settings
+EOF
+```
+
+**Frontmatter fields:**
+| Field | Default | Description |
+|-------|---------|-------------|
+| `title` | Filename titlecased | Browser tab title and navigation link text (not rendered on page) |
+| `slug` | Filename without `.md` | URL path (e.g., `about` → `/pages/about`) |
+| `menu_order` | `100` | Sort order in navigation (lower = earlier) |
+
+The markdown content is rendered as-is, so include your own `# Heading` if desired.
+
+Pages automatically appear in the navigation menu and sitemap. With Docker, mount the pages directory:
+
+```yaml
+# docker-compose.yml (already configured)
+volumes:
+  - ${PAGES_HOME:-./pages}:/pages:ro
+environment:
+  - PAGES_HOME=/pages
+```
 
 ## Seed Data
 
@@ -542,10 +591,13 @@ meshcore-hub/
 ├── alembic/                # Database migrations
 ├── etc/                    # Configuration files (mosquitto.conf)
 ├── example/                # Example files for testing
-│   └── seed/               # Example seed data files
-│       ├── node_tags.yaml  # Example node tags
-│       └── members.yaml    # Example network members
+│   ├── seed/               # Example seed data files
+│   │   ├── node_tags.yaml  # Example node tags
+│   │   └── members.yaml    # Example network members
+│   └── pages/              # Example custom pages
+│       └── about.md        # Example about page
 ├── seed/                   # Seed data directory (SEED_HOME, copy from example/seed/)
+├── pages/                  # Custom pages directory (PAGES_HOME, optional)
 ├── data/                   # Runtime data directory (DATA_HOME, created at runtime)
 ├── Dockerfile              # Docker build configuration
 ├── docker-compose.yml      # Docker Compose services

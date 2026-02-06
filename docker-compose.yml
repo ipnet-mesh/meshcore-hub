@@ -241,6 +241,8 @@ services:
         condition: service_healthy
     ports:
       - "${WEB_PORT:-8080}:8080"
+    volumes:
+      - ${PAGES_HOME:-./pages}:/pages:ro
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - API_BASE_URL=http://api:8000
@@ -258,6 +260,7 @@ services:
       - NETWORK_CONTACT_DISCORD=${NETWORK_CONTACT_DISCORD:-}
       - NETWORK_CONTACT_GITHUB=${NETWORK_CONTACT_GITHUB:-}
       - NETWORK_WELCOME_TEXT=${NETWORK_WELCOME_TEXT:-}
+      - PAGES_HOME=/pages
     command: ["web"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]

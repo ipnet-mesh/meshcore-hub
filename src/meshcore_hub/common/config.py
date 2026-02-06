@@ -295,6 +295,19 @@ class WebSettings(CommonSettings):
         default=None, description="Welcome text for homepage"
     )
 
+    # Custom pages directory
+    pages_home: Optional[str] = Field(
+        default=None,
+        description="Directory containing custom markdown pages (default: ./pages)",
+    )
+
+    @property
+    def effective_pages_home(self) -> str:
+        """Get the effective pages home directory."""
+        from pathlib import Path
+
+        return str(Path(self.pages_home or "./pages"))
+
     @property
     def web_data_dir(self) -> str:
         """Get the web data directory path."""

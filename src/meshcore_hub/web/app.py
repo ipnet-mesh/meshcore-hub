@@ -14,6 +14,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from meshcore_hub import __version__
 from meshcore_hub.common.schemas import RadioConfig
+from meshcore_hub.web.pages import PageLoader
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +127,11 @@ def create_app(
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
     app.state.templates = templates
 
+    # Initialize page loader for custom markdown pages
+    page_loader = PageLoader(settings.effective_pages_home)
+    page_loader.load_pages()
+    app.state.page_loader = page_loader
+
     # Mount static files
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -217,6 +223,17 @@ def create_app(
         except Exception as e:
             logger.warning(f"Failed to fetch nodes for sitemap: {e}")
 
+        # Add custom pages to sitemap
+        page_loader = request.app.state.page_loader
+        for page in page_loader.get_menu_pages():
+            urls.append(
+                f"  <url>\n"
+                f"    <loc>{base_url}{page.url}</loc>\n"
+                f"    <changefreq>weekly</changefreq>\n"
+                f"    <priority>0.6</priority>\n"
+                f"  </url>"
+            )
+
         xml = (
             '<?xml version="1.0" encoding="UTF-8"?>\n'
             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
@@ -260,6 +277,10 @@ def get_network_context(request: Request) -> dict:
         request.app.state.network_radio_config
     )
 
+    # Get custom pages for navigation
+    page_loader = request.app.state.page_loader
+    custom_pages = page_loader.get_menu_pages()
+
     return {
         "network_name": request.app.state.network_name,
         "network_city": request.app.state.network_city,
@@ -270,5 +291,6 @@ def get_network_context(request: Request) -> dict:
         "network_contact_github": request.app.state.network_contact_github,
         "network_welcome_text": request.app.state.network_welcome_text,
         "admin_enabled": request.app.state.admin_enabled,
+        "custom_pages": custom_pages,
         "version": __version__,
     }

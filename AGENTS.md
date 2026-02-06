@@ -455,6 +455,7 @@ See [PLAN.md](PLAN.md#configuration-environment-variables) for complete list.
 Key variables:
 - `DATA_HOME` - Base directory for runtime data (default: `./data`)
 - `SEED_HOME` - Directory containing seed data files (default: `./seed`)
+- `PAGES_HOME` - Directory containing custom markdown pages (default: `./pages`)
 - `MQTT_HOST`, `MQTT_PORT`, `MQTT_PREFIX` - MQTT broker connection
 - `MQTT_TLS` - Enable TLS/SSL for MQTT (default: `false`)
 - `API_READ_KEY`, `API_ADMIN_KEY` - API authentication keys
@@ -470,6 +471,27 @@ The database defaults to `sqlite:///{DATA_HOME}/collector/meshcore.db` and does 
 ${SEED_HOME}/
 ├── node_tags.yaml    # Node tags (keyed by public_key)
 └── members.yaml      # Network members list
+```
+
+**Custom Pages (`PAGES_HOME`)** - Contains custom markdown pages for the web dashboard:
+```
+${PAGES_HOME}/
+├── about.md          # Example: About page (/pages/about)
+├── faq.md            # Example: FAQ page (/pages/faq)
+└── getting-started.md # Example: Getting Started (/pages/getting-started)
+```
+
+Pages use YAML frontmatter for metadata:
+```markdown
+---
+title: About Us        # Browser tab title and nav link (not rendered on page)
+slug: about            # URL path (default: filename without .md)
+menu_order: 10         # Nav sort order (default: 100, lower = earlier)
+---
+
+# About Our Network
+
+Markdown content here (include your own heading)...
 ```
 
 **Runtime Data (`DATA_HOME`)** - Contains runtime data (gitignored):

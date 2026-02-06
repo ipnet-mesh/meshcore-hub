@@ -61,6 +61,28 @@
             text-overflow: ellipsis;
             white-space: nowrap;
         }
+
+        /* Prose styling for custom markdown pages */
+        .prose h1 { font-size: 2.25rem; font-weight: 700; margin-top: 1.5rem; margin-bottom: 1rem; }
+        .prose h2 { font-size: 1.875rem; font-weight: 600; margin-top: 1.25rem; margin-bottom: 0.75rem; }
+        .prose h3 { font-size: 1.5rem; font-weight: 600; margin-top: 1rem; margin-bottom: 0.5rem; }
+        .prose h4 { font-size: 1.25rem; font-weight: 600; margin-top: 1rem; margin-bottom: 0.5rem; }
+        .prose p { margin-bottom: 1rem; line-height: 1.75; }
+        .prose ul, .prose ol { margin-bottom: 1rem; padding-left: 1.5rem; }
+        .prose ul { list-style-type: disc; }
+        .prose ol { list-style-type: decimal; }
+        .prose li { margin-bottom: 0.25rem; }
+        .prose a { color: oklch(var(--p)); text-decoration: underline; }
+        .prose a:hover { color: oklch(var(--pf)); }
+        .prose code { background: oklch(var(--b2)); padding: 0.125rem 0.25rem; border-radius: 0.25rem; font-size: 0.875em; }
+        .prose pre { background: oklch(var(--b2)); padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin-bottom: 1rem; }
+        .prose pre code { background: none; padding: 0; }
+        .prose blockquote { border-left: 4px solid oklch(var(--bc) / 0.3); padding-left: 1rem; margin: 1rem 0; font-style: italic; }
+        .prose table { width: 100%; margin-bottom: 1rem; border-collapse: collapse; }
+        .prose th, .prose td { border: 1px solid oklch(var(--bc) / 0.2); padding: 0.5rem; text-align: left; }
+        .prose th { background: oklch(var(--b2)); font-weight: 600; }
+        .prose hr { border: none; border-top: 1px solid oklch(var(--bc) / 0.2); margin: 2rem 0; }
+        .prose img { max-width: 100%; height: auto; border-radius: 0.5rem; margin: 1rem 0; }
     </style>
 
     {% block extra_head %}{% endblock %}
@@ -83,6 +105,9 @@
                     <li><a href="/messages" class="{% if request.url.path == '/messages' %}active{% endif %}">Messages</a></li>
                     <li><a href="/map" class="{% if request.url.path == '/map' %}active{% endif %}">Map</a></li>
                     <li><a href="/members" class="{% if request.url.path == '/members' %}active{% endif %}">Members</a></li>
+                    {% for page in custom_pages %}
+                    <li><a href="{{ page.url }}" class="{% if request.url.path == page.url %}active{% endif %}">{{ page.title }}</a></li>
+                    {% endfor %}
                 </ul>
             </div>
             <a href="/" class="btn btn-ghost text-xl">
@@ -101,6 +126,9 @@
                 <li><a href="/messages" class="{% if request.url.path == '/messages' %}active{% endif %}">Messages</a></li>
                 <li><a href="/map" class="{% if request.url.path == '/map' %}active{% endif %}">Map</a></li>
                 <li><a href="/members" class="{% if request.url.path == '/members' %}active{% endif %}">Members</a></li>
+                {% for page in custom_pages %}
+                <li><a href="{{ page.url }}" class="{% if request.url.path == page.url %}active{% endif %}">{{ page.title }}</a></li>
+                {% endfor %}
             </ul>
         </div>
         <div class="navbar-end">
