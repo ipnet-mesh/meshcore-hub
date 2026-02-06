@@ -37,7 +37,7 @@ Using the wrong frequency is illegal and may cause interference. Check your loca
 
 ## Compatible Hardware
 
-MeshCore runs on ESP32-based LoRa devices. Popular options include:
+MeshCore runs on inexpensive low-power LoRa devices. Popular options include:
 
 ### Recommended Devices
 
