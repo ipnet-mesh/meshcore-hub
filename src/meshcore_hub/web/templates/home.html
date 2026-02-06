@@ -8,11 +8,16 @@
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-base-100 rounded-box p-6">
     <!-- Hero Content (2 columns) -->
     <div class="lg:col-span-2 flex flex-col items-center text-center">
-        <img src="/static/img/logo.svg" alt="{{ network_name }}" class="h-32 w-32 mb-4" />
-        <h1 class="text-4xl font-bold">{{ network_name }}</h1>
-        {% if network_city and network_country %}
-        <p class="py-1 text-lg opacity-70">{{ network_city }}, {{ network_country }}</p>
-        {% endif %}
+        <!-- Header: Logo and Title side by side -->
+        <div class="flex items-center gap-8 mb-4">
+            <img src="/static/img/logo.svg" alt="{{ network_name }}" class="h-36 w-36" />
+            <div class="flex flex-col justify-center">
+                <h1 class="text-6xl font-black tracking-tight">{{ network_name }}</h1>
+                {% if network_city and network_country %}
+                <p class="text-2xl opacity-70 mt-2">{{ network_city }}, {{ network_country }}</p>
+                {% endif %}
+            </div>
+        </div>
         {% if network_welcome_text %}
         <p class="py-4 max-w-[70%]">{{ network_welcome_text }}</p>
         {% else %}
