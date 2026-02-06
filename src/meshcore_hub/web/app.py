@@ -7,7 +7,7 @@ from typing import AsyncGenerator
 
 import httpx
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -151,6 +151,11 @@ def create_app(
             return {"status": "not_ready", "api": f"status {response.status_code}"}
         except Exception as e:
             return {"status": "not_ready", "api": str(e)}
+
+    @app.get("/robots.txt", response_class=PlainTextResponse)
+    async def robots_txt() -> str:
+        """Serve robots.txt to control search engine crawling."""
+        return "User-agent: *\nAllow: /\n"
 
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(
