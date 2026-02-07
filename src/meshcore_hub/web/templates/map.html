@@ -27,6 +27,10 @@
     .show-labels .map-label {
         opacity: 1;
     }
+    /* Bring hovered marker to front */
+    .leaflet-marker-icon:hover {
+        z-index: 10000 !important;
+    }
 </style>
 {% endblock %}
 
