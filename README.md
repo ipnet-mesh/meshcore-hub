@@ -338,19 +338,28 @@ The collector automatically cleans up old event data and inactive nodes:
 | `NETWORK_CONTACT_EMAIL` | *(none)* | Contact email address |
 | `NETWORK_CONTACT_DISCORD` | *(none)* | Discord server link |
 | `NETWORK_CONTACT_GITHUB` | *(none)* | GitHub repository URL |
-| `PAGES_HOME` | `./pages` | Directory containing custom markdown pages |
+| `CONTENT_HOME` | `./content` | Directory containing custom content (pages/, media/) |
 
-### Custom Pages
+### Custom Content
 
-The web dashboard supports custom markdown pages for adding static content like "About Us", "Getting Started", or "FAQ" pages. Pages are stored as markdown files with YAML frontmatter.
+The web dashboard supports custom content including markdown pages and media files. Content is organized in subdirectories:
+
+```
+content/
+├── pages/     # Custom markdown pages
+│   └── about.md
+└── media/     # Custom media files
+    └── images/
+        └── logo.svg   # Custom logo (replaces favicon and navbar/home logo)
+```
 
 **Setup:**
 ```bash
-# Create pages directory
-mkdir -p pages
+# Create content directory structure
+mkdir -p content/pages content/media
 
 # Create a custom page
-cat > pages/about.md << 'EOF'
+cat > content/pages/about.md << 'EOF'
 ---
 title: About Us
 slug: about
@@ -378,14 +387,14 @@ EOF
 
 The markdown content is rendered as-is, so include your own `# Heading` if desired.
 
-Pages automatically appear in the navigation menu and sitemap. With Docker, mount the pages directory:
+Pages automatically appear in the navigation menu and sitemap. With Docker, mount the content directory:
 
 ```yaml
 # docker-compose.yml (already configured)
 volumes:
-  - ${PAGES_HOME:-./pages}:/pages:ro
+  - ${CONTENT_HOME:-./content}:/content:ro
 environment:
-  - PAGES_HOME=/pages
+  - CONTENT_HOME=/content
 ```
 
 ## Seed Data
@@ -594,10 +603,16 @@ meshcore-hub/
 │   ├── seed/               # Example seed data files
 │   │   ├── node_tags.yaml  # Example node tags
 │   │   └── members.yaml    # Example network members
-│   └── pages/              # Example custom pages
-│       └── about.md        # Example about page
+│   └── content/            # Example custom content
+│       ├── pages/          # Example custom pages
+│       │   └── about.md    # Example about page
+│       └── media/          # Example media files
+│           └── images/     # Custom images
 ├── seed/                   # Seed data directory (SEED_HOME, copy from example/seed/)
-├── pages/                  # Custom pages directory (PAGES_HOME, optional)
+├── content/                # Custom content directory (CONTENT_HOME, optional)
+│   ├── pages/              # Custom markdown pages
+│   └── media/              # Custom media files
+│       └── images/         # Custom images (logo.svg replaces default logo)
 ├── data/                   # Runtime data directory (DATA_HOME, created at runtime)
 ├── Dockerfile              # Docker build configuration
 ├── docker-compose.yml      # Docker Compose services

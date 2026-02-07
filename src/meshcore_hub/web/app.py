@@ -132,9 +132,22 @@ def create_app(
     page_loader.load_pages()
     app.state.page_loader = page_loader
 
+    # Check for custom logo and store media path
+    media_home = Path(settings.effective_media_home)
+    custom_logo_path = media_home / "images" / "logo.svg"
+    if custom_logo_path.exists():
+        app.state.logo_url = "/media/images/logo.svg"
+        logger.info(f"Using custom logo from {custom_logo_path}")
+    else:
+        app.state.logo_url = "/static/img/logo.svg"
+
     # Mount static files
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+    # Mount custom media files if directory exists
+    if media_home.exists() and media_home.is_dir():
+        app.mount("/media", StaticFiles(directory=str(media_home)), name="media")
 
     # Include routers
     from meshcore_hub.web.routes import web_router
@@ -292,5 +305,6 @@ def get_network_context(request: Request) -> dict:
         "network_welcome_text": request.app.state.network_welcome_text,
         "admin_enabled": request.app.state.admin_enabled,
         "custom_pages": custom_pages,
+        "logo_url": request.app.state.logo_url,
         "version": __version__,
     }

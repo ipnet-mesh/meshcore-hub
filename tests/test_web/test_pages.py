@@ -346,9 +346,12 @@ class TestPagesRoute:
 
     @pytest.fixture
     def pages_dir(self) -> Generator[str, None, None]:
-        """Create a temporary directory with test pages."""
+        """Create a temporary content directory with test pages."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            (Path(tmpdir) / "about.md").write_text(
+            # Create pages subdirectory (CONTENT_HOME/pages)
+            pages_subdir = Path(tmpdir) / "pages"
+            pages_subdir.mkdir()
+            (pages_subdir / "about.md").write_text(
                 """---
 title: About Us
 slug: about
@@ -360,7 +363,7 @@ menu_order: 10
 Welcome to the network.
 """
             )
-            (Path(tmpdir) / "faq.md").write_text(
+            (pages_subdir / "faq.md").write_text(
                 """---
 title: FAQ
 slug: faq
@@ -381,8 +384,8 @@ Here are some answers.
         """Create a web app with custom pages configured."""
         import os
 
-        # Temporarily set PAGES_HOME environment variable
-        os.environ["PAGES_HOME"] = pages_dir
+        # Temporarily set CONTENT_HOME environment variable
+        os.environ["CONTENT_HOME"] = pages_dir
 
         from meshcore_hub.web.app import create_app
 
@@ -396,7 +399,7 @@ Here are some answers.
         yield app
 
         # Cleanup
-        del os.environ["PAGES_HOME"]
+        del os.environ["CONTENT_HOME"]
 
     @pytest.fixture
     def client_with_pages(
@@ -442,9 +445,12 @@ class TestPagesInSitemap:
 
     @pytest.fixture
     def pages_dir(self) -> Generator[str, None, None]:
-        """Create a temporary directory with test pages."""
+        """Create a temporary content directory with test pages."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            (Path(tmpdir) / "about.md").write_text(
+            # Create pages subdirectory (CONTENT_HOME/pages)
+            pages_subdir = Path(tmpdir) / "pages"
+            pages_subdir.mkdir()
+            (pages_subdir / "about.md").write_text(
                 """---
 title: About
 slug: about
@@ -462,7 +468,7 @@ About page.
         """Create a test client with custom pages for sitemap testing."""
         import os
 
-        os.environ["PAGES_HOME"] = pages_dir
+        os.environ["CONTENT_HOME"] = pages_dir
 
         from meshcore_hub.web.app import create_app
 
@@ -476,7 +482,7 @@ About page.
         client = TestClient(app, raise_server_exceptions=True)
         yield client
 
-        del os.environ["PAGES_HOME"]
+        del os.environ["CONTENT_HOME"]
 
     def test_pages_included_in_sitemap(
         self, client_with_pages_for_sitemap: TestClient

@@ -455,7 +455,7 @@ See [PLAN.md](PLAN.md#configuration-environment-variables) for complete list.
 Key variables:
 - `DATA_HOME` - Base directory for runtime data (default: `./data`)
 - `SEED_HOME` - Directory containing seed data files (default: `./seed`)
-- `PAGES_HOME` - Directory containing custom markdown pages (default: `./pages`)
+- `CONTENT_HOME` - Directory containing custom content (pages, media) (default: `./content`)
 - `MQTT_HOST`, `MQTT_PORT`, `MQTT_PREFIX` - MQTT broker connection
 - `MQTT_TLS` - Enable TLS/SSL for MQTT (default: `false`)
 - `API_READ_KEY`, `API_ADMIN_KEY` - API authentication keys
@@ -473,12 +473,16 @@ ${SEED_HOME}/
 └── members.yaml      # Network members list
 ```
 
-**Custom Pages (`PAGES_HOME`)** - Contains custom markdown pages for the web dashboard:
+**Custom Content (`CONTENT_HOME`)** - Contains custom pages and media for the web dashboard:
 ```
-${PAGES_HOME}/
-├── about.md          # Example: About page (/pages/about)
-├── faq.md            # Example: FAQ page (/pages/faq)
-└── getting-started.md # Example: Getting Started (/pages/getting-started)
+${CONTENT_HOME}/
+├── pages/            # Custom markdown pages
+│   ├── about.md      # Example: About page (/pages/about)
+│   ├── faq.md        # Example: FAQ page (/pages/faq)
+│   └── getting-started.md # Example: Getting Started (/pages/getting-started)
+└── media/            # Custom media files
+    └── images/
+        └── logo.svg  # Custom logo (replaces default favicon and navbar/home logo)
 ```
 
 Pages use YAML frontmatter for metadata:

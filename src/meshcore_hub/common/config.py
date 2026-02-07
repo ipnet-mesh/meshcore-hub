@@ -295,18 +295,32 @@ class WebSettings(CommonSettings):
         default=None, description="Welcome text for homepage"
     )
 
-    # Custom pages directory
-    pages_home: Optional[str] = Field(
+    # Content directory (contains pages/ and media/ subdirectories)
+    content_home: Optional[str] = Field(
         default=None,
-        description="Directory containing custom markdown pages (default: ./pages)",
+        description="Directory containing custom content (pages/, media/) (default: ./content)",
     )
 
     @property
-    def effective_pages_home(self) -> str:
-        """Get the effective pages home directory."""
+    def effective_content_home(self) -> str:
+        """Get the effective content home directory."""
         from pathlib import Path
 
-        return str(Path(self.pages_home or "./pages"))
+        return str(Path(self.content_home or "./content"))
+
+    @property
+    def effective_pages_home(self) -> str:
+        """Get the effective pages directory (content_home/pages)."""
+        from pathlib import Path
+
+        return str(Path(self.effective_content_home) / "pages")
+
+    @property
+    def effective_media_home(self) -> str:
+        """Get the effective media directory (content_home/media)."""
+        from pathlib import Path
+
+        return str(Path(self.effective_content_home) / "media")
 
     @property
     def web_data_dir(self) -> str:

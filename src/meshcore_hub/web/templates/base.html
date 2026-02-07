@@ -25,7 +25,7 @@
     <meta name="twitter:description" content="{% block twitter_description %}{{ self.meta_description() }}{% endblock %}">
 
     <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="/static/img/logo.svg">
+    <link rel="icon" type="image/svg+xml" href="{{ logo_url }}">
 
     <!-- Tailwind CSS with DaisyUI -->
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.19/dist/full.min.css" rel="stylesheet" type="text/css" />
@@ -112,7 +112,7 @@
                 </ul>
             </div>
             <a href="/" class="btn btn-ghost text-xl">
-                <img src="/static/img/logo.svg" alt="{{ network_name }}" class="h-6 w-6 mr-2" />
+                <img src="{{ logo_url }}" alt="{{ network_name }}" class="h-6 w-6 mr-2" />
                 {{ network_name }}
             </a>
         </div>
