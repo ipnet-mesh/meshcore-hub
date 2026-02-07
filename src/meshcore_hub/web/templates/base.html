@@ -89,9 +89,9 @@
         .prose img { max-width: 100%; height: auto; border-radius: 0.5rem; margin: 1rem 0; }
 
         /* View Transitions API - Cross-document page transitions */
-        .navbar { view-transition-name: navbar; }
-        main { view-transition-name: main-content; }
-        footer { view-transition-name: footer; }
+        .navbar { view-transition-name: navbar; position: relative; z-index: 50; }
+        main { view-transition-name: main-content; position: relative; z-index: 10; }
+        footer { view-transition-name: footer; position: relative; z-index: 10; }
 
         /* Subtle slide + fade for main content */
         ::view-transition-old(main-content) {
