@@ -141,8 +141,9 @@
     const MAX_BOUNDS_RADIUS_KM = 20;
 
     // Padding for fitBounds - more padding on mobile for tighter zoom
+    const isMobilePortrait = window.innerWidth < 480;
     const isMobile = window.innerWidth < 768;
-    const BOUNDS_PADDING = isMobile ? [150, 150] : [100, 100];
+    const BOUNDS_PADDING = isMobilePortrait ? [50, 50] : (isMobile ? [75, 75] : [100, 100]);
 
     // Calculate distance between two points in km (Haversine formula)
     function getDistanceKm(lat1, lon1, lat2, lon2) {
