@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros/icons.html" import icon_dashboard, icon_map, icon_nodes, icon_advertisements, icon_messages %}
+{% from "macros/icons.html" import icon_dashboard, icon_map, icon_nodes, icon_advertisements, icon_messages, icon_page %}
 
 {% block title %}{{ network_name }} - Home{% endblock %}
 
@@ -48,6 +48,12 @@
                 {{ icon_map("h-5 w-5 mr-2") }}
                 Map
             </a>
+            {% for page in custom_pages[:3] %}
+            <a href="{{ page.url }}" class="btn btn-outline btn-neutral">
+                {{ icon_page("h-5 w-5 mr-2") }}
+                {{ page.title }}
+            </a>
+            {% endfor %}
         </div>
     </div>
 
