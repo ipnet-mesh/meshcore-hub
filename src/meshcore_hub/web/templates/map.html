@@ -78,12 +78,6 @@
             </div>
             <div class="form-control">
                 <label class="label cursor-pointer gap-2 py-1">
-                    <span class="label-text">Show Chat Nodes</span>
-                    <input type="checkbox" id="show-chat" class="checkbox checkbox-sm">
-                </label>
-            </div>
-            <div class="form-control">
-                <label class="label cursor-pointer gap-2 py-1">
                     <span class="label-text">Show Labels</span>
                     <input type="checkbox" id="show-labels" class="checkbox checkbox-sm">
                 </label>
@@ -267,18 +261,14 @@
         const categoryFilter = document.getElementById('filter-category').value;
         const typeFilter = document.getElementById('filter-type').value;
         const memberFilter = document.getElementById('filter-member').value;
-        const showChat = document.getElementById('show-chat').checked;
 
         // Filter nodes
         const filteredNodes = allNodes.filter(node => {
-            // Hide chat/companion nodes unless checkbox is checked
-            const nodeType = normalizeType(node.adv_type);
-            if (!showChat && nodeType === 'chat') return false;
-
             // Category filter (infrastructure only)
             if (categoryFilter === 'infra' && !node.is_infra) return false;
 
             // Type filter (case-insensitive)
+            const nodeType = normalizeType(node.adv_type);
             if (typeFilter && nodeType !== typeFilter) return false;
 
             // Member filter - match node's member_id tag to selected member_id
@@ -370,7 +360,6 @@
         document.getElementById('filter-category').value = '';
         document.getElementById('filter-type').value = '';
         document.getElementById('filter-member').value = '';
-        document.getElementById('show-chat').checked = false;
         document.getElementById('show-labels').checked = false;
         updateLabelVisibility();
         applyFilters();
@@ -391,7 +380,6 @@
     document.getElementById('filter-category').addEventListener('change', applyFilters);
     document.getElementById('filter-type').addEventListener('change', applyFilters);
     document.getElementById('filter-member').addEventListener('change', applyFilters);
-    document.getElementById('show-chat').addEventListener('change', applyFilters);
     document.getElementById('show-labels').addEventListener('change', updateLabelVisibility);
     document.getElementById('clear-filters').addEventListener('click', clearFilters);
 
