@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "macros/icons.html" import icon_alert, icon_error %}
 
-{% block title %}{{ network_name }} - Node Details{% endblock %}
+{% block title %}{% if node %}{{ node.name or ('Node ' ~ public_key[:8] ~ '...') }} - {{ network_name }}{% else %}Node Not Found - {{ network_name }}{% endif %}{% endblock %}
 
 {% block extra_head %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>

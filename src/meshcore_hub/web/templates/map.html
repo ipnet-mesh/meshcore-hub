@@ -1,11 +1,10 @@
 {% extends "base.html" %}
 
-{% block title %}{{ network_name }} - Node Map{% endblock %}
-
+{% block title %}Map - {{ network_name }}{% endblock %}
 
 {% block content %}
 <div class="flex items-center justify-between mb-6">
-    <h1 class="text-3xl font-bold">Node Map</h1>
+    <h1 class="text-3xl font-bold">Map</h1>
     <div class="flex items-center gap-2">
         <span id="node-count" class="badge badge-lg">Loading...</span>
         <span id="filtered-count" class="badge badge-lg badge-ghost hidden"></span>

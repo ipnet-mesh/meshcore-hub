@@ -123,8 +123,10 @@ def create_app(
         network_welcome_text or settings.network_welcome_text
     )
 
-    # Set up templates
+    # Set up templates with whitespace control
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+    templates.env.trim_blocks = True  # Remove first newline after block tags
+    templates.env.lstrip_blocks = True  # Remove leading whitespace before block tags
     app.state.templates = templates
 
     # Initialize page loader for custom markdown pages

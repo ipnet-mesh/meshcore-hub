@@ -1,15 +1,11 @@
 {% extends "base.html" %}
-{% from "macros/icons.html" import icon_nodes, icon_advertisements, icon_messages, icon_alert, icon_refresh, icon_channel %}
+{% from "macros/icons.html" import icon_nodes, icon_advertisements, icon_messages, icon_alert, icon_channel %}
 
-{% block title %}{{ network_name }} - Network Overview{% endblock %}
+{% block title %}Dashboard - {{ network_name }}{% endblock %}
 
 {% block content %}
 <div class="flex items-center justify-between mb-6">
-    <h1 class="text-3xl font-bold">Network Overview</h1>
-    <button onclick="location.reload()" class="btn btn-ghost btn-sm">
-        {{ icon_refresh("h-5 w-5") }}
-        Refresh
-    </button>
+    <h1 class="text-3xl font-bold">Dashboard</h1>
 </div>
 
 {% if api_error %}

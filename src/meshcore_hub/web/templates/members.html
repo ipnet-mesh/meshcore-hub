@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% from "macros/icons.html" import icon_info %}
 
-{% block title %}{{ network_name }} - Members{% endblock %}
+{% block title %}Members - {{ network_name }}{% endblock %}
 
 {% block content %}
 <div class="flex items-center justify-between mb-6">
-    <h1 class="text-3xl font-bold">Network Members</h1>
+    <h1 class="text-3xl font-bold">Members</h1>
     <span class="badge badge-lg">{{ members|length }} members</span>
 </div>
 
