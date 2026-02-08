@@ -104,10 +104,10 @@
         var relativeTime = typeof formatRelativeTime === 'function' ? formatRelativeTime(node.last_seen) : '';
         var timeDisplay = relativeTime ? ' (' + relativeTime + ')' : '';
 
-        // Use logo for infrastructure nodes, blue circle for others
+        // Use red circle for infrastructure nodes, blue circle for others
         var iconHtml;
         if (node.is_infra) {
-            iconHtml = '<img src="' + logoUrl + '" alt="Infra" style="width: 24px; height: 24px; filter: drop-shadow(0 0 2px #1a237e) drop-shadow(0 0 4px #1a237e) drop-shadow(0 1px 2px rgba(0,0,0,0.7));">';
+            iconHtml = '<div style="width: 12px; height: 12px; background: #ef4444; border: 2px solid #b91c1c; border-radius: 50%; box-shadow: 0 0 4px rgba(239,68,68,0.6), 0 1px 2px rgba(0,0,0,0.5);"></div>';
         } else {
             iconHtml = '<div style="width: 12px; height: 12px; background: #3b82f6; border: 2px solid #1e40af; border-radius: 50%; box-shadow: 0 0 4px rgba(59,130,246,0.6), 0 1px 2px rgba(0,0,0,0.5);"></div>';
         }
@@ -121,6 +121,17 @@
             iconSize: [120, 50],
             iconAnchor: [60, 12]
         });
+    }
+
+    /**
+     * Get type emoji for node
+     */
+    function getTypeEmoji(node) {
+        var type = normalizeType(node.adv_type);
+        if (type === 'chat') return '💬';
+        if (type === 'repeater') return '📡';
+        if (type === 'room') return '🪧';
+        return '📍';
     }
 
     /**
@@ -141,18 +152,23 @@
         }
 
         var typeDisplay = getTypeDisplay(node);
+        var typeEmoji = getTypeEmoji(node);
 
-        // Use logo for infrastructure nodes, blue circle for others
-        var iconHtml = node.is_infra
-            ? '<img src="' + logoUrl + '" alt="Infra" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;">'
-            : '<span style="display: inline-block; width: 12px; height: 12px; background: #3b82f6; border: 2px solid #1e40af; border-radius: 50%; vertical-align: middle;"></span>';
+        // Infra indicator (red/blue dot) shown to the right of the title if is_infra is defined
+        var infraIndicatorHtml = '';
+        if (typeof node.is_infra !== 'undefined') {
+            var dotColor = node.is_infra ? '#ef4444' : '#3b82f6';
+            var borderColor = node.is_infra ? '#b91c1c' : '#1e40af';
+            var title = node.is_infra ? 'Infrastructure' : 'Public';
+            infraIndicatorHtml = ' <span style="display: inline-block; width: 10px; height: 10px; background: ' + dotColor + '; border: 2px solid ' + borderColor + '; border-radius: 50%; vertical-align: middle;" title="' + title + '"></span>';
+        }
 
         var lastSeenHtml = node.last_seen
             ? '<p><span class="opacity-70">Last seen:</span> ' + node.last_seen.substring(0, 19).replace('T', ' ') + '</p>'
             : '';
 
         return '<div class="p-2">' +
-            '<h3 class="font-bold text-lg mb-2">' + iconHtml + ' ' + node.name + '</h3>' +
+            '<h3 class="font-bold text-lg mb-2">' + typeEmoji + ' ' + node.name + infraIndicatorHtml + '</h3>' +
             '<div class="space-y-1 text-sm">' +
                 '<p><span class="opacity-70">Type:</span> ' + typeDisplay + '</p>' +
                 roleHtml +
