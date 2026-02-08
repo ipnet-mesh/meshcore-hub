@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from meshcore_hub import __version__
 from meshcore_hub.common.schemas import RadioConfig
@@ -97,6 +98,10 @@ def create_app(
         docs_url=None,  # Disable docs for web app
         redoc_url=None,
     )
+
+    # Trust proxy headers (X-Forwarded-Proto, X-Forwarded-For) for HTTPS detection
+    # This ensures url_for() generates correct HTTPS URLs behind a reverse proxy
+    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
     # Store configuration in app state (use args if provided, else settings)
     app.state.api_url = api_url or settings.api_base_url
