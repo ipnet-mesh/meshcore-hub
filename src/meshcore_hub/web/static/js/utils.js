@@ -70,9 +70,35 @@ function populateRelativeTimeElements() {
     });
 }
 
+/**
+ * Initialize auto-submit behavior for filter forms
+ * Forms with data-auto-submit attribute will auto-submit on:
+ * - Change events on select and checkbox inputs
+ * - Enter key on text inputs
+ */
+function initAutoSubmitForms() {
+    document.querySelectorAll('form[data-auto-submit]').forEach(form => {
+        // Auto-submit on select/checkbox change
+        form.querySelectorAll('select, input[type="checkbox"]').forEach(el => {
+            el.addEventListener('change', () => form.submit());
+        });
+
+        // Submit on Enter key for text inputs
+        form.querySelectorAll('input[type="text"]').forEach(el => {
+            el.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    form.submit();
+                }
+            });
+        });
+    });
+}
+
 // Auto-populate when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     populateRelativeTimestamps();
     populateReceiverTooltips();
     populateRelativeTimeElements();
+    initAutoSubmitForms();
 });
