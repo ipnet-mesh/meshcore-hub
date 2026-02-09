@@ -104,7 +104,7 @@
                         <td>
                             <span class="badge badge-ghost badge-sm">{{ tag.value_type }}</span>
                         </td>
-                        <td class="text-sm opacity-70">{{ tag.updated_at[:10] if tag.updated_at else '-' }}</td>
+                        <td class="text-sm opacity-70">{{ tag.updated_at|localdate }}</td>
                         <td>
                             <div class="flex gap-1">
                                 <button class="btn btn-ghost btn-xs btn-edit">

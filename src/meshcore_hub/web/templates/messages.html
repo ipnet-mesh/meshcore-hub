@@ -62,7 +62,7 @@
                             {% endif %}
                         </div>
                         <div class="text-xs opacity-60">
-                            {{ msg.received_at[:16].replace('T', ' ') if msg.received_at else '-' }}
+                            {{ msg.received_at|localtime_short }}
                         </div>
                     </div>
                 </div>
@@ -105,7 +105,7 @@
                     {% if msg.message_type == 'channel' %}📻{% else %}👤{% endif %}
                 </td>
                 <td class="text-sm whitespace-nowrap">
-                    {{ msg.received_at[:19].replace('T', ' ') if msg.received_at else '-' }}
+                    {{ msg.received_at|localtime }}
                 </td>
                 <td class="text-sm whitespace-nowrap">
                     {% if msg.message_type == 'channel' %}

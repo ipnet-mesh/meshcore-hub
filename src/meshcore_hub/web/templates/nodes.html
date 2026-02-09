@@ -85,7 +85,7 @@
                 <div class="text-right flex-shrink-0">
                     <div class="text-xs opacity-60">
                         {% if node.last_seen %}
-                        {{ node.last_seen[:10] }}
+                        {{ node.last_seen|localdate }}
                         {% else %}
                         -
                         {% endif %}
@@ -143,7 +143,7 @@
                 </td>
                 <td class="text-sm whitespace-nowrap">
                     {% if node.last_seen %}
-                    {{ node.last_seen[:19].replace('T', ' ') }}
+                    {{ node.last_seen|localtime }}
                     {% else %}
                     -
                     {% endif %}

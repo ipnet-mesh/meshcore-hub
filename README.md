@@ -330,6 +330,7 @@ The collector automatically cleans up old event data and inactive nodes:
 | `WEB_PORT` | `8080` | Web server port |
 | `API_BASE_URL` | `http://localhost:8000` | API endpoint URL |
 | `WEB_ADMIN_ENABLED` | `false` | Enable admin interface at /a/ (requires auth proxy) |
+| `TZ` | `UTC` | Timezone for displaying dates/times (e.g., `America/New_York`, `Europe/London`) |
 | `NETWORK_NAME` | `MeshCore Network` | Display name for the network |
 | `NETWORK_CITY` | *(none)* | City where network is located |
 | `NETWORK_COUNTRY` | *(none)* | Country code (ISO 3166-1 alpha-2) |

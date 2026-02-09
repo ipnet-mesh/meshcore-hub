@@ -253,6 +253,9 @@ class WebSettings(CommonSettings):
     web_host: str = Field(default="0.0.0.0", description="Web server host")
     web_port: int = Field(default=8080, description="Web server port")
 
+    # Timezone for date/time display (uses standard TZ environment variable)
+    tz: str = Field(default="UTC", description="Timezone for displaying dates/times")
+
     # Admin interface (disabled by default for security)
     web_admin_enabled: bool = Field(
         default=False,
