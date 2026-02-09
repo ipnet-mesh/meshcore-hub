@@ -60,7 +60,7 @@
                             {% endif %}
                         </div>
                         {% if node.last_seen %}
-                        <time class="text-xs opacity-60 whitespace-nowrap" datetime="{{ node.last_seen }}" title="{{ node.last_seen[:19].replace('T', ' ') }}" data-relative-time>-</time>
+                        <time class="text-xs opacity-60 whitespace-nowrap" datetime="{{ node.last_seen }}" title="{{ node.last_seen|localtime }}" data-relative-time>-</time>
                         {% endif %}
                     </a>
                     {% endfor %}

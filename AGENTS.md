@@ -460,6 +460,7 @@ Key variables:
 - `MQTT_TLS` - Enable TLS/SSL for MQTT (default: `false`)
 - `API_READ_KEY`, `API_ADMIN_KEY` - API authentication keys
 - `WEB_ADMIN_ENABLED` - Enable admin interface at /a/ (default: `false`, requires auth proxy)
+- `TZ` - Timezone for web dashboard date/time display (default: `UTC`, e.g., `America/New_York`, `Europe/London`)
 - `LOG_LEVEL` - Logging verbosity
 
 The database defaults to `sqlite:///{DATA_HOME}/collector/meshcore.db` and does not typically need to be configured.

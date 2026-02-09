@@ -108,11 +108,11 @@
         <div class="flex flex-wrap gap-x-8 gap-y-2 mt-4 text-sm">
             <div>
                 <span class="opacity-70">First seen:</span>
-                {{ node.first_seen[:19].replace('T', ' ') if node.first_seen else '-' }}
+                {{ node.first_seen|localtime }}
             </div>
             <div>
                 <span class="opacity-70">Last seen:</span>
-                {{ node.last_seen[:19].replace('T', ' ') if node.last_seen else '-' }}
+                {{ node.last_seen|localtime }}
             </div>
             {% if has_coords %}
             <div>
@@ -142,7 +142,7 @@
                     <tbody>
                         {% for adv in advertisements %}
                         <tr>
-                            <td class="text-xs whitespace-nowrap">{{ adv.received_at[:19].replace('T', ' ') if adv.received_at else '-' }}</td>
+                            <td class="text-xs whitespace-nowrap">{{ adv.received_at|localtime }}</td>
                             <td>
                                 {% if adv.adv_type and adv.adv_type|lower == 'chat' %}
                                 <span title="Chat">💬</span>

@@ -136,7 +136,7 @@
                                 <span class="opacity-50">-</span>
                                 {% endif %}
                             </td>
-                            <td class="text-right text-sm opacity-70">{{ ad.received_at.split('T')[1][:8] if ad.received_at else '-' }}</td>
+                            <td class="text-right text-sm opacity-70">{{ ad.received_at|localtimeonly }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -166,7 +166,7 @@
                     <div class="space-y-1 pl-2 border-l-2 border-base-300">
                         {% for msg in messages %}
                         <div class="text-sm">
-                            <span class="text-xs opacity-50">{{ msg.received_at.split('T')[1][:5] if msg.received_at else '' }}</span>
+                            <span class="text-xs opacity-50">{{ msg.received_at|localtimeonly_short }}</span>
                             <span class="break-words" style="white-space: pre-wrap;">{{ msg.text }}</span>
                         </div>
                         {% endfor %}

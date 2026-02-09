@@ -2,8 +2,10 @@
 
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import AsyncGenerator
+from zoneinfo import ZoneInfo
 
 import httpx
 from fastapi import FastAPI, Request
@@ -23,6 +25,75 @@ logger = logging.getLogger(__name__)
 PACKAGE_DIR = Path(__file__).parent
 TEMPLATES_DIR = PACKAGE_DIR / "templates"
 STATIC_DIR = PACKAGE_DIR / "static"
+
+
+def _create_timezone_filters(tz_name: str) -> dict:
+    """Create Jinja2 filters for timezone-aware date formatting.
+
+    Args:
+        tz_name: IANA timezone name (e.g., "America/New_York", "Europe/London")
+
+    Returns:
+        Dict of filter name -> filter function
+    """
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        logger.warning(f"Invalid timezone '{tz_name}', falling back to UTC")
+        tz = ZoneInfo("UTC")
+
+    def format_datetime(
+        value: str | datetime | None,
+        fmt: str = "%Y-%m-%d %H:%M:%S %Z",
+    ) -> str:
+        """Format a UTC datetime string or object to the configured timezone.
+
+        Args:
+            value: ISO 8601 UTC datetime string or datetime object
+            fmt: strftime format string
+
+        Returns:
+            Formatted datetime string in configured timezone
+        """
+        if value is None:
+            return "-"
+
+        try:
+            if isinstance(value, str):
+                # Parse ISO 8601 string (assume UTC if no timezone)
+                value = value.replace("Z", "+00:00")
+                if "+" not in value and "-" not in value[10:]:
+                    # No timezone info, assume UTC
+                    dt = datetime.fromisoformat(value).replace(tzinfo=ZoneInfo("UTC"))
+                else:
+                    dt = datetime.fromisoformat(value)
+            else:
+                dt = value
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+
+            # Convert to target timezone
+            local_dt = dt.astimezone(tz)
+            return local_dt.strftime(fmt)
+        except Exception:
+            # Fallback to original value if parsing fails
+            return str(value)[:19].replace("T", " ") if value else "-"
+
+    def format_time(value: str | datetime | None, fmt: str = "%H:%M:%S %Z") -> str:
+        """Format just the time portion in the configured timezone."""
+        return format_datetime(value, fmt)
+
+    def format_date(value: str | datetime | None, fmt: str = "%Y-%m-%d") -> str:
+        """Format just the date portion in the configured timezone."""
+        return format_datetime(value, fmt)
+
+    return {
+        "localtime": format_datetime,
+        "localtime_short": lambda v: format_datetime(v, "%Y-%m-%d %H:%M %Z"),
+        "localdate": format_date,
+        "localtimeonly": format_time,
+        "localtimeonly_short": lambda v: format_time(v, "%H:%M %Z"),
+    }
 
 
 @asynccontextmanager
@@ -137,6 +208,13 @@ def create_app(
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
     templates.env.trim_blocks = True  # Remove first newline after block tags
     templates.env.lstrip_blocks = True  # Remove leading whitespace before block tags
+
+    # Register timezone-aware date formatting filters
+    app.state.timezone = settings.tz
+    tz_filters = _create_timezone_filters(settings.tz)
+    for name, func in tz_filters.items():
+        templates.env.filters[name] = func
+
     app.state.templates = templates
 
     # Initialize page loader for custom markdown pages
@@ -320,4 +398,5 @@ def get_network_context(request: Request) -> dict:
         "custom_pages": custom_pages,
         "logo_url": request.app.state.logo_url,
         "version": __version__,
+        "timezone": request.app.state.timezone,
     }

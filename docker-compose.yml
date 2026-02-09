@@ -262,6 +262,7 @@ services:
       - NETWORK_CONTACT_YOUTUBE=${NETWORK_CONTACT_YOUTUBE:-}
       - NETWORK_WELCOME_TEXT=${NETWORK_WELCOME_TEXT:-}
       - CONTENT_HOME=/content
+      - TZ=${TZ:-UTC}
     command: ["web"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
