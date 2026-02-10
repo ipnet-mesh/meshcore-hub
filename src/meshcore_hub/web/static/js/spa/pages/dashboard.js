@@ -111,8 +111,20 @@ function renderChannelMessages(channelMessages) {
     </div>`;
 }
 
+/** Return a Tailwind grid-cols class for the given visible column count. */
+function gridCols(count) {
+    if (count <= 1) return '';
+    return `md:grid-cols-${count}`;
+}
+
 export async function render(container, params, router) {
     try {
+        const config = getConfig();
+        const features = config.features || {};
+        const showNodes = features.nodes !== false;
+        const showAdverts = features.advertisements !== false;
+        const showMessages = features.messages !== false;
+
         const [stats, advertActivity, messageActivity, nodeCount] = await Promise.all([
             apiGet('/api/v1/dashboard/stats'),
             apiGet('/api/v1/dashboard/activity', { days: 7 }),
@@ -120,12 +132,22 @@ export async function render(container, params, router) {
             apiGet('/api/v1/dashboard/node-count', { days: 7 }),
         ]);
 
+        // Top section: stats + charts
+        const topCount = (showNodes ? 1 : 0) + (showAdverts ? 1 : 0) + (showMessages ? 1 : 0);
+        const topGrid = gridCols(topCount);
+
+        // Bottom section: recent adverts + recent channel messages
+        const bottomCount = (showAdverts ? 1 : 0) + (showMessages ? 1 : 0);
+        const bottomGrid = gridCols(bottomCount);
+
         litRender(html`
 <div class="flex items-center justify-between mb-6">
     <h1 class="text-3xl font-bold">Dashboard</h1>
 </div>
 
-<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+${topCount > 0 ? html`
+<div class="grid grid-cols-1 ${topGrid} gap-6 mb-6">
+    ${showNodes ? html`
     <div class="stat bg-base-100 rounded-box shadow">
         <div class="stat-figure" style="color: ${pageColors.nodes}">
             ${iconNodes('h-8 w-8')}
@@ -133,8 +155,9 @@ export async function render(container, params, router) {
         <div class="stat-title">Total Nodes</div>
         <div class="stat-value" style="color: ${pageColors.nodes}">${stats.total_nodes}</div>
         <div class="stat-desc">All discovered nodes</div>
-    </div>
+    </div>` : nothing}
 
+    ${showAdverts ? html`
     <div class="stat bg-base-100 rounded-box shadow">
         <div class="stat-figure" style="color: ${pageColors.adverts}">
             ${iconAdvertisements('h-8 w-8')}
@@ -142,8 +165,9 @@ export async function render(container, params, router) {
         <div class="stat-title">Advertisements</div>
         <div class="stat-value" style="color: ${pageColors.adverts}">${stats.advertisements_7d}</div>
         <div class="stat-desc">Last 7 days</div>
-    </div>
+    </div>` : nothing}
 
+    ${showMessages ? html`
     <div class="stat bg-base-100 rounded-box shadow">
         <div class="stat-figure" style="color: ${pageColors.messages}">
             ${iconMessages('h-8 w-8')}
@@ -151,10 +175,11 @@ export async function render(container, params, router) {
         <div class="stat-title">Messages</div>
         <div class="stat-value" style="color: ${pageColors.messages}">${stats.messages_7d}</div>
         <div class="stat-desc">Last 7 days</div>
-    </div>
+    </div>` : nothing}
 </div>
 
-<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+<div class="grid grid-cols-1 ${topGrid} gap-6 mb-8">
+    ${showNodes ? html`
     <div class="card bg-base-100 shadow-xl">
         <div class="card-body">
             <h2 class="card-title text-base">
@@ -166,8 +191,9 @@ export async function render(container, params, router) {
                 <canvas id="nodeChart"></canvas>
             </div>
         </div>
-    </div>
+    </div>` : nothing}
 
+    ${showAdverts ? html`
     <div class="card bg-base-100 shadow-xl">
         <div class="card-body">
             <h2 class="card-title text-base">
@@ -179,8 +205,9 @@ export async function render(container, params, router) {
                 <canvas id="advertChart"></canvas>
             </div>
         </div>
-    </div>
+    </div>` : nothing}
 
+    ${showMessages ? html`
     <div class="card bg-base-100 shadow-xl">
         <div class="card-body">
             <h2 class="card-title text-base">
@@ -192,10 +219,12 @@ export async function render(container, params, router) {
                 <canvas id="messageChart"></canvas>
             </div>
         </div>
-    </div>
-</div>
+    </div>` : nothing}
+</div>` : nothing}
 
-<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+${bottomCount > 0 ? html`
+<div class="grid grid-cols-1 ${bottomGrid} gap-6">
+    ${showAdverts ? html`
     <div class="card bg-base-100 shadow-xl">
         <div class="card-body">
             <h2 class="card-title">
@@ -204,12 +233,16 @@ export async function render(container, params, router) {
             </h2>
             ${renderRecentAds(stats.recent_advertisements)}
         </div>
-    </div>
+    </div>` : nothing}
 
-    ${renderChannelMessages(stats.channel_messages)}
-</div>`, container);
+    ${showMessages ? renderChannelMessages(stats.channel_messages) : nothing}
+</div>` : nothing}`, container);
 
-        window.initDashboardCharts(nodeCount, advertActivity, messageActivity);
+        window.initDashboardCharts(
+            showNodes ? nodeCount : null,
+            showAdverts ? advertActivity : null,
+            showMessages ? messageActivity : null,
+        );
 
         const chartIds = ['nodeChart', 'advertChart', 'messageChart'];
         return () => {

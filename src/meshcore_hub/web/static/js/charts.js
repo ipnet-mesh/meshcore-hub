@@ -137,82 +137,95 @@ function createLineChart(canvasId, data, label, borderColor, backgroundColor, fi
 }
 
 /**
- * Create a multi-dataset activity chart (for home page)
+ * Create a multi-dataset activity chart (for home page).
+ * Pass null for advertData or messageData to omit that series.
  * @param {string} canvasId - ID of the canvas element
- * @param {Object} advertData - Advertisement data with 'data' array
- * @param {Object} messageData - Message data with 'data' array
+ * @param {Object|null} advertData - Advertisement data with 'data' array, or null to omit
+ * @param {Object|null} messageData - Message data with 'data' array, or null to omit
  */
 function createActivityChart(canvasId, advertData, messageData) {
     var ctx = document.getElementById(canvasId);
-    if (!ctx || !advertData || !advertData.data || advertData.data.length === 0) {
-        return null;
+    if (!ctx) return null;
+
+    // Build datasets from whichever series are provided
+    var datasets = [];
+    var labels = null;
+
+    if (advertData && advertData.data && advertData.data.length > 0) {
+        if (!labels) labels = formatDateLabels(advertData.data);
+        datasets.push({
+            label: 'Advertisements',
+            data: advertData.data.map(function(d) { return d.count; }),
+            borderColor: ChartColors.adverts,
+            backgroundColor: ChartColors.advertsFill,
+            fill: false,
+            tension: 0.3,
+            pointRadius: 2,
+            pointHoverRadius: 5
+        });
     }
 
-    var labels = formatDateLabels(advertData.data);
-    var advertCounts = advertData.data.map(function(d) { return d.count; });
-    var messageCounts = messageData && messageData.data
-        ? messageData.data.map(function(d) { return d.count; })
-        : [];
+    if (messageData && messageData.data && messageData.data.length > 0) {
+        if (!labels) labels = formatDateLabels(messageData.data);
+        datasets.push({
+            label: 'Messages',
+            data: messageData.data.map(function(d) { return d.count; }),
+            borderColor: ChartColors.messages,
+            backgroundColor: ChartColors.messagesFill,
+            fill: false,
+            tension: 0.3,
+            pointRadius: 2,
+            pointHoverRadius: 5
+        });
+    }
+
+    if (datasets.length === 0 || !labels) return null;
 
     return new Chart(ctx, {
         type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Advertisements',
-                data: advertCounts,
-                borderColor: ChartColors.adverts,
-                backgroundColor: ChartColors.advertsFill,
-                fill: false,
-                tension: 0.3,
-                pointRadius: 2,
-                pointHoverRadius: 5
-            }, {
-                label: 'Messages',
-                data: messageCounts,
-                borderColor: ChartColors.messages,
-                backgroundColor: ChartColors.messagesFill,
-                fill: false,
-                tension: 0.3,
-                pointRadius: 2,
-                pointHoverRadius: 5
-            }]
-        },
+        data: { labels: labels, datasets: datasets },
         options: createChartOptions(true)
     });
 }
 
 /**
- * Initialize dashboard charts (nodes, advertisements, messages)
- * @param {Object} nodeData - Node count data
- * @param {Object} advertData - Advertisement data
- * @param {Object} messageData - Message data
+ * Initialize dashboard charts (nodes, advertisements, messages).
+ * Pass null for any data parameter to skip that chart.
+ * @param {Object|null} nodeData - Node count data, or null to skip
+ * @param {Object|null} advertData - Advertisement data, or null to skip
+ * @param {Object|null} messageData - Message data, or null to skip
  */
 function initDashboardCharts(nodeData, advertData, messageData) {
-    createLineChart(
-        'nodeChart',
-        nodeData,
-        'Total Nodes',
-        ChartColors.nodes,
-        ChartColors.nodesFill,
-        true
-    );
+    if (nodeData) {
+        createLineChart(
+            'nodeChart',
+            nodeData,
+            'Total Nodes',
+            ChartColors.nodes,
+            ChartColors.nodesFill,
+            true
+        );
+    }
 
-    createLineChart(
-        'advertChart',
-        advertData,
-        'Advertisements',
-        ChartColors.adverts,
-        ChartColors.advertsFill,
-        true
-    );
+    if (advertData) {
+        createLineChart(
+            'advertChart',
+            advertData,
+            'Advertisements',
+            ChartColors.adverts,
+            ChartColors.advertsFill,
+            true
+        );
+    }
 
-    createLineChart(
-        'messageChart',
-        messageData,
-        'Messages',
-        ChartColors.messages,
-        ChartColors.messagesFill,
-        true
-    );
+    if (messageData) {
+        createLineChart(
+            'messageChart',
+            messageData,
+            'Messages',
+            ChartColors.messages,
+            ChartColors.messagesFill,
+            true
+        );
+    }
 }

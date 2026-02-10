@@ -30,6 +30,7 @@ function renderRadioConfig(rc) {
 export async function render(container, params, router) {
     try {
         const config = getConfig();
+        const features = config.features || {};
         const networkName = config.network_name || 'MeshCore Network';
         const logoUrl = config.logo_url || '/static/img/logo.svg';
         const customPages = config.custom_pages || [];
@@ -42,7 +43,7 @@ export async function render(container, params, router) {
         ]);
 
         const cityCountry = (config.network_city && config.network_country)
-            ? html`<p class="text-2xl opacity-70 mt-2">${config.network_city}, ${config.network_country}</p>`
+            ? html`<p class="text-lg sm:text-2xl opacity-70 mt-2">${config.network_city}, ${config.network_country}</p>`
             : nothing;
 
         const welcomeText = config.network_welcome_text
@@ -52,50 +53,64 @@ export async function render(container, params, router) {
                 Monitor network activity, view connected nodes, and explore message history.
             </p>`;
 
-        const customPageButtons = customPages.slice(0, 3).map(page => html`
-            <a href="${page.url}" class="btn btn-outline btn-neutral">
-                ${iconPage('h-5 w-5 mr-2')}
-                ${page.title}
-            </a>`);
+        const customPageButtons = features.pages !== false
+            ? customPages.slice(0, 3).map(page => html`
+                <a href="${page.url}" class="btn btn-outline btn-neutral">
+                    ${iconPage('h-5 w-5 mr-2')}
+                    ${page.title}
+                </a>`)
+            : [];
+
+        const showStats = features.nodes !== false || features.advertisements !== false || features.messages !== false;
+        const showAdvertSeries = features.advertisements !== false;
+        const showMessageSeries = features.messages !== false;
+        const showActivityChart = showAdvertSeries || showMessageSeries;
 
         litRender(html`
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-base-100 rounded-box p-6">
-    <div class="lg:col-span-2 flex flex-col items-center text-center">
-        <div class="flex items-center gap-8 mb-4">
-            <img src="${logoUrl}" alt="${networkName}" class="h-36 w-36" />
+<div class="${showStats ? 'grid grid-cols-1 lg:grid-cols-3 gap-6' : ''} bg-base-100 rounded-box p-6">
+    <div class="${showStats ? 'lg:col-span-2' : ''} flex flex-col items-center text-center">
+        <div class="flex flex-col sm:flex-row items-center gap-4 sm:gap-8 mb-4">
+            <img src="${logoUrl}" alt="${networkName}" class="h-24 w-24 sm:h-36 sm:w-36" />
             <div class="flex flex-col justify-center">
-                <h1 class="text-6xl font-black tracking-tight">${networkName}</h1>
+                <h1 class="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight">${networkName}</h1>
                 ${cityCountry}
             </div>
         </div>
         ${welcomeText}
         <div class="flex-1"></div>
         <div class="flex flex-wrap justify-center gap-3 mt-auto">
+            ${features.dashboard !== false ? html`
             <a href="/dashboard" class="btn btn-outline btn-info">
                 ${iconDashboard('h-5 w-5 mr-2')}
                 Dashboard
-            </a>
+            </a>` : nothing}
+            ${features.nodes !== false ? html`
             <a href="/nodes" class="btn btn-outline btn-primary">
                 ${iconNodes('h-5 w-5 mr-2')}
                 Nodes
-            </a>
+            </a>` : nothing}
+            ${features.advertisements !== false ? html`
             <a href="/advertisements" class="btn btn-outline btn-secondary">
                 ${iconAdvertisements('h-5 w-5 mr-2')}
                 Adverts
-            </a>
+            </a>` : nothing}
+            ${features.messages !== false ? html`
             <a href="/messages" class="btn btn-outline btn-accent">
                 ${iconMessages('h-5 w-5 mr-2')}
                 Messages
-            </a>
+            </a>` : nothing}
+            ${features.map !== false ? html`
             <a href="/map" class="btn btn-outline btn-warning">
                 ${iconMap('h-5 w-5 mr-2')}
                 Map
-            </a>
+            </a>` : nothing}
             ${customPageButtons}
         </div>
     </div>
 
+    ${showStats ? html`
     <div class="flex flex-col gap-4">
+        ${features.nodes !== false ? html`
         <div class="stat bg-base-200 rounded-box">
             <div class="stat-figure" style="color: ${pageColors.nodes}">
                 ${iconNodes('h-8 w-8')}
@@ -103,8 +118,9 @@ export async function render(container, params, router) {
             <div class="stat-title">Total Nodes</div>
             <div class="stat-value" style="color: ${pageColors.nodes}">${stats.total_nodes}</div>
             <div class="stat-desc">All discovered nodes</div>
-        </div>
+        </div>` : nothing}
 
+        ${features.advertisements !== false ? html`
         <div class="stat bg-base-200 rounded-box">
             <div class="stat-figure" style="color: ${pageColors.adverts}">
                 ${iconAdvertisements('h-8 w-8')}
@@ -112,8 +128,9 @@ export async function render(container, params, router) {
             <div class="stat-title">Advertisements</div>
             <div class="stat-value" style="color: ${pageColors.adverts}">${stats.advertisements_7d}</div>
             <div class="stat-desc">Last 7 days</div>
-        </div>
+        </div>` : nothing}
 
+        ${features.messages !== false ? html`
         <div class="stat bg-base-200 rounded-box">
             <div class="stat-figure" style="color: ${pageColors.messages}">
                 ${iconMessages('h-8 w-8')}
@@ -121,11 +138,11 @@ export async function render(container, params, router) {
             <div class="stat-title">Messages</div>
             <div class="stat-value" style="color: ${pageColors.messages}">${stats.messages_7d}</div>
             <div class="stat-desc">Last 7 days</div>
-        </div>
-    </div>
+        </div>` : nothing}
+    </div>` : nothing}
 </div>
 
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+<div class="grid grid-cols-1 md:grid-cols-2 ${showActivityChart ? 'lg:grid-cols-3' : ''} gap-6 mt-6">
     <div class="card bg-base-100 shadow-xl">
         <div class="card-body">
             <h2 class="card-title">
@@ -158,6 +175,7 @@ export async function render(container, params, router) {
         </div>
     </div>
 
+    ${showActivityChart ? html`
     <div class="card bg-base-100 shadow-xl">
         <div class="card-body">
             <h2 class="card-title">
@@ -169,10 +187,17 @@ export async function render(container, params, router) {
                 <canvas id="activityChart"></canvas>
             </div>
         </div>
-    </div>
+    </div>` : nothing}
 </div>`, container);
 
-        const chart = window.createActivityChart('activityChart', advertActivity, messageActivity);
+        let chart = null;
+        if (showActivityChart) {
+            chart = window.createActivityChart(
+                'activityChart',
+                showAdvertSeries ? advertActivity : null,
+                showMessageSeries ? messageActivity : null,
+            );
+        }
 
         return () => {
             if (chart) chart.destroy();

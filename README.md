@@ -341,6 +341,22 @@ The collector automatically cleans up old event data and inactive nodes:
 | `NETWORK_CONTACT_GITHUB` | *(none)* | GitHub repository URL |
 | `CONTENT_HOME` | `./content` | Directory containing custom content (pages/, media/) |
 
+#### Feature Flags
+
+Control which pages are visible in the web dashboard. Disabled features are fully hidden: removed from navigation, return 404 on their routes, and excluded from sitemap/robots.txt.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FEATURE_DASHBOARD` | `true` | Enable the `/dashboard` page |
+| `FEATURE_NODES` | `true` | Enable the `/nodes` pages (list, detail, short links) |
+| `FEATURE_ADVERTISEMENTS` | `true` | Enable the `/advertisements` page |
+| `FEATURE_MESSAGES` | `true` | Enable the `/messages` page |
+| `FEATURE_MAP` | `true` | Enable the `/map` page and `/map/data` endpoint |
+| `FEATURE_MEMBERS` | `true` | Enable the `/members` page |
+| `FEATURE_PAGES` | `true` | Enable custom markdown pages |
+
+**Dependencies:** Dashboard auto-disables when all of Nodes/Advertisements/Messages are disabled. Map auto-disables when Nodes is disabled.
+
 ### Custom Content
 
 The web dashboard supports custom content including markdown pages and media files. Content is organized in subdirectories:

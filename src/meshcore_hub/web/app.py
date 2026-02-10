@@ -68,23 +68,32 @@ def _build_config_json(app: FastAPI, request: Request) -> str:
     radio_config_dict = None
     if radio_config:
         radio_config_dict = {
+            "profile": radio_config.profile,
             "frequency": radio_config.frequency,
             "bandwidth": radio_config.bandwidth,
             "spreading_factor": radio_config.spreading_factor,
             "coding_rate": radio_config.coding_rate,
+            "tx_power": radio_config.tx_power,
         }
 
-    # Get custom pages for navigation
+    # Get feature flags
+    features = app.state.features
+
+    # Get custom pages for navigation (empty when pages feature is disabled)
     page_loader = app.state.page_loader
-    custom_pages = [
-        {
-            "slug": p.slug,
-            "title": p.title,
-            "url": p.url,
-            "menu_order": p.menu_order,
-        }
-        for p in page_loader.get_menu_pages()
-    ]
+    custom_pages = (
+        [
+            {
+                "slug": p.slug,
+                "title": p.title,
+                "url": p.url,
+                "menu_order": p.menu_order,
+            }
+            for p in page_loader.get_menu_pages()
+        ]
+        if features.get("pages", True)
+        else []
+    )
 
     config = {
         "network_name": app.state.network_name,
@@ -97,6 +106,7 @@ def _build_config_json(app: FastAPI, request: Request) -> str:
         "network_contact_youtube": app.state.network_contact_youtube,
         "network_welcome_text": app.state.network_welcome_text,
         "admin_enabled": app.state.admin_enabled,
+        "features": features,
         "custom_pages": custom_pages,
         "logo_url": app.state.logo_url,
         "version": __version__,
@@ -121,6 +131,7 @@ def create_app(
     network_contact_github: str | None = None,
     network_contact_youtube: str | None = None,
     network_welcome_text: str | None = None,
+    features: dict[str, bool] | None = None,
 ) -> FastAPI:
     """Create and configure the web dashboard application.
 
@@ -140,6 +151,7 @@ def create_app(
         network_contact_github: GitHub repository URL
         network_contact_youtube: YouTube channel URL
         network_welcome_text: Welcome text for homepage
+        features: Feature flags dict (default: all enabled from settings)
 
     Returns:
         Configured FastAPI application
@@ -188,6 +200,24 @@ def create_app(
     app.state.network_welcome_text = (
         network_welcome_text or settings.network_welcome_text
     )
+
+    # Store feature flags with automatic dependencies:
+    # - Dashboard requires at least one of nodes/advertisements/messages
+    # - Map requires nodes (map displays node locations)
+    effective_features = features if features is not None else settings.features
+    overrides: dict[str, bool] = {}
+    has_dashboard_content = (
+        effective_features.get("nodes", True)
+        or effective_features.get("advertisements", True)
+        or effective_features.get("messages", True)
+    )
+    if not has_dashboard_content:
+        overrides["dashboard"] = False
+    if not effective_features.get("nodes", True):
+        overrides["map"] = False
+    if overrides:
+        effective_features = {**effective_features, **overrides}
+    app.state.features = effective_features
 
     # Set up templates (for SPA shell only)
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -309,6 +339,8 @@ def create_app(
     @app.get("/map/data", tags=["Map"])
     async def map_data(request: Request) -> JSONResponse:
         """Return node location data as JSON for the map."""
+        if not request.app.state.features.get("map", True):
+            return JSONResponse({"detail": "Map feature is disabled"}, status_code=404)
         nodes_with_location: list[dict[str, Any]] = []
         members_list: list[dict[str, Any]] = []
         members_by_id: dict[str, dict[str, Any]] = {}
@@ -448,6 +480,10 @@ def create_app(
     @app.get("/spa/pages/{slug}", tags=["SPA"])
     async def get_custom_page(request: Request, slug: str) -> JSONResponse:
         """Get a custom page by slug."""
+        if not request.app.state.features.get("pages", True):
+            return JSONResponse(
+                {"detail": "Pages feature is disabled"}, status_code=404
+            )
         page_loader = request.app.state.page_loader
         page = page_loader.get_page(slug)
         if not page:
@@ -489,21 +525,57 @@ def create_app(
     async def robots_txt(request: Request) -> str:
         """Serve robots.txt."""
         base_url = _get_https_base_url(request)
-        return f"User-agent: *\nDisallow:\n\nSitemap: {base_url}/sitemap.xml\n"
+        features = request.app.state.features
+
+        # Always disallow message and node detail pages
+        disallow_lines = [
+            "Disallow: /messages",
+            "Disallow: /nodes/",
+        ]
+
+        # Add disallow for disabled features
+        feature_paths = {
+            "dashboard": "/dashboard",
+            "nodes": "/nodes",
+            "advertisements": "/advertisements",
+            "map": "/map",
+            "members": "/members",
+            "pages": "/pages",
+        }
+        for feature, path in feature_paths.items():
+            if not features.get(feature, True):
+                line = f"Disallow: {path}"
+                if line not in disallow_lines:
+                    disallow_lines.append(line)
+
+        disallow_block = "\n".join(disallow_lines)
+        return (
+            f"User-agent: *\n"
+            f"{disallow_block}\n"
+            f"\n"
+            f"Sitemap: {base_url}/sitemap.xml\n"
+        )
 
     @app.get("/sitemap.xml")
     async def sitemap_xml(request: Request) -> Response:
-        """Generate dynamic sitemap including all node pages."""
+        """Generate dynamic sitemap."""
         base_url = _get_https_base_url(request)
+        features = request.app.state.features
+
+        # Home is always included; other pages depend on feature flags
+        all_static_pages = [
+            ("", "daily", "1.0", None),
+            ("/dashboard", "hourly", "0.9", "dashboard"),
+            ("/nodes", "hourly", "0.9", "nodes"),
+            ("/advertisements", "hourly", "0.8", "advertisements"),
+            ("/map", "daily", "0.7", "map"),
+            ("/members", "weekly", "0.6", "members"),
+        ]
 
         static_pages = [
-            ("", "daily", "1.0"),
-            ("/dashboard", "hourly", "0.9"),
-            ("/nodes", "hourly", "0.9"),
-            ("/advertisements", "hourly", "0.8"),
-            ("/messages", "hourly", "0.8"),
-            ("/map", "daily", "0.7"),
-            ("/members", "weekly", "0.6"),
+            (path, freq, prio)
+            for path, freq, prio, feature in all_static_pages
+            if feature is None or features.get(feature, True)
         ]
 
         urls = []
@@ -516,34 +588,16 @@ def create_app(
                 f"  </url>"
             )
 
-        try:
-            response = await request.app.state.http_client.get(
-                "/api/v1/nodes", params={"limit": 500, "role": "infra"}
-            )
-            if response.status_code == 200:
-                nodes = response.json().get("items", [])
-                for node in nodes:
-                    public_key = node.get("public_key")
-                    if public_key:
-                        urls.append(
-                            f"  <url>\n"
-                            f"    <loc>{base_url}/nodes/{public_key[:8]}</loc>\n"
-                            f"    <changefreq>daily</changefreq>\n"
-                            f"    <priority>0.5</priority>\n"
-                            f"  </url>"
-                        )
-        except Exception as e:
-            logger.warning(f"Failed to fetch nodes for sitemap: {e}")
-
-        page_loader = request.app.state.page_loader
-        for page in page_loader.get_menu_pages():
-            urls.append(
-                f"  <url>\n"
-                f"    <loc>{base_url}{page.url}</loc>\n"
-                f"    <changefreq>weekly</changefreq>\n"
-                f"    <priority>0.6</priority>\n"
-                f"  </url>"
-            )
+        if features.get("pages", True):
+            page_loader = request.app.state.page_loader
+            for page in page_loader.get_menu_pages():
+                urls.append(
+                    f"  <url>\n"
+                    f"    <loc>{base_url}{page.url}</loc>\n"
+                    f"    <changefreq>weekly</changefreq>\n"
+                    f"    <priority>0.6</priority>\n"
+                    f"  </url>"
+                )
 
         xml = (
             '<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -559,8 +613,11 @@ def create_app(
     async def spa_catchall(request: Request, path: str = "") -> HTMLResponse:
         """Serve the SPA shell for all non-API routes."""
         templates_inst: Jinja2Templates = request.app.state.templates
+        features = request.app.state.features
         page_loader = request.app.state.page_loader
-        custom_pages = page_loader.get_menu_pages()
+        custom_pages = (
+            page_loader.get_menu_pages() if features.get("pages", True) else []
+        )
 
         config_json = _build_config_json(request.app, request)
 
@@ -577,6 +634,7 @@ def create_app(
                 "network_contact_youtube": request.app.state.network_contact_youtube,
                 "network_welcome_text": request.app.state.network_welcome_text,
                 "admin_enabled": request.app.state.admin_enabled,
+                "features": features,
                 "custom_pages": custom_pages,
                 "logo_url": request.app.state.logo_url,
                 "version": __version__,

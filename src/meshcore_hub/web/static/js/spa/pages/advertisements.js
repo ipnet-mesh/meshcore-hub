@@ -132,7 +132,7 @@ ${content}`, container);
                     receiversBlock = html`<div class="flex gap-1">
                         ${ad.receivers.map(recv => {
                             const recvName = recv.tag_name || recv.name || truncateKey(recv.public_key, 12);
-                            return html`<a href="/nodes/${recv.public_key}" class="text-lg hover:opacity-70" data-receiver-tooltip data-name=${recvName} data-timestamp=${recv.received_at || ''}>\u{1F4E1}</a>`;
+                            return html`<a href="/nodes/${recv.public_key}" class="text-lg hover:opacity-70" title=${recvName}>\u{1F4E1}</a>`;
                         })}
                     </div>`;
                 } else if (ad.received_by) {
