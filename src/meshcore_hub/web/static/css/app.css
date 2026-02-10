@@ -49,9 +49,12 @@
     filter: brightness(0.15);
 }
 
-/* Soften hero heading to dark grey in light mode */
+/* Ensure hero heading is pure black/white per theme */
+.hero-title {
+    color: #fff;
+}
 [data-theme="light"] .hero-title {
-    color: #6b7280;
+    color: #000;
 }
 
 /* Nav icon colors */
