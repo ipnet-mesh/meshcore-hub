@@ -287,7 +287,8 @@ meshcore-hub/
 │   └── web/
 │       ├── cli.py
 │       ├── app.py            # FastAPI app
-│       ├── templates/        # Jinja2 templates (spa.html shell, base.html)
+│       ├── pages.py          # Custom markdown page loader
+│       ├── templates/        # Jinja2 templates (spa.html shell)
 │       └── static/
 │           ├── css/app.css   # Custom styles
 │           └── js/spa/       # SPA frontend (ES modules)
@@ -312,9 +313,12 @@ meshcore-hub/
 ├── etc/
 │   └── mosquitto.conf        # MQTT broker configuration
 ├── example/
-│   └── seed/                 # Example seed data files
-│       ├── node_tags.yaml    # Example node tags
-│       └── members.yaml      # Example network members
+│   ├── seed/                 # Example seed data files
+│   │   ├── node_tags.yaml    # Example node tags
+│   │   └── members.yaml      # Example network members
+│   └── content/              # Example custom content
+│       ├── pages/            # Example custom pages
+│       └── media/            # Example media files
 ├── seed/                     # Seed data directory (SEED_HOME)
 │   ├── node_tags.yaml        # Node tags for import
 │   └── members.yaml          # Network members for import
@@ -715,9 +719,10 @@ await mc.start_auto_message_fetching()
 
 On startup, the receiver performs these initialization steps:
 1. Set device clock to current Unix timestamp
-2. Send a local (non-flood) advertisement
-3. Start automatic message fetching
-4. Sync the device's contact database
+2. Optionally set the device name (if `MESHCORE_DEVICE_NAME` is configured)
+3. Send a flood advertisement (broadcasts device name to the mesh)
+4. Start automatic message fetching
+5. Sync the device's contact database
 
 ### Contact Sync Behavior
 
