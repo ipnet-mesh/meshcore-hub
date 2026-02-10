@@ -23,7 +23,7 @@
     --color-nodes: oklch(0.65 0.24 265);       /* violet */
     --color-adverts: oklch(0.7 0.17 330);      /* magenta */
     --color-messages: oklch(0.75 0.18 180);    /* teal */
-    --color-map: oklch(0.8 0.17 80);            /* yellow (matches btn-warning) */
+    --color-map: oklch(0.8471 0.199 83.87);      /* yellow (matches btn-warning) */
     --color-members: oklch(0.72 0.17 50);      /* orange */
 }
 
