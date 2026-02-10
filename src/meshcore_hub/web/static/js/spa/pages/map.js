@@ -174,7 +174,7 @@ export async function render(container, params, router) {
     </div>
 </div>
 
-<div class="card bg-base-100 shadow mb-6">
+<div class="card shadow mb-6 panel-solid" style="--panel-color: var(--color-neutral)">
     <div class="card-body py-4">
         <div class="flex gap-4 flex-wrap items-end">
             <div class="form-control">

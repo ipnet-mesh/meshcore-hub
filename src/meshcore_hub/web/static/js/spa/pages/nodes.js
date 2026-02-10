@@ -133,7 +133,7 @@ ${content}`, container);
         });
 
         renderPage(html`
-<div class="card bg-base-100 shadow mb-6">
+<div class="card shadow mb-6 panel-solid" style="--panel-color: var(--color-neutral)">
     <div class="card-body py-4">
         <form method="GET" action="/nodes" class="flex gap-4 flex-wrap items-end" @submit=${createFilterHandler('/nodes', navigate)}>
             <div class="form-control">

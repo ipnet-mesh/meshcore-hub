@@ -25,6 +25,7 @@
     --color-messages: oklch(0.75 0.18 180);    /* teal */
     --color-map: oklch(0.8471 0.199 83.87);      /* yellow (matches btn-warning) */
     --color-members: oklch(0.72 0.17 50);      /* orange */
+    --color-neutral: oklch(0.3 0.01 250);     /* subtle dark grey */
 }
 
 /* Light mode: darker section colors for contrast on light backgrounds */
@@ -35,6 +36,7 @@
     --color-messages: oklch(0.55 0.18 180);
     --color-map: oklch(0.58 0.16 45);
     --color-members: oklch(0.55 0.18 25);
+    --color-neutral: oklch(0.85 0.01 250);
 }
 
 /* ==========================================================================
@@ -88,6 +90,34 @@
 }
 #app .btn-outline:hover {
     color: #fff !important;
+}
+
+/* ==========================================================================
+   Panel Glow
+   Radial color glow from bottom-right corner.
+   Set --panel-color on the element for a section-tinted glow.
+   ========================================================================== */
+
+.panel-glow {
+    background-image:
+        radial-gradient(
+            ellipse at 80% 80%,
+            color-mix(in oklch, var(--panel-color, transparent) 15%, transparent),
+            transparent 70%
+        );
+}
+
+.panel-glow.panel-glow-tl {
+    background-image:
+        radial-gradient(
+            ellipse at 20% 20%,
+            color-mix(in oklch, var(--panel-color, transparent) 15%, transparent),
+            transparent 70%
+        );
+}
+
+.panel-solid {
+    background-color: color-mix(in oklch, var(--panel-color, transparent) 10%, oklch(var(--b1)));
 }
 
 /* ==========================================================================

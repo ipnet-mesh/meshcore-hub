@@ -67,7 +67,7 @@ export async function render(container, params, router) {
         const showActivityChart = showAdvertSeries || showMessageSeries;
 
         litRender(html`
-<div class="${showStats ? 'grid grid-cols-1 lg:grid-cols-3 gap-6' : ''} bg-base-100 rounded-box p-6">
+<div class="${showStats ? 'grid grid-cols-1 lg:grid-cols-3 gap-6' : ''} bg-base-100 rounded-box shadow-xl p-6">
     <div class="${showStats ? 'lg:col-span-2' : ''} flex flex-col items-center text-center">
         <div class="flex flex-col sm:flex-row items-center gap-4 sm:gap-8 mb-4">
             <img src="${logoUrl}" alt="${networkName}" class="theme-logo h-24 w-24 sm:h-36 sm:w-36" />
@@ -111,7 +111,7 @@ export async function render(container, params, router) {
     ${showStats ? html`
     <div class="flex flex-col gap-4">
         ${features.nodes !== false ? html`
-        <div class="stat bg-base-200 rounded-box">
+        <div class="stat bg-base-200 rounded-box shadow panel-glow" style="--panel-color: ${pageColors.nodes}">
             <div class="stat-figure" style="color: ${pageColors.nodes}">
                 ${iconNodes('h-8 w-8')}
             </div>
@@ -121,7 +121,7 @@ export async function render(container, params, router) {
         </div>` : nothing}
 
         ${features.advertisements !== false ? html`
-        <div class="stat bg-base-200 rounded-box">
+        <div class="stat bg-base-200 rounded-box shadow panel-glow" style="--panel-color: ${pageColors.adverts}">
             <div class="stat-figure" style="color: ${pageColors.adverts}">
                 ${iconAdvertisements('h-8 w-8')}
             </div>
@@ -131,7 +131,7 @@ export async function render(container, params, router) {
         </div>` : nothing}
 
         ${features.messages !== false ? html`
-        <div class="stat bg-base-200 rounded-box">
+        <div class="stat bg-base-200 rounded-box shadow panel-glow" style="--panel-color: ${pageColors.messages}">
             <div class="stat-figure" style="color: ${pageColors.messages}">
                 ${iconMessages('h-8 w-8')}
             </div>

@@ -45,7 +45,7 @@ function renderRecentAds(ads) {
     if (!ads || ads.length === 0) {
         return html`<p class="text-sm opacity-70">No advertisements recorded yet.</p>`;
     }
-    const rows = ads.map(ad => {
+    const rows = ads.slice(0, 5).map(ad => {
         const friendlyName = ad.tag_name || ad.name;
         const displayName = friendlyName || (ad.public_key.slice(0, 12) + '...');
         const keyLine = friendlyName
@@ -98,7 +98,7 @@ function renderChannelMessages(channelMessages) {
         </div>`;
     });
 
-    return html`<div class="card bg-base-100 shadow-xl">
+    return html`<div class="card bg-base-100 shadow-xl panel-glow" style="--panel-color: var(--color-neutral)">
         <div class="card-body">
             <h2 class="card-title">
                 ${iconChannel('h-6 w-6')}
@@ -148,7 +148,7 @@ export async function render(container, params, router) {
 ${topCount > 0 ? html`
 <div class="grid grid-cols-1 ${topGrid} gap-6 mb-6">
     ${showNodes ? html`
-    <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat bg-base-100 rounded-box shadow-xl panel-glow" style="--panel-color: ${pageColors.nodes}">
         <div class="stat-figure" style="color: ${pageColors.nodes}">
             ${iconNodes('h-8 w-8')}
         </div>
@@ -158,7 +158,7 @@ ${topCount > 0 ? html`
     </div>` : nothing}
 
     ${showAdverts ? html`
-    <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat bg-base-100 rounded-box shadow-xl panel-glow" style="--panel-color: ${pageColors.adverts}">
         <div class="stat-figure" style="color: ${pageColors.adverts}">
             ${iconAdvertisements('h-8 w-8')}
         </div>
@@ -168,7 +168,7 @@ ${topCount > 0 ? html`
     </div>` : nothing}
 
     ${showMessages ? html`
-    <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat bg-base-100 rounded-box shadow-xl panel-glow" style="--panel-color: ${pageColors.messages}">
         <div class="stat-figure" style="color: ${pageColors.messages}">
             ${iconMessages('h-8 w-8')}
         </div>
@@ -180,7 +180,7 @@ ${topCount > 0 ? html`
 
 <div class="grid grid-cols-1 ${topGrid} gap-6 mb-8">
     ${showNodes ? html`
-    <div class="card bg-base-100 shadow-xl">
+    <div class="card bg-base-100 shadow-xl panel-glow" style="--panel-color: var(--color-neutral)">
         <div class="card-body">
             <h2 class="card-title text-base">
                 ${iconNodes('h-5 w-5')}
@@ -194,7 +194,7 @@ ${topCount > 0 ? html`
     </div>` : nothing}
 
     ${showAdverts ? html`
-    <div class="card bg-base-100 shadow-xl">
+    <div class="card bg-base-100 shadow-xl panel-glow" style="--panel-color: var(--color-neutral)">
         <div class="card-body">
             <h2 class="card-title text-base">
                 ${iconAdvertisements('h-5 w-5')}
@@ -208,7 +208,7 @@ ${topCount > 0 ? html`
     </div>` : nothing}
 
     ${showMessages ? html`
-    <div class="card bg-base-100 shadow-xl">
+    <div class="card bg-base-100 shadow-xl panel-glow" style="--panel-color: var(--color-neutral)">
         <div class="card-body">
             <h2 class="card-title text-base">
                 ${iconMessages('h-5 w-5')}
@@ -225,7 +225,7 @@ ${topCount > 0 ? html`
 ${bottomCount > 0 ? html`
 <div class="grid grid-cols-1 ${bottomGrid} gap-6">
     ${showAdverts ? html`
-    <div class="card bg-base-100 shadow-xl">
+    <div class="card bg-base-100 shadow-xl panel-glow" style="--panel-color: var(--color-neutral)">
         <div class="card-body">
             <h2 class="card-title">
                 ${iconAdvertisements('h-6 w-6')}
