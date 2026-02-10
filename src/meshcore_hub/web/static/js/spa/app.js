@@ -28,6 +28,10 @@ const pages = {
 const appContainer = document.getElementById('app');
 const router = new Router();
 
+// Read feature flags from config
+const config = getConfig();
+const features = config.features || {};
+
 /**
  * Create a route handler that lazy-loads a page module and calls its render function.
  * @param {Function} loader - Module loader function
@@ -51,20 +55,35 @@ function pageHandler(loader) {
     };
 }
 
-// Register routes
+// Register routes (conditionally based on feature flags)
 router.addRoute('/', pageHandler(pages.home));
-router.addRoute('/dashboard', pageHandler(pages.dashboard));
-router.addRoute('/nodes', pageHandler(pages.nodes));
-router.addRoute('/nodes/:publicKey', pageHandler(pages.nodeDetail));
-router.addRoute('/n/:prefix', async (params) => {
-    // Short link redirect
-    router.navigate(`/nodes/${params.prefix}`, true);
-});
-router.addRoute('/messages', pageHandler(pages.messages));
-router.addRoute('/advertisements', pageHandler(pages.advertisements));
-router.addRoute('/map', pageHandler(pages.map));
-router.addRoute('/members', pageHandler(pages.members));
-router.addRoute('/pages/:slug', pageHandler(pages.customPage));
+
+if (features.dashboard !== false) {
+    router.addRoute('/dashboard', pageHandler(pages.dashboard));
+}
+if (features.nodes !== false) {
+    router.addRoute('/nodes', pageHandler(pages.nodes));
+    router.addRoute('/nodes/:publicKey', pageHandler(pages.nodeDetail));
+    router.addRoute('/n/:prefix', async (params) => {
+        // Short link redirect
+        router.navigate(`/nodes/${params.prefix}`, true);
+    });
+}
+if (features.messages !== false) {
+    router.addRoute('/messages', pageHandler(pages.messages));
+}
+if (features.advertisements !== false) {
+    router.addRoute('/advertisements', pageHandler(pages.advertisements));
+}
+if (features.map !== false) {
+    router.addRoute('/map', pageHandler(pages.map));
+}
+if (features.members !== false) {
+    router.addRoute('/members', pageHandler(pages.members));
+}
+if (features.pages !== false) {
+    router.addRoute('/pages/:slug', pageHandler(pages.customPage));
+}
 
 // Admin routes
 router.addRoute('/a', pageHandler(pages.adminIndex));
@@ -114,17 +133,19 @@ function updatePageTitle(pathname) {
     const networkName = config.network_name || 'MeshCore Network';
     const titles = {
         '/': networkName,
-        '/dashboard': `Dashboard - ${networkName}`,
-        '/nodes': `Nodes - ${networkName}`,
-        '/messages': `Messages - ${networkName}`,
-        '/advertisements': `Advertisements - ${networkName}`,
-        '/map': `Map - ${networkName}`,
-        '/members': `Members - ${networkName}`,
         '/a': `Admin - ${networkName}`,
         '/a/': `Admin - ${networkName}`,
         '/a/node-tags': `Node Tags - Admin - ${networkName}`,
         '/a/members': `Members - Admin - ${networkName}`,
     };
+
+    // Add feature-dependent titles
+    if (features.dashboard !== false) titles['/dashboard'] = `Dashboard - ${networkName}`;
+    if (features.nodes !== false) titles['/nodes'] = `Nodes - ${networkName}`;
+    if (features.messages !== false) titles['/messages'] = `Messages - ${networkName}`;
+    if (features.advertisements !== false) titles['/advertisements'] = `Advertisements - ${networkName}`;
+    if (features.map !== false) titles['/map'] = `Map - ${networkName}`;
+    if (features.members !== false) titles['/members'] = `Members - ${networkName}`;
 
     if (titles[pathname]) {
         document.title = titles[pathname];

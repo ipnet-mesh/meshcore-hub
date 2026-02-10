@@ -263,6 +263,14 @@ services:
       - NETWORK_WELCOME_TEXT=${NETWORK_WELCOME_TEXT:-}
       - CONTENT_HOME=/content
       - TZ=${TZ:-UTC}
+      # Feature flags (set to false to disable specific pages)
+      - FEATURE_DASHBOARD=${FEATURE_DASHBOARD:-true}
+      - FEATURE_NODES=${FEATURE_NODES:-true}
+      - FEATURE_ADVERTISEMENTS=${FEATURE_ADVERTISEMENTS:-true}
+      - FEATURE_MESSAGES=${FEATURE_MESSAGES:-true}
+      - FEATURE_MAP=${FEATURE_MAP:-true}
+      - FEATURE_MEMBERS=${FEATURE_MEMBERS:-true}
+      - FEATURE_PAGES=${FEATURE_PAGES:-true}
     command: ["web"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]

@@ -183,6 +183,11 @@ def web(
     if effective_city and effective_country:
         click.echo(f"Location: {effective_city}, {effective_country}")
     click.echo(f"Reload mode: {reload}")
+    disabled_features = [
+        name for name, enabled in settings.features.items() if not enabled
+    ]
+    if disabled_features:
+        click.echo(f"Disabled features: {', '.join(disabled_features)}")
     click.echo("=" * 50)
 
     if reload:

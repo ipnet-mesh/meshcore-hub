@@ -9,6 +9,18 @@ from httpx import Response
 
 from meshcore_hub.web.app import create_app
 
+# Explicit all-enabled features dict so tests are not affected by the user's
+# local .env file (pydantic-settings loads .env by default).
+ALL_FEATURES_ENABLED = {
+    "dashboard": True,
+    "nodes": True,
+    "advertisements": True,
+    "messages": True,
+    "map": True,
+    "members": True,
+    "pages": True,
+}
+
 
 class MockHttpClient:
     """Mock HTTP client for testing web routes."""
@@ -315,6 +327,7 @@ def web_app(mock_http_client: MockHttpClient) -> Any:
         network_radio_config="Test Radio Config",
         network_contact_email="test@example.com",
         network_contact_discord="https://discord.gg/test",
+        features=ALL_FEATURES_ENABLED,
     )
 
     # Override the lifespan to use our mock client
@@ -333,6 +346,38 @@ def client(web_app: Any, mock_http_client: MockHttpClient) -> TestClient:
     # Ensure the mock client is attached
     web_app.state.http_client = mock_http_client
     return TestClient(web_app, raise_server_exceptions=True)
+
+
+@pytest.fixture
+def web_app_no_features(mock_http_client: MockHttpClient) -> Any:
+    """Create a web app with all features disabled."""
+    app = create_app(
+        api_url="http://localhost:8000",
+        api_key="test-api-key",
+        network_name="Test Network",
+        network_city="Test City",
+        network_country="Test Country",
+        features={
+            "dashboard": False,
+            "nodes": False,
+            "advertisements": False,
+            "messages": False,
+            "map": False,
+            "members": False,
+            "pages": False,
+        },
+    )
+    app.state.http_client = mock_http_client
+    return app
+
+
+@pytest.fixture
+def client_no_features(
+    web_app_no_features: Any, mock_http_client: MockHttpClient
+) -> TestClient:
+    """Create a test client with all features disabled."""
+    web_app_no_features.state.http_client = mock_http_client
+    return TestClient(web_app_no_features, raise_server_exceptions=True)
 
 
 @pytest.fixture
@@ -429,6 +474,7 @@ def web_app_with_members(mock_http_client_with_members: MockHttpClient) -> Any:
         network_radio_config="Test Radio Config",
         network_contact_email="test@example.com",
         network_contact_discord="https://discord.gg/test",
+        features=ALL_FEATURES_ENABLED,
     )
 
     app.state.http_client = mock_http_client_with_members

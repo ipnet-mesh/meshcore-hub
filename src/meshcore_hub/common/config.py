@@ -301,11 +301,51 @@ class WebSettings(CommonSettings):
         default=None, description="Welcome text for homepage"
     )
 
+    # Feature flags (control which pages are visible in the web dashboard)
+    feature_dashboard: bool = Field(
+        default=True, description="Enable the /dashboard page"
+    )
+    feature_nodes: bool = Field(default=True, description="Enable the /nodes pages")
+    feature_advertisements: bool = Field(
+        default=True, description="Enable the /advertisements page"
+    )
+    feature_messages: bool = Field(
+        default=True, description="Enable the /messages page"
+    )
+    feature_map: bool = Field(
+        default=True, description="Enable the /map page and /map/data endpoint"
+    )
+    feature_members: bool = Field(default=True, description="Enable the /members page")
+    feature_pages: bool = Field(
+        default=True, description="Enable custom markdown pages"
+    )
+
     # Content directory (contains pages/ and media/ subdirectories)
     content_home: Optional[str] = Field(
         default=None,
         description="Directory containing custom content (pages/, media/) (default: ./content)",
     )
+
+    @property
+    def features(self) -> dict[str, bool]:
+        """Get feature flags as a dictionary.
+
+        Automatic dependencies:
+        - Dashboard requires at least one of nodes/advertisements/messages.
+        - Map requires nodes (map displays node locations).
+        """
+        has_dashboard_content = (
+            self.feature_nodes or self.feature_advertisements or self.feature_messages
+        )
+        return {
+            "dashboard": self.feature_dashboard and has_dashboard_content,
+            "nodes": self.feature_nodes,
+            "advertisements": self.feature_advertisements,
+            "messages": self.feature_messages,
+            "map": self.feature_map and self.feature_nodes,
+            "members": self.feature_members,
+            "pages": self.feature_pages,
+        }
 
     @property
     def effective_content_home(self) -> str:
