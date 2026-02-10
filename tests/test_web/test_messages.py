@@ -1,10 +1,8 @@
-"""Tests for the messages page route."""
+"""Tests for the messages page route (SPA)."""
 
-from typing import Any
+import json
 
 from fastapi.testclient import TestClient
-
-from tests.test_web.conftest import MockHttpClient
 
 
 class TestMessagesPage:
@@ -25,94 +23,68 @@ class TestMessagesPage:
         response = client.get("/messages")
         assert "Test Network" in response.text
 
-    def test_messages_displays_message_list(
-        self, client: TestClient, mock_http_client: MockHttpClient
-    ) -> None:
-        """Test that messages page displays messages from API."""
+    def test_messages_contains_app_config(self, client: TestClient) -> None:
+        """Test that messages page contains SPA config."""
         response = client.get("/messages")
-        assert response.status_code == 200
-        # Check for message data from mock
-        assert "Hello World" in response.text
-        assert "Channel message" in response.text
+        assert "window.__APP_CONFIG__" in response.text
 
-    def test_messages_displays_message_types(
-        self, client: TestClient, mock_http_client: MockHttpClient
-    ) -> None:
-        """Test that messages page displays message types."""
+    def test_messages_contains_spa_script(self, client: TestClient) -> None:
+        """Test that messages page includes SPA application script."""
         response = client.get("/messages")
-        # Should show message types
-        assert "direct" in response.text.lower() or "contact" in response.text.lower()
-        assert "channel" in response.text.lower()
+        assert "/static/js/spa/app.js" in response.text
 
 
 class TestMessagesPageFilters:
-    """Tests for messages page filtering."""
+    """Tests for messages page with query parameters.
+
+    In the SPA architecture, all routes return the same shell.
+    Query parameters are handled client-side.
+    """
 
     def test_messages_with_type_filter(self, client: TestClient) -> None:
-        """Test messages page with message type filter."""
+        """Test messages page with message type filter returns SPA shell."""
         response = client.get("/messages?message_type=direct")
         assert response.status_code == 200
 
     def test_messages_with_channel_filter(self, client: TestClient) -> None:
-        """Test messages page with channel filter."""
+        """Test messages page with channel filter returns SPA shell."""
         response = client.get("/messages?channel_idx=0")
         assert response.status_code == 200
 
     def test_messages_with_search(self, client: TestClient) -> None:
-        """Test messages page with search parameter."""
+        """Test messages page with search parameter returns SPA shell."""
         response = client.get("/messages?search=hello")
         assert response.status_code == 200
 
     def test_messages_with_pagination(self, client: TestClient) -> None:
-        """Test messages page with pagination parameters."""
+        """Test messages page with pagination parameters returns SPA shell."""
         response = client.get("/messages?page=1&limit=25")
         assert response.status_code == 200
 
     def test_messages_page_2(self, client: TestClient) -> None:
-        """Test messages page 2."""
+        """Test messages page 2 returns SPA shell."""
         response = client.get("/messages?page=2")
         assert response.status_code == 200
 
     def test_messages_with_all_filters(self, client: TestClient) -> None:
-        """Test messages page with multiple filters."""
+        """Test messages page with multiple filters returns SPA shell."""
         response = client.get(
             "/messages?message_type=channel&channel_idx=1&page=1&limit=10"
         )
         assert response.status_code == 200
 
 
-class TestMessagesPageAPIErrors:
-    """Tests for messages page handling API errors."""
+class TestMessagesConfig:
+    """Tests for messages page SPA config content."""
 
-    def test_messages_handles_api_error(
-        self, web_app: Any, mock_http_client: MockHttpClient
-    ) -> None:
-        """Test that messages page handles API errors gracefully."""
-        mock_http_client.set_response(
-            "GET", "/api/v1/messages", status_code=500, json_data=None
-        )
-        web_app.state.http_client = mock_http_client
-
-        client = TestClient(web_app, raise_server_exceptions=True)
+    def test_messages_config_has_network_name(self, client: TestClient) -> None:
+        """Test that SPA config includes network name."""
         response = client.get("/messages")
-
-        # Should still return 200 (page renders with empty list)
-        assert response.status_code == 200
-
-    def test_messages_handles_api_not_found(
-        self, web_app: Any, mock_http_client: MockHttpClient
-    ) -> None:
-        """Test that messages page handles API 404 gracefully."""
-        mock_http_client.set_response(
-            "GET",
-            "/api/v1/messages",
-            status_code=404,
-            json_data={"detail": "Not found"},
+        text = response.text
+        config_start = text.find("window.__APP_CONFIG__ = ") + len(
+            "window.__APP_CONFIG__ = "
         )
-        web_app.state.http_client = mock_http_client
+        config_end = text.find(";", config_start)
+        config = json.loads(text[config_start:config_end])
 
-        client = TestClient(web_app, raise_server_exceptions=True)
-        response = client.get("/messages")
-
-        # Should still return 200 (page renders with empty list)
-        assert response.status_code == 200
+        assert config["network_name"] == "Test Network"

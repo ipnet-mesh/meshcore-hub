@@ -1,4 +1,6 @@
-"""Tests for the members page route."""
+"""Tests for the members page route (SPA)."""
+
+import json
 
 from fastapi.testclient import TestClient
 
@@ -21,36 +23,24 @@ class TestMembersPage:
         response = client.get("/members")
         assert "Test Network" in response.text
 
-    def test_members_without_data_shows_empty(self, client: TestClient) -> None:
-        """Test that members page with no API data shows no members."""
+    def test_members_contains_app_config(self, client: TestClient) -> None:
+        """Test that members page contains SPA config."""
         response = client.get("/members")
-        # Should still render successfully
-        assert response.status_code == 200
+        assert "window.__APP_CONFIG__" in response.text
 
-    def test_members_with_api_data_shows_members(
-        self, client_with_members: TestClient
-    ) -> None:
-        """Test that members page with API data shows member data."""
-        response = client_with_members.get("/members")
-        assert response.status_code == 200
-        # Check for member data from mock API response
-        assert "Alice" in response.text
-        assert "Bob" in response.text
-        assert "W1ABC" in response.text
-        assert "W2XYZ" in response.text
+    def test_members_contains_spa_script(self, client: TestClient) -> None:
+        """Test that members page includes SPA application script."""
+        response = client.get("/members")
+        assert "/static/js/spa/app.js" in response.text
 
-    def test_members_with_nodes_shows_node_links(
-        self, client_with_members: TestClient
-    ) -> None:
-        """Test that members page shows associated nodes with links."""
-        response = client_with_members.get("/members")
-        assert response.status_code == 200
-        # Alice has a node associated - check for friendly name display
-        assert "Alice Chat" in response.text
-        # Check for partial public key underneath
-        assert "abc123def456" in response.text
-        # Check for link to node detail page (full public key)
-        assert (
-            "/nodes/abc123def456abc123def456abc123def456abc123def456abc123def456abc1"
-            in response.text
+    def test_members_config_has_network_name(self, client: TestClient) -> None:
+        """Test that SPA config includes network name."""
+        response = client.get("/members")
+        text = response.text
+        config_start = text.find("window.__APP_CONFIG__ = ") + len(
+            "window.__APP_CONFIG__ = "
         )
+        config_end = text.find(";", config_start)
+        config = json.loads(text[config_start:config_end])
+
+        assert config["network_name"] == "Test Network"

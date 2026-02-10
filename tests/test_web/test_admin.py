@@ -1,5 +1,6 @@
-"""Tests for admin web routes."""
+"""Tests for admin web routes (SPA)."""
 
+import json
 from typing import Any
 
 import pytest
@@ -11,122 +12,7 @@ from .conftest import MockHttpClient
 
 
 @pytest.fixture
-def mock_http_client_admin() -> MockHttpClient:
-    """Create a mock HTTP client for admin tests."""
-    client = MockHttpClient()
-
-    # Mock the nodes API response for admin dropdown
-    client.set_response(
-        "GET",
-        "/api/v1/nodes",
-        200,
-        {
-            "items": [
-                {
-                    "public_key": "abc123def456abc123def456abc123de",
-                    "name": "Node One",
-                    "adv_type": "REPEATER",
-                    "first_seen": "2024-01-01T00:00:00Z",
-                    "last_seen": "2024-01-01T12:00:00Z",
-                    "created_at": "2024-01-01T00:00:00Z",
-                    "updated_at": "2024-01-01T00:00:00Z",
-                    "tags": [],
-                },
-                {
-                    "public_key": "xyz789xyz789xyz789xyz789xyz789xy",
-                    "name": "Node Two",
-                    "adv_type": "CHAT",
-                    "first_seen": "2024-01-01T00:00:00Z",
-                    "last_seen": "2024-01-01T11:00:00Z",
-                    "created_at": "2024-01-01T00:00:00Z",
-                    "updated_at": "2024-01-01T00:00:00Z",
-                    "tags": [],
-                },
-            ],
-            "total": 2,
-            "limit": 100,
-            "offset": 0,
-        },
-    )
-
-    # Mock node tags response
-    client.set_response(
-        "GET",
-        "/api/v1/nodes/abc123def456abc123def456abc123de/tags",
-        200,
-        [
-            {
-                "key": "environment",
-                "value": "production",
-                "value_type": "string",
-                "created_at": "2024-01-01T00:00:00Z",
-                "updated_at": "2024-01-01T00:00:00Z",
-            },
-            {
-                "key": "location",
-                "value": "building-a",
-                "value_type": "string",
-                "created_at": "2024-01-01T00:00:00Z",
-                "updated_at": "2024-01-01T00:00:00Z",
-            },
-        ],
-    )
-
-    # Mock create tag response
-    client.set_response(
-        "POST",
-        "/api/v1/nodes/abc123def456abc123def456abc123de/tags",
-        201,
-        {
-            "key": "new_tag",
-            "value": "new_value",
-            "value_type": "string",
-            "created_at": "2024-01-01T00:00:00Z",
-            "updated_at": "2024-01-01T00:00:00Z",
-        },
-    )
-
-    # Mock update tag response
-    client.set_response(
-        "PUT",
-        "/api/v1/nodes/abc123def456abc123def456abc123de/tags/environment",
-        200,
-        {
-            "key": "environment",
-            "value": "staging",
-            "value_type": "string",
-            "created_at": "2024-01-01T00:00:00Z",
-            "updated_at": "2024-01-01T12:00:00Z",
-        },
-    )
-
-    # Mock move tag response
-    client.set_response(
-        "PUT",
-        "/api/v1/nodes/abc123def456abc123def456abc123de/tags/environment/move",
-        200,
-        {
-            "key": "environment",
-            "value": "production",
-            "value_type": "string",
-            "created_at": "2024-01-01T00:00:00Z",
-            "updated_at": "2024-01-01T12:00:00Z",
-        },
-    )
-
-    # Mock delete tag response
-    client.set_response(
-        "DELETE",
-        "/api/v1/nodes/abc123def456abc123def456abc123de/tags/environment",
-        204,
-        None,
-    )
-
-    return client
-
-
-@pytest.fixture
-def admin_app(mock_http_client_admin: MockHttpClient) -> Any:
+def admin_app(mock_http_client: MockHttpClient) -> Any:
     """Create a web app with admin enabled."""
     app = create_app(
         api_url="http://localhost:8000",
@@ -139,13 +25,13 @@ def admin_app(mock_http_client_admin: MockHttpClient) -> Any:
         admin_enabled=True,
     )
 
-    app.state.http_client = mock_http_client_admin
+    app.state.http_client = mock_http_client
 
     return app
 
 
 @pytest.fixture
-def admin_app_disabled(mock_http_client_admin: MockHttpClient) -> Any:
+def admin_app_disabled(mock_http_client: MockHttpClient) -> Any:
     """Create a web app with admin disabled."""
     app = create_app(
         api_url="http://localhost:8000",
@@ -158,7 +44,7 @@ def admin_app_disabled(mock_http_client_admin: MockHttpClient) -> Any:
         admin_enabled=False,
     )
 
-    app.state.http_client = mock_http_client_admin
+    app.state.http_client = mock_http_client
 
     return app
 
@@ -174,253 +60,151 @@ def auth_headers() -> dict:
 
 
 @pytest.fixture
-def admin_client(admin_app: Any, mock_http_client_admin: MockHttpClient) -> TestClient:
+def admin_client(admin_app: Any, mock_http_client: MockHttpClient) -> TestClient:
     """Create a test client with admin enabled."""
-    admin_app.state.http_client = mock_http_client_admin
+    admin_app.state.http_client = mock_http_client
     return TestClient(admin_app, raise_server_exceptions=True)
 
 
 @pytest.fixture
 def admin_client_disabled(
-    admin_app_disabled: Any, mock_http_client_admin: MockHttpClient
+    admin_app_disabled: Any, mock_http_client: MockHttpClient
 ) -> TestClient:
     """Create a test client with admin disabled."""
-    admin_app_disabled.state.http_client = mock_http_client_admin
+    admin_app_disabled.state.http_client = mock_http_client
     return TestClient(admin_app_disabled, raise_server_exceptions=True)
 
 
 class TestAdminHome:
-    """Tests for admin home page."""
+    """Tests for admin home page (SPA).
 
-    def test_admin_home_enabled(self, admin_client, auth_headers):
-        """Test admin home page when enabled."""
+    In the SPA architecture, admin routes serve the same shell HTML.
+    Admin access control is handled client-side based on
+    window.__APP_CONFIG__.admin_enabled and is_authenticated.
+    """
+
+    def test_admin_home_returns_spa_shell(self, admin_client, auth_headers):
+        """Test admin home page returns the SPA shell."""
         response = admin_client.get("/a/", headers=auth_headers)
         assert response.status_code == 200
-        assert "Admin" in response.text
-        assert "Node Tags" in response.text
+        assert "window.__APP_CONFIG__" in response.text
 
-    def test_admin_home_disabled(self, admin_client_disabled, auth_headers):
-        """Test admin home page when disabled."""
+    def test_admin_home_config_admin_enabled(self, admin_client, auth_headers):
+        """Test admin config shows admin_enabled: true."""
+        response = admin_client.get("/a/", headers=auth_headers)
+        text = response.text
+        config_start = text.find("window.__APP_CONFIG__ = ") + len(
+            "window.__APP_CONFIG__ = "
+        )
+        config_end = text.find(";", config_start)
+        config = json.loads(text[config_start:config_end])
+
+        assert config["admin_enabled"] is True
+
+    def test_admin_home_config_authenticated(self, admin_client, auth_headers):
+        """Test admin config shows is_authenticated: true with auth headers."""
+        response = admin_client.get("/a/", headers=auth_headers)
+        text = response.text
+        config_start = text.find("window.__APP_CONFIG__ = ") + len(
+            "window.__APP_CONFIG__ = "
+        )
+        config_end = text.find(";", config_start)
+        config = json.loads(text[config_start:config_end])
+
+        assert config["is_authenticated"] is True
+
+    def test_admin_home_disabled_returns_spa_shell(
+        self, admin_client_disabled, auth_headers
+    ):
+        """Test admin page returns SPA shell even when disabled.
+
+        The SPA catch-all serves the shell for all routes.
+        Client-side code checks admin_enabled to show/hide admin UI.
+        """
         response = admin_client_disabled.get("/a/", headers=auth_headers)
-        assert response.status_code == 404
+        assert response.status_code == 200
+        assert "window.__APP_CONFIG__" in response.text
 
-    def test_admin_home_unauthenticated(self, admin_client):
-        """Test admin home page without authentication."""
+    def test_admin_home_disabled_config(self, admin_client_disabled, auth_headers):
+        """Test admin config shows admin_enabled: false when disabled."""
+        response = admin_client_disabled.get("/a/", headers=auth_headers)
+        text = response.text
+        config_start = text.find("window.__APP_CONFIG__ = ") + len(
+            "window.__APP_CONFIG__ = "
+        )
+        config_end = text.find(";", config_start)
+        config = json.loads(text[config_start:config_end])
+
+        assert config["admin_enabled"] is False
+
+    def test_admin_home_unauthenticated_returns_spa_shell(self, admin_client):
+        """Test admin page returns SPA shell without authentication.
+
+        The SPA catch-all serves the shell for all routes.
+        Client-side code checks is_authenticated to show access denied.
+        """
         response = admin_client.get("/a/")
-        assert response.status_code == 403
-        assert "Access Denied" in response.text
+        assert response.status_code == 200
+        assert "window.__APP_CONFIG__" in response.text
+
+    def test_admin_home_unauthenticated_config(self, admin_client):
+        """Test admin config shows is_authenticated: false without auth headers."""
+        response = admin_client.get("/a/")
+        text = response.text
+        config_start = text.find("window.__APP_CONFIG__ = ") + len(
+            "window.__APP_CONFIG__ = "
+        )
+        config_end = text.find(";", config_start)
+        config = json.loads(text[config_start:config_end])
+
+        assert config["is_authenticated"] is False
 
 
 class TestAdminNodeTags:
-    """Tests for admin node tags page."""
+    """Tests for admin node tags page (SPA)."""
 
-    def test_node_tags_page_no_selection(self, admin_client, auth_headers):
-        """Test node tags page without selecting a node."""
+    def test_node_tags_page_returns_spa_shell(self, admin_client, auth_headers):
+        """Test node tags page returns the SPA shell."""
         response = admin_client.get("/a/node-tags", headers=auth_headers)
         assert response.status_code == 200
-        assert "Node Tags" in response.text
-        assert "Select a Node" in response.text
-        # Should show node dropdown
-        assert "Node One" in response.text
-        assert "Node Two" in response.text
+        assert "window.__APP_CONFIG__" in response.text
 
-    def test_node_tags_page_with_selection(self, admin_client, auth_headers):
-        """Test node tags page with a node selected."""
+    def test_node_tags_page_with_public_key(self, admin_client, auth_headers):
+        """Test node tags page with public_key param returns SPA shell."""
         response = admin_client.get(
             "/a/node-tags?public_key=abc123def456abc123def456abc123de",
             headers=auth_headers,
         )
         assert response.status_code == 200
-        assert "Node Tags" in response.text
-        # Should show the selected node's tags
-        assert "environment" in response.text
-        assert "production" in response.text
-        assert "location" in response.text
-        assert "building-a" in response.text
+        assert "window.__APP_CONFIG__" in response.text
 
-    def test_node_tags_page_disabled(self, admin_client_disabled, auth_headers):
-        """Test node tags page when admin is disabled."""
+    def test_node_tags_page_disabled_returns_spa_shell(
+        self, admin_client_disabled, auth_headers
+    ):
+        """Test node tags page returns SPA shell even when admin is disabled."""
         response = admin_client_disabled.get("/a/node-tags", headers=auth_headers)
-        assert response.status_code == 404
-
-    def test_node_tags_page_with_message(self, admin_client, auth_headers):
-        """Test node tags page displays success message."""
-        response = admin_client.get(
-            "/a/node-tags?public_key=abc123def456abc123def456abc123de"
-            "&message=Tag%20created%20successfully",
-            headers=auth_headers,
-        )
         assert response.status_code == 200
-        assert "Tag created successfully" in response.text
-
-    def test_node_tags_page_with_error(self, admin_client, auth_headers):
-        """Test node tags page displays error message."""
-        response = admin_client.get(
-            "/a/node-tags?public_key=abc123def456abc123def456abc123de"
-            "&error=Tag%20already%20exists",
-            headers=auth_headers,
-        )
-        assert response.status_code == 200
-        assert "Tag already exists" in response.text
+        assert "window.__APP_CONFIG__" in response.text
 
     def test_node_tags_page_unauthenticated(self, admin_client):
-        """Test node tags page without authentication."""
+        """Test node tags page returns SPA shell without authentication."""
         response = admin_client.get("/a/node-tags")
-        assert response.status_code == 403
-        assert "Access Denied" in response.text
+        assert response.status_code == 200
+        assert "window.__APP_CONFIG__" in response.text
 
 
-class TestAdminCreateTag:
-    """Tests for creating node tags."""
+class TestAdminFooterLink:
+    """Tests for admin link in footer."""
 
-    def test_create_tag_success(self, admin_client, auth_headers):
-        """Test creating a new tag."""
-        response = admin_client.post(
-            "/a/node-tags",
-            data={
-                "public_key": "abc123def456abc123def456abc123de",
-                "key": "new_tag",
-                "value": "new_value",
-                "value_type": "string",
-            },
-            headers=auth_headers,
-            follow_redirects=False,
-        )
-        assert response.status_code == 303
-        assert "message=" in response.headers["location"]
-        assert "created" in response.headers["location"]
+    def test_admin_link_visible_when_enabled(self, admin_client):
+        """Test that admin link appears in footer when enabled."""
+        response = admin_client.get("/")
+        assert response.status_code == 200
+        assert 'href="/a/"' in response.text
+        assert "Admin" in response.text
 
-    def test_create_tag_disabled(self, admin_client_disabled, auth_headers):
-        """Test creating tag when admin is disabled."""
-        response = admin_client_disabled.post(
-            "/a/node-tags",
-            data={
-                "public_key": "abc123def456abc123def456abc123de",
-                "key": "new_tag",
-                "value": "new_value",
-                "value_type": "string",
-            },
-            headers=auth_headers,
-            follow_redirects=False,
-        )
-        assert response.status_code == 404
-
-    def test_create_tag_unauthenticated(self, admin_client):
-        """Test creating tag without authentication."""
-        response = admin_client.post(
-            "/a/node-tags",
-            data={
-                "public_key": "abc123def456abc123def456abc123de",
-                "key": "new_tag",
-                "value": "new_value",
-                "value_type": "string",
-            },
-            follow_redirects=False,
-        )
-        assert response.status_code == 403
-
-
-class TestAdminUpdateTag:
-    """Tests for updating node tags."""
-
-    def test_update_tag_success(self, admin_client, auth_headers):
-        """Test updating a tag."""
-        response = admin_client.post(
-            "/a/node-tags/update",
-            data={
-                "public_key": "abc123def456abc123def456abc123de",
-                "key": "environment",
-                "value": "staging",
-                "value_type": "string",
-            },
-            headers=auth_headers,
-            follow_redirects=False,
-        )
-        assert response.status_code == 303
-        assert "message=" in response.headers["location"]
-        assert "updated" in response.headers["location"]
-
-    def test_update_tag_not_found(
-        self, admin_app, mock_http_client_admin: MockHttpClient, auth_headers
-    ):
-        """Test updating a non-existent tag returns error."""
-        # Set up 404 response for this specific tag
-        mock_http_client_admin.set_response(
-            "PUT",
-            "/api/v1/nodes/abc123def456abc123def456abc123de/tags/nonexistent",
-            404,
-            {"detail": "Tag not found"},
-        )
-        admin_app.state.http_client = mock_http_client_admin
-        client = TestClient(admin_app, raise_server_exceptions=True)
-
-        response = client.post(
-            "/a/node-tags/update",
-            data={
-                "public_key": "abc123def456abc123def456abc123de",
-                "key": "nonexistent",
-                "value": "value",
-                "value_type": "string",
-            },
-            headers=auth_headers,
-            follow_redirects=False,
-        )
-        assert response.status_code == 303
-        assert "error=" in response.headers["location"]
-        assert "not+found" in response.headers["location"].lower()
-
-    def test_update_tag_disabled(self, admin_client_disabled, auth_headers):
-        """Test updating tag when admin is disabled."""
-        response = admin_client_disabled.post(
-            "/a/node-tags/update",
-            data={
-                "public_key": "abc123def456abc123def456abc123de",
-                "key": "environment",
-                "value": "staging",
-                "value_type": "string",
-            },
-            headers=auth_headers,
-            follow_redirects=False,
-        )
-        assert response.status_code == 404
-
-
-class TestAdminMoveTag:
-    """Tests for moving node tags."""
-
-    def test_move_tag_success(self, admin_client, auth_headers):
-        """Test moving a tag to another node."""
-        response = admin_client.post(
-            "/a/node-tags/move",
-            data={
-                "public_key": "abc123def456abc123def456abc123de",
-                "key": "environment",
-                "new_public_key": "xyz789xyz789xyz789xyz789xyz789xy",
-            },
-            headers=auth_headers,
-            follow_redirects=False,
-        )
-        assert response.status_code == 303
-        # Should redirect to destination node
-        assert "xyz789xyz789xyz789xyz789xyz789xy" in response.headers["location"]
-        assert "message=" in response.headers["location"]
-        assert "moved" in response.headers["location"]
-
-
-class TestAdminDeleteTag:
-    """Tests for deleting node tags."""
-
-    def test_delete_tag_success(self, admin_client, auth_headers):
-        """Test deleting a tag."""
-        response = admin_client.post(
-            "/a/node-tags/delete",
-            data={
-                "public_key": "abc123def456abc123def456abc123de",
-                "key": "environment",
-            },
-            headers=auth_headers,
-            follow_redirects=False,
-        )
-        assert response.status_code == 303
-        assert "message=" in response.headers["location"]
-        assert "deleted" in response.headers["location"]
+    def test_admin_link_hidden_when_disabled(self, admin_client_disabled):
+        """Test that admin link does not appear in footer when disabled."""
+        response = admin_client_disabled.get("/")
+        assert response.status_code == 200
+        assert 'href="/a/"' not in response.text

@@ -6,22 +6,27 @@
  */
 
 /**
- * OKLCH color values for consistent theming
+ * Read page colors from CSS custom properties (defined in app.css :root).
+ * Falls back to hardcoded values if CSS vars are unavailable.
  */
+function getCSSColor(varName, fallback) {
+    return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || fallback;
+}
+
+function withAlpha(color, alpha) {
+    // oklch(0.65 0.24 265) -> oklch(0.65 0.24 265 / 0.1)
+    return color.replace(')', ' / ' + alpha + ')');
+}
+
 const ChartColors = {
-    // Primary (purple/blue)
-    primary: 'oklch(0.65 0.24 265)',
-    primaryFill: 'oklch(0.65 0.24 265 / 0.1)',
+    get nodes()        { return getCSSColor('--color-nodes', 'oklch(0.65 0.24 265)'); },
+    get nodesFill()    { return withAlpha(this.nodes, 0.1); },
+    get adverts()      { return getCSSColor('--color-adverts', 'oklch(0.7 0.17 330)'); },
+    get advertsFill()  { return withAlpha(this.adverts, 0.1); },
+    get messages()     { return getCSSColor('--color-messages', 'oklch(0.75 0.18 180)'); },
+    get messagesFill() { return withAlpha(this.messages, 0.1); },
 
-    // Secondary (pink/magenta)
-    secondary: 'oklch(0.7 0.17 330)',
-    secondaryFill: 'oklch(0.7 0.17 330 / 0.1)',
-
-    // Accent (teal/cyan)
-    accent: 'oklch(0.75 0.18 180)',
-    accentFill: 'oklch(0.75 0.18 180 / 0.1)',
-
-    // Neutral grays
+    // Neutral grays (not page-specific)
     grid: 'oklch(0.4 0 0 / 0.2)',
     text: 'oklch(0.7 0 0)',
     tooltipBg: 'oklch(0.25 0 0)',
@@ -156,8 +161,8 @@ function createActivityChart(canvasId, advertData, messageData) {
             datasets: [{
                 label: 'Advertisements',
                 data: advertCounts,
-                borderColor: ChartColors.secondary,
-                backgroundColor: ChartColors.secondaryFill,
+                borderColor: ChartColors.adverts,
+                backgroundColor: ChartColors.advertsFill,
                 fill: false,
                 tension: 0.3,
                 pointRadius: 2,
@@ -165,8 +170,8 @@ function createActivityChart(canvasId, advertData, messageData) {
             }, {
                 label: 'Messages',
                 data: messageCounts,
-                borderColor: ChartColors.accent,
-                backgroundColor: ChartColors.accentFill,
+                borderColor: ChartColors.messages,
+                backgroundColor: ChartColors.messagesFill,
                 fill: false,
                 tension: 0.3,
                 pointRadius: 2,
@@ -184,33 +189,30 @@ function createActivityChart(canvasId, advertData, messageData) {
  * @param {Object} messageData - Message data
  */
 function initDashboardCharts(nodeData, advertData, messageData) {
-    // Node count chart (primary color)
     createLineChart(
         'nodeChart',
         nodeData,
         'Total Nodes',
-        ChartColors.primary,
-        ChartColors.primaryFill,
+        ChartColors.nodes,
+        ChartColors.nodesFill,
         true
     );
 
-    // Advertisements chart (secondary color)
     createLineChart(
         'advertChart',
         advertData,
         'Advertisements',
-        ChartColors.secondary,
-        ChartColors.secondaryFill,
+        ChartColors.adverts,
+        ChartColors.advertsFill,
         true
     );
 
-    // Messages chart (accent color)
     createLineChart(
         'messageChart',
         messageData,
         'Messages',
-        ChartColors.accent,
-        ChartColors.accentFill,
+        ChartColors.messages,
+        ChartColors.messagesFill,
         true
     );
 }

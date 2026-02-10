@@ -13,7 +13,7 @@ MeshCore Hub provides a complete solution for monitoring, collecting, and intera
 | **Interface** | Connects to MeshCore companion nodes via Serial/USB, bridges events to/from MQTT |
 | **Collector** | Subscribes to MQTT events and persists them to a database |
 | **API** | REST API for querying data and sending commands to the network |
-| **Web Dashboard** | User-friendly web interface for visualizing network status |
+| **Web Dashboard** | Single Page Application (SPA) for visualizing network status |
 
 ## Architecture
 
@@ -597,6 +597,8 @@ meshcore-hub/
 │   ├── collector/          # MQTT event collector
 │   ├── api/                # REST API
 │   └── web/                # Web dashboard
+│       ├── templates/      # Jinja2 templates (SPA shell)
+│       └── static/js/spa/  # SPA frontend (ES modules, lit-html)
 ├── tests/                  # Test suite
 ├── alembic/                # Database migrations
 ├── etc/                    # Configuration files (mosquitto.conf)

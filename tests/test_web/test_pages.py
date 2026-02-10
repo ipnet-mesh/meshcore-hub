@@ -1,5 +1,6 @@
-"""Tests for custom pages functionality."""
+"""Tests for custom pages functionality (SPA)."""
 
+import json
 import tempfile
 from collections.abc import Generator
 from pathlib import Path
@@ -342,7 +343,12 @@ def hello():
 
 
 class TestPagesRoute:
-    """Tests for the custom pages route."""
+    """Tests for the custom pages routes (SPA).
+
+    In the SPA architecture:
+    - /pages/{slug} returns the SPA shell HTML (catch-all)
+    - /spa/pages/{slug} returns page content as JSON
+    """
 
     @pytest.fixture
     def pages_dir(self) -> Generator[str, None, None]:
@@ -409,22 +415,55 @@ Here are some answers.
         web_app_with_pages.state.http_client = mock_http_client
         return TestClient(web_app_with_pages, raise_server_exceptions=True)
 
-    def test_get_page_success(self, client_with_pages: TestClient) -> None:
-        """Test successfully retrieving a custom page."""
+    def test_page_route_returns_spa_shell(self, client_with_pages: TestClient) -> None:
+        """Test that /pages/{slug} returns the SPA shell HTML."""
         response = client_with_pages.get("/pages/about")
         assert response.status_code == 200
-        assert "About Us" in response.text
-        assert "About Our Network" in response.text
-        assert "Welcome to the network" in response.text
+        assert "window.__APP_CONFIG__" in response.text
 
-    def test_get_page_not_found(self, client_with_pages: TestClient) -> None:
-        """Test 404 for unknown page slug."""
+    def test_page_route_nonexistent_returns_spa_shell(
+        self, client_with_pages: TestClient
+    ) -> None:
+        """Test that /pages/{slug} returns SPA shell even for nonexistent pages.
+
+        The SPA catch-all serves the shell for all routes.
+        Client-side code fetches page content via /spa/pages/{slug}.
+        """
         response = client_with_pages.get("/pages/nonexistent")
+        assert response.status_code == 200
+        assert "window.__APP_CONFIG__" in response.text
+
+    def test_spa_page_api_returns_json(self, client_with_pages: TestClient) -> None:
+        """Test that /spa/pages/{slug} returns page content as JSON."""
+        response = client_with_pages.get("/spa/pages/about")
+        assert response.status_code == 200
+        assert "application/json" in response.headers["content-type"]
+
+        data = response.json()
+        assert data["slug"] == "about"
+        assert data["title"] == "About Us"
+        assert "About Our Network" in data["content_html"]
+        assert "Welcome to the network" in data["content_html"]
+
+    def test_spa_page_api_not_found(self, client_with_pages: TestClient) -> None:
+        """Test that /spa/pages/{slug} returns 404 for unknown page."""
+        response = client_with_pages.get("/spa/pages/nonexistent")
         assert response.status_code == 404
+        data = response.json()
+        assert data["detail"] == "Page not found"
+
+    def test_spa_page_api_faq(self, client_with_pages: TestClient) -> None:
+        """Test that /spa/pages/faq returns FAQ page content."""
+        response = client_with_pages.get("/spa/pages/faq")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["slug"] == "faq"
+        assert data["title"] == "FAQ"
+        assert "Frequently Asked Questions" in data["content_html"]
 
     def test_pages_in_navigation(self, client_with_pages: TestClient) -> None:
         """Test that custom pages appear in navigation."""
-        response = client_with_pages.get("/pages/about")
+        response = client_with_pages.get("/")
         assert response.status_code == 200
         # Check for navigation links
         assert 'href="/pages/about"' in response.text
@@ -432,12 +471,28 @@ Here are some answers.
 
     def test_pages_sorted_in_navigation(self, client_with_pages: TestClient) -> None:
         """Test that pages are sorted by menu_order in navigation."""
-        response = client_with_pages.get("/pages/about")
+        response = client_with_pages.get("/")
         assert response.status_code == 200
         # About (order 10) should appear before FAQ (order 20)
         about_pos = response.text.find('href="/pages/about"')
         faq_pos = response.text.find('href="/pages/faq"')
         assert about_pos < faq_pos
+
+    def test_pages_in_config(self, client_with_pages: TestClient) -> None:
+        """Test that custom pages are included in SPA config."""
+        response = client_with_pages.get("/")
+        text = response.text
+        config_start = text.find("window.__APP_CONFIG__ = ") + len(
+            "window.__APP_CONFIG__ = "
+        )
+        config_end = text.find(";", config_start)
+        config = json.loads(text[config_start:config_end])
+
+        custom_pages = config["custom_pages"]
+        assert len(custom_pages) == 2
+        slugs = [p["slug"] for p in custom_pages]
+        assert "about" in slugs
+        assert "faq" in slugs
 
 
 class TestPagesInSitemap:

@@ -3,14 +3,44 @@
  *
  * This file contains all custom CSS that extends the Tailwind/DaisyUI framework.
  * Organized in sections:
+ * - Color palette
+ * - Navbar styling
  * - Scrollbar styling
  * - Table styling
  * - Text utilities
  * - Prose (markdown content) styling
- * - View Transitions API
- * - Card animations
  * - Leaflet map theming
  */
+
+/* ==========================================================================
+   Color Palette
+   Single source of truth for page/section colors used across nav, charts,
+   and page content. All values are OKLCH.
+   ========================================================================== */
+
+:root {
+    --color-dashboard: oklch(0.75 0.15 210);   /* cyan */
+    --color-nodes: oklch(0.65 0.24 265);       /* violet */
+    --color-adverts: oklch(0.7 0.17 330);      /* magenta */
+    --color-messages: oklch(0.75 0.18 180);    /* teal */
+    --color-map: oklch(0.8471 0.199 83.87);      /* yellow (matches btn-warning) */
+    --color-members: oklch(0.72 0.17 50);      /* orange */
+}
+
+/* ==========================================================================
+   Navbar Styling
+   ========================================================================== */
+
+/* Spacing between horizontal nav items */
+.menu-horizontal { gap: 0.125rem; }
+
+/* Nav icon colors */
+.nav-icon-dashboard { color: var(--color-dashboard); }
+.nav-icon-nodes { color: var(--color-nodes); }
+.nav-icon-adverts { color: var(--color-adverts); }
+.nav-icon-messages { color: var(--color-messages); }
+.nav-icon-map { color: var(--color-map); }
+.nav-icon-members { color: var(--color-members); }
 
 /* ==========================================================================
    Scrollbar Styling
@@ -175,130 +205,6 @@
     margin: 1rem 0;
 }
 
-/* ==========================================================================
-   View Transitions API
-   ========================================================================== */
-
-/* Named transition elements */
-.navbar {
-    view-transition-name: navbar;
-    position: relative;
-    z-index: 50;
-}
-
-main {
-    view-transition-name: main-content;
-    position: relative;
-    z-index: 10;
-}
-
-footer {
-    view-transition-name: footer;
-    position: relative;
-    z-index: 10;
-}
-
-/* Subtle slide + fade for main content */
-::view-transition-old(main-content) {
-    animation: vt-fade-out 200ms ease-out forwards;
-}
-
-::view-transition-new(main-content) {
-    animation: vt-slide-up 250ms ease-out forwards;
-}
-
-/* Keep navbar and footer stable */
-::view-transition-old(navbar),
-::view-transition-new(navbar),
-::view-transition-old(footer),
-::view-transition-new(footer) {
-    animation: none;
-}
-
-/* Subtle crossfade for background */
-::view-transition-old(root),
-::view-transition-new(root) {
-    animation-duration: 150ms;
-}
-
-@keyframes vt-fade-out {
-    from {
-        opacity: 1;
-    }
-    to {
-        opacity: 0;
-    }
-}
-
-@keyframes vt-slide-up {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* ==========================================================================
-   Card Entrance Animations
-   ========================================================================== */
-
-/* Only for stat cards with .animate-stagger class */
-.animate-stagger > .card,
-.animate-stagger > .stat {
-    animation: card-fade-in 300ms ease-out backwards;
-}
-
-.animate-stagger > :nth-child(1) {
-    animation-delay: 0ms;
-}
-
-.animate-stagger > :nth-child(2) {
-    animation-delay: 50ms;
-}
-
-.animate-stagger > :nth-child(3) {
-    animation-delay: 100ms;
-}
-
-.animate-stagger > :nth-child(4) {
-    animation-delay: 150ms;
-}
-
-.animate-stagger > :nth-child(5) {
-    animation-delay: 200ms;
-}
-
-.animate-stagger > :nth-child(6) {
-    animation-delay: 250ms;
-}
-
-@keyframes card-fade-in {
-    from {
-        opacity: 0;
-        transform: translateY(8px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* ==========================================================================
-   Reduced Motion Preferences
-   ========================================================================== */
-
-@media (prefers-reduced-motion: reduce) {
-    .card,
-    ::view-transition-old(main-content),
-    ::view-transition-new(main-content),
-    ::view-transition-old(root),
-    ::view-transition-new(root) {
-        animation: none !important;
-    }
-}
 
 /* ==========================================================================
    Leaflet Map Theming (Dark Mode)

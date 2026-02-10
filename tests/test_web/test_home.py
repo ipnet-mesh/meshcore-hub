@@ -1,4 +1,6 @@
-"""Tests for the home page route."""
+"""Tests for the home page route (SPA)."""
+
+import json
 
 from fastapi.testclient import TestClient
 
@@ -31,25 +33,81 @@ class TestHomePage:
         response = client.get("/")
         assert "Test Country" in response.text
 
-    def test_home_contains_radio_config(self, client: TestClient) -> None:
-        """Test that home page contains the radio configuration."""
+    def test_home_contains_app_config(self, client: TestClient) -> None:
+        """Test that home page contains the SPA config JSON."""
         response = client.get("/")
-        assert "Test Radio Config" in response.text
+        assert "window.__APP_CONFIG__" in response.text
+
+    def test_home_config_contains_network_info(self, client: TestClient) -> None:
+        """Test that SPA config contains network information."""
+        response = client.get("/")
+        # Extract the config JSON from the HTML
+        text = response.text
+        config_start = text.find("window.__APP_CONFIG__ = ") + len(
+            "window.__APP_CONFIG__ = "
+        )
+        config_end = text.find(";", config_start)
+        config = json.loads(text[config_start:config_end])
+
+        assert config["network_name"] == "Test Network"
+        assert config["network_city"] == "Test City"
+        assert config["network_country"] == "Test Country"
+
+    def test_home_config_contains_contact_info(self, client: TestClient) -> None:
+        """Test that SPA config contains contact information."""
+        response = client.get("/")
+        text = response.text
+        config_start = text.find("window.__APP_CONFIG__ = ") + len(
+            "window.__APP_CONFIG__ = "
+        )
+        config_end = text.find(";", config_start)
+        config = json.loads(text[config_start:config_end])
+
+        assert config["network_contact_email"] == "test@example.com"
+        assert config["network_contact_discord"] == "https://discord.gg/test"
 
     def test_home_contains_contact_email(self, client: TestClient) -> None:
-        """Test that home page contains the contact email."""
+        """Test that home page contains the contact email in footer."""
         response = client.get("/")
         assert "test@example.com" in response.text
 
     def test_home_contains_discord_link(self, client: TestClient) -> None:
-        """Test that home page contains the Discord link."""
+        """Test that home page contains the Discord link in footer."""
         response = client.get("/")
         assert "discord.gg/test" in response.text
 
     def test_home_contains_navigation(self, client: TestClient) -> None:
         """Test that home page contains navigation links."""
         response = client.get("/")
-        # Check for navigation links to other pages
-        assert 'href="/"' in response.text or 'href=""' in response.text
-        assert 'href="/nodes"' in response.text or "/nodes" in response.text
-        assert 'href="/messages"' in response.text or "/messages" in response.text
+        assert 'href="/"' in response.text
+        assert 'href="/nodes"' in response.text
+        assert 'href="/messages"' in response.text
+
+    def test_home_contains_spa_app_script(self, client: TestClient) -> None:
+        """Test that home page includes the SPA application script."""
+        response = client.get("/")
+        assert "/static/js/spa/app.js" in response.text
+
+    def test_home_unauthenticated(self, client: TestClient) -> None:
+        """Test that home page config shows unauthenticated by default."""
+        response = client.get("/")
+        text = response.text
+        config_start = text.find("window.__APP_CONFIG__ = ") + len(
+            "window.__APP_CONFIG__ = "
+        )
+        config_end = text.find(";", config_start)
+        config = json.loads(text[config_start:config_end])
+
+        assert config["is_authenticated"] is False
+
+    def test_home_authenticated(self, client: TestClient) -> None:
+        """Test that home page config shows authenticated with auth header."""
+        response = client.get("/", headers={"X-Forwarded-User": "test-user"})
+        text = response.text
+        config_start = text.find("window.__APP_CONFIG__ = ") + len(
+            "window.__APP_CONFIG__ = "
+        )
+        config_end = text.find(";", config_start)
+        config = json.loads(text[config_start:config_end])
+
+        assert config["is_authenticated"] is True

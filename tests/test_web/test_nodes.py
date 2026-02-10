@@ -1,10 +1,8 @@
-"""Tests for the nodes page routes."""
+"""Tests for the nodes page routes (SPA)."""
 
-from typing import Any
+import json
 
 from fastapi.testclient import TestClient
-
-from tests.test_web.conftest import MockHttpClient
 
 
 class TestNodesListPage:
@@ -25,43 +23,33 @@ class TestNodesListPage:
         response = client.get("/nodes")
         assert "Test Network" in response.text
 
-    def test_nodes_displays_node_list(
-        self, client: TestClient, mock_http_client: MockHttpClient
-    ) -> None:
-        """Test that nodes page displays node data from API."""
+    def test_nodes_contains_app_config(self, client: TestClient) -> None:
+        """Test that nodes page contains SPA config."""
         response = client.get("/nodes")
-        assert response.status_code == 200
-        # Check for node data from mock (names and public key prefixes)
-        assert "Node One" in response.text
-        assert "Node Two" in response.text
-        assert "abc123" in response.text
-        assert "def456" in response.text
+        assert "window.__APP_CONFIG__" in response.text
 
-    def test_nodes_displays_public_keys(
-        self, client: TestClient, mock_http_client: MockHttpClient
-    ) -> None:
-        """Test that nodes page displays public keys."""
+    def test_nodes_contains_spa_script(self, client: TestClient) -> None:
+        """Test that nodes page includes SPA application script."""
         response = client.get("/nodes")
-        # Should show truncated or full public keys
-        assert "abc123" in response.text or "def456" in response.text
+        assert "/static/js/spa/app.js" in response.text
 
     def test_nodes_with_search_param(self, client: TestClient) -> None:
-        """Test nodes page with search parameter."""
+        """Test nodes page with search parameter returns SPA shell."""
         response = client.get("/nodes?search=test")
         assert response.status_code == 200
 
     def test_nodes_with_adv_type_filter(self, client: TestClient) -> None:
-        """Test nodes page with adv_type filter."""
+        """Test nodes page with adv_type filter returns SPA shell."""
         response = client.get("/nodes?adv_type=REPEATER")
         assert response.status_code == 200
 
     def test_nodes_with_pagination(self, client: TestClient) -> None:
-        """Test nodes page with pagination parameters."""
+        """Test nodes page with pagination parameters returns SPA shell."""
         response = client.get("/nodes?page=1&limit=10")
         assert response.status_code == 200
 
     def test_nodes_page_2(self, client: TestClient) -> None:
-        """Test nodes page 2."""
+        """Test nodes page 2 returns SPA shell."""
         response = client.get("/nodes?page=2")
         assert response.status_code == 200
 
@@ -69,83 +57,51 @@ class TestNodesListPage:
 class TestNodeDetailPage:
     """Tests for the node detail page."""
 
-    def test_node_detail_returns_200(
-        self, client: TestClient, mock_http_client: MockHttpClient
-    ) -> None:
+    def test_node_detail_returns_200(self, client: TestClient) -> None:
         """Test that node detail page returns 200 status code."""
         response = client.get(
             "/nodes/abc123def456abc123def456abc123def456abc123def456abc123def456abc1"
         )
         assert response.status_code == 200
 
-    def test_node_detail_returns_html(
-        self, client: TestClient, mock_http_client: MockHttpClient
-    ) -> None:
+    def test_node_detail_returns_html(self, client: TestClient) -> None:
         """Test that node detail page returns HTML content."""
         response = client.get(
             "/nodes/abc123def456abc123def456abc123def456abc123def456abc123def456abc1"
         )
         assert "text/html" in response.headers["content-type"]
 
-    def test_node_detail_displays_node_info(
-        self, client: TestClient, mock_http_client: MockHttpClient
-    ) -> None:
-        """Test that node detail page displays node information."""
+    def test_node_detail_contains_app_config(self, client: TestClient) -> None:
+        """Test that node detail page contains SPA config."""
         response = client.get(
             "/nodes/abc123def456abc123def456abc123def456abc123def456abc123def456abc1"
         )
-        assert response.status_code == 200
-        # Should display node details
-        assert "Node One" in response.text
-        # Node type is shown as emoji with title attribute
-        assert 'title="Repeater"' in response.text
+        assert "window.__APP_CONFIG__" in response.text
 
-    def test_node_detail_displays_public_key(
-        self, client: TestClient, mock_http_client: MockHttpClient
+    def test_node_detail_nonexistent_returns_spa_shell(
+        self, client: TestClient
     ) -> None:
-        """Test that node detail page displays the full public key."""
-        response = client.get(
-            "/nodes/abc123def456abc123def456abc123def456abc123def456abc123def456abc1"
-        )
-        assert (
-            "abc123def456abc123def456abc123def456abc123def456abc123def456abc1"
-            in response.text
-        )
+        """Test that node detail for nonexistent node returns SPA shell.
 
-
-class TestNodesPageAPIErrors:
-    """Tests for nodes pages handling API errors."""
-
-    def test_nodes_handles_api_error(
-        self, web_app: Any, mock_http_client: MockHttpClient
-    ) -> None:
-        """Test that nodes page handles API errors gracefully."""
-        mock_http_client.set_response(
-            "GET", "/api/v1/nodes", status_code=500, json_data=None
-        )
-        web_app.state.http_client = mock_http_client
-
-        client = TestClient(web_app, raise_server_exceptions=True)
-        response = client.get("/nodes")
-
-        # Should still return 200 (page renders with empty list)
-        assert response.status_code == 200
-
-    def test_node_detail_handles_not_found(
-        self, web_app: Any, mock_http_client: MockHttpClient
-    ) -> None:
-        """Test that node detail page returns 404 when node not found."""
-        mock_http_client.set_response(
-            "GET",
-            "/api/v1/nodes/nonexistent",
-            status_code=404,
-            json_data={"detail": "Node not found"},
-        )
-        web_app.state.http_client = mock_http_client
-
-        client = TestClient(web_app, raise_server_exceptions=False)
+        In the SPA architecture, all routes return the same shell.
+        The SPA client handles 404 display when the API returns not found.
+        """
         response = client.get("/nodes/nonexistent")
+        assert response.status_code == 200
+        assert "window.__APP_CONFIG__" in response.text
 
-        # Should return 404 with custom error page
-        assert response.status_code == 404
-        assert "Page Not Found" in response.text
+
+class TestNodesConfig:
+    """Tests for nodes page SPA config content."""
+
+    def test_nodes_config_has_network_name(self, client: TestClient) -> None:
+        """Test that SPA config includes network name."""
+        response = client.get("/nodes")
+        text = response.text
+        config_start = text.find("window.__APP_CONFIG__ = ") + len(
+            "window.__APP_CONFIG__ = "
+        )
+        config_end = text.find(";", config_start)
+        config = json.loads(text[config_start:config_end])
+
+        assert config["network_name"] == "Test Network"

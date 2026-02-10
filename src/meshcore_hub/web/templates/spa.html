@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ network_name }}</title>
+
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="{{ network_name }}{% if network_welcome_text %} - {{ network_welcome_text }}{% else %} - MeshCore off-grid LoRa mesh network dashboard.{% endif %}">
+    <meta name="generator" content="MeshCore Hub {{ version }}">
+    <link rel="canonical" href="{{ request.url }}">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="{{ network_name }}">
+    <meta property="og:description" content="{{ network_name }}{% if network_welcome_text %} - {{ network_welcome_text }}{% else %} - MeshCore off-grid LoRa mesh network dashboard.{% endif %}">
+    <meta property="og:site_name" content="{{ network_name }}">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="{{ network_name }}">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="{{ logo_url }}">
+
+    <!-- Tailwind CSS with DaisyUI -->
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.19/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Leaflet CSS for maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <!-- Custom application styles -->
+    <link rel="stylesheet" href="/static/css/app.css">
+
+    <!-- Import map for ES module dependencies -->
+    <script type="importmap">
+    {
+        "imports": {
+            "lit-html": "https://esm.sh/lit-html@3",
+            "lit-html/": "https://esm.sh/lit-html@3/"
+        }
+    }
+    </script>
+</head>
+<body class="min-h-screen bg-base-200 flex flex-col">
+    <!-- Navbar -->
+    <div class="navbar bg-base-100 shadow-lg">
+        <div class="navbar-start">
+            <div class="dropdown">
+                <div tabindex="0" role="button" class="btn btn-ghost lg:hidden">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h8m-8 6h16" /></svg>
+                </div>
+                <ul tabindex="0" class="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52">
+                    <li><a href="/" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg> Home</a></li>
+                    <li><a href="/dashboard" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 nav-icon-dashboard" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg> Dashboard</a></li>
+                    <li><a href="/nodes" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 nav-icon-nodes" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg> Nodes</a></li>
+                    <li><a href="/advertisements" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 nav-icon-adverts" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" /></svg> Advertisements</a></li>
+                    <li><a href="/messages" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 nav-icon-messages" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg> Messages</a></li>
+                    <li><a href="/map" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 nav-icon-map" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg> Map</a></li>
+                    <li><a href="/members" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 nav-icon-members" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg> Members</a></li>
+                    {% for page in custom_pages %}
+                    <li><a href="{{ page.url }}" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg> {{ page.title }}</a></li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <a href="/" class="btn btn-ghost text-xl">
+                <img src="{{ logo_url }}" alt="{{ network_name }}" class="h-6 w-6 mr-2" />
+                {{ network_name }}
+            </a>
+        </div>
+        <div class="navbar-center hidden lg:flex">
+            <ul class="menu menu-horizontal px-1">
+                <li><a href="/" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg> Home</a></li>
+                <li><a href="/dashboard" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 nav-icon-dashboard" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg> Dashboard</a></li>
+                <li><a href="/nodes" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 nav-icon-nodes" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg> Nodes</a></li>
+                <li><a href="/advertisements" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 nav-icon-adverts" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" /></svg> Advertisements</a></li>
+                <li><a href="/messages" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 nav-icon-messages" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg> Messages</a></li>
+                <li><a href="/map" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 nav-icon-map" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg> Map</a></li>
+                <li><a href="/members" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 nav-icon-members" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg> Members</a></li>
+                {% for page in custom_pages %}
+                <li><a href="{{ page.url }}" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg> {{ page.title }}</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div class="navbar-end">
+            <span id="nav-loading" class="loading loading-spinner loading-sm hidden"></span>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-6 flex-1" id="app">
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer footer-center p-4 bg-base-100 text-base-content mt-auto">
+        <aside>
+            <p>
+                {{ network_name }}
+                {% if network_city and network_country %}
+                - {{ network_city }}, {{ network_country }}
+                {% endif %}
+            </p>
+            <p class="text-sm opacity-70">
+                {% if network_contact_email %}
+                <a href="mailto:{{ network_contact_email }}" class="link link-hover">{{ network_contact_email }}</a>
+                {% endif %}
+                {% if network_contact_email and network_contact_discord %} | {% endif %}
+                {% if network_contact_discord %}
+                <a href="{{ network_contact_discord }}" target="_blank" rel="noopener noreferrer" class="link link-hover">Discord</a>
+                {% endif %}
+                {% if (network_contact_email or network_contact_discord) and network_contact_github %} | {% endif %}
+                {% if network_contact_github %}
+                <a href="{{ network_contact_github }}" target="_blank" rel="noopener noreferrer" class="link link-hover">GitHub</a>
+                {% endif %}
+                {% if (network_contact_email or network_contact_discord or network_contact_github) and network_contact_youtube %} | {% endif %}
+                {% if network_contact_youtube %}
+                <a href="{{ network_contact_youtube }}" target="_blank" rel="noopener noreferrer" class="link link-hover">YouTube</a>
+                {% endif %}
+            </p>
+            <p class="text-xs opacity-50 mt-2">{% if admin_enabled %}<a href="/a/" class="link link-hover">Admin</a> | {% endif %}Powered by <a href="https://github.com/ipnet-mesh/meshcore-hub" target="_blank" rel="noopener noreferrer" class="link link-hover">MeshCore Hub</a> {{ version }}</p>
+        </aside>
+    </footer>
+
+    <!-- Leaflet JS for maps -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Chart.js for charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- QR Code library -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
+    <!-- Chart helper functions -->
+    <script src="/static/js/charts.js"></script>
+
+    <!-- Embedded app configuration -->
+    <script>
+        window.__APP_CONFIG__ = {{ config_json|safe }};
+    </script>
+
+    <!-- SPA Application (ES Module) -->
+    <script type="module" src="/static/js/spa/app.js"></script>
+</body>
+</html>

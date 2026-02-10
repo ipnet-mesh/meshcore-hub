@@ -13,7 +13,13 @@ This document provides context and guidelines for AI coding assistants working o
 * You MUST install all project dependencies using `pip install -e ".[dev]"` command`
 * You MUST install `pre-commit` for quality checks
 * Before commiting:
-  - Run tests with `pytest` to ensure recent changes haven't broken anything
+  - Run **targeted tests** for the components you changed, not the full suite:
+    - `pytest tests/test_web/` for web-only changes (templates, static JS, web routes)
+    - `pytest tests/test_api/` for API changes
+    - `pytest tests/test_collector/` for collector changes
+    - `pytest tests/test_interface/` for interface/sender/receiver changes
+    - `pytest tests/test_common/` for common models/schemas/config changes
+    - Only run the full `pytest` if changes span multiple components
   - Run `pre-commit run --all-files` to perform all quality checks
 
 ## Project Overview
@@ -46,7 +52,8 @@ MeshCore Hub is a Python 3.13+ monorepo for managing and orchestrating MeshCore 
 | REST API | FastAPI |
 | MQTT Client | paho-mqtt |
 | MeshCore Interface | meshcore |
-| Templates | Jinja2 |
+| Templates | Jinja2 (server), lit-html (SPA) |
+| Frontend | ES Modules SPA with client-side routing |
 | CSS Framework | Tailwind CSS + DaisyUI |
 | Testing | pytest, pytest-asyncio |
 | Formatting | black |
@@ -280,11 +287,18 @@ meshcore-hub/
 │   └── web/
 │       ├── cli.py
 │       ├── app.py            # FastAPI app
-│       ├── routes/           # Page routes
-│       │   ├── members.py    # Members page
-│       │   └── ...
-│       ├── templates/        # Jinja2 templates
-│       └── static/           # CSS, JS
+│       ├── templates/        # Jinja2 templates (spa.html shell, base.html)
+│       └── static/
+│           ├── css/app.css   # Custom styles
+│           └── js/spa/       # SPA frontend (ES modules)
+│               ├── app.js        # Entry point, route registration
+│               ├── router.js     # Client-side History API router
+│               ├── api.js        # API fetch helper
+│               ├── components.js # Shared UI components (lit-html)
+│               ├── icons.js      # SVG icon functions (lit-html)
+│               └── pages/        # Page modules (lazy-loaded)
+│                   ├── home.js, dashboard.js, nodes.js, ...
+│                   └── admin/    # Admin page modules
 ├── tests/
 │   ├── conftest.py
 │   ├── test_common/
@@ -416,6 +430,24 @@ async def client(db_session):
 4. Create/update database model if persisted
 5. Add Alembic migration if schema changed
 6. Add tests in `tests/test_collector/`
+
+### Adding a New SPA Page
+
+The web dashboard is a Single Page Application. Pages are ES modules loaded by the client-side router.
+
+1. Create a page module in `web/static/js/spa/pages/` (e.g., `my-page.js`)
+2. Export an `async function render(container, params, router)` that renders into `container` using `litRender(html\`...\`, container)`
+3. Register the route in `web/static/js/spa/app.js` with `router.addRoute('/my-page', pageHandler(pages.myPage))`
+4. Add the page title to `updatePageTitle()` in `app.js`
+5. Add a nav link in `web/templates/spa.html` (both mobile and desktop menus)
+
+**Key patterns:**
+- Import `html`, `litRender`, `nothing` from `../components.js` (re-exports lit-html)
+- Use `apiGet()` from `../api.js` for API calls
+- For list pages with filters, use the `renderPage()` pattern: render the page header immediately, then re-render with the filter form + results after fetch (keeps the form out of the shell to avoid layout shift from data-dependent filter selects)
+- Old page content stays visible until data is ready (navbar spinner indicates loading)
+- Use `pageColors` from `components.js` for section-specific colors (reads CSS custom properties from `app.css`)
+- Return a cleanup function if the page creates resources (e.g., Leaflet maps, Chart.js instances)
 
 ### Adding a New Database Model
 
