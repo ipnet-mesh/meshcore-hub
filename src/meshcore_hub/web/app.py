@@ -254,6 +254,20 @@ def create_app(
             if h in request.headers:
                 headers[h] = request.headers[h]
 
+        # Block mutating requests from unauthenticated users when admin is
+        # enabled.  OAuth2Proxy is expected to set X-Forwarded-User for
+        # authenticated sessions; without it, write operations must be
+        # rejected server-side to prevent auth bypass.
+        if (
+            request.method in ("POST", "PUT", "DELETE", "PATCH")
+            and request.app.state.admin_enabled
+            and not request.headers.get("x-forwarded-user")
+        ):
+            return JSONResponse(
+                {"detail": "Authentication required"},
+                status_code=401,
+            )
+
         try:
             response = await client.request(
                 method=request.method,
