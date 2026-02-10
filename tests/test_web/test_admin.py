@@ -193,6 +193,104 @@ class TestAdminNodeTags:
         assert "window.__APP_CONFIG__" in response.text
 
 
+class TestAdminApiProxyAuth:
+    """Tests for admin API proxy authentication enforcement.
+
+    When admin is enabled, mutating requests (POST/PUT/DELETE/PATCH) through
+    the API proxy must require authentication via X-Forwarded-User header.
+    This prevents unauthenticated users from performing admin operations
+    even though the web app's HTTP client has a service-level API key.
+    """
+
+    def test_proxy_post_blocked_without_auth(self, admin_client, mock_http_client):
+        """POST to API proxy returns 401 without auth headers."""
+        mock_http_client.set_response("POST", "/api/v1/members", 201, {"id": "new"})
+        response = admin_client.post(
+            "/api/v1/members",
+            json={"name": "Test", "member_id": "test"},
+        )
+        assert response.status_code == 401
+        assert "Authentication required" in response.json()["detail"]
+
+    def test_proxy_put_blocked_without_auth(self, admin_client, mock_http_client):
+        """PUT to API proxy returns 401 without auth headers."""
+        mock_http_client.set_response("PUT", "/api/v1/members/1", 200, {"id": "1"})
+        response = admin_client.put(
+            "/api/v1/members/1",
+            json={"name": "Updated"},
+        )
+        assert response.status_code == 401
+
+    def test_proxy_delete_blocked_without_auth(self, admin_client, mock_http_client):
+        """DELETE to API proxy returns 401 without auth headers."""
+        mock_http_client.set_response("DELETE", "/api/v1/members/1", 204, None)
+        response = admin_client.delete("/api/v1/members/1")
+        assert response.status_code == 401
+
+    def test_proxy_patch_blocked_without_auth(self, admin_client, mock_http_client):
+        """PATCH to API proxy returns 401 without auth headers."""
+        mock_http_client.set_response("PATCH", "/api/v1/members/1", 200, {"id": "1"})
+        response = admin_client.patch(
+            "/api/v1/members/1",
+            json={"name": "Patched"},
+        )
+        assert response.status_code == 401
+
+    def test_proxy_post_allowed_with_auth(
+        self, admin_client, auth_headers, mock_http_client
+    ):
+        """POST to API proxy succeeds with auth headers."""
+        mock_http_client.set_response("POST", "/api/v1/members", 201, {"id": "new"})
+        response = admin_client.post(
+            "/api/v1/members",
+            json={"name": "Test", "member_id": "test"},
+            headers=auth_headers,
+        )
+        assert response.status_code == 201
+
+    def test_proxy_put_allowed_with_auth(
+        self, admin_client, auth_headers, mock_http_client
+    ):
+        """PUT to API proxy succeeds with auth headers."""
+        mock_http_client.set_response("PUT", "/api/v1/members/1", 200, {"id": "1"})
+        response = admin_client.put(
+            "/api/v1/members/1",
+            json={"name": "Updated"},
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+
+    def test_proxy_delete_allowed_with_auth(
+        self, admin_client, auth_headers, mock_http_client
+    ):
+        """DELETE to API proxy succeeds with auth headers."""
+        mock_http_client.set_response("DELETE", "/api/v1/members/1", 204, None)
+        response = admin_client.delete(
+            "/api/v1/members/1",
+            headers=auth_headers,
+        )
+        # 204 from the mock API
+        assert response.status_code == 204
+
+    def test_proxy_get_allowed_without_auth(self, admin_client, mock_http_client):
+        """GET to API proxy is allowed without auth (read-only)."""
+        response = admin_client.get("/api/v1/nodes")
+        assert response.status_code == 200
+
+    def test_proxy_post_allowed_when_admin_disabled(
+        self, admin_client_disabled, mock_http_client
+    ):
+        """POST to API proxy allowed when admin is disabled (no proxy auth)."""
+        mock_http_client.set_response("POST", "/api/v1/members", 201, {"id": "new"})
+        response = admin_client_disabled.post(
+            "/api/v1/members",
+            json={"name": "Test", "member_id": "test"},
+        )
+        # Should reach the API (which may return its own auth error, but
+        # the proxy itself should not block it)
+        assert response.status_code == 201
+
+
 class TestAdminFooterLink:
     """Tests for admin link in footer."""
 

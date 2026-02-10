@@ -225,18 +225,41 @@ class MockHttpClient:
 
     def _create_response(self, key: str) -> Response:
         """Create a mock response for a given key."""
+        import json as _json
+
         response_data = self._responses.get(key)
         if response_data is None:
             # Return 404 for unknown endpoints
             response = MagicMock(spec=Response)
             response.status_code = 404
             response.json.return_value = {"detail": "Not found"}
+            response.content = b'{"detail": "Not found"}'
+            response.headers = {"content-type": "application/json"}
             return response
 
         response = MagicMock(spec=Response)
         response.status_code = response_data["status_code"]
         response.json.return_value = response_data["json"]
+        response.content = _json.dumps(response_data["json"]).encode()
+        response.headers = {"content-type": "application/json"}
         return response
+
+    async def request(
+        self,
+        method: str,
+        url: str,
+        params: dict | None = None,
+        content: bytes | None = None,
+        headers: dict | None = None,
+    ) -> Response:
+        """Mock generic request (used by API proxy)."""
+        key = f"{method.upper()}:{url}"
+        if key in self._responses:
+            return self._create_response(key)
+        # Try base path without query params
+        base_path = url.split("?")[0]
+        key = f"{method.upper()}:{base_path}"
+        return self._create_response(key)
 
     async def get(self, path: str, params: dict | None = None) -> Response:
         """Mock GET request."""
