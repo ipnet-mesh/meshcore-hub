@@ -256,6 +256,12 @@ class WebSettings(CommonSettings):
     # Timezone for date/time display (uses standard TZ environment variable)
     tz: str = Field(default="UTC", description="Timezone for displaying dates/times")
 
+    # Theme (dark or light, default dark)
+    web_theme: str = Field(
+        default="dark",
+        description="Default theme for the web dashboard (dark or light)",
+    )
+
     # Admin interface (disabled by default for security)
     web_admin_enabled: bool = Field(
         default=False,

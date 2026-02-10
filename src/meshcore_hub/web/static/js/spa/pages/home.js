@@ -70,9 +70,9 @@ export async function render(container, params, router) {
 <div class="${showStats ? 'grid grid-cols-1 lg:grid-cols-3 gap-6' : ''} bg-base-100 rounded-box p-6">
     <div class="${showStats ? 'lg:col-span-2' : ''} flex flex-col items-center text-center">
         <div class="flex flex-col sm:flex-row items-center gap-4 sm:gap-8 mb-4">
-            <img src="${logoUrl}" alt="${networkName}" class="h-24 w-24 sm:h-36 sm:w-36" />
+            <img src="${logoUrl}" alt="${networkName}" class="theme-logo h-24 w-24 sm:h-36 sm:w-36" />
             <div class="flex flex-col justify-center">
-                <h1 class="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight">${networkName}</h1>
+                <h1 class="hero-title text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight">${networkName}</h1>
                 ${cityCountry}
             </div>
         </div>
@@ -159,7 +159,7 @@ export async function render(container, params, router) {
         <div class="card-body flex flex-col items-center justify-center">
             <p class="text-sm opacity-70 mb-4 text-center">Our local off-grid mesh network is made possible by</p>
             <a href="https://meshcore.co.uk/" target="_blank" rel="noopener noreferrer" class="hover:opacity-80 transition-opacity">
-                <img src="/static/img/meshcore.svg" alt="MeshCore" class="h-8" />
+                <img src="/static/img/meshcore.svg" alt="MeshCore" class="theme-logo h-8" />
             </a>
             <p class="text-xs opacity-50 mt-4 text-center">Connecting people and things, without using the internet</p>
             <div class="flex gap-2 mt-4">

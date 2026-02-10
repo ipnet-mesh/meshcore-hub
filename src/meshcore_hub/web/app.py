@@ -113,6 +113,7 @@ def _build_config_json(app: FastAPI, request: Request) -> str:
         "timezone": app.state.timezone_abbr,
         "timezone_iana": app.state.timezone,
         "is_authenticated": bool(request.headers.get("X-Forwarded-User")),
+        "default_theme": app.state.web_theme,
     }
 
     return json.dumps(config)
@@ -174,6 +175,9 @@ def create_app(
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
     # Store configuration in app state (use args if provided, else settings)
+    app.state.web_theme = (
+        settings.web_theme if settings.web_theme in ("dark", "light") else "dark"
+    )
     app.state.api_url = api_url or settings.api_base_url
     app.state.api_key = api_key or settings.api_key
     app.state.admin_enabled = (
@@ -638,6 +642,7 @@ def create_app(
                 "custom_pages": custom_pages,
                 "logo_url": request.app.state.logo_url,
                 "version": __version__,
+                "default_theme": request.app.state.web_theme,
                 "config_json": config_json,
             },
         )

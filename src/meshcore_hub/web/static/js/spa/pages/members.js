@@ -53,7 +53,7 @@ function renderMemberCard(member, nodes) {
         : nothing;
 
     const callsignBadge = member.callsign
-        ? html`<span class="badge badge-success">${member.callsign}</span>`
+        ? html`<span class="badge badge-neutral">${member.callsign}</span>`
         : nothing;
 
     const descBlock = member.description
