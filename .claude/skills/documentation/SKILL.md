@@ -25,6 +25,7 @@ Also check for substantial comments or inline instructions within the codebase t
    - File paths and directory structures are accurate.
 
 3. **Identify and fix discrepancies:**
+   - **Version updates** — ensure documentation reflects any new/updated/removed versions. Check .python-version, pyproject.toml, etc.
    - **Stale/legacy content** — documented but no longer in the code. Remove it.
    - **Missing content** — exists in the code but not documented. Add it.
    - **Inaccurate descriptions** — documented behavior doesn't match implementation. Correct it.

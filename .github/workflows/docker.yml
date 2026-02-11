@@ -7,6 +7,7 @@ on:
       - "src/**"
       - "alembic/**"
       - "alembic.ini"
+      - ".python-version"
       - "pyproject.toml"
       - "Dockerfile"
       - "docker-compose.yml"
