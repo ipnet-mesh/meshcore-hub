@@ -3,6 +3,14 @@ name: Docker
 on:
   push:
     branches: [main]
+    paths:
+      - "src/**"
+      - "alembic/**"
+      - "alembic.ini"
+      - "pyproject.toml"
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - ".github/workflows/docker.yml"
     tags:
       - "v*"
 
