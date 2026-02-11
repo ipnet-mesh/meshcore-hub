@@ -168,7 +168,7 @@ Docker Compose uses **profiles** to select which services to run:
 
 | Profile | Services | Use Case |
 |---------|----------|----------|
-| `core` | collector, api, web | Central server infrastructure |
+| `core` | db-migrate, collector, api, web | Central server infrastructure |
 | `receiver` | interface-receiver | Receiver node (events to MQTT) |
 | `sender` | interface-sender | Sender node (MQTT to device) |
 | `mqtt` | mosquitto broker | Local MQTT broker (optional) |
@@ -275,6 +275,10 @@ All components are configured via environment variables. Create a `.env` file or
 | `SERIAL_PORT` | `/dev/ttyUSB0` | Serial port for MeshCore device |
 | `SERIAL_BAUD` | `115200` | Serial baud rate |
 | `MESHCORE_DEVICE_NAME` | *(none)* | Device/node name set on startup (broadcast in advertisements) |
+| `NODE_ADDRESS` | *(none)* | Override for device public key (64-char hex string) |
+| `NODE_ADDRESS_SENDER` | *(none)* | Override for sender device public key |
+| `CONTACT_CLEANUP_ENABLED` | `true` | Enable automatic removal of stale contacts from companion node |
+| `CONTACT_CLEANUP_DAYS` | `7` | Remove contacts not advertised for this many days |
 
 ### Webhooks
 
@@ -287,7 +291,9 @@ The collector can forward certain events to external HTTP endpoints:
 | `WEBHOOK_MESSAGE_URL` | *(none)* | Webhook URL for all message events |
 | `WEBHOOK_MESSAGE_SECRET` | *(none)* | Secret for message webhook |
 | `WEBHOOK_CHANNEL_MESSAGE_URL` | *(none)* | Override URL for channel messages only |
+| `WEBHOOK_CHANNEL_MESSAGE_SECRET` | *(none)* | Secret for channel message webhook |
 | `WEBHOOK_DIRECT_MESSAGE_URL` | *(none)* | Override URL for direct messages only |
+| `WEBHOOK_DIRECT_MESSAGE_SECRET` | *(none)* | Secret for direct message webhook |
 | `WEBHOOK_TIMEOUT` | `10.0` | Request timeout in seconds |
 | `WEBHOOK_MAX_RETRIES` | `3` | Max retry attempts on failure |
 | `WEBHOOK_RETRY_BACKOFF` | `2.0` | Exponential backoff multiplier |
@@ -329,6 +335,7 @@ The collector automatically cleans up old event data and inactive nodes:
 | `WEB_HOST` | `0.0.0.0` | Web server bind address |
 | `WEB_PORT` | `8080` | Web server port |
 | `API_BASE_URL` | `http://localhost:8000` | API endpoint URL |
+| `WEB_THEME` | `dark` | Default theme (`dark` or `light`). Users can override via theme toggle in navbar. |
 | `WEB_ADMIN_ENABLED` | `false` | Enable admin interface at /a/ (requires auth proxy) |
 | `TZ` | `UTC` | Timezone for displaying dates/times (e.g., `America/New_York`, `Europe/London`) |
 | `NETWORK_NAME` | `MeshCore Network` | Display name for the network |
@@ -339,6 +346,7 @@ The collector automatically cleans up old event data and inactive nodes:
 | `NETWORK_CONTACT_EMAIL` | *(none)* | Contact email address |
 | `NETWORK_CONTACT_DISCORD` | *(none)* | Discord server link |
 | `NETWORK_CONTACT_GITHUB` | *(none)* | GitHub repository URL |
+| `NETWORK_CONTACT_YOUTUBE` | *(none)* | YouTube channel URL |
 | `CONTENT_HOME` | `./content` | Directory containing custom content (pages/, media/) |
 
 #### Feature Flags
@@ -541,15 +549,21 @@ curl -X POST \
 |--------|----------|-------------|
 | GET | `/api/v1/nodes` | List all known nodes |
 | GET | `/api/v1/nodes/{public_key}` | Get node details |
+| GET | `/api/v1/nodes/prefix/{prefix}` | Get node by public key prefix |
 | GET | `/api/v1/nodes/{public_key}/tags` | Get node tags |
 | POST | `/api/v1/nodes/{public_key}/tags` | Create node tag |
 | GET | `/api/v1/messages` | List messages with filters |
 | GET | `/api/v1/advertisements` | List advertisements |
 | GET | `/api/v1/telemetry` | List telemetry data |
 | GET | `/api/v1/trace-paths` | List trace paths |
+| GET | `/api/v1/members` | List network members |
 | POST | `/api/v1/commands/send-message` | Send direct message |
 | POST | `/api/v1/commands/send-channel-message` | Send channel message |
+| POST | `/api/v1/commands/send-advertisement` | Send advertisement |
 | GET | `/api/v1/dashboard/stats` | Get network statistics |
+| GET | `/api/v1/dashboard/activity` | Get daily advertisement activity |
+| GET | `/api/v1/dashboard/message-activity` | Get daily message activity |
+| GET | `/api/v1/dashboard/node-count` | Get cumulative node count history |
 
 ## Development
 
@@ -618,13 +632,13 @@ meshcore-hub/
 ├── tests/                  # Test suite
 ├── alembic/                # Database migrations
 ├── etc/                    # Configuration files (mosquitto.conf)
-├── example/                # Example files for testing
+├── example/                # Example files for reference
 │   ├── seed/               # Example seed data files
 │   │   ├── node_tags.yaml  # Example node tags
 │   │   └── members.yaml    # Example network members
 │   └── content/            # Example custom content
 │       ├── pages/          # Example custom pages
-│       │   └── about.md    # Example about page
+│       │   └── join.md     # Example join page
 │       └── media/          # Example media files
 │           └── images/     # Custom images
 ├── seed/                   # Seed data directory (SEED_HOME, copy from example/seed/)
