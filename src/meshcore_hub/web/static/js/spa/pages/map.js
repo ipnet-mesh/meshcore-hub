@@ -309,7 +309,7 @@ export async function render(container, params, router) {
         }
 
         if (debug.total_nodes === 0) {
-            container.querySelector('#node-count').textContent = t('map.no_nodes_in_database');
+            container.querySelector('#node-count').textContent = t('common.no_entity_in_database', { entity: t('entities.nodes').toLowerCase() });
             return () => map.remove();
         }
 

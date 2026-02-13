@@ -34,11 +34,30 @@
         "delete_entity": "Delete {{entity}}",
         "delete_all_entity": "Delete All {{entity}}",
         "move_entity": "Move {{entity}}",
+        "move_entity_to_another_node": "Move {{entity}} to Another Node",
         "copy_entity": "Copy {{entity}}",
+        "copy_all_entity_to_another_node": "Copy All {{entity}} to Another Node",
         "view_entity": "View {{entity}}",
         "recent_entity": "Recent {{entity}}",
         "total_entity": "Total {{entity}}",
         "all_entity": "All {{entity}}",
+        "no_entity_found": "No {{entity}} found",
+        "no_entity_recorded": "No {{entity}} recorded",
+        "no_entity_defined": "No {{entity}} defined",
+        "no_entity_in_database": "No {{entity}} in database",
+        "no_entity_configured": "No {{entity}} configured",
+        "no_entity_yet": "No {{entity}} yet",
+        "entity_not_found_details": "{{entity}} not found: {{details}}",
+        "page_not_found": "Page not found",
+        "delete_entity_confirm": "Are you sure you want to delete {{entity}} <strong>{{name}}</strong>?",
+        "delete_all_entity_confirm": "Are you sure you want to delete all {{count}} {{entity}} from <strong>{{name}}</strong>?",
+        "cannot_be_undone": "This action cannot be undone.",
+        "entity_added_success": "{{entity}} added successfully",
+        "entity_updated_success": "{{entity}} updated successfully",
+        "entity_deleted_success": "{{entity}} deleted successfully",
+        "entity_moved_success": "{{entity}} moved successfully",
+        "all_entity_deleted_success": "All {{entity}} deleted successfully",
+        "copy_all_entity_description": "Copy all {{count}} {{entity}} from <strong>{{name}}</strong> to another node.",
         "previous": "Previous",
         "next": "Next",
         "go_home": "Go Home",
@@ -67,7 +86,7 @@
         "callsign": "Callsign",
         "tags": "Tags",
         "last_seen": "Last Seen",
-        "first_seen": "First seen:",
+        "first_seen_label": "First seen:",
         "last_seen_label": "Last seen:",
         "location": "Location",
         "public_key": "Public Key",
@@ -117,21 +136,13 @@
     "dashboard": {
         "all_discovered_nodes": "All discovered nodes",
         "recent_channel_messages": "Recent Channel Messages",
-        "channel": "Channel {{number}}",
-        "no_advertisements_yet": "No advertisements recorded yet."
+        "channel": "Channel {{number}}"
     },
     "nodes": {
-        "no_nodes_found": "No nodes found.",
-        "node_not_found": "Node not found: {{public_key}}",
-        "scan_to_add": "Scan to add as contact",
-        "no_advertisements": "No advertisements recorded.",
-        "no_tags": "No tags defined."
+        "scan_to_add": "Scan to add as contact"
     },
-    "advertisements": {
-        "no_advertisements_found": "No advertisements found."
-    },
+    "advertisements": {},
     "messages": {
-        "no_messages_found": "No messages found.",
         "type_direct": "Direct",
         "type_channel": "Channel",
         "type_contact": "Contact",
@@ -144,7 +155,6 @@
         "infrastructure": "Infrastructure",
         "public": "Public",
         "nodes_on_map": "{{count}} nodes on map",
-        "no_nodes_in_database": "No nodes in database",
         "nodes_none_have_coordinates": "{{count}} nodes (none have coordinates)",
         "gps_description": "Nodes are placed on the map based on GPS coordinates from node reports or manual tags.",
         "owner": "Owner:",
@@ -152,18 +162,15 @@
         "select_destination_node": "-- Select destination node --"
     },
     "members": {
-        "no_members_configured": "No members configured",
-        "no_members_description": "To display network members, create a members.yaml file in your seed directory.",
+        "empty_state_description": "To display network members, create a members.yaml file in your seed directory.",
         "members_file_format": "Members File Format",
         "members_file_description": "Create a YAML file at <code>$SEED_HOME/members.yaml</code> with the following structure:",
         "members_import_instructions": "Run <code>meshcore-hub collector seed</code> to import members.<br/>To associate nodes with members, add a <code>member_id</code> tag to nodes in <code>node_tags.yaml</code>."
     },
     "not_found": {
-        "title": "Page Not Found",
         "description": "The page you're looking for doesn't exist or has been moved."
     },
     "custom_page": {
-        "page_not_found": "Page not found",
         "failed_to_load": "Failed to load page"
     },
     "admin": {
@@ -180,40 +187,23 @@
         "network_members": "Network Members ({{count}})",
         "member_id": "Member ID",
         "member_id_hint": "Unique identifier (letters, numbers, underscore)",
-        "no_members_yet": "No members configured yet.",
-        "no_members_hint": "Click \"Add Member\" to create the first member.",
-        "delete_confirm": "Are you sure you want to delete member <strong>{{name}}</strong>?",
-        "cannot_be_undone": "This action cannot be undone.",
-        "entity_added": "Member added successfully",
-        "entity_updated": "Member updated successfully",
-        "entity_deleted": "Member deleted successfully"
+        "empty_state_hint": "Click \"Add Member\" to create the first member."
     },
     "admin_node_tags": {
         "select_node": "Select Node",
         "select_node_placeholder": "-- Select a node --",
         "load_tags": "Load Tags",
-        "move_to_another_node": "Move Tag to Another Node",
         "move_warning": "This will move the tag from the current node to the destination node.",
-        "delete_tag_confirm": "Are you sure you want to delete the tag \"{{key}}\"?",
-        "cannot_be_undone": "This action cannot be undone.",
         "copy_all": "Copy All",
-        "copy_all_title": "Copy All Tags to Another Node",
-        "copy_all_description": "Copy all {{count}} tag(s) from <strong>{{name}}</strong> to another node.",
         "copy_all_info": "Tags that already exist on the destination node will be skipped. Original tags remain on this node.",
         "delete_all": "Delete All",
-        "delete_all_confirm": "Are you sure you want to delete all {{count}} tag(s) from <strong>{{name}}</strong>?",
-        "delete_all_warning": "This action cannot be undone. All tags will be permanently deleted.",
+        "delete_all_warning": "All tags will be permanently deleted.",
         "destination_node": "Destination Node",
         "tag_key": "Tag Key",
-        "no_tags_found": "No tags found for this node.",
-        "no_tags_hint": "Add a new tag below.",
+        "for_this_node": "for this node",
+        "empty_state_hint": "Add a new tag below.",
         "select_a_node": "Select a Node",
         "select_a_node_description": "Choose a node from the dropdown above to view and manage its tags.",
-        "entity_added": "Tag added successfully",
-        "entity_updated": "Tag updated successfully",
-        "entity_moved": "Tag moved successfully",
-        "entity_deleted": "Tag deleted successfully",
-        "all_entities_deleted": "All tags deleted successfully",
         "copied_entities": "Copied {{copied}} tag(s), skipped {{skipped}}"
     },
     "footer": {

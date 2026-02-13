@@ -41,7 +41,7 @@ ${content}`, container);
         const totalPages = Math.ceil(total / limit);
 
         const mobileCards = messages.length === 0
-            ? html`<div class="text-center py-8 opacity-70">${t('messages.no_messages_found')}</div>`
+            ? html`<div class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.messages').toLowerCase() })}</div>`
             : messages.map(msg => {
                 const isChannel = msg.message_type === 'channel';
                 const typeIcon = isChannel ? '\u{1F4FB}' : '\u{1F464}';
@@ -95,7 +95,7 @@ ${content}`, container);
             });
 
         const tableRows = messages.length === 0
-            ? html`<tr><td colspan="5" class="text-center py-8 opacity-70">${t('messages.no_messages_found')}</td></tr>`
+            ? html`<tr><td colspan="5" class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.messages').toLowerCase() })}</td></tr>`
             : messages.map(msg => {
                 const isChannel = msg.message_type === 'channel';
                 const typeIcon = isChannel ? '\u{1F4FB}' : '\u{1F464}';

@@ -80,7 +80,7 @@ ${content}`, container);
             : nothing;
 
         const mobileCards = advertisements.length === 0
-            ? html`<div class="text-center py-8 opacity-70">${t('advertisements.no_advertisements_found')}</div>`
+            ? html`<div class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.advertisements').toLowerCase() })}</div>`
             : advertisements.map(ad => {
                 const emoji = typeEmoji(ad.adv_type);
                 const adName = ad.node_tag_name || ad.node_name || ad.name;
@@ -119,7 +119,7 @@ ${content}`, container);
             });
 
         const tableRows = advertisements.length === 0
-            ? html`<tr><td colspan="3" class="text-center py-8 opacity-70">${t('advertisements.no_advertisements_found')}</td></tr>`
+            ? html`<tr><td colspan="3" class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.advertisements').toLowerCase() })}</td></tr>`
             : advertisements.map(ad => {
                 const emoji = typeEmoji(ad.adv_type);
                 const adName = ad.node_tag_name || ad.node_name || ad.name;

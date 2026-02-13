@@ -78,8 +78,8 @@ export async function render(container, params, router) {
             </div>`
             : html`
             <div class="text-center py-8 text-base-content/60">
-                <p>${t('admin_members.no_members_yet')}</p>
-                <p class="text-sm mt-2">${t('admin_members.no_members_hint')}</p>
+                <p>${t('common.no_entity_yet', { entity: t('entities.members').toLowerCase() })}</p>
+                <p class="text-sm mt-2">${t('admin_members.empty_state_hint')}</p>
             </div>`;
 
         litRender(html`
@@ -208,10 +208,10 @@ ${flashHtml}
     <div class="modal-box">
         <h3 class="font-bold text-lg">${t('common.delete_entity', { entity: t('entities.member') })}</h3>
         <div class="py-4">
-            <p class="py-4">Are you sure you want to delete member <strong id="delete_member_name"></strong>?</p>
+            <p class="py-4" id="delete_confirm_message"></p>
             <div class="alert alert-error mb-4">
                 <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                <span>${t('admin_members.cannot_be_undone')}</span>
+                <span>${t('common.cannot_be_undone')}</span>
             </div>
             <div class="modal-action">
                 <button type="button" class="btn" id="deleteCancel">${t('common.cancel')}</button>
@@ -249,7 +249,7 @@ ${flashHtml}
             try {
                 await apiPost('/api/v1/members', body);
                 container.querySelector('#addModal').close();
-                router.navigate('/a/members?message=' + encodeURIComponent(t('admin_members.entity_added')));
+                router.navigate('/a/members?message=' + encodeURIComponent(t('common.entity_added_success', { entity: t('entities.member') })));
             } catch (err) {
                 container.querySelector('#addModal').close();
                 router.navigate('/a/members?error=' + encodeURIComponent(err.message));
@@ -289,7 +289,7 @@ ${flashHtml}
             try {
                 await apiPut('/api/v1/members/' + encodeURIComponent(id), body);
                 container.querySelector('#editModal').close();
-                router.navigate('/a/members?message=' + encodeURIComponent(t('admin_members.entity_updated')));
+                router.navigate('/a/members?message=' + encodeURIComponent(t('common.entity_updated_success', { entity: t('entities.member') })));
             } catch (err) {
                 container.querySelector('#editModal').close();
                 router.navigate('/a/members?error=' + encodeURIComponent(err.message));
@@ -301,7 +301,12 @@ ${flashHtml}
             btn.addEventListener('click', () => {
                 const row = btn.closest('tr');
                 activeDeleteId = row.dataset.memberId;
-                container.querySelector('#delete_member_name').textContent = row.dataset.memberName;
+                const memberName = row.dataset.memberName;
+                const confirmMsg = t('common.delete_entity_confirm', {
+                    entity: t('entities.member').toLowerCase(),
+                    name: memberName
+                });
+                container.querySelector('#delete_confirm_message').innerHTML = confirmMsg;
                 container.querySelector('#deleteModal').showModal();
             });
         });
@@ -314,7 +319,7 @@ ${flashHtml}
             try {
                 await apiDelete('/api/v1/members/' + encodeURIComponent(activeDeleteId));
                 container.querySelector('#deleteModal').close();
-                router.navigate('/a/members?message=' + encodeURIComponent(t('admin_members.entity_deleted')));
+                router.navigate('/a/members?message=' + encodeURIComponent(t('common.entity_deleted_success', { entity: t('entities.member') })));
             } catch (err) {
                 container.querySelector('#deleteModal').close();
                 router.navigate('/a/members?error=' + encodeURIComponent(err.message));

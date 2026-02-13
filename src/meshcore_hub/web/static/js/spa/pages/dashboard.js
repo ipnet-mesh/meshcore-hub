@@ -43,7 +43,7 @@ function formatTimeShort(isoString) {
 
 function renderRecentAds(ads) {
     if (!ads || ads.length === 0) {
-        return html`<p class="text-sm opacity-70">${t('dashboard.no_advertisements_yet')}</p>`;
+        return html`<p class="text-sm opacity-70">${t('common.no_entity_yet', { entity: t('entities.advertisements').toLowerCase() })}</p>`;
     }
     const rows = ads.slice(0, 5).map(ad => {
         const friendlyName = ad.tag_name || ad.name;

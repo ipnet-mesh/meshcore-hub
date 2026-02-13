@@ -92,8 +92,8 @@ export async function render(container, params, router) {
 <div class="alert alert-info">
     ${iconInfo('stroke-current shrink-0 h-6 w-6')}
     <div>
-        <h3 class="font-bold">${t('members.no_members_configured')}</h3>
-        <p class="text-sm">${t('members.no_members_description')}</p>
+        <h3 class="font-bold">${t('common.no_entity_configured', { entity: t('entities.members').toLowerCase() })}</h3>
+        <p class="text-sm">${t('members.empty_state_description')}</p>
     </div>
 </div>
 

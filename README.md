@@ -8,6 +8,23 @@ Python 3.14+ platform for managing and orchestrating MeshCore mesh networks.
 
 ![MeshCore Hub Web Dashboard](docs/images/web.png)
 
+## 🌍 Help Translate MeshCore Hub
+
+**We need volunteers to translate the web dashboard into other languages!**
+
+MeshCore Hub includes full internationalization (i18n) support with a composable translation system. We're looking for open source volunteers to contribute and maintain language packs for their native languages.
+
+**Current translations:**
+- 🇬🇧 English (complete)
+
+**How to contribute:**
+1. Check out the [Translation Reference Guide](src/meshcore_hub/web/static/locales/languages.md) for complete documentation
+2. Copy `src/meshcore_hub/web/static/locales/en.json` to your language code (e.g., `es.json`, `fr.json`, `de.json`)
+3. Translate all values while preserving variables (`{{variable}}`) and HTML tags
+4. Submit a pull request with your translation
+
+Even partial translations are welcome! The system falls back to English for missing keys, so you can translate incrementally.
+
 ## Overview
 
 MeshCore Hub provides a complete solution for monitoring, collecting, and interacting with MeshCore mesh networks. It consists of multiple components that work together:
@@ -70,6 +87,7 @@ flowchart LR
 - **Command Dispatch**: Send messages and advertisements via the API
 - **Node Tagging**: Add custom metadata to nodes for organization
 - **Web Dashboard**: Visualize network status, node locations, and message history
+- **Internationalization**: Full i18n support with composable translation patterns
 - **Docker Ready**: Single image with all components, easy deployment
 
 ## Getting Started
@@ -248,7 +266,7 @@ pip install -e ".[dev]"
 meshcore-hub db upgrade
 
 # Start components (in separate terminals)
-meshcore-hub interface --mode receiver --port /dev/ttyUSB0
+meshcore-hub interface receiver --port /dev/ttyUSB0
 meshcore-hub collector
 meshcore-hub api
 meshcore-hub web
@@ -339,9 +357,12 @@ The collector automatically cleans up old event data and inactive nodes:
 | `WEB_HOST` | `0.0.0.0` | Web server bind address |
 | `WEB_PORT` | `8080` | Web server port |
 | `API_BASE_URL` | `http://localhost:8000` | API endpoint URL |
+| `API_KEY` | *(none)* | API key for web dashboard queries (optional) |
 | `WEB_THEME` | `dark` | Default theme (`dark` or `light`). Users can override via theme toggle in navbar. |
+| `WEB_LOCALE` | `en` | Locale/language for the web dashboard (e.g., `en`, `es`, `fr`) |
 | `WEB_ADMIN_ENABLED` | `false` | Enable admin interface at /a/ (requires auth proxy) |
 | `TZ` | `UTC` | Timezone for displaying dates/times (e.g., `America/New_York`, `Europe/London`) |
+| `NETWORK_DOMAIN` | *(none)* | Network domain name (optional) |
 | `NETWORK_NAME` | `MeshCore Network` | Display name for the network |
 | `NETWORK_CITY` | *(none)* | City where network is located |
 | `NETWORK_COUNTRY` | *(none)* | Country code (ISO 3166-1 alpha-2) |
@@ -632,7 +653,9 @@ meshcore-hub/
 │   ├── api/                # REST API
 │   └── web/                # Web dashboard
 │       ├── templates/      # Jinja2 templates (SPA shell)
-│       └── static/js/spa/  # SPA frontend (ES modules, lit-html)
+│       └── static/
+│           ├── js/spa/     # SPA frontend (ES modules, lit-html)
+│           └── locales/    # Translation files (en.json, languages.md)
 ├── tests/                  # Test suite
 ├── alembic/                # Database migrations
 ├── etc/                    # Configuration files (mosquitto.conf)

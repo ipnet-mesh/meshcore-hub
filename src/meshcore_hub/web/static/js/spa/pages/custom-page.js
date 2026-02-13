@@ -20,7 +20,7 @@ export async function render(container, params, router) {
 
     } catch (e) {
         if (e.message && e.message.includes('404')) {
-            litRender(errorAlert(t('custom_page.page_not_found')), container);
+            litRender(errorAlert(t('common.page_not_found')), container);
         } else {
             litRender(errorAlert(e.message || t('custom_page.failed_to_load')), container);
         }

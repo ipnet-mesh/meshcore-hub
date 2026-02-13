@@ -93,8 +93,8 @@ export async function render(container, params, router) {
                 </div>`
                 : html`
                 <div class="text-center py-8 text-base-content/60">
-                    <p>${t('admin_node_tags.no_tags_found')}</p>
-                    <p class="text-sm mt-2">${t('admin_node_tags.no_tags_hint')}</p>
+                    <p>${t('common.no_entity_found', { entity: t('entities.tags').toLowerCase() }) + ' ' + t('admin_node_tags.for_this_node')}</p>
+                    <p class="text-sm mt-2">${t('admin_node_tags.empty_state_hint')}</p>
                 </div>`;
 
             const bulkButtons = tags.length > 0
@@ -116,7 +116,7 @@ export async function render(container, params, router) {
             </div>
             <div class="flex gap-2">
                 ${bulkButtons}
-                <a href="/nodes/${encodeURIComponent(selectedPublicKey)}" class="btn btn-ghost btn-sm">${t('admin_node_tags.view_node')}</a>
+                <a href="/nodes/${encodeURIComponent(selectedPublicKey)}" class="btn btn-ghost btn-sm">${t('common.view_entity', { entity: t('entities.node') })}</a>
             </div>
         </div>
     </div>
@@ -124,7 +124,7 @@ export async function render(container, params, router) {
 
 <div class="card bg-base-100 shadow-xl mb-6">
     <div class="card-body">
-        <h2 class="card-title">${t('admin_node_tags.tags_count', { count: tags.length })}</h2>
+        <h2 class="card-title">${t('entities.tags')} (${tags.length})</h2>
         ${tagsTableHtml}
     </div>
 </div>
@@ -188,7 +188,7 @@ export async function render(container, params, router) {
 
 <dialog id="moveModal" class="modal">
     <div class="modal-box">
-        <h3 class="font-bold text-lg">${t('admin_node_tags.move_to_another_node')}</h3>
+        <h3 class="font-bold text-lg">${t('common.move_entity_to_another_node', { entity: t('entities.tag') })}</h3>
         <form id="move-tag-form" class="py-4">
             <div class="form-control mb-4">
                 <label class="label"><span class="label-text">${t('admin_node_tags.tag_key')}</span></label>
@@ -222,10 +222,10 @@ export async function render(container, params, router) {
     <div class="modal-box">
         <h3 class="font-bold text-lg">${t('common.delete_entity', { entity: t('entities.tag') })}</h3>
         <div class="py-4">
-            <p class="py-4">Are you sure you want to delete the tag "<span id="deleteKeyDisplay" class="font-mono font-semibold"></span>"?</p>
+            <p class="py-4" id="delete_tag_confirm_message"></p>
             <div class="alert alert-error mb-4">
                 <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                <span>${t('admin_node_tags.cannot_be_undone')}</span>
+                <span>${t('common.cannot_be_undone')}</span>
             </div>
             <div class="modal-action">
                 <button type="button" class="btn" id="deleteCancel">${t('common.cancel')}</button>
@@ -238,9 +238,9 @@ export async function render(container, params, router) {
 
 <dialog id="copyAllModal" class="modal">
     <div class="modal-box">
-        <h3 class="font-bold text-lg">${t('admin_node_tags.copy_all_title')}</h3>
+        <h3 class="font-bold text-lg">${t('common.copy_all_entity_to_another_node', { entity: t('entities.tags') })}</h3>
         <form id="copy-all-form" class="py-4">
-            <p class="mb-4">${unsafeHTML(t('admin_node_tags.copy_all_description', { count: tags.length, name: nodeName }))}</p>
+            <p class="mb-4">${unsafeHTML(t('common.copy_all_entity_description', { count: tags.length, entity: t('entities.tags').toLowerCase(), name: nodeName }))}</p>
             <div class="form-control mb-4">
                 <label class="label"><span class="label-text">${t('admin_node_tags.destination_node')}</span></label>
                 <select id="copyAllDestination" class="select select-bordered w-full" required>
@@ -258,7 +258,7 @@ export async function render(container, params, router) {
             </div>
             <div class="modal-action">
                 <button type="button" class="btn" id="copyAllCancel">${t('common.cancel')}</button>
-                <button type="submit" class="btn btn-primary">${t('admin_node_tags.copy_tags')}</button>
+                <button type="submit" class="btn btn-primary">${t('common.copy_entity', { entity: t('entities.tags') })}</button>
             </div>
         </form>
     </div>
@@ -269,7 +269,7 @@ export async function render(container, params, router) {
     <div class="modal-box">
         <h3 class="font-bold text-lg">${t('common.delete_all_entity', { entity: t('entities.tags') })}</h3>
         <div class="py-4">
-            <p class="mb-4">${unsafeHTML(t('admin_node_tags.delete_all_confirm', { count: tags.length, name: nodeName }))}</p>
+            <p class="mb-4">${unsafeHTML(t('common.delete_all_entity_confirm', { count: tags.length, entity: t('entities.tags').toLowerCase(), name: nodeName }))}</p>
             <div class="alert alert-error mb-4">
                 <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
                 <span>${t('admin_node_tags.delete_all_warning')}</span>
@@ -371,7 +371,7 @@ ${contentHtml}`, container);
                     await apiPost('/api/v1/nodes/' + encodeURIComponent(selectedPublicKey) + '/tags', {
                         key, value, value_type,
                     });
-                    router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&message=' + encodeURIComponent(t('admin_node_tags.entity_added')));
+                    router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&message=' + encodeURIComponent(t('common.entity_added_success', { entity: t('entities.tag') })));
                 } catch (err) {
                     router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&error=' + encodeURIComponent(err.message));
                 }
@@ -403,7 +403,7 @@ ${contentHtml}`, container);
                         value, value_type,
                     });
                     container.querySelector('#editModal').close();
-                    router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&message=' + encodeURIComponent(t('admin_node_tags.entity_updated')));
+                    router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&message=' + encodeURIComponent(t('common.entity_updated_success', { entity: t('entities.tag') })));
                 } catch (err) {
                     container.querySelector('#editModal').close();
                     router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&error=' + encodeURIComponent(err.message));
@@ -435,7 +435,7 @@ ${contentHtml}`, container);
                         new_public_key: newPublicKey,
                     });
                     container.querySelector('#moveModal').close();
-                    router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&message=' + encodeURIComponent(t('admin_node_tags.entity_moved')));
+                    router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&message=' + encodeURIComponent(t('common.entity_moved_success', { entity: t('entities.tag') })));
                 } catch (err) {
                     container.querySelector('#moveModal').close();
                     router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&error=' + encodeURIComponent(err.message));
@@ -447,7 +447,11 @@ ${contentHtml}`, container);
                 btn.addEventListener('click', () => {
                     const row = btn.closest('tr');
                     activeTagKey = row.dataset.tagKey;
-                    container.querySelector('#deleteKeyDisplay').textContent = activeTagKey;
+                    const confirmMsg = t('common.delete_entity_confirm', {
+                        entity: t('entities.tag').toLowerCase(),
+                        name: `"<span class="font-mono font-semibold">${activeTagKey}</span>"`
+                    });
+                    container.querySelector('#delete_tag_confirm_message').innerHTML = confirmMsg;
                     container.querySelector('#deleteModal').showModal();
                 });
             });
@@ -460,7 +464,7 @@ ${contentHtml}`, container);
                 try {
                     await apiDelete('/api/v1/nodes/' + encodeURIComponent(selectedPublicKey) + '/tags/' + encodeURIComponent(activeTagKey));
                     container.querySelector('#deleteModal').close();
-                    router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&message=' + encodeURIComponent(t('admin_node_tags.entity_deleted')));
+                    router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&message=' + encodeURIComponent(t('common.entity_deleted_success', { entity: t('entities.tag') })));
                 } catch (err) {
                     container.querySelector('#deleteModal').close();
                     router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&error=' + encodeURIComponent(err.message));
@@ -511,7 +515,7 @@ ${contentHtml}`, container);
                     try {
                         await apiDelete('/api/v1/nodes/' + encodeURIComponent(selectedPublicKey) + '/tags');
                         container.querySelector('#deleteAllModal').close();
-                        router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&message=' + encodeURIComponent(t('admin_node_tags.all_entities_deleted')));
+                        router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&message=' + encodeURIComponent(t('common.all_entity_deleted_success', { entity: t('entities.tags').toLowerCase() })));
                     } catch (err) {
                         container.querySelector('#deleteAllModal').close();
                         router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&error=' + encodeURIComponent(err.message));

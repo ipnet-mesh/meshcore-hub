@@ -118,6 +118,15 @@ class TestEnJsonCompleteness:
         for section in required:
             assert section in data, f"Missing section: {section}"
 
+    def test_common_no_entity_patterns(self):
+        """Test that common 'no entity' patterns exist."""
+        assert t("common.no_entity_found", entity="test") == "No test found"
+        assert t("common.no_entity_recorded", entity="test") == "No test recorded"
+        assert t("common.no_entity_defined", entity="test") == "No test defined"
+        assert t("common.no_entity_configured", entity="test") == "No test configured"
+        assert t("common.no_entity_yet", entity="test") == "No test yet"
+        assert t("common.page_not_found") == "Page not found"
+
     def test_entity_keys(self):
         """Entity keys are all present."""
         assert t("entities.home") != "entities.home"

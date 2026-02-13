@@ -453,13 +453,103 @@ The web dashboard is a Single Page Application. Pages are ES modules loaded by t
 - Use `pageColors` from `components.js` for section-specific colors (reads CSS custom properties from `app.css`)
 - Return a cleanup function if the page creates resources (e.g., Leaflet maps, Chart.js instances)
 
+### Internationalization (i18n)
+
+The web dashboard supports internationalization via JSON translation files. The default language is English.
+
+**Translation files location:** `src/meshcore_hub/web/static/locales/`
+
+**Key files:**
+- `en.json` - English translations (reference implementation)
+- `languages.md` - Comprehensive translation reference guide for translators
+
+**Using translations in JavaScript:**
+
+Import the `t()` function from `components.js`:
+
+```javascript
+import { t } from '../components.js';
+
+// Simple translation
+const label = t('common.save');  // "Save"
+
+// Translation with variable interpolation
+const title = t('common.add_entity', { entity: t('entities.node') });  // "Add Node"
+
+// Composed patterns for consistency
+const emptyMsg = t('common.no_entity_found', { entity: t('entities.nodes').toLowerCase() });  // "No nodes found"
+```
+
+**Translation architecture:**
+
+1. **Entity-based composition:** Core entity names (`entities.*`) are referenced by composite patterns for consistency
+2. **Reusable patterns:** Common UI patterns (`common.*`) use `{{variable}}` interpolation for dynamic content
+3. **Separation of concerns:**
+   - Keys without `_label` suffix = table headers (title case, no colon)
+   - Keys with `_label` suffix = inline labels (sentence case, with colon)
+
+**When adding/modifying translations:**
+
+1. **Add new keys** to `en.json` following existing patterns:
+   - Use composition when possible (reference `entities.*` in `common.*` patterns)
+   - Group related keys by section (e.g., `admin_members.*`, `admin_node_tags.*`)
+   - Use `{{variable}}` syntax for dynamic content
+
+2. **Update `languages.md`** with:
+   - Key name, English value, and usage context
+   - Variable descriptions if using interpolation
+   - Notes about HTML content or special formatting
+
+3. **Add tests** in `tests/test_common/test_i18n.py`:
+   - Test new interpolation patterns
+   - Test required sections if adding new top-level sections
+   - Test composed patterns with entity references
+
+4. **Run i18n tests:**
+   ```bash
+   pytest tests/test_common/test_i18n.py -v
+   ```
+
+**Best practices:**
+
+- **Avoid duplication:** Use `common.*` patterns instead of duplicating similar strings
+- **Compose with entities:** Reference `entities.*` keys in patterns rather than hardcoding entity names
+- **Preserve variables:** Keep `{{variable}}` placeholders unchanged when translating
+- **Test composition:** Verify patterns work with all entity types (singular/plural, lowercase/uppercase)
+- **Document context:** Always update `languages.md` so translators understand usage
+
+**Example - adding a new entity and patterns:**
+
+```javascript
+// 1. Add entity to en.json
+"entities": {
+  "sensor": "Sensor"
+}
+
+// 2. Use with existing common patterns
+t('common.add_entity', { entity: t('entities.sensor') })  // "Add Sensor"
+t('common.no_entity_found', { entity: t('entities.sensors').toLowerCase() })  // "No sensors found"
+
+// 3. Update languages.md with context
+// 4. Add test to test_i18n.py
+```
+
+**Translation loading:**
+
+The i18n system (`src/meshcore_hub/common/i18n.py`) loads translations on startup:
+- Defaults to English (`en`)
+- Falls back to English for missing keys
+- Returns the key itself if translation not found
+
+For full translation guidelines, see `src/meshcore_hub/web/static/locales/languages.md`.
+
 ### Adding a New Database Model
 
 1. Create model in `common/models/`
 2. Export in `common/models/__init__.py`
-3. Create Alembic migration: `alembic revision --autogenerate -m "description"`
+3. Create Alembic migration: `meshcore-hub db revision --autogenerate -m "description"`
 4. Review and adjust migration file
-5. Test migration: `alembic upgrade head`
+5. Test migration: `meshcore-hub db upgrade`
 
 ### Running the Development Environment
 
@@ -481,7 +571,7 @@ pytest
 # Run specific component
 meshcore-hub api --reload
 meshcore-hub collector
-meshcore-hub interface --mode receiver --mock
+meshcore-hub interface receiver --mock
 ```
 
 ## Environment Variables

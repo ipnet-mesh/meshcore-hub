@@ -61,7 +61,7 @@ ${content}`, container);
             : nothing;
 
         const mobileCards = nodes.length === 0
-            ? html`<div class="text-center py-8 opacity-70">${t('nodes.no_nodes_found')}</div>`
+            ? html`<div class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.nodes').toLowerCase() })}</div>`
             : nodes.map(node => {
                 const tagName = node.tags?.find(tag => tag.key === 'name')?.value;
                 const displayName = tagName || node.name;
@@ -97,7 +97,7 @@ ${content}`, container);
             });
 
         const tableRows = nodes.length === 0
-            ? html`<tr><td colspan="3" class="text-center py-8 opacity-70">${t('nodes.no_nodes_found')}</td></tr>`
+            ? html`<tr><td colspan="3" class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.nodes').toLowerCase() })}</td></tr>`
             : nodes.map(node => {
                 const tagName = node.tags?.find(tag => tag.key === 'name')?.value;
                 const displayName = tagName || node.name;

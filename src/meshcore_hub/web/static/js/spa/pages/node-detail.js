@@ -101,7 +101,7 @@ export async function render(container, params, router) {
                     </tbody>
                 </table>
             </div>`
-            : html`<p class="opacity-70">${t('nodes.no_advertisements')}</p>`;
+            : html`<p class="opacity-70">${t('common.no_entity_recorded', { entity: t('entities.advertisements').toLowerCase() })}</p>`;
 
         const tags = node.tags || [];
         const tagsTableHtml = tags.length > 0
@@ -123,7 +123,7 @@ export async function render(container, params, router) {
                     </tbody>
                 </table>
             </div>`
-            : html`<p class="opacity-70">${t('nodes.no_tags')}</p>`;
+            : html`<p class="opacity-70">${t('common.no_entity_defined', { entity: t('entities.tags').toLowerCase() })}</p>`;
 
         const adminTagsHtml = (config.admin_enabled && config.is_authenticated)
             ? html`<div class="mt-3">
@@ -154,7 +154,7 @@ ${heroHtml}
             <code class="text-sm bg-base-200 p-2 rounded block break-all">${node.public_key}</code>
         </div>
         <div class="flex flex-wrap gap-x-8 gap-y-2 mt-4 text-sm">
-            <div><span class="opacity-70">${t('common.first_seen')}</span> ${formatDateTime(node.first_seen)}</div>
+            <div><span class="opacity-70">${t('common.first_seen_label')}</span> ${formatDateTime(node.first_seen)}</div>
             <div><span class="opacity-70">${t('common.last_seen_label')}</span> ${formatDateTime(node.last_seen)}</div>
             ${coordsHtml}
         </div>
@@ -239,12 +239,12 @@ function renderNotFound(publicKey) {
     <ul>
         <li><a href="/">${t('entities.home')}</a></li>
         <li><a href="/nodes">${t('entities.nodes')}</a></li>
-        <li>${t('not_found.title')}</li>
+        <li>${t('common.page_not_found')}</li>
     </ul>
 </div>
 <div class="alert alert-error">
     ${iconError('stroke-current shrink-0 h-6 w-6')}
-    <span>${t('nodes.node_not_found', { public_key: publicKey })}</span>
+    <span>${t('common.entity_not_found_details', { entity: t('entities.node'), details: publicKey })}</span>
 </div>
 <a href="/nodes" class="btn btn-primary mt-4">${t('common.view_entity', { entity: t('entities.nodes') })}</a>`;
 }

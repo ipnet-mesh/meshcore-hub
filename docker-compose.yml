@@ -251,6 +251,8 @@ services:
       - API_KEY=${API_ADMIN_KEY:-${API_READ_KEY:-}}
       - WEB_HOST=0.0.0.0
       - WEB_PORT=8080
+      - WEB_THEME=${WEB_THEME:-dark}
+      - WEB_LOCALE=${WEB_LOCALE:-en}
       - WEB_ADMIN_ENABLED=${WEB_ADMIN_ENABLED:-false}
       - NETWORK_NAME=${NETWORK_NAME:-MeshCore Network}
       - NETWORK_CITY=${NETWORK_CITY:-}
