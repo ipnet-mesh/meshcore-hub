@@ -8,22 +8,10 @@ Python 3.14+ platform for managing and orchestrating MeshCore mesh networks.
 
 ![MeshCore Hub Web Dashboard](docs/images/web.png)
 
-## 🌍 Help Translate MeshCore Hub
-
-**We need volunteers to translate the web dashboard into other languages!**
-
-MeshCore Hub includes full internationalization (i18n) support with a composable translation system. We're looking for open source volunteers to contribute and maintain language packs for their native languages.
-
-**Current translations:**
-- 🇬🇧 English (complete)
-
-**How to contribute:**
-1. Check out the [Translation Reference Guide](src/meshcore_hub/web/static/locales/languages.md) for complete documentation
-2. Copy `src/meshcore_hub/web/static/locales/en.json` to your language code (e.g., `es.json`, `fr.json`, `de.json`)
-3. Translate all values while preserving variables (`{{variable}}`) and HTML tags
-4. Submit a pull request with your translation
-
-Even partial translations are welcome! The system falls back to English for missing keys, so you can translate incrementally.
+> [!IMPORTANT]
+> **Help Translate MeshCore Hub** 🌍
+>
+> We need volunteers to translate the web dashboard! Currently only English is available. Check out the [Translation Guide](src/meshcore_hub/web/static/locales/languages.md) to contribute a language pack. Partial translations welcome!
 
 ## Overview
 
