@@ -127,6 +127,17 @@ function updateNavActiveState(pathname) {
 }
 
 /**
+ * Compose a page title from entity name and network name.
+ * @param {string} entityKey - Translation key for entity (e.g., 'entities.dashboard')
+ * @returns {string}
+ */
+function composePageTitle(entityKey) {
+    const networkName = config.network_name || 'MeshCore Network';
+    const entity = t(entityKey);
+    return `${entity} - ${networkName}`;
+}
+
+/**
  * Update the page title based on the current route.
  * @param {string} pathname
  */
@@ -134,24 +145,24 @@ function updatePageTitle(pathname) {
     const networkName = config.network_name || 'MeshCore Network';
     const titles = {
         '/': networkName,
-        '/a': t('page_title.admin', { network_name: networkName }),
-        '/a/': t('page_title.admin', { network_name: networkName }),
-        '/a/node-tags': t('page_title.admin_node_tags', { network_name: networkName }),
-        '/a/members': t('page_title.admin_members', { network_name: networkName }),
+        '/a': composePageTitle('entities.admin'),
+        '/a/': composePageTitle('entities.admin'),
+        '/a/node-tags': `${t('entities.tags')} - ${t('entities.admin')} - ${networkName}`,
+        '/a/members': `${t('entities.members')} - ${t('entities.admin')} - ${networkName}`,
     };
 
     // Add feature-dependent titles
-    if (features.dashboard !== false) titles['/dashboard'] = t('page_title.dashboard', { network_name: networkName });
-    if (features.nodes !== false) titles['/nodes'] = t('page_title.nodes', { network_name: networkName });
-    if (features.messages !== false) titles['/messages'] = t('page_title.messages', { network_name: networkName });
-    if (features.advertisements !== false) titles['/advertisements'] = t('page_title.advertisements', { network_name: networkName });
-    if (features.map !== false) titles['/map'] = t('page_title.map', { network_name: networkName });
-    if (features.members !== false) titles['/members'] = t('page_title.members', { network_name: networkName });
+    if (features.dashboard !== false) titles['/dashboard'] = composePageTitle('entities.dashboard');
+    if (features.nodes !== false) titles['/nodes'] = composePageTitle('entities.nodes');
+    if (features.messages !== false) titles['/messages'] = composePageTitle('entities.messages');
+    if (features.advertisements !== false) titles['/advertisements'] = composePageTitle('entities.advertisements');
+    if (features.map !== false) titles['/map'] = composePageTitle('entities.map');
+    if (features.members !== false) titles['/members'] = composePageTitle('entities.members');
 
     if (titles[pathname]) {
         document.title = titles[pathname];
     } else if (pathname.startsWith('/nodes/')) {
-        document.title = t('page_title.node_detail', { network_name: networkName });
+        document.title = composePageTitle('entities.node_detail');
     } else if (pathname.startsWith('/pages/')) {
         // Custom pages set their own title in the page module
         document.title = networkName;

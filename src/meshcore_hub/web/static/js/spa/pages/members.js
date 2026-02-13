@@ -85,8 +85,8 @@ export async function render(container, params, router) {
         if (members.length === 0) {
             litRender(html`
 <div class="flex items-center justify-between mb-6">
-    <h1 class="text-3xl font-bold">${t('members.title')}</h1>
-    <span class="badge badge-lg">${t('members.count', { count: 0 })}</span>
+    <h1 class="text-3xl font-bold">${t('entities.members')}</h1>
+    <span class="badge badge-lg">${t('common.count_entity', { count: 0, entity: t('entities.members').toLowerCase() })}</span>
 </div>
 
 <div class="alert alert-info">
@@ -138,8 +138,8 @@ export async function render(container, params, router) {
 
         litRender(html`
 <div class="flex items-center justify-between mb-6">
-    <h1 class="text-3xl font-bold">${t('members.title')}</h1>
-    <span class="badge badge-lg">${t('members.count', { count: members.length })}</span>
+    <h1 class="text-3xl font-bold">${t('entities.members')}</h1>
+    <span class="badge badge-lg">${t('common.count_entity', { count: members.length, entity: t('entities.members').toLowerCase() })}</span>
 </div>
 
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">

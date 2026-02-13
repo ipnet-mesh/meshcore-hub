@@ -31,7 +31,7 @@ export async function render(container, params, router) {
         litRender(html`
 <div class="flex items-center justify-between mb-4">
     <div>
-        <h1 class="text-3xl font-bold">${t('admin.title')}</h1>
+        <h1 class="text-3xl font-bold">${t('entities.admin')}</h1>
         <div class="text-sm breadcrumbs">
             <ul>
                 <li><a href="/">${t('nav.home')}</a></li>

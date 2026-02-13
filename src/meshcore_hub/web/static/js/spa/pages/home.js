@@ -11,7 +11,7 @@ import {
 function renderRadioConfig(rc) {
     if (!rc) return nothing;
     const fields = [
-        [t('home.profile'), rc.profile],
+        [t('links.profile'), rc.profile],
         [t('home.frequency'), rc.frequency],
         [t('home.bandwidth'), rc.bandwidth],
         [t('home.spreading_factor'), rc.spreading_factor],
@@ -164,11 +164,11 @@ export async function render(container, params, router) {
             <div class="flex gap-2 mt-4">
                 <a href="https://meshcore.co.uk/" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">
                     ${iconGlobe('h-4 w-4 mr-1')}
-                    ${t('home.website')}
+                    ${t('links.website')}
                 </a>
                 <a href="https://github.com/meshcore-dev/MeshCore" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">
                     ${iconGithub('h-4 w-4 mr-1')}
-                    ${t('home.github')}
+                    ${t('links.github')}
                 </a>
             </div>
         </div>

@@ -85,12 +85,12 @@ export async function render(container, params, router) {
         litRender(html`
 <div class="flex items-center justify-between mb-6">
     <div>
-        <h1 class="text-3xl font-bold">${t('admin_members.title')}</h1>
+        <h1 class="text-3xl font-bold">${t('entities.members')}</h1>
         <div class="text-sm breadcrumbs">
             <ul>
                 <li><a href="/">${t('nav.home')}</a></li>
                 <li><a href="/a/">${t('nav.admin')}</a></li>
-                <li>${t('admin_members.title')}</li>
+                <li>${t('entities.members')}</li>
             </ul>
         </div>
     </div>
@@ -103,7 +103,7 @@ ${flashHtml}
     <div class="card-body">
         <div class="flex justify-between items-center">
             <h2 class="card-title">${t('admin_members.network_members', { count: members.length })}</h2>
-            <button id="btn-add-member" class="btn btn-primary btn-sm">${t('admin_members.add_member')}</button>
+            <button id="btn-add-member" class="btn btn-primary btn-sm">${t('common.add_entity', { entity: t('entities.member') })}</button>
         </div>
         ${tableHtml}
     </div>
@@ -111,7 +111,7 @@ ${flashHtml}
 
 <dialog id="addModal" class="modal">
     <div class="modal-box w-11/12 max-w-2xl">
-        <h3 class="font-bold text-lg">${t('admin_members.add_new_member')}</h3>
+        <h3 class="font-bold text-lg">${t('common.add_new_entity', { entity: t('entities.member') })}</h3>
         <form id="add-member-form" class="py-4">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="form-control">
@@ -151,7 +151,7 @@ ${flashHtml}
             </div>
             <div class="modal-action">
                 <button type="button" class="btn" id="addCancel">${t('common.cancel')}</button>
-                <button type="submit" class="btn btn-primary">${t('admin_members.add_member')}</button>
+                <button type="submit" class="btn btn-primary">${t('common.add_entity', { entity: t('entities.member') })}</button>
             </div>
         </form>
     </div>
@@ -160,7 +160,7 @@ ${flashHtml}
 
 <dialog id="editModal" class="modal">
     <div class="modal-box w-11/12 max-w-2xl">
-        <h3 class="font-bold text-lg">${t('admin_members.edit_member')}</h3>
+        <h3 class="font-bold text-lg">${t('common.edit_entity', { entity: t('entities.member') })}</h3>
         <form id="edit-member-form" class="py-4">
             <input type="hidden" name="id" id="edit_id">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -206,7 +206,7 @@ ${flashHtml}
 
 <dialog id="deleteModal" class="modal">
     <div class="modal-box">
-        <h3 class="font-bold text-lg">${t('admin_members.delete_member')}</h3>
+        <h3 class="font-bold text-lg">${t('common.delete_entity', { entity: t('entities.member') })}</h3>
         <div class="py-4">
             <p class="py-4">Are you sure you want to delete member <strong id="delete_member_name"></strong>?</p>
             <div class="alert alert-error mb-4">
@@ -249,7 +249,7 @@ ${flashHtml}
             try {
                 await apiPost('/api/v1/members', body);
                 container.querySelector('#addModal').close();
-                router.navigate('/a/members?message=' + encodeURIComponent(t('admin_members.member_added')));
+                router.navigate('/a/members?message=' + encodeURIComponent(t('admin_members.entity_added')));
             } catch (err) {
                 container.querySelector('#addModal').close();
                 router.navigate('/a/members?error=' + encodeURIComponent(err.message));
@@ -289,7 +289,7 @@ ${flashHtml}
             try {
                 await apiPut('/api/v1/members/' + encodeURIComponent(id), body);
                 container.querySelector('#editModal').close();
-                router.navigate('/a/members?message=' + encodeURIComponent(t('admin_members.member_updated')));
+                router.navigate('/a/members?message=' + encodeURIComponent(t('admin_members.entity_updated')));
             } catch (err) {
                 container.querySelector('#editModal').close();
                 router.navigate('/a/members?error=' + encodeURIComponent(err.message));
@@ -314,7 +314,7 @@ ${flashHtml}
             try {
                 await apiDelete('/api/v1/members/' + encodeURIComponent(activeDeleteId));
                 container.querySelector('#deleteModal').close();
-                router.navigate('/a/members?message=' + encodeURIComponent(t('admin_members.member_deleted')));
+                router.navigate('/a/members?message=' + encodeURIComponent(t('admin_members.entity_deleted')));
             } catch (err) {
                 container.querySelector('#deleteModal').close();
                 router.navigate('/a/members?error=' + encodeURIComponent(err.message));

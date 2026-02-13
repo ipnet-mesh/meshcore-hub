@@ -150,15 +150,15 @@
                 {% endif %}
                 {% if network_contact_email and network_contact_discord %} | {% endif %}
                 {% if network_contact_discord %}
-                <a href="{{ network_contact_discord }}" target="_blank" rel="noopener noreferrer" class="link link-hover">{{ t('footer.discord') }}</a>
+                <a href="{{ network_contact_discord }}" target="_blank" rel="noopener noreferrer" class="link link-hover">{{ t('links.discord') }}</a>
                 {% endif %}
                 {% if (network_contact_email or network_contact_discord) and network_contact_github %} | {% endif %}
                 {% if network_contact_github %}
-                <a href="{{ network_contact_github }}" target="_blank" rel="noopener noreferrer" class="link link-hover">{{ t('footer.github') }}</a>
+                <a href="{{ network_contact_github }}" target="_blank" rel="noopener noreferrer" class="link link-hover">{{ t('links.github') }}</a>
                 {% endif %}
                 {% if (network_contact_email or network_contact_discord or network_contact_github) and network_contact_youtube %} | {% endif %}
                 {% if network_contact_youtube %}
-                <a href="{{ network_contact_youtube }}" target="_blank" rel="noopener noreferrer" class="link link-hover">{{ t('footer.youtube') }}</a>
+                <a href="{{ network_contact_youtube }}" target="_blank" rel="noopener noreferrer" class="link link-hover">{{ t('links.youtube') }}</a>
                 {% endif %}
             </p>
             <p class="text-xs opacity-50 mt-2">{% if admin_enabled %}<a href="/a/" class="link link-hover">{{ t('nav.admin') }}</a> | {% endif %}{{ t('footer.powered_by') }} <a href="https://github.com/ipnet-mesh/meshcore-hub" target="_blank" rel="noopener noreferrer" class="link link-hover">MeshCore Hub</a> {{ version }}</p>

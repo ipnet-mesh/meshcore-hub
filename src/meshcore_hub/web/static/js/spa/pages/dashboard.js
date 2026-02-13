@@ -142,7 +142,7 @@ export async function render(container, params, router) {
 
         litRender(html`
 <div class="flex items-center justify-between mb-6">
-    <h1 class="text-3xl font-bold">${t('dashboard.title')}</h1>
+    <h1 class="text-3xl font-bold">${t('entities.dashboard')}</h1>
 </div>
 
 ${topCount > 0 ? html`

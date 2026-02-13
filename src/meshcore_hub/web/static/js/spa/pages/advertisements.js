@@ -23,7 +23,7 @@ export async function render(container, params, router) {
     function renderPage(content, { total = null } = {}) {
         litRender(html`
 <div class="flex items-center justify-between mb-6">
-    <h1 class="text-3xl font-bold">${t('advertisements.title')}</h1>
+    <h1 class="text-3xl font-bold">${t('entities.advertisements')}</h1>
     <div class="flex items-center gap-2">
         ${tzBadge}
         ${total !== null ? html`<span class="badge badge-lg">${t('common.total', { count: total })}</span>` : nothing}
