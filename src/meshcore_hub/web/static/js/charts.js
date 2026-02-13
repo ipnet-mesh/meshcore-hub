@@ -154,7 +154,7 @@ function createActivityChart(canvasId, advertData, messageData) {
     if (advertData && advertData.data && advertData.data.length > 0) {
         if (!labels) labels = formatDateLabels(advertData.data);
         datasets.push({
-            label: (window.t && window.t('nav.advertisements')) || 'Advertisements',
+            label: (window.t && window.t('entities.advertisements')) || 'Advertisements',
             data: advertData.data.map(function(d) { return d.count; }),
             borderColor: ChartColors.adverts,
             backgroundColor: ChartColors.advertsFill,
@@ -168,7 +168,7 @@ function createActivityChart(canvasId, advertData, messageData) {
     if (messageData && messageData.data && messageData.data.length > 0) {
         if (!labels) labels = formatDateLabels(messageData.data);
         datasets.push({
-            label: (window.t && window.t('nav.messages')) || 'Messages',
+            label: (window.t && window.t('entities.messages')) || 'Messages',
             data: messageData.data.map(function(d) { return d.count; }),
             borderColor: ChartColors.messages,
             backgroundColor: ChartColors.messagesFill,
@@ -200,7 +200,7 @@ function initDashboardCharts(nodeData, advertData, messageData) {
         createLineChart(
             'nodeChart',
             nodeData,
-            (window.t && window.t('dashboard.total_nodes')) || 'Total Nodes',
+            (window.t && window.t('common.total_entity', { entity: t('entities.nodes') })) || 'Total Nodes',
             ChartColors.nodes,
             ChartColors.nodesFill,
             true
@@ -211,7 +211,7 @@ function initDashboardCharts(nodeData, advertData, messageData) {
         createLineChart(
             'advertChart',
             advertData,
-            (window.t && window.t('nav.advertisements')) || 'Advertisements',
+            (window.t && window.t('entities.advertisements')) || 'Advertisements',
             ChartColors.adverts,
             ChartColors.advertsFill,
             true
@@ -222,7 +222,7 @@ function initDashboardCharts(nodeData, advertData, messageData) {
         createLineChart(
             'messageChart',
             messageData,
-            (window.t && window.t('nav.messages')) || 'Messages',
+            (window.t && window.t('entities.messages')) || 'Messages',
             ChartColors.messages,
             ChartColors.messagesFill,
             true

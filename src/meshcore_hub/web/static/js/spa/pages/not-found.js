@@ -18,7 +18,7 @@ export async function render(container, params, router) {
                 </a>
                 <a href="/nodes" class="btn btn-outline">
                     ${iconNodes('h-5 w-5 mr-2')}
-                    ${t('not_found.browse_nodes')}
+                    ${t('common.view_entity', { entity: t('entities.nodes') })}
                 </a>
             </div>
         </div>

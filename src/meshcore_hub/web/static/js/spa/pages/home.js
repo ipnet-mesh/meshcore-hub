@@ -81,27 +81,27 @@ export async function render(container, params, router) {
             ${features.dashboard !== false ? html`
             <a href="/dashboard" class="btn btn-outline btn-info">
                 ${iconDashboard('h-5 w-5 mr-2')}
-                ${t('nav.dashboard')}
+                ${t('entities.dashboard')}
             </a>` : nothing}
             ${features.nodes !== false ? html`
             <a href="/nodes" class="btn btn-outline btn-primary">
                 ${iconNodes('h-5 w-5 mr-2')}
-                ${t('nav.nodes')}
+                ${t('entities.nodes')}
             </a>` : nothing}
             ${features.advertisements !== false ? html`
             <a href="/advertisements" class="btn btn-outline btn-secondary">
                 ${iconAdvertisements('h-5 w-5 mr-2')}
-                ${t('nav.advertisements')}
+                ${t('entities.advertisements')}
             </a>` : nothing}
             ${features.messages !== false ? html`
             <a href="/messages" class="btn btn-outline btn-accent">
                 ${iconMessages('h-5 w-5 mr-2')}
-                ${t('nav.messages')}
+                ${t('entities.messages')}
             </a>` : nothing}
             ${features.map !== false ? html`
             <a href="/map" class="btn btn-outline btn-warning">
                 ${iconMap('h-5 w-5 mr-2')}
-                ${t('nav.map')}
+                ${t('entities.map')}
             </a>` : nothing}
             ${customPageButtons}
         </div>
@@ -114,7 +114,7 @@ export async function render(container, params, router) {
             <div class="stat-figure" style="color: ${pageColors.nodes}">
                 ${iconNodes('h-8 w-8')}
             </div>
-            <div class="stat-title">${t('home.total_nodes')}</div>
+            <div class="stat-title">${t('common.total_entity', { entity: t('entities.nodes') })}</div>
             <div class="stat-value" style="color: ${pageColors.nodes}">${stats.total_nodes}</div>
             <div class="stat-desc">${t('home.all_discovered_nodes')}</div>
         </div>` : nothing}
@@ -160,7 +160,7 @@ export async function render(container, params, router) {
             <a href="https://meshcore.co.uk/" target="_blank" rel="noopener noreferrer" class="hover:opacity-80 transition-opacity">
                 <img src="/static/img/meshcore.svg" alt="MeshCore" class="theme-logo h-8" />
             </a>
-            <p class="text-xs opacity-50 mt-4 text-center">${t('home.meshcore_tagline')}</p>
+            <p class="text-xs opacity-50 mt-4 text-center">Connecting people and things, without using the internet</p>
             <div class="flex gap-2 mt-4">
                 <a href="https://meshcore.co.uk/" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">
                     ${iconGlobe('h-4 w-4 mr-1')}

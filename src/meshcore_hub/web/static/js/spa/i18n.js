@@ -7,7 +7,7 @@
  * Usage:
  *   import { t, loadLocale } from './i18n.js';
  *   await loadLocale('en');
- *   t('nav.home');                        // "Home"
+ *   t('entities.home');                        // "Home"
  *   t('common.total', { count: 42 });     // "42 total"
  */
 

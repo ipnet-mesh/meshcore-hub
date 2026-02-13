@@ -34,8 +34,8 @@ export async function render(container, params, router) {
         <h1 class="text-3xl font-bold">${t('entities.admin')}</h1>
         <div class="text-sm breadcrumbs">
             <ul>
-                <li><a href="/">${t('nav.home')}</a></li>
-                <li>${t('nav.admin')}</li>
+                <li><a href="/">${t('entities.home')}</a></li>
+                <li>${t('entities.admin')}</li>
             </ul>
         </div>
     </div>

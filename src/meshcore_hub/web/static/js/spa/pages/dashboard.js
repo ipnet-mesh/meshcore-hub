@@ -152,7 +152,7 @@ ${topCount > 0 ? html`
         <div class="stat-figure" style="color: ${pageColors.nodes}">
             ${iconNodes('h-8 w-8')}
         </div>
-        <div class="stat-title">${t('dashboard.total_nodes')}</div>
+        <div class="stat-title">${t('common.total_entity', { entity: t('entities.nodes') })}</div>
         <div class="stat-value" style="color: ${pageColors.nodes}">${stats.total_nodes}</div>
         <div class="stat-desc">${t('dashboard.all_discovered_nodes')}</div>
     </div>` : nothing}
@@ -184,7 +184,7 @@ ${topCount > 0 ? html`
         <div class="card-body">
             <h2 class="card-title text-base">
                 ${iconNodes('h-5 w-5')}
-                ${t('dashboard.total_nodes')}
+                ${t('common.total_entity', { entity: t('entities.nodes') })}
             </h2>
             <p class="text-xs opacity-70">${t('time.over_time_last_7_days')}</p>
             <div class="h-32">
@@ -229,7 +229,7 @@ ${bottomCount > 0 ? html`
         <div class="card-body">
             <h2 class="card-title">
                 ${iconAdvertisements('h-6 w-6')}
-                ${t('dashboard.recent_advertisements')}
+                ${t('common.recent_entity', { entity: t('entities.advertisements') })}
             </h2>
             ${renderRecentAds(stats.recent_advertisements)}
         </div>

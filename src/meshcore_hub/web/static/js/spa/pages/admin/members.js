@@ -88,8 +88,8 @@ export async function render(container, params, router) {
         <h1 class="text-3xl font-bold">${t('entities.members')}</h1>
         <div class="text-sm breadcrumbs">
             <ul>
-                <li><a href="/">${t('nav.home')}</a></li>
-                <li><a href="/a/">${t('nav.admin')}</a></li>
+                <li><a href="/">${t('entities.home')}</a></li>
+                <li><a href="/a/">${t('entities.admin')}</a></li>
                 <li>${t('entities.members')}</li>
             </ul>
         </div>

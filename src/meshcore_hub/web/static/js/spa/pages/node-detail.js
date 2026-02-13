@@ -127,15 +127,15 @@ export async function render(container, params, router) {
 
         const adminTagsHtml = (config.admin_enabled && config.is_authenticated)
             ? html`<div class="mt-3">
-                <a href="/a/node-tags?public_key=${node.public_key}" class="btn btn-sm btn-outline">${tags.length > 0 ? t('nodes.edit_tags') : t('nodes.add_tags')}</a>
+                <a href="/a/node-tags?public_key=${node.public_key}" class="btn btn-sm btn-outline">${tags.length > 0 ? t('common.edit_entity', { entity: t('entities.tags') }) : t('common.add_entity', { entity: t('entities.tags') })}</a>
             </div>`
             : nothing;
 
         litRender(html`
 <div class="breadcrumbs text-sm mb-4">
     <ul>
-        <li><a href="/">${t('nav.home')}</a></li>
-        <li><a href="/nodes">${t('nav.nodes')}</a></li>
+        <li><a href="/">${t('entities.home')}</a></li>
+        <li><a href="/nodes">${t('entities.nodes')}</a></li>
         <li>${tagName || node.name || node.public_key.slice(0, 12) + '...'}</li>
     </ul>
 </div>
@@ -164,7 +164,7 @@ ${heroHtml}
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
     <div class="card bg-base-100 shadow-xl">
         <div class="card-body">
-            <h2 class="card-title">${t('nodes.recent_advertisements')}</h2>
+            <h2 class="card-title">${t('common.recent_entity', { entity: t('entities.advertisements') })}</h2>
             ${adsTableHtml}
         </div>
     </div>
@@ -237,8 +237,8 @@ function renderNotFound(publicKey) {
     return html`
 <div class="breadcrumbs text-sm mb-4">
     <ul>
-        <li><a href="/">${t('nav.home')}</a></li>
-        <li><a href="/nodes">${t('nav.nodes')}</a></li>
+        <li><a href="/">${t('entities.home')}</a></li>
+        <li><a href="/nodes">${t('entities.nodes')}</a></li>
         <li>${t('not_found.title')}</li>
     </ul>
 </div>
@@ -246,5 +246,5 @@ function renderNotFound(publicKey) {
     ${iconError('stroke-current shrink-0 h-6 w-6')}
     <span>${t('nodes.node_not_found', { public_key: publicKey })}</span>
 </div>
-<a href="/nodes" class="btn btn-primary mt-4">${t('nodes.back_to_nodes')}</a>`;
+<a href="/nodes" class="btn btn-primary mt-4">${t('common.view_entity', { entity: t('entities.nodes') })}</a>`;
 }

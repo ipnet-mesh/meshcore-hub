@@ -26,10 +26,10 @@ class TestLoadLocale:
     def test_fallback_to_english(self, tmp_path: Path):
         """Unknown locale falls back to 'en' if the directory has en.json."""
         # Copy en.json into a temp directory
-        en_data = {"nav": {"home": "Home"}}
+        en_data = {"entities": {"home": "Home"}}
         (tmp_path / "en.json").write_text(json.dumps(en_data))
         load_locale("xx", locales_dir=tmp_path)
-        assert t("nav.home") == "Home"
+        assert t("entities.home") == "Home"
 
     def test_missing_locale_dir(self, tmp_path: Path):
         """Missing locale file doesn't crash."""
@@ -43,12 +43,12 @@ class TestTranslation:
 
     def test_simple_key(self):
         """Simple dot-separated key resolves correctly."""
-        assert t("nav.home") == "Home"
-        assert t("nav.nodes") == "Nodes"
+        assert t("entities.home") == "Home"
+        assert t("entities.nodes") == "Nodes"
 
     def test_nested_key(self):
         """Deeply nested keys resolve correctly."""
-        assert t("nav.advertisements") == "Advertisements"
+        assert t("entities.advertisements") == "Advertisements"
 
     def test_missing_key_returns_key(self):
         """Missing key returns the key itself as fallback."""
@@ -61,7 +61,7 @@ class TestTranslation:
     def test_interpolation_multiple(self):
         """Multiple placeholders are all replaced."""
         result = t(
-            "admin_node_tags.copied_tags",
+            "admin_node_tags.copied_entities",
             copied=5,
             skipped=2,
         )
@@ -96,10 +96,11 @@ class TestEnJsonCompleteness:
         en_path = LOCALES_DIR / "en.json"
         data = json.loads(en_path.read_text(encoding="utf-8"))
         required = [
-            "nav",
-            "page_title",
+            "entities",
             "common",
+            "links",
             "time",
+            "node_types",
             "home",
             "dashboard",
             "nodes",
@@ -108,6 +109,7 @@ class TestEnJsonCompleteness:
             "map",
             "members",
             "not_found",
+            "custom_page",
             "admin",
             "admin_members",
             "admin_node_tags",
@@ -116,13 +118,13 @@ class TestEnJsonCompleteness:
         for section in required:
             assert section in data, f"Missing section: {section}"
 
-    def test_nav_keys(self):
-        """Navigation keys are all present."""
-        assert t("nav.home") != "nav.home"
-        assert t("nav.dashboard") != "nav.dashboard"
-        assert t("nav.nodes") != "nav.nodes"
-        assert t("nav.advertisements") != "nav.advertisements"
-        assert t("nav.messages") != "nav.messages"
-        assert t("nav.map") != "nav.map"
-        assert t("nav.members") != "nav.members"
-        assert t("nav.admin") != "nav.admin"
+    def test_entity_keys(self):
+        """Entity keys are all present."""
+        assert t("entities.home") != "entities.home"
+        assert t("entities.dashboard") != "entities.dashboard"
+        assert t("entities.nodes") != "entities.nodes"
+        assert t("entities.advertisements") != "entities.advertisements"
+        assert t("entities.messages") != "entities.messages"
+        assert t("entities.map") != "entities.map"
+        assert t("entities.members") != "entities.members"
+        assert t("entities.admin") != "entities.admin"

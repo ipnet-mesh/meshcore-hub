@@ -16,16 +16,6 @@
         "tags": "Tags",
         "tag": "Tag"
     },
-    "nav": {
-        "home": "Home",
-        "dashboard": "Dashboard",
-        "nodes": "Nodes",
-        "advertisements": "Advertisements",
-        "messages": "Messages",
-        "map": "Map",
-        "members": "Members",
-        "admin": "Admin"
-    },
     "common": {
         "filter": "Filter",
         "clear": "Clear",
@@ -46,6 +36,9 @@
         "move_entity": "Move {{entity}}",
         "copy_entity": "Copy {{entity}}",
         "view_entity": "View {{entity}}",
+        "recent_entity": "Recent {{entity}}",
+        "total_entity": "Total {{entity}}",
+        "all_entity": "All {{entity}}",
         "previous": "Previous",
         "next": "Next",
         "go_home": "Go Home",
@@ -66,8 +59,6 @@
         "sign_out": "Sign Out",
         "view_details": "View Details",
         "all_types": "All Types",
-        "all_nodes": "All Nodes",
-        "all_members": "All Members",
         "node_type": "Node Type",
         "show": "Show",
         "search_placeholder": "Search by name, ID, or public key...",
@@ -113,12 +104,10 @@
     },
     "home": {
         "welcome_default": "Welcome to the {{network_name}} mesh network dashboard. Monitor network activity, view connected nodes, and explore message history.",
-        "total_nodes": "Total Nodes",
         "all_discovered_nodes": "All discovered nodes",
         "network_info": "Network Info",
         "network_activity": "Network Activity",
         "meshcore_attribution": "Our local off-grid mesh network is made possible by",
-        "meshcore_tagline": "Connecting people and things, without using the internet",
         "frequency": "Frequency",
         "bandwidth": "Bandwidth",
         "spreading_factor": "Spreading Factor",
@@ -126,9 +115,7 @@
         "tx_power": "TX Power"
     },
     "dashboard": {
-        "total_nodes": "Total Nodes",
         "all_discovered_nodes": "All discovered nodes",
-        "recent_advertisements": "Recent Advertisements",
         "recent_channel_messages": "Recent Channel Messages",
         "channel": "Channel {{number}}",
         "no_advertisements_yet": "No advertisements recorded yet."
@@ -136,13 +123,9 @@
     "nodes": {
         "no_nodes_found": "No nodes found.",
         "node_not_found": "Node not found: {{public_key}}",
-        "back_to_nodes": "Back to Nodes",
         "scan_to_add": "Scan to add as contact",
-        "recent_advertisements": "Recent Advertisements",
         "no_advertisements": "No advertisements recorded.",
-        "no_tags": "No tags defined.",
-        "edit_tags": "Edit Tags",
-        "add_tags": "Add Tags"
+        "no_tags": "No tags defined."
     },
     "advertisements": {
         "no_advertisements_found": "No advertisements found."
@@ -177,8 +160,7 @@
     },
     "not_found": {
         "title": "Page Not Found",
-        "description": "The page you're looking for doesn't exist or has been moved.",
-        "browse_nodes": "Browse Nodes"
+        "description": "The page you're looking for doesn't exist or has been moved."
     },
     "custom_page": {
         "page_not_found": "Page not found",
