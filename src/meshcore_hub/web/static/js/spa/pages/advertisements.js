@@ -16,6 +16,8 @@ export async function render(container, params, router) {
     const offset = (page - 1) * limit;
 
     const config = getConfig();
+    const features = config.features || {};
+    const showMembers = features.members !== false;
     const tz = config.timezone || '';
     const tzBadge = tz && tz !== 'UTC' ? html`<span class="text-sm opacity-60">${tz}</span>` : nothing;
     const navigate = (url) => router.navigate(url);
@@ -36,17 +38,24 @@ ${content}`, container);
     renderPage(nothing);
 
     try {
-        const [data, nodesData, membersData] = await Promise.all([
+        const requests = [
             apiGet('/api/v1/advertisements', { limit, offset, search, public_key, member_id }),
             apiGet('/api/v1/nodes', { limit: 500 }),
-            apiGet('/api/v1/members', { limit: 100 }),
-        ]);
+        ];
+        if (showMembers) {
+            requests.push(apiGet('/api/v1/members', { limit: 100 }));
+        }
+
+        const results = await Promise.all(requests);
+        const data = results[0];
+        const nodesData = results[1];
+        const membersData = showMembers ? results[2] : null;
 
         const advertisements = data.items || [];
         const total = data.total || 0;
         const totalPages = Math.ceil(total / limit);
         const allNodes = nodesData.items || [];
-        const members = membersData.items || [];
+        const members = membersData?.items || [];
 
         const sortedNodes = allNodes.map(n => {
             const tagName = n.tags?.find(t => t.key === 'name')?.value;
@@ -66,7 +75,7 @@ ${content}`, container);
             </div>`
             : nothing;
 
-        const membersFilter = members.length > 0
+        const membersFilter = (showMembers && members.length > 0)
             ? html`
             <div class="form-control">
                 <label class="label py-1">
