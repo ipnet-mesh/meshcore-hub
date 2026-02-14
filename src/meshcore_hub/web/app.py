@@ -18,6 +18,7 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from meshcore_hub import __version__
 from meshcore_hub.common.i18n import load_locale, t
 from meshcore_hub.common.schemas import RadioConfig
+from meshcore_hub.web.middleware import CacheControlMiddleware
 from meshcore_hub.web.pages import PageLoader
 
 logger = logging.getLogger(__name__)
@@ -175,6 +176,9 @@ def create_app(
 
     # Trust proxy headers (X-Forwarded-Proto, X-Forwarded-For) for HTTPS detection
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+
+    # Add cache control headers based on resource type
+    app.add_middleware(CacheControlMiddleware)
 
     # Load i18n translations
     app.state.web_locale = settings.web_locale or "en"

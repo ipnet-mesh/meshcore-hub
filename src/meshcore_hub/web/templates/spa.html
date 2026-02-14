@@ -39,7 +39,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
     <!-- Custom application styles -->
-    <link rel="stylesheet" href="/static/css/app.css">
+    <link rel="stylesheet" href="/static/css/app.css?v={{ version }}">
 
     <!-- Import map for ES module dependencies -->
     <script type="importmap">
@@ -175,7 +175,7 @@
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 
     <!-- Chart helper functions -->
-    <script src="/static/js/charts.js"></script>
+    <script src="/static/js/charts.js?v={{ version }}"></script>
 
     <!-- Embedded app configuration -->
     <script>
@@ -199,6 +199,6 @@
     </script>
 
     <!-- SPA Application (ES Module) -->
-    <script type="module" src="/static/js/spa/app.js"></script>
+    <script type="module" src="/static/js/spa/app.js?v={{ version }}"></script>
 </body>
 </html>
