@@ -1,9 +1,9 @@
 import { apiGet } from '../api.js';
 import {
     html, litRender, nothing, t,
-    getConfig, typeEmoji, formatDateTime, formatDateTimeShort,
+    getConfig, formatDateTime, formatDateTimeShort,
     truncateKey, errorAlert,
-    pagination, createFilterHandler, autoSubmit, submitOnEnter
+    pagination, createFilterHandler, autoSubmit, submitOnEnter, copyToClipboard, renderNodeDisplay
 } from '../components.js';
 
 export async function render(container, params, router) {
@@ -82,12 +82,8 @@ ${content}`, container);
         const mobileCards = advertisements.length === 0
             ? html`<div class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.advertisements').toLowerCase() })}</div>`
             : advertisements.map(ad => {
-                const emoji = typeEmoji(ad.adv_type);
                 const adName = ad.node_tag_name || ad.node_name || ad.name;
-                const nameBlock = adName
-                    ? html`<div class="font-medium text-sm truncate">${adName}</div>
-                           <div class="text-xs font-mono opacity-60 truncate">${ad.public_key.slice(0, 16)}...</div>`
-                    : html`<div class="font-mono text-sm truncate">${ad.public_key.slice(0, 16)}...</div>`;
+                const adDescription = ad.node_tag_description;
                 let receiversBlock = nothing;
                 if (ad.receivers && ad.receivers.length >= 1) {
                     receiversBlock = html`<div class="flex gap-0.5 justify-end mt-1">
@@ -103,12 +99,13 @@ ${content}`, container);
                 return html`<a href="/nodes/${ad.public_key}" class="card bg-base-100 shadow-sm block">
         <div class="card-body p-3">
             <div class="flex items-center justify-between gap-2">
-                <div class="flex items-center gap-2 min-w-0">
-                    <span class="text-lg flex-shrink-0" title=${ad.adv_type || t('node_types.unknown')}>${emoji}</span>
-                    <div class="min-w-0">
-                        ${nameBlock}
-                    </div>
-                </div>
+                ${renderNodeDisplay({
+                    name: adName,
+                    description: adDescription,
+                    publicKey: ad.public_key,
+                    advType: ad.adv_type,
+                    size: 'sm'
+                })}
                 <div class="text-right flex-shrink-0">
                     <div class="text-xs opacity-60">${formatDateTimeShort(ad.received_at)}</div>
                     ${receiversBlock}
@@ -119,14 +116,10 @@ ${content}`, container);
             });
 
         const tableRows = advertisements.length === 0
-            ? html`<tr><td colspan="3" class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.advertisements').toLowerCase() })}</td></tr>`
+            ? html`<tr><td colspan="4" class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.advertisements').toLowerCase() })}</td></tr>`
             : advertisements.map(ad => {
-                const emoji = typeEmoji(ad.adv_type);
                 const adName = ad.node_tag_name || ad.node_name || ad.name;
-                const nameBlock = adName
-                    ? html`<div class="font-medium">${adName}</div>
-                           <div class="text-xs font-mono opacity-70">${ad.public_key.slice(0, 16)}...</div>`
-                    : html`<span class="font-mono text-sm">${ad.public_key.slice(0, 16)}...</span>`;
+                const adDescription = ad.node_tag_description;
                 let receiversBlock;
                 if (ad.receivers && ad.receivers.length >= 1) {
                     receiversBlock = html`<div class="flex gap-1">
@@ -143,12 +136,20 @@ ${content}`, container);
                 }
                 return html`<tr class="hover">
                 <td>
-                    <a href="/nodes/${ad.public_key}" class="link link-hover flex items-center gap-2">
-                        <span class="text-lg" title=${ad.adv_type || t('node_types.unknown')}>${emoji}</span>
-                        <div>
-                            ${nameBlock}
-                        </div>
+                    <a href="/nodes/${ad.public_key}" class="link link-hover">
+                        ${renderNodeDisplay({
+                            name: adName,
+                            description: adDescription,
+                            publicKey: ad.public_key,
+                            advType: ad.adv_type,
+                            size: 'base'
+                        })}
                     </a>
+                </td>
+                <td>
+                    <code class="font-mono text-xs cursor-pointer hover:bg-base-200 px-1 py-0.5 rounded select-all"
+                          @click=${(e) => copyToClipboard(e, ad.public_key)}
+                          title="Click to copy">${ad.public_key}</code>
                 </td>
                 <td class="text-sm whitespace-nowrap">${formatDateTime(ad.received_at)}</td>
                 <td>${receiversBlock}</td>
@@ -188,6 +189,7 @@ ${content}`, container);
         <thead>
             <tr>
                 <th>${t('entities.node')}</th>
+                <th>${t('common.public_key')}</th>
                 <th>${t('common.time')}</th>
                 <th>${t('common.receivers')}</th>
             </tr>

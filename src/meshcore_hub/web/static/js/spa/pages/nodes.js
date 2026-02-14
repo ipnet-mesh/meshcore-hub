@@ -1,10 +1,10 @@
 import { apiGet } from '../api.js';
 import {
     html, litRender, nothing,
-    getConfig, typeEmoji, formatDateTime, formatDateTimeShort,
+    getConfig, formatDateTime, formatDateTimeShort,
     truncateKey, errorAlert,
     pagination, timezoneIndicator,
-    createFilterHandler, autoSubmit, submitOnEnter, t
+    createFilterHandler, autoSubmit, submitOnEnter, copyToClipboard, renderNodeDisplay, t
 } from '../components.js';
 
 export async function render(container, params, router) {
@@ -64,32 +64,27 @@ ${content}`, container);
             ? html`<div class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.nodes').toLowerCase() })}</div>`
             : nodes.map(node => {
                 const tagName = node.tags?.find(tag => tag.key === 'name')?.value;
+                const tagDescription = node.tags?.find(tag => tag.key === 'description')?.value;
                 const displayName = tagName || node.name;
-                const emoji = typeEmoji(node.adv_type);
-                const nameBlock = displayName
-                    ? html`<div class="font-medium text-sm truncate">${displayName}</div>
-                           <div class="text-xs font-mono opacity-60 truncate">${node.public_key.slice(0, 16)}...</div>`
-                    : html`<div class="font-mono text-sm truncate">${node.public_key.slice(0, 16)}...</div>`;
                 const lastSeen = node.last_seen ? formatDateTimeShort(node.last_seen) : '-';
-                const tags = node.tags || [];
-                const tagsBlock = tags.length > 0
-                    ? html`<div class="flex gap-1 justify-end mt-1">
-                        ${tags.slice(0, 2).map(tag => html`<span class="badge badge-ghost badge-xs">${tag.key}</span>`)}
-                        ${tags.length > 2 ? html`<span class="badge badge-ghost badge-xs">+${tags.length - 2}</span>` : nothing}
-                    </div>`
+                const memberIdTag = node.tags?.find(tag => tag.key === 'member_id')?.value;
+                const member = memberIdTag ? members.find(m => m.member_id === memberIdTag) : null;
+                const memberBlock = member
+                    ? html`<div class="text-xs opacity-60">${member.name}</div>`
                     : nothing;
                 return html`<a href="/nodes/${node.public_key}" class="card bg-base-100 shadow-sm block">
         <div class="card-body p-3">
             <div class="flex items-center justify-between gap-2">
-                <div class="flex items-center gap-2 min-w-0">
-                    <span class="text-lg flex-shrink-0" title=${node.adv_type || t('node_types.unknown')}>${emoji}</span>
-                    <div class="min-w-0">
-                        ${nameBlock}
-                    </div>
-                </div>
+                ${renderNodeDisplay({
+                    name: displayName,
+                    description: tagDescription,
+                    publicKey: node.public_key,
+                    advType: node.adv_type,
+                    size: 'sm'
+                })}
                 <div class="text-right flex-shrink-0">
                     <div class="text-xs opacity-60">${lastSeen}</div>
-                    ${tagsBlock}
+                    ${memberBlock}
                 </div>
             </div>
         </div>
@@ -97,34 +92,36 @@ ${content}`, container);
             });
 
         const tableRows = nodes.length === 0
-            ? html`<tr><td colspan="3" class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.nodes').toLowerCase() })}</td></tr>`
+            ? html`<tr><td colspan="4" class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.nodes').toLowerCase() })}</td></tr>`
             : nodes.map(node => {
                 const tagName = node.tags?.find(tag => tag.key === 'name')?.value;
+                const tagDescription = node.tags?.find(tag => tag.key === 'description')?.value;
                 const displayName = tagName || node.name;
-                const emoji = typeEmoji(node.adv_type);
-                const nameBlock = displayName
-                    ? html`<div class="font-medium">${displayName}</div>
-                           <div class="text-xs font-mono opacity-70">${node.public_key.slice(0, 16)}...</div>`
-                    : html`<span class="font-mono text-sm">${node.public_key.slice(0, 16)}...</span>`;
                 const lastSeen = node.last_seen ? formatDateTime(node.last_seen) : '-';
-                const tags = node.tags || [];
-                const tagsBlock = tags.length > 0
-                    ? html`<div class="flex gap-1 flex-wrap">
-                        ${tags.slice(0, 3).map(tag => html`<span class="badge badge-ghost badge-xs">${tag.key}</span>`)}
-                        ${tags.length > 3 ? html`<span class="badge badge-ghost badge-xs">+${tags.length - 3}</span>` : nothing}
-                    </div>`
+                const memberIdTag = node.tags?.find(tag => tag.key === 'member_id')?.value;
+                const member = memberIdTag ? members.find(m => m.member_id === memberIdTag) : null;
+                const memberBlock = member
+                    ? html`${member.name}${member.callsign ? html` <span class="opacity-60">(${member.callsign})</span>` : nothing}`
                     : html`<span class="opacity-50">-</span>`;
                 return html`<tr class="hover">
                 <td>
-                    <a href="/nodes/${node.public_key}" class="link link-hover flex items-center gap-2">
-                        <span class="text-lg" title=${node.adv_type || t('node_types.unknown')}>${emoji}</span>
-                        <div>
-                            ${nameBlock}
-                        </div>
+                    <a href="/nodes/${node.public_key}" class="link link-hover">
+                        ${renderNodeDisplay({
+                            name: displayName,
+                            description: tagDescription,
+                            publicKey: node.public_key,
+                            advType: node.adv_type,
+                            size: 'base'
+                        })}
                     </a>
                 </td>
+                <td>
+                    <code class="font-mono text-xs cursor-pointer hover:bg-base-200 px-1 py-0.5 rounded select-all"
+                          @click=${(e) => copyToClipboard(e, node.public_key)}
+                          title="Click to copy">${node.public_key}</code>
+                </td>
                 <td class="text-sm whitespace-nowrap">${lastSeen}</td>
-                <td>${tagsBlock}</td>
+                <td class="text-sm">${memberBlock}</td>
             </tr>`;
             });
 
@@ -171,8 +168,9 @@ ${content}`, container);
         <thead>
             <tr>
                 <th>${t('entities.node')}</th>
+                <th>${t('common.public_key')}</th>
                 <th>${t('common.last_seen')}</th>
-                <th>${t('common.tags')}</th>
+                <th>${t('entities.member')}</th>
             </tr>
         </thead>
         <tbody>
