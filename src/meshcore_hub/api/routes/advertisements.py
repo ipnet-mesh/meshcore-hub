@@ -29,6 +29,16 @@ def _get_tag_name(node: Optional[Node]) -> Optional[str]:
     return None
 
 
+def _get_tag_description(node: Optional[Node]) -> Optional[str]:
+    """Extract description tag from a node's tags."""
+    if not node or not node.tags:
+        return None
+    for tag in node.tags:
+        if tag.key == "description":
+            return tag.value
+    return None
+
+
 def _fetch_receivers_for_events(
     session: DbSession,
     event_type: str,
@@ -210,6 +220,7 @@ async def list_advertisements(
             "name": adv.name,
             "node_name": row.source_name,
             "node_tag_name": _get_tag_name(source_node),
+            "node_tag_description": _get_tag_description(source_node),
             "adv_type": adv.adv_type or row.source_adv_type,
             "flags": adv.flags,
             "received_at": adv.received_at,
@@ -292,6 +303,7 @@ async def get_advertisement(
         "name": adv.name,
         "node_name": result.source_name,
         "node_tag_name": _get_tag_name(source_node),
+        "node_tag_description": _get_tag_description(source_node),
         "adv_type": adv.adv_type or result.source_adv_type,
         "flags": adv.flags,
         "received_at": adv.received_at,

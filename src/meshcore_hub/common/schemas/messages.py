@@ -119,6 +119,9 @@ class AdvertisementRead(BaseModel):
     node_tag_name: Optional[str] = Field(
         default=None, description="Node name from tags"
     )
+    node_tag_description: Optional[str] = Field(
+        default=None, description="Node description from tags"
+    )
     adv_type: Optional[str] = Field(default=None, description="Node type")
     flags: Optional[int] = Field(default=None, description="Capability flags")
     received_at: datetime = Field(..., description="When received")

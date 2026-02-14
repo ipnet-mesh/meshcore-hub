@@ -2,7 +2,7 @@ import { apiGet } from '../api.js';
 import {
     html, litRender, nothing,
     getConfig, typeEmoji, formatDateTime,
-    truncateKey, errorAlert, t,
+    truncateKey, errorAlert, copyToClipboard, t,
 } from '../components.js';
 import { iconError } from '../icons.js';
 
@@ -30,6 +30,7 @@ export async function render(container, params, router) {
 
         const config = getConfig();
         const tagName = node.tags?.find(t => t.key === 'name')?.value;
+        const tagDescription = node.tags?.find(t => t.key === 'description')?.value;
         const displayName = tagName || node.name || t('common.unnamed_node');
         const emoji = typeEmoji(node.adv_type);
 
@@ -140,10 +141,13 @@ export async function render(container, params, router) {
     </ul>
 </div>
 
-<h1 class="text-3xl font-bold mb-6">
-    <span title=${node.adv_type || t('node_types.unknown')}>${emoji}</span>
-    ${displayName}
-</h1>
+<div class="flex items-start gap-4 mb-6">
+    <span class="text-6xl flex-shrink-0" title=${node.adv_type || t('node_types.unknown')}>${emoji}</span>
+    <div class="flex-1 min-w-0">
+        <h1 class="text-3xl font-bold">${displayName}</h1>
+        ${tagDescription ? html`<p class="text-base-content/70 mt-2">${tagDescription}</p>` : nothing}
+    </div>
+</div>
 
 ${heroHtml}
 
@@ -151,7 +155,9 @@ ${heroHtml}
     <div class="card-body">
         <div>
             <h3 class="font-semibold opacity-70 mb-2">${t('common.public_key')}</h3>
-            <code class="text-sm bg-base-200 p-2 rounded block break-all">${node.public_key}</code>
+            <code class="text-sm bg-base-200 p-2 rounded block break-all cursor-pointer hover:bg-base-300 select-all"
+                  @click=${(e) => copyToClipboard(e, node.public_key)}
+                  title="Click to copy">${node.public_key}</code>
         </div>
         <div class="flex flex-wrap gap-x-8 gap-y-2 mt-4 text-sm">
             <div><span class="opacity-70">${t('common.first_seen_label')}</span> ${formatDateTime(node.first_seen)}</div>

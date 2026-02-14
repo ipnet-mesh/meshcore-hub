@@ -4,7 +4,7 @@
 [![Docker](https://github.com/ipnet-mesh/meshcore-hub/actions/workflows/docker.yml/badge.svg)](https://github.com/ipnet-mesh/meshcore-hub/actions/workflows/docker.yml)
 [![BuyMeACoffee](https://raw.githubusercontent.com/pachadotdev/buymeacoffee-badges/main/bmc-donate-yellow.svg)](https://www.buymeacoffee.com/jinglemansweep)
 
-Python 3.14+ platform for managing and orchestrating MeshCore mesh networks.
+Python 3.13+ platform for managing and orchestrating MeshCore mesh networks.
 
 ![MeshCore Hub Web Dashboard](docs/images/web.png)
 
@@ -476,15 +476,16 @@ Tags are keyed by public key in YAML format:
 ```yaml
 # Each key is a 64-character hex public key
 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef:
-  friendly_name: Gateway Node
+  name: Gateway Node
+  description: Main network gateway
   role: gateway
   lat: 37.7749
   lon: -122.4194
-  is_online: true
+  member_id: alice
 
 fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210:
-  friendly_name: Oakland Repeater
-  altitude: 150
+  name: Oakland Repeater
+  elevation: 150
 ```
 
 Tag values can be:

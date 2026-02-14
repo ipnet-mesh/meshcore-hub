@@ -52,6 +52,32 @@ export function typeEmoji(advType) {
 }
 
 /**
+ * Extract the first emoji from a string.
+ * Uses a regex pattern that matches emoji characters including compound emojis.
+ * @param {string|null} str
+ * @returns {string|null} First emoji found, or null if none
+ */
+export function extractFirstEmoji(str) {
+    if (!str) return null;
+    // Match emoji using Unicode ranges and zero-width joiners
+    const emojiRegex = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F000}-\u{1F02F}\u{1F0A0}-\u{1F0FF}\u{1F100}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{231A}-\u{231B}\u{23E9}-\u{23FA}\u{25AA}-\u{25AB}\u{25B6}\u{25C0}\u{25FB}-\u{25FE}\u{2B50}\u{2B55}\u{3030}\u{303D}\u{3297}\u{3299}](?:\u{FE0F})?(?:\u{200D}[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}](?:\u{FE0F})?)*|\u{00A9}|\u{00AE}|\u{203C}|\u{2049}|\u{2122}|\u{2139}|\u{2194}-\u{2199}|\u{21A9}-\u{21AA}|\u{24C2}|\u{2934}-\u{2935}|\u{2B05}-\u{2B07}|\u{2B1B}-\u{2B1C}/u;
+    const match = str.match(emojiRegex);
+    return match ? match[0] : null;
+}
+
+/**
+ * Get the display emoji for a node.
+ * Prefers the first emoji from the node name, falls back to type emoji.
+ * @param {string|null} nodeName - Node's display name
+ * @param {string|null} advType - Advertisement type
+ * @returns {string} Emoji character to display
+ */
+export function getNodeEmoji(nodeName, advType) {
+    const nameEmoji = extractFirstEmoji(nodeName);
+    return nameEmoji || typeEmoji(advType);
+}
+
+/**
  * Format an ISO datetime string to the configured timezone.
  * @param {string|null} isoString
  * @param {Object} [options] - Intl.DateTimeFormat options override
@@ -146,7 +172,93 @@ export function escapeHtml(str) {
     return div.innerHTML;
 }
 
+/**
+ * Copy text to clipboard with visual feedback.
+ * Updates the target element to show "Copied!" temporarily.
+ * Falls back to execCommand for browsers without Clipboard API.
+ * @param {Event} e - Click event
+ * @param {string} text - Text to copy to clipboard
+ */
+export function copyToClipboard(e, text) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const showSuccess = (target) => {
+        const originalText = target.textContent;
+        target.textContent = 'Copied!';
+        target.classList.add('text-success');
+        setTimeout(() => {
+            target.textContent = originalText;
+            target.classList.remove('text-success');
+        }, 1500);
+    };
+
+    // Try modern Clipboard API first
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+            showSuccess(e.currentTarget);
+        }).catch(err => {
+            console.error('Clipboard API failed:', err);
+            fallbackCopy(text, e.currentTarget);
+        });
+    } else {
+        // Fallback for older browsers or non-secure contexts
+        fallbackCopy(text, e.currentTarget);
+    }
+
+    function fallbackCopy(text, target) {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            showSuccess(target);
+        } catch (err) {
+            console.error('Fallback copy failed:', err);
+        }
+        document.body.removeChild(textArea);
+    }
+}
+
 // --- UI Components (return lit-html TemplateResult) ---
+
+/**
+ * Render a node display with emoji, name, and optional description.
+ * Used for consistent node representation across lists (nodes, advertisements, messages, etc.).
+ *
+ * @param {Object} options - Node display options
+ * @param {string|null} options.name - Node display name (from tag or advertised name)
+ * @param {string|null} options.description - Node description from tags
+ * @param {string} options.publicKey - Node public key (for fallback display)
+ * @param {string|null} options.advType - Advertisement type (chat, repeater, room)
+ * @param {string} [options.size='base'] - Size variant: 'sm' (small lists) or 'base' (normal)
+ * @returns {TemplateResult} lit-html template
+ */
+export function renderNodeDisplay({ name, description, publicKey, advType, size = 'base' }) {
+    const displayName = name || null;
+    const emoji = getNodeEmoji(name, advType);
+    const emojiSize = size === 'sm' ? 'text-lg' : 'text-lg';
+    const nameSize = size === 'sm' ? 'text-sm' : 'text-base';
+    const descSize = size === 'sm' ? 'text-xs' : 'text-xs';
+
+    const nameBlock = displayName
+        ? html`<div class="font-medium ${nameSize} truncate">${displayName}</div>
+               ${description ? html`<div class="${descSize} opacity-70 truncate">${description}</div>` : nothing}`
+        : html`<div class="font-mono ${nameSize} truncate">${publicKey.slice(0, 16)}...</div>`;
+
+    return html`
+        <div class="flex items-center gap-2 min-w-0">
+            <span class="${emojiSize} flex-shrink-0" title=${advType || t('node_types.unknown')}>${emoji}</span>
+            <div class="min-w-0">
+                ${nameBlock}
+            </div>
+        </div>`;
+}
 
 /**
  * Render a loading spinner.

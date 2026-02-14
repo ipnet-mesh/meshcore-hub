@@ -359,6 +359,25 @@ Examples:
 - JSON columns for flexible data (path_hashes, parsed_data, etc.)
 - Foreign keys reference nodes by UUID, not public_key
 
+## Standard Node Tags
+
+Node tags are flexible key-value pairs that allow custom metadata to be attached to nodes. While tags are completely optional and freeform, the following standard tag keys are recommended for consistent use across the web dashboard:
+
+| Tag Key | Description | Usage |
+|---------|-------------|-------|
+| `name` | Node display name | Used as the primary display name throughout the UI (overrides the advertised name) |
+| `description` | Short description | Displayed as supplementary text under the node name |
+| `member_id` | Member identifier reference | Links the node to a network member (matches `member_id` in Members table) |
+| `lat` | GPS latitude override | Overrides node-reported latitude for map display |
+| `lon` | GPS longitude override | Overrides node-reported longitude for map display |
+| `elevation` | GPS elevation override | Overrides node-reported elevation |
+| `role` | Node role/purpose | Used for website presentation and filtering (e.g., "gateway", "repeater", "sensor") |
+
+**Important Notes:**
+- All tags are optional - nodes can function without any tags
+- Tag keys are case-sensitive
+- The `member_id` tag should reference a valid `member_id` from the Members table
+
 ## Testing Guidelines
 
 ### Unit Tests
