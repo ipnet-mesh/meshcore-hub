@@ -17,6 +17,8 @@ export async function render(container, params, router) {
     const offset = (page - 1) * limit;
 
     const config = getConfig();
+    const features = config.features || {};
+    const showMembers = features.members !== false;
     const tz = config.timezone || '';
     const tzBadge = tz && tz !== 'UTC' ? html`<span class="text-sm opacity-60">${tz}</span>` : nothing;
     const navigate = (url) => router.navigate(url);
@@ -37,17 +39,23 @@ ${content}`, container);
     renderPage(nothing);
 
     try {
-        const [data, membersData] = await Promise.all([
+        const requests = [
             apiGet('/api/v1/nodes', { limit, offset, search, adv_type, member_id }),
-            apiGet('/api/v1/members', { limit: 100 }),
-        ]);
+        ];
+        if (showMembers) {
+            requests.push(apiGet('/api/v1/members', { limit: 100 }));
+        }
+
+        const results = await Promise.all(requests);
+        const data = results[0];
+        const membersData = showMembers ? results[1] : null;
 
         const nodes = data.items || [];
         const total = data.total || 0;
         const totalPages = Math.ceil(total / limit);
-        const members = membersData.items || [];
+        const members = membersData?.items || [];
 
-        const membersFilter = members.length > 0
+        const membersFilter = (showMembers && members.length > 0)
             ? html`
             <div class="form-control">
                 <label class="label py-1">
@@ -67,9 +75,9 @@ ${content}`, container);
                 const tagDescription = node.tags?.find(tag => tag.key === 'description')?.value;
                 const displayName = tagName || node.name;
                 const lastSeen = node.last_seen ? formatDateTimeShort(node.last_seen) : '-';
-                const memberIdTag = node.tags?.find(tag => tag.key === 'member_id')?.value;
+                const memberIdTag = showMembers ? node.tags?.find(tag => tag.key === 'member_id')?.value : null;
                 const member = memberIdTag ? members.find(m => m.member_id === memberIdTag) : null;
-                const memberBlock = member
+                const memberBlock = (showMembers && member)
                     ? html`<div class="text-xs opacity-60">${member.name}</div>`
                     : nothing;
                 return html`<a href="/nodes/${node.public_key}" class="card bg-base-100 shadow-sm block">
@@ -91,14 +99,15 @@ ${content}`, container);
     </a>`;
             });
 
+        const tableColspan = showMembers ? 4 : 3;
         const tableRows = nodes.length === 0
-            ? html`<tr><td colspan="4" class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.nodes').toLowerCase() })}</td></tr>`
+            ? html`<tr><td colspan="${tableColspan}" class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.nodes').toLowerCase() })}</td></tr>`
             : nodes.map(node => {
                 const tagName = node.tags?.find(tag => tag.key === 'name')?.value;
                 const tagDescription = node.tags?.find(tag => tag.key === 'description')?.value;
                 const displayName = tagName || node.name;
                 const lastSeen = node.last_seen ? formatDateTime(node.last_seen) : '-';
-                const memberIdTag = node.tags?.find(tag => tag.key === 'member_id')?.value;
+                const memberIdTag = showMembers ? node.tags?.find(tag => tag.key === 'member_id')?.value : null;
                 const member = memberIdTag ? members.find(m => m.member_id === memberIdTag) : null;
                 const memberBlock = member
                     ? html`${member.name}${member.callsign ? html` <span class="opacity-60">(${member.callsign})</span>` : nothing}`
@@ -121,7 +130,7 @@ ${content}`, container);
                           title="Click to copy">${node.public_key}</code>
                 </td>
                 <td class="text-sm whitespace-nowrap">${lastSeen}</td>
-                <td class="text-sm">${memberBlock}</td>
+                ${showMembers ? html`<td class="text-sm">${memberBlock}</td>` : nothing}
             </tr>`;
             });
 
@@ -170,7 +179,7 @@ ${content}`, container);
                 <th>${t('entities.node')}</th>
                 <th>${t('common.public_key')}</th>
                 <th>${t('common.last_seen')}</th>
-                <th>${t('entities.member')}</th>
+                ${showMembers ? html`<th>${t('entities.member')}</th>` : nothing}
             </tr>
         </thead>
         <tbody>
