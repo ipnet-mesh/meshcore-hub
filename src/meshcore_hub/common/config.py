@@ -268,6 +268,13 @@ class WebSettings(CommonSettings):
         description="Locale/language for the web dashboard (e.g. 'en')",
     )
 
+    # Auto-refresh interval for list pages
+    web_auto_refresh_seconds: int = Field(
+        default=30,
+        description="Auto-refresh interval in seconds for list pages (0 to disable)",
+        ge=0,
+    )
+
     # Admin interface (disabled by default for security)
     web_admin_enabled: bool = Field(
         default=False,

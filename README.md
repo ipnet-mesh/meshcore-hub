@@ -348,6 +348,7 @@ The collector automatically cleans up old event data and inactive nodes:
 | `API_KEY` | *(none)* | API key for web dashboard queries (optional) |
 | `WEB_THEME` | `dark` | Default theme (`dark` or `light`). Users can override via theme toggle in navbar. |
 | `WEB_LOCALE` | `en` | Locale/language for the web dashboard (e.g., `en`, `es`, `fr`) |
+| `WEB_AUTO_REFRESH_SECONDS` | `30` | Auto-refresh interval in seconds for list pages (0 to disable) |
 | `WEB_ADMIN_ENABLED` | `false` | Enable admin interface at /a/ (requires auth proxy) |
 | `TZ` | `UTC` | Timezone for displaying dates/times (e.g., `America/New_York`, `Europe/London`) |
 | `NETWORK_DOMAIN` | *(none)* | Network domain name (optional) |
