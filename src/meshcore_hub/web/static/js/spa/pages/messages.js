@@ -6,6 +6,7 @@ import {
     pagination, timezoneIndicator,
     createFilterHandler, autoSubmit, submitOnEnter
 } from '../components.js';
+import { createAutoRefresh } from '../auto-refresh.js';
 
 export async function render(container, params, router) {
     const query = params.query || {};
@@ -24,6 +25,7 @@ export async function render(container, params, router) {
 <div class="flex items-center justify-between mb-6">
     <h1 class="text-3xl font-bold">${t('entities.messages')}</h1>
     <div class="flex items-center gap-2">
+        <span id="auto-refresh-toggle"></span>
         ${tzBadge}
         ${total !== null ? html`<span class="badge badge-lg">${t('common.total', { count: total })}</span>` : nothing}
     </div>
@@ -34,111 +36,112 @@ ${content}`, container);
     // Render page header immediately (old content stays visible until data loads)
     renderPage(nothing);
 
-    try {
-        const data = await apiGet('/api/v1/messages', { limit, offset, message_type });
-        const messages = data.items || [];
-        const total = data.total || 0;
-        const totalPages = Math.ceil(total / limit);
+    async function fetchAndRenderData() {
+        try {
+            const data = await apiGet('/api/v1/messages', { limit, offset, message_type });
+            const messages = data.items || [];
+            const total = data.total || 0;
+            const totalPages = Math.ceil(total / limit);
 
-        const mobileCards = messages.length === 0
-            ? html`<div class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.messages').toLowerCase() })}</div>`
-            : messages.map(msg => {
-                const isChannel = msg.message_type === 'channel';
-                const typeIcon = isChannel ? '\u{1F4FB}' : '\u{1F464}';
-                const typeTitle = isChannel ? t('messages.type_channel') : t('messages.type_contact');
-                let senderBlock;
-                if (isChannel) {
-                    senderBlock = html`<span class="opacity-60">${t('messages.type_public')}</span>`;
-                } else {
-                    const senderName = msg.sender_tag_name || msg.sender_name;
-                    if (senderName) {
-                        senderBlock = senderName;
+            const mobileCards = messages.length === 0
+                ? html`<div class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.messages').toLowerCase() })}</div>`
+                : messages.map(msg => {
+                    const isChannel = msg.message_type === 'channel';
+                    const typeIcon = isChannel ? '\u{1F4FB}' : '\u{1F464}';
+                    const typeTitle = isChannel ? t('messages.type_channel') : t('messages.type_contact');
+                    let senderBlock;
+                    if (isChannel) {
+                        senderBlock = html`<span class="opacity-60">${t('messages.type_public')}</span>`;
                     } else {
-                        senderBlock = html`<span class="font-mono text-xs">${(msg.pubkey_prefix || '-').slice(0, 12)}</span>`;
+                        const senderName = msg.sender_tag_name || msg.sender_name;
+                        if (senderName) {
+                            senderBlock = senderName;
+                        } else {
+                            senderBlock = html`<span class="font-mono text-xs">${(msg.pubkey_prefix || '-').slice(0, 12)}</span>`;
+                        }
                     }
-                }
-                let receiversBlock = nothing;
-                if (msg.receivers && msg.receivers.length >= 1) {
-                    receiversBlock = html`<div class="flex gap-0.5">
-                        ${msg.receivers.map(recv => {
-                            const recvName = recv.tag_name || recv.name || truncateKey(recv.public_key, 12);
-                            return html`<a href="/nodes/${recv.public_key}" class="text-sm hover:opacity-70" title=${recvName}>\u{1F4E1}</a>`;
-                        })}
-                    </div>`;
-                } else if (msg.received_by) {
-                    const recvTitle = msg.receiver_tag_name || msg.receiver_name || truncateKey(msg.received_by, 12);
-                    receiversBlock = html`<a href="/nodes/${msg.received_by}" class="text-sm hover:opacity-70" title=${recvTitle}>\u{1F4E1}</a>`;
-                }
-                return html`<div class="card bg-base-100 shadow-sm">
-        <div class="card-body p-3">
-            <div class="flex items-start justify-between gap-2">
-                <div class="flex items-center gap-2 min-w-0">
-                    <span class="text-lg flex-shrink-0" title=${typeTitle}>
-                        ${typeIcon}
-                    </span>
-                    <div class="min-w-0">
-                        <div class="font-medium text-sm truncate">
-                            ${senderBlock}
-                        </div>
-                        <div class="text-xs opacity-60">
-                            ${formatDateTimeShort(msg.received_at)}
+                    let receiversBlock = nothing;
+                    if (msg.receivers && msg.receivers.length >= 1) {
+                        receiversBlock = html`<div class="flex gap-0.5">
+                            ${msg.receivers.map(recv => {
+                                const recvName = recv.tag_name || recv.name || truncateKey(recv.public_key, 12);
+                                return html`<a href="/nodes/${recv.public_key}" class="text-sm hover:opacity-70" title=${recvName}>\u{1F4E1}</a>`;
+                            })}
+                        </div>`;
+                    } else if (msg.received_by) {
+                        const recvTitle = msg.receiver_tag_name || msg.receiver_name || truncateKey(msg.received_by, 12);
+                        receiversBlock = html`<a href="/nodes/${msg.received_by}" class="text-sm hover:opacity-70" title=${recvTitle}>\u{1F4E1}</a>`;
+                    }
+                    return html`<div class="card bg-base-100 shadow-sm">
+            <div class="card-body p-3">
+                <div class="flex items-start justify-between gap-2">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <span class="text-lg flex-shrink-0" title=${typeTitle}>
+                            ${typeIcon}
+                        </span>
+                        <div class="min-w-0">
+                            <div class="font-medium text-sm truncate">
+                                ${senderBlock}
+                            </div>
+                            <div class="text-xs opacity-60">
+                                ${formatDateTimeShort(msg.received_at)}
+                            </div>
                         </div>
                     </div>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        ${receiversBlock}
+                    </div>
                 </div>
-                <div class="flex items-center gap-2 flex-shrink-0">
-                    ${receiversBlock}
-                </div>
+                <p class="text-sm mt-2 break-words whitespace-pre-wrap">${msg.text || '-'}</p>
             </div>
-            <p class="text-sm mt-2 break-words whitespace-pre-wrap">${msg.text || '-'}</p>
-        </div>
-    </div>`;
-            });
+        </div>`;
+                });
 
-        const tableRows = messages.length === 0
-            ? html`<tr><td colspan="5" class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.messages').toLowerCase() })}</td></tr>`
-            : messages.map(msg => {
-                const isChannel = msg.message_type === 'channel';
-                const typeIcon = isChannel ? '\u{1F4FB}' : '\u{1F464}';
-                const typeTitle = isChannel ? t('messages.type_channel') : t('messages.type_contact');
-                let senderBlock;
-                if (isChannel) {
-                    senderBlock = html`<span class="opacity-60">${t('messages.type_public')}</span>`;
-                } else {
-                    const senderName = msg.sender_tag_name || msg.sender_name;
-                    if (senderName) {
-                        senderBlock = html`<span class="font-medium">${senderName}</span>`;
+            const tableRows = messages.length === 0
+                ? html`<tr><td colspan="5" class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.messages').toLowerCase() })}</td></tr>`
+                : messages.map(msg => {
+                    const isChannel = msg.message_type === 'channel';
+                    const typeIcon = isChannel ? '\u{1F4FB}' : '\u{1F464}';
+                    const typeTitle = isChannel ? t('messages.type_channel') : t('messages.type_contact');
+                    let senderBlock;
+                    if (isChannel) {
+                        senderBlock = html`<span class="opacity-60">${t('messages.type_public')}</span>`;
                     } else {
-                        senderBlock = html`<span class="font-mono text-xs">${(msg.pubkey_prefix || '-').slice(0, 12)}</span>`;
+                        const senderName = msg.sender_tag_name || msg.sender_name;
+                        if (senderName) {
+                            senderBlock = html`<span class="font-medium">${senderName}</span>`;
+                        } else {
+                            senderBlock = html`<span class="font-mono text-xs">${(msg.pubkey_prefix || '-').slice(0, 12)}</span>`;
+                        }
                     }
-                }
-                let receiversBlock;
-                if (msg.receivers && msg.receivers.length >= 1) {
-                    receiversBlock = html`<div class="flex gap-1">
-                        ${msg.receivers.map(recv => {
-                            const recvName = recv.tag_name || recv.name || truncateKey(recv.public_key, 12);
-                            return html`<a href="/nodes/${recv.public_key}" class="text-lg hover:opacity-70" title=${recvName}>\u{1F4E1}</a>`;
-                        })}
-                    </div>`;
-                } else if (msg.received_by) {
-                    const recvTitle = msg.receiver_tag_name || msg.receiver_name || truncateKey(msg.received_by, 12);
-                    receiversBlock = html`<a href="/nodes/${msg.received_by}" class="text-lg hover:opacity-70" title=${recvTitle}>\u{1F4E1}</a>`;
-                } else {
-                    receiversBlock = html`<span class="opacity-50">-</span>`;
-                }
-                return html`<tr class="hover align-top">
-                <td class="text-lg" title=${typeTitle}>${typeIcon}</td>
-                <td class="text-sm whitespace-nowrap">${formatDateTime(msg.received_at)}</td>
-                <td class="text-sm whitespace-nowrap">${senderBlock}</td>
-                <td class="break-words max-w-md" style="white-space: pre-wrap;">${msg.text || '-'}</td>
-                <td>${receiversBlock}</td>
-            </tr>`;
+                    let receiversBlock;
+                    if (msg.receivers && msg.receivers.length >= 1) {
+                        receiversBlock = html`<div class="flex gap-1">
+                            ${msg.receivers.map(recv => {
+                                const recvName = recv.tag_name || recv.name || truncateKey(recv.public_key, 12);
+                                return html`<a href="/nodes/${recv.public_key}" class="text-lg hover:opacity-70" title=${recvName}>\u{1F4E1}</a>`;
+                            })}
+                        </div>`;
+                    } else if (msg.received_by) {
+                        const recvTitle = msg.receiver_tag_name || msg.receiver_name || truncateKey(msg.received_by, 12);
+                        receiversBlock = html`<a href="/nodes/${msg.received_by}" class="text-lg hover:opacity-70" title=${recvTitle}>\u{1F4E1}</a>`;
+                    } else {
+                        receiversBlock = html`<span class="opacity-50">-</span>`;
+                    }
+                    return html`<tr class="hover align-top">
+                    <td class="text-lg" title=${typeTitle}>${typeIcon}</td>
+                    <td class="text-sm whitespace-nowrap">${formatDateTime(msg.received_at)}</td>
+                    <td class="text-sm whitespace-nowrap">${senderBlock}</td>
+                    <td class="break-words max-w-md" style="white-space: pre-wrap;">${msg.text || '-'}</td>
+                    <td>${receiversBlock}</td>
+                </tr>`;
+                });
+
+            const paginationBlock = pagination(page, totalPages, '/messages', {
+                message_type, limit,
             });
 
-        const paginationBlock = pagination(page, totalPages, '/messages', {
-            message_type, limit,
-        });
-
-        renderPage(html`
+            renderPage(html`
 <div class="card shadow mb-6 panel-solid" style="--panel-color: var(--color-neutral)">
     <div class="card-body py-4">
         <form method="GET" action="/messages" class="flex gap-4 flex-wrap items-end" @submit=${createFilterHandler('/messages', navigate)}>
@@ -183,7 +186,17 @@ ${content}`, container);
 
 ${paginationBlock}`, { total });
 
-    } catch (e) {
-        renderPage(errorAlert(e.message));
+        } catch (e) {
+            renderPage(errorAlert(e.message));
+        }
     }
+
+    await fetchAndRenderData();
+
+    const toggleEl = container.querySelector('#auto-refresh-toggle');
+    const { cleanup } = createAutoRefresh({
+        fetchAndRender: fetchAndRenderData,
+        toggleContainer: toggleEl,
+    });
+    return cleanup;
 }

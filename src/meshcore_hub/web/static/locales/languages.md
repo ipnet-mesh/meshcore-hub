@@ -191,7 +191,16 @@ Platform and external link labels:
 | `youtube` | YouTube | YouTube link label (preserve capitalization) |
 | `profile` | Profile | Radio profile label |
 
-### 4. `time`
+### 4. `auto_refresh`
+
+Auto-refresh controls for list pages (nodes, advertisements, messages):
+
+| Key | English | Context |
+|-----|---------|---------|
+| `pause` | Pause auto-refresh | Tooltip on pause button when auto-refresh is active |
+| `resume` | Resume auto-refresh | Tooltip on play button when auto-refresh is paused |
+
+### 5. `time`
 
 Time-related labels and formats:
 
@@ -206,7 +215,7 @@ Time-related labels and formats:
 | `over_time_last_7_days` | Over time (last 7 days) | Over time last 7 days |
 | `activity_per_day_last_7_days` | Activity per day (last 7 days) | Activity chart label |
 
-### 5. `node_types`
+### 6. `node_types`
 
 Mesh network node type labels:
 
@@ -217,7 +226,7 @@ Mesh network node type labels:
 | `room` | Room | Room/group node type |
 | `unknown` | Unknown | Unknown node type fallback |
 
-### 6. `home`
+### 7. `home`
 
 Homepage-specific content:
 
@@ -238,7 +247,7 @@ Homepage-specific content:
 
 **Note:** MeshCore tagline "Connecting people and things, without using the internet" is hardcoded in English and should not be translated (trademark).
 
-### 7. `dashboard`
+### 8. `dashboard`
 
 Dashboard page content:
 
@@ -248,7 +257,7 @@ Dashboard page content:
 | `recent_channel_messages` | Recent Channel Messages | Recent messages card title |
 | `channel` | Channel {{number}} | Channel label with number |
 
-### 8. `nodes`
+### 9. `nodes`
 
 Node-specific labels:
 
@@ -256,11 +265,11 @@ Node-specific labels:
 |-----|---------|---------|
 | `scan_to_add` | Scan to add as contact | QR code instruction |
 
-### 9. `advertisements`
+### 10. `advertisements`
 
 Currently empty - advertisements page uses common patterns.
 
-### 10. `messages`
+### 11. `messages`
 
 Message type labels:
 
@@ -271,7 +280,7 @@ Message type labels:
 | `type_contact` | Contact | Contact message type |
 | `type_public` | Public | Public message type |
 
-### 11. `map`
+### 12. `map`
 
 Map page content:
 
@@ -289,7 +298,7 @@ Map page content:
 | `role` | Role: | Member role label |
 | `select_destination_node` | -- Select destination node -- | Dropdown placeholder |
 
-### 12. `members`
+### 13. `members`
 
 Members page content:
 
@@ -300,7 +309,7 @@ Members page content:
 | `members_file_description` | Create a YAML file at <code>$SEED_HOME/members.yaml</code> with the following structure: | File creation instructions |
 | `members_import_instructions` | Run <code>meshcore-hub collector seed</code> to import members.<br/>To associate nodes with members, add a <code>member_id</code> tag to nodes in <code>node_tags.yaml</code>. | Import instructions (HTML allowed) |
 
-### 13. `not_found`
+### 14. `not_found`
 
 404 page content:
 
@@ -308,7 +317,7 @@ Members page content:
 |-----|---------|---------|
 | `description` | The page you're looking for doesn't exist or has been moved. | 404 description |
 
-### 14. `custom_page`
+### 15. `custom_page`
 
 Custom markdown page errors:
 
@@ -316,7 +325,7 @@ Custom markdown page errors:
 |-----|---------|---------|
 | `failed_to_load` | Failed to load page | Page load error |
 
-### 15. `admin`
+### 16. `admin`
 
 Admin panel content:
 
@@ -331,7 +340,7 @@ Admin panel content:
 | `members_description` | Manage network members and operators. | Members card description |
 | `tags_description` | Manage custom tags and metadata for network nodes. | Tags card description |
 
-### 16. `admin_members`
+### 17. `admin_members`
 
 Admin members page:
 
@@ -344,7 +353,7 @@ Admin members page:
 
 **Note:** Confirmation and success messages use `common.*` patterns.
 
-### 17. `admin_node_tags`
+### 18. `admin_node_tags`
 
 Admin node tags page:
 
@@ -368,7 +377,7 @@ Admin node tags page:
 
 **Note:** Titles, confirmations, and success messages use `common.*` patterns.
 
-### 18. `footer`
+### 19. `footer`
 
 Footer content:
 

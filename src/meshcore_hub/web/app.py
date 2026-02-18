@@ -117,6 +117,7 @@ def _build_config_json(app: FastAPI, request: Request) -> str:
         "is_authenticated": bool(request.headers.get("X-Forwarded-User")),
         "default_theme": app.state.web_theme,
         "locale": app.state.web_locale,
+        "auto_refresh_seconds": app.state.auto_refresh_seconds,
     }
 
     return json.dumps(config)
@@ -183,6 +184,9 @@ def create_app(
     # Load i18n translations
     app.state.web_locale = settings.web_locale or "en"
     load_locale(app.state.web_locale)
+
+    # Auto-refresh interval
+    app.state.auto_refresh_seconds = settings.web_auto_refresh_seconds
 
     # Store configuration in app state (use args if provided, else settings)
     app.state.web_theme = (

@@ -606,6 +606,7 @@ Key variables:
 - `API_READ_KEY`, `API_ADMIN_KEY` - API authentication keys
 - `WEB_ADMIN_ENABLED` - Enable admin interface at /a/ (default: `false`, requires auth proxy)
 - `WEB_THEME` - Default theme for the web dashboard (default: `dark`, options: `dark`, `light`). Users can override via the theme toggle in the navbar, which persists their preference in browser localStorage.
+- `WEB_AUTO_REFRESH_SECONDS` - Auto-refresh interval in seconds for list pages (default: `30`, `0` to disable)
 - `TZ` - Timezone for web dashboard date/time display (default: `UTC`, e.g., `America/New_York`, `Europe/London`)
 - `FEATURE_DASHBOARD`, `FEATURE_NODES`, `FEATURE_ADVERTISEMENTS`, `FEATURE_MESSAGES`, `FEATURE_MAP`, `FEATURE_MEMBERS`, `FEATURE_PAGES` - Feature flags to enable/disable specific web dashboard pages (default: all `true`). Dependencies: Dashboard auto-disables when all of Nodes/Advertisements/Messages are disabled. Map auto-disables when Nodes is disabled.
 - `LOG_LEVEL` - Logging verbosity

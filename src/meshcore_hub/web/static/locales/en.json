@@ -105,6 +105,10 @@
         "youtube": "YouTube",
         "profile": "Profile"
     },
+    "auto_refresh": {
+        "pause": "Pause auto-refresh",
+        "resume": "Resume auto-refresh"
+    },
     "time": {
         "days_ago": "{{count}}d ago",
         "hours_ago": "{{count}}h ago",
