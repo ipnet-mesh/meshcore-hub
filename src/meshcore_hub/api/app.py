@@ -54,6 +54,8 @@ def create_app(
     mqtt_prefix: str = "meshcore",
     mqtt_tls: bool = False,
     cors_origins: list[str] | None = None,
+    metrics_enabled: bool = True,
+    metrics_cache_ttl: int = 60,
 ) -> FastAPI:
     """Create and configure the FastAPI application.
 
@@ -66,6 +68,8 @@ def create_app(
         mqtt_prefix: MQTT topic prefix
         mqtt_tls: Enable TLS/SSL for MQTT connection
         cors_origins: Allowed CORS origins
+        metrics_enabled: Enable Prometheus metrics endpoint at /metrics
+        metrics_cache_ttl: Seconds to cache metrics output
 
     Returns:
         Configured FastAPI application
@@ -88,6 +92,7 @@ def create_app(
     app.state.mqtt_port = mqtt_port
     app.state.mqtt_prefix = mqtt_prefix
     app.state.mqtt_tls = mqtt_tls
+    app.state.metrics_cache_ttl = metrics_cache_ttl
 
     # Configure CORS
     if cors_origins is None:
@@ -105,6 +110,12 @@ def create_app(
     from meshcore_hub.api.routes import api_router
 
     app.include_router(api_router, prefix="/api/v1")
+
+    # Include Prometheus metrics endpoint
+    if metrics_enabled:
+        from meshcore_hub.api.metrics import router as metrics_router
+
+        app.include_router(metrics_router)
 
     # Health check endpoints
     @app.get("/health", tags=["Health"])

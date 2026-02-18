@@ -281,6 +281,7 @@ meshcore-hub/
 │   │   ├── app.py            # FastAPI app
 │   │   ├── auth.py           # Authentication
 │   │   ├── dependencies.py
+│   │   ├── metrics.py        # Prometheus metrics endpoint
 │   │   └── routes/           # API routes
 │   │       ├── members.py    # Member CRUD endpoints
 │   │       └── ...
@@ -311,7 +312,12 @@ meshcore-hub/
 │   ├── env.py
 │   └── versions/
 ├── etc/
-│   └── mosquitto.conf        # MQTT broker configuration
+│   ├── mosquitto.conf        # MQTT broker configuration
+│   ├── prometheus/            # Prometheus configuration
+│   │   ├── prometheus.yml    # Scrape and alerting config
+│   │   └── alerts.yml        # Alert rules
+│   └── alertmanager/          # Alertmanager configuration
+│       └── alertmanager.yml  # Routing and receiver config
 ├── example/
 │   ├── seed/                 # Example seed data files
 │   │   ├── node_tags.yaml    # Example node tags
@@ -609,6 +615,8 @@ Key variables:
 - `WEB_AUTO_REFRESH_SECONDS` - Auto-refresh interval in seconds for list pages (default: `30`, `0` to disable)
 - `TZ` - Timezone for web dashboard date/time display (default: `UTC`, e.g., `America/New_York`, `Europe/London`)
 - `FEATURE_DASHBOARD`, `FEATURE_NODES`, `FEATURE_ADVERTISEMENTS`, `FEATURE_MESSAGES`, `FEATURE_MAP`, `FEATURE_MEMBERS`, `FEATURE_PAGES` - Feature flags to enable/disable specific web dashboard pages (default: all `true`). Dependencies: Dashboard auto-disables when all of Nodes/Advertisements/Messages are disabled. Map auto-disables when Nodes is disabled.
+- `METRICS_ENABLED` - Enable Prometheus metrics endpoint at /metrics (default: `true`)
+- `METRICS_CACHE_TTL` - Seconds to cache metrics output (default: `60`)
 - `LOG_LEVEL` - Logging verbosity
 
 The database defaults to `sqlite:///{DATA_HOME}/collector/meshcore.db` and does not typically need to be configured.

@@ -1,0 +1,29 @@
+# Prometheus scrape configuration for MeshCore Hub
+#
+# This file is used when running Prometheus via Docker Compose:
+#   docker compose --profile core --profile metrics up -d
+#
+# The scrape interval matches the default metrics cache TTL (60s)
+# to avoid unnecessary database queries.
+
+global:
+  scrape_interval: 60s
+  evaluation_interval: 60s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+rule_files:
+  - 'alerts.yml'
+
+scrape_configs:
+  - job_name: 'meshcore-hub'
+    metrics_path: '/metrics'
+    # Uncomment basic_auth if API_READ_KEY is configured
+    # basic_auth:
+    #   username: 'metrics'
+    #   password: '<API_READ_KEY>'
+    static_configs:
+      - targets: ['api:8000']
