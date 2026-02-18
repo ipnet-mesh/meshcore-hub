@@ -1,0 +1,16 @@
+# Prometheus alert rules for MeshCore Hub
+#
+# These rules are evaluated by Prometheus and fired alerts are sent
+# to Alertmanager for routing and notification.
+
+groups:
+  - name: meshcore
+    rules:
+      - alert: NodeNotSeen
+        expr: time() - meshcore_node_last_seen_timestamp_seconds > 48 * 3600
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node {{ $labels.node_name }} not seen for 48+ hours"
+          description: "Node {{ $labels.public_key }} ({{ $labels.adv_type }}) last seen {{ $value | humanizeDuration }} ago."

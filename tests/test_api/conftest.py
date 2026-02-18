@@ -2,6 +2,7 @@
 
 import os
 import tempfile
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
@@ -81,6 +82,20 @@ def mock_db_manager(api_db_engine):
     manager = MagicMock(spec=DatabaseManager)
     Session = sessionmaker(bind=api_db_engine)
     manager.get_session = lambda: Session()
+
+    @contextmanager
+    def _session_scope():
+        session = Session()
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    manager.session_scope = _session_scope
     return manager
 
 

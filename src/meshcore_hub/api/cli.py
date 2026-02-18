@@ -82,6 +82,19 @@ import click
     help="Comma-separated list of allowed CORS origins",
 )
 @click.option(
+    "--metrics-enabled/--no-metrics",
+    default=True,
+    envvar="METRICS_ENABLED",
+    help="Enable Prometheus metrics endpoint at /metrics",
+)
+@click.option(
+    "--metrics-cache-ttl",
+    type=int,
+    default=60,
+    envvar="METRICS_CACHE_TTL",
+    help="Seconds to cache metrics output (reduces database load)",
+)
+@click.option(
     "--reload",
     is_flag=True,
     default=False,
@@ -101,6 +114,8 @@ def api(
     mqtt_prefix: str,
     mqtt_tls: bool,
     cors_origins: str | None,
+    metrics_enabled: bool,
+    metrics_cache_ttl: int,
     reload: bool,
 ) -> None:
     """Run the REST API server.
@@ -149,6 +164,8 @@ def api(
     click.echo(f"Read key configured: {read_key is not None}")
     click.echo(f"Admin key configured: {admin_key is not None}")
     click.echo(f"CORS origins: {cors_origins or 'none'}")
+    click.echo(f"Metrics enabled: {metrics_enabled}")
+    click.echo(f"Metrics cache TTL: {metrics_cache_ttl}s")
     click.echo(f"Reload mode: {reload}")
     click.echo("=" * 50)
 
@@ -181,6 +198,8 @@ def api(
             mqtt_prefix=mqtt_prefix,
             mqtt_tls=mqtt_tls,
             cors_origins=origins_list,
+            metrics_enabled=metrics_enabled,
+            metrics_cache_ttl=metrics_cache_ttl,
         )
 
         click.echo("\nStarting API server...")

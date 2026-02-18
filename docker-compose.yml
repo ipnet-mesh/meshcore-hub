@@ -215,6 +215,8 @@ services:
       - API_PORT=8000
       - API_READ_KEY=${API_READ_KEY:-}
       - API_ADMIN_KEY=${API_ADMIN_KEY:-}
+      - METRICS_ENABLED=${METRICS_ENABLED:-true}
+      - METRICS_CACHE_TTL=${METRICS_CACHE_TTL:-60}
     command: ["api"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
@@ -326,6 +328,48 @@ services:
     # Imports both node_tags.yaml and members.yaml if they exist
     command: ["collector", "seed"]
 
+  # ==========================================================================
+  # Prometheus - Metrics collection and monitoring (optional, use --profile metrics)
+  # ==========================================================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: meshcore-prometheus
+    profiles:
+      - all
+      - metrics
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=30d'
+    volumes:
+      - ./etc/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./etc/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+
+  # ==========================================================================
+  # Alertmanager - Alert routing and notifications (optional, use --profile metrics)
+  # ==========================================================================
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: meshcore-alertmanager
+    profiles:
+      - all
+      - metrics
+    restart: unless-stopped
+    ports:
+      - "${ALERTMANAGER_PORT:-9093}:9093"
+    volumes:
+      - ./etc/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+
 # ==========================================================================
 # Volumes
 # ==========================================================================
@@ -336,3 +380,7 @@ volumes:
     name: meshcore_mosquitto_data
   mosquitto_log:
     name: meshcore_mosquitto_log
+  prometheus_data:
+    name: meshcore_prometheus_data
+  alertmanager_data:
+    name: meshcore_alertmanager_data

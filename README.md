@@ -185,6 +185,7 @@ Docker Compose uses **profiles** to select which services to run:
 | `mock` | interface-mock-receiver | Testing without hardware |
 | `migrate` | db-migrate | One-time database migration |
 | `seed` | seed | One-time seed data import |
+| `metrics` | prometheus, alertmanager | Prometheus metrics and alerting |
 
 **Note:** Most deployments connect to an external MQTT broker. Add `--profile mqtt` only if you need a local broker.
 
@@ -337,6 +338,8 @@ The collector automatically cleans up old event data and inactive nodes:
 | `API_PORT` | `8000` | API port |
 | `API_READ_KEY` | *(none)* | Read-only API key |
 | `API_ADMIN_KEY` | *(none)* | Admin API key (required for commands) |
+| `METRICS_ENABLED` | `true` | Enable Prometheus metrics endpoint at `/metrics` |
+| `METRICS_CACHE_TTL` | `60` | Seconds to cache metrics output (reduces database load) |
 
 ### Web Dashboard Settings
 
@@ -541,6 +544,7 @@ Health check endpoints are also available:
 
 - **Health**: http://localhost:8000/health
 - **Ready**: http://localhost:8000/health/ready (includes database check)
+- **Metrics**: http://localhost:8000/metrics (Prometheus format)
 
 ### Authentication
 
@@ -648,7 +652,7 @@ meshcore-hub/
 │           └── locales/    # Translation files (en.json, languages.md)
 ├── tests/                  # Test suite
 ├── alembic/                # Database migrations
-├── etc/                    # Configuration files (mosquitto.conf)
+├── etc/                    # Configuration files (MQTT, Prometheus, Alertmanager)
 ├── example/                # Example files for reference
 │   ├── seed/               # Example seed data files
 │   │   ├── node_tags.yaml  # Example node tags
