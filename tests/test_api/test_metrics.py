@@ -13,7 +13,7 @@ from meshcore_hub.api.dependencies import (
     get_db_session,
     get_mqtt_client,
 )
-from meshcore_hub.common.models import Node
+from meshcore_hub.common.models import Node, NodeTag
 
 
 def _make_basic_auth(username: str, password: str) -> str:
@@ -198,7 +198,36 @@ class TestMetricsData:
             "meshcore_node_last_seen_timestamp_seconds"
             '{adv_type="REPEATER",'
             'node_name="Seen Node",'
-            'public_key="lastseen1234lastseen1234lastseen"}'
+            'public_key="lastseen1234lastseen1234lastseen",'
+            'role=""}'
+        ) in response.text
+
+    def test_node_last_seen_timestamp_with_role(self, api_db_session, client_no_auth):
+        """Test that node_last_seen_timestamp includes role label from node tags."""
+        seen_at = datetime(2025, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+        node = Node(
+            public_key="rolenode1234rolenode1234rolenode",
+            name="Infra Node",
+            adv_type="REPEATER",
+            first_seen=seen_at,
+            last_seen=seen_at,
+        )
+        api_db_session.add(node)
+        api_db_session.flush()
+
+        tag = NodeTag(node_id=node.id, key="role", value="infra")
+        api_db_session.add(tag)
+        api_db_session.commit()
+
+        _clear_metrics_cache()
+        response = client_no_auth.get("/metrics")
+        assert response.status_code == 200
+        assert (
+            "meshcore_node_last_seen_timestamp_seconds"
+            '{adv_type="REPEATER",'
+            'node_name="Infra Node",'
+            'public_key="rolenode1234rolenode1234rolenode",'
+            'role="infra"}'
         ) in response.text
 
     def test_node_last_seen_timestamp_skips_null(self, api_db_session, client_no_auth):

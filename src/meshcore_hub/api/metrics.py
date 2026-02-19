@@ -16,6 +16,7 @@ from meshcore_hub.common.models import (
     Member,
     Message,
     Node,
+    NodeTag,
     Telemetry,
     TracePath,
 )
@@ -144,19 +145,31 @@ def collect_metrics(session: Any) -> bytes:
     node_last_seen = Gauge(
         "meshcore_node_last_seen_timestamp_seconds",
         "Unix timestamp of when the node was last seen",
-        ["public_key", "node_name", "adv_type"],
+        ["public_key", "node_name", "adv_type", "role"],
         registry=registry,
     )
+    role_subq = (
+        select(NodeTag.node_id, NodeTag.value.label("role"))
+        .where(NodeTag.key == "role")
+        .subquery()
+    )
     nodes_with_last_seen = session.execute(
-        select(Node.public_key, Node.name, Node.adv_type, Node.last_seen).where(
-            Node.last_seen.isnot(None)
+        select(
+            Node.public_key,
+            Node.name,
+            Node.adv_type,
+            Node.last_seen,
+            role_subq.c.role,
         )
+        .outerjoin(role_subq, Node.id == role_subq.c.node_id)
+        .where(Node.last_seen.isnot(None))
     ).all()
-    for public_key, name, adv_type, last_seen in nodes_with_last_seen:
+    for public_key, name, adv_type, last_seen, role in nodes_with_last_seen:
         node_last_seen.labels(
             public_key=public_key,
             node_name=name or "",
             adv_type=adv_type or "unknown",
+            role=role or "",
         ).set(last_seen.timestamp())
 
     # -- Messages total by type --

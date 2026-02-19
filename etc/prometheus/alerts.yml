@@ -7,10 +7,10 @@ groups:
   - name: meshcore
     rules:
       - alert: NodeNotSeen
-        expr: time() - meshcore_node_last_seen_timestamp_seconds > 48 * 3600
+        expr: time() - meshcore_node_last_seen_timestamp_seconds{role="infra"} > 48 * 3600
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "Node {{ $labels.node_name }} not seen for 48+ hours"
-          description: "Node {{ $labels.public_key }} ({{ $labels.adv_type }}) last seen {{ $value | humanizeDuration }} ago."
+          summary: "Node {{ $labels.node_name }} ({{ $labels.role }}) not seen for 48+ hours"
+          description: "Node {{ $labels.public_key }} ({{ $labels.adv_type }}, role={{ $labels.role }}) last seen {{ $value | humanizeDuration }} ago."
