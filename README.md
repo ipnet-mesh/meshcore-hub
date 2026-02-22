@@ -390,9 +390,6 @@ The collector automatically cleans up old event data and inactive nodes:
 | `WEB_AUTO_REFRESH_SECONDS` | `30` | Auto-refresh interval in seconds for list pages (0 to disable) |
 | `WEB_ADMIN_ENABLED` | `false` | Enable admin interface at /a/ (requires auth proxy: `X-Forwarded-User`/`X-Auth-Request-User` or forwarded `Authorization: Basic ...`) |
 | `TZ` | `UTC` | Timezone for displaying dates/times (e.g., `America/New_York`, `Europe/London`) |
-
-Timezone handling note:
-- API timestamps that omit an explicit timezone suffix are treated as UTC before rendering in the configured `TZ`.
 | `NETWORK_DOMAIN` | *(none)* | Network domain name (optional) |
 | `NETWORK_NAME` | `MeshCore Network` | Display name for the network |
 | `NETWORK_CITY` | *(none)* | City where network is located |
@@ -404,6 +401,59 @@ Timezone handling note:
 | `NETWORK_CONTACT_GITHUB` | *(none)* | GitHub repository URL |
 | `NETWORK_CONTACT_YOUTUBE` | *(none)* | YouTube channel URL |
 | `CONTENT_HOME` | `./content` | Directory containing custom content (pages/, media/) |
+
+Timezone handling note:
+- API timestamps that omit an explicit timezone suffix are treated as UTC before rendering in the configured `TZ`.
+
+#### Nginx Proxy Manager (NPM) Admin Setup
+
+Use two hostnames so the public map/site stays open while admin stays protected:
+
+1. Public host: no Access List (normal users).
+2. Admin host: Access List enabled (operators only).
+
+Both proxy hosts should forward to the same web container:
+- Scheme: `http`
+- Forward Hostname/IP: your MeshCore Hub host
+- Forward Port: `18080` (or your mapped web port)
+- Websockets Support: `ON`
+- Block Common Exploits: `ON`
+
+Important:
+- Do not host this app under a subpath (for example `/meshcore`); proxy it at `/`.
+- `WEB_ADMIN_ENABLED` must be `true`.
+
+In NPM, for the **admin host**, paste this in the `Advanced` field:
+
+```nginx
+# Forward authenticated identity for MeshCore Hub admin checks
+proxy_set_header Authorization $http_authorization;
+proxy_set_header X-Forwarded-User $remote_user;
+proxy_set_header X-Auth-Request-User $remote_user;
+proxy_set_header X-Forwarded-Email "";
+proxy_set_header X-Forwarded-Groups "";
+```
+
+Then attach your NPM Access List (Basic auth users) to that admin host.
+
+Verify auth forwarding:
+
+```bash
+curl -s -u 'admin:password' "https://admin.example.com/config.js?t=$(date +%s)" \
+  | grep -o '"is_authenticated":[^,]*'
+```
+
+Expected:
+
+```text
+"is_authenticated": true
+```
+
+If it still shows `false`, check:
+1. You are using the admin hostname, not the public hostname.
+2. The Access List is attached to that admin host.
+3. The `Advanced` block above is present exactly.
+4. `WEB_ADMIN_ENABLED=true` is loaded in the running web container.
 
 #### Feature Flags
 
@@ -425,10 +475,9 @@ Control which pages are visible in the web dashboard. Disabled features are full
 
 The web dashboard supports custom content including markdown pages and media files. Content is organized in subdirectories:
 
-```
-
 Custom logo note:
 - If a custom logo file is present, the UI keeps its original colors in both light/dark themes (no automatic light-mode darkening).
+```
 content/
 ├── pages/     # Custom markdown pages
 │   └── about.md
