@@ -122,7 +122,8 @@
     "node_types": {
         "chat": "Chat",
         "repeater": "Repeater",
-        "room": "Room",
+        "companion": "Companion",
+        "room": "Room Server",
         "unknown": "Unknown"
     },
     "home": {

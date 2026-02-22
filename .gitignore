@@ -3,6 +3,7 @@
 !example/data/
 /seed/
 !example/seed/
+/content/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

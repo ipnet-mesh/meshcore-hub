@@ -2,6 +2,8 @@
 
 import json
 import logging
+import os
+import re
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -16,6 +18,7 @@ from fastapi.templating import Jinja2Templates
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from meshcore_hub import __version__
+from meshcore_hub.collector.letsmesh_decoder import LetsMeshPacketDecoder
 from meshcore_hub.common.i18n import load_locale, t
 from meshcore_hub.common.schemas import RadioConfig
 from meshcore_hub.web.middleware import CacheControlMiddleware
@@ -27,6 +30,58 @@ logger = logging.getLogger(__name__)
 PACKAGE_DIR = Path(__file__).parent
 TEMPLATES_DIR = PACKAGE_DIR / "templates"
 STATIC_DIR = PACKAGE_DIR / "static"
+
+
+def _parse_decoder_key_entries(raw: str | None) -> list[str]:
+    """Parse COLLECTOR_LETSMESH_DECODER_KEYS into key entries."""
+    if not raw:
+        return []
+    return [part.strip() for part in re.split(r"[,\s]+", raw) if part.strip()]
+
+
+def _build_channel_labels() -> dict[str, str]:
+    """Build UI channel labels from built-in + configured decoder keys."""
+    raw_keys = os.getenv("COLLECTOR_LETSMESH_DECODER_KEYS")
+    decoder = LetsMeshPacketDecoder(
+        enabled=False,
+        channel_keys=_parse_decoder_key_entries(raw_keys),
+    )
+    labels = decoder.channel_labels_by_index()
+    return {str(idx): label for idx, label in sorted(labels.items())}
+
+
+def _resolve_logo(media_home: Path) -> tuple[str, bool, Path | None]:
+    """Resolve logo URL and whether light-mode inversion should be applied.
+
+    Returns:
+        tuple of (logo_url, invert_in_light_mode, resolved_path)
+    """
+    custom_logo_candidates = (("logo.svg", "/media/images/logo.svg"),)
+    for filename, url in custom_logo_candidates:
+        path = media_home / "images" / filename
+        if path.exists():
+            # Custom logos are assumed to be full-color and should not be darkened.
+            cache_buster = int(path.stat().st_mtime)
+            return f"{url}?v={cache_buster}", False, path
+
+    # Default packaged logo is monochrome and needs darkening in light mode.
+    return "/static/img/logo.svg", True, None
+
+
+def _is_authenticated_proxy_request(request: Request) -> bool:
+    """Check whether request is authenticated by an upstream auth proxy.
+
+    Supported patterns:
+    - OAuth2/OIDC proxy headers: X-Forwarded-User, X-Auth-Request-User
+    - Forwarded Basic auth header: Authorization: Basic ...
+    """
+    if request.headers.get("x-forwarded-user"):
+        return True
+    if request.headers.get("x-auth-request-user"):
+        return True
+
+    auth_header = request.headers.get("authorization", "")
+    return auth_header.lower().startswith("basic ")
 
 
 @asynccontextmanager
@@ -114,10 +169,13 @@ def _build_config_json(app: FastAPI, request: Request) -> str:
         "version": __version__,
         "timezone": app.state.timezone_abbr,
         "timezone_iana": app.state.timezone,
-        "is_authenticated": bool(request.headers.get("X-Forwarded-User")),
+        "is_authenticated": _is_authenticated_proxy_request(request),
         "default_theme": app.state.web_theme,
         "locale": app.state.web_locale,
+        "datetime_locale": app.state.web_datetime_locale,
         "auto_refresh_seconds": app.state.auto_refresh_seconds,
+        "channel_labels": app.state.channel_labels,
+        "logo_invert_light": app.state.logo_invert_light,
     }
 
     return json.dumps(config)
@@ -183,10 +241,12 @@ def create_app(
 
     # Load i18n translations
     app.state.web_locale = settings.web_locale or "en"
+    app.state.web_datetime_locale = settings.web_datetime_locale or "en-US"
     load_locale(app.state.web_locale)
 
     # Auto-refresh interval
     app.state.auto_refresh_seconds = settings.web_auto_refresh_seconds
+    app.state.channel_labels = _build_channel_labels()
 
     # Store configuration in app state (use args if provided, else settings)
     app.state.web_theme = (
@@ -259,12 +319,11 @@ def create_app(
 
     # Check for custom logo and store media path
     media_home = Path(settings.effective_media_home)
-    custom_logo_path = media_home / "images" / "logo.svg"
-    if custom_logo_path.exists():
-        app.state.logo_url = "/media/images/logo.svg"
-        logger.info(f"Using custom logo from {custom_logo_path}")
-    else:
-        app.state.logo_url = "/static/img/logo.svg"
+    logo_url, logo_invert_light, logo_path = _resolve_logo(media_home)
+    app.state.logo_url = logo_url
+    app.state.logo_invert_light = logo_invert_light
+    if logo_path is not None:
+        logger.info("Using custom logo from %s", logo_path)
 
     # Mount static files
     if STATIC_DIR.exists():
@@ -310,7 +369,7 @@ def create_app(
         if (
             request.method in ("POST", "PUT", "DELETE", "PATCH")
             and request.app.state.admin_enabled
-            and not request.headers.get("x-forwarded-user")
+            and not _is_authenticated_proxy_request(request)
         ):
             return JSONResponse(
                 {"detail": "Authentication required"},
@@ -656,6 +715,7 @@ def create_app(
                 "features": features,
                 "custom_pages": custom_pages,
                 "logo_url": request.app.state.logo_url,
+                "logo_invert_light": request.app.state.logo_invert_light,
                 "version": __version__,
                 "default_theme": request.app.state.web_theme,
                 "config_json": config_json,

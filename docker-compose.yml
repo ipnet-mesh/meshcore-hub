@@ -48,6 +48,8 @@ services:
       - MQTT_PASSWORD=${MQTT_PASSWORD:-}
       - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
       - MQTT_TLS=${MQTT_TLS:-false}
+      - MQTT_TRANSPORT=${MQTT_TRANSPORT:-tcp}
+      - MQTT_WS_PATH=${MQTT_WS_PATH:-/mqtt}
       - SERIAL_PORT=${SERIAL_PORT:-/dev/ttyUSB0}
       - SERIAL_BAUD=${SERIAL_BAUD:-115200}
       - NODE_ADDRESS=${NODE_ADDRESS:-}
@@ -83,6 +85,8 @@ services:
       - MQTT_PASSWORD=${MQTT_PASSWORD:-}
       - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
       - MQTT_TLS=${MQTT_TLS:-false}
+      - MQTT_TRANSPORT=${MQTT_TRANSPORT:-tcp}
+      - MQTT_WS_PATH=${MQTT_WS_PATH:-/mqtt}
       - SERIAL_PORT=${SERIAL_PORT_SENDER:-/dev/ttyUSB1}
       - SERIAL_BAUD=${SERIAL_BAUD:-115200}
       - NODE_ADDRESS=${NODE_ADDRESS_SENDER:-}
@@ -115,6 +119,8 @@ services:
       - MQTT_PASSWORD=${MQTT_PASSWORD:-}
       - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
       - MQTT_TLS=${MQTT_TLS:-false}
+      - MQTT_TRANSPORT=${MQTT_TRANSPORT:-tcp}
+      - MQTT_WS_PATH=${MQTT_WS_PATH:-/mqtt}
       - MOCK_DEVICE=true
       - NODE_ADDRESS=${NODE_ADDRESS:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
     command: ["interface", "receiver", "--mock"]
@@ -152,6 +158,13 @@ services:
       - MQTT_PASSWORD=${MQTT_PASSWORD:-}
       - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
       - MQTT_TLS=${MQTT_TLS:-false}
+      - MQTT_TRANSPORT=${MQTT_TRANSPORT:-tcp}
+      - MQTT_WS_PATH=${MQTT_WS_PATH:-/mqtt}
+      - COLLECTOR_INGEST_MODE=${COLLECTOR_INGEST_MODE:-native}
+      - COLLECTOR_LETSMESH_DECODER_ENABLED=${COLLECTOR_LETSMESH_DECODER_ENABLED:-true}
+      - COLLECTOR_LETSMESH_DECODER_COMMAND=${COLLECTOR_LETSMESH_DECODER_COMMAND:-meshcore-decoder}
+      - COLLECTOR_LETSMESH_DECODER_KEYS=${COLLECTOR_LETSMESH_DECODER_KEYS:-}
+      - COLLECTOR_LETSMESH_DECODER_TIMEOUT_SECONDS=${COLLECTOR_LETSMESH_DECODER_TIMEOUT_SECONDS:-2.0}
       - DATA_HOME=/data
       - SEED_HOME=/seed
       # Webhook configuration
@@ -210,6 +223,8 @@ services:
       - MQTT_PASSWORD=${MQTT_PASSWORD:-}
       - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
       - MQTT_TLS=${MQTT_TLS:-false}
+      - MQTT_TRANSPORT=${MQTT_TRANSPORT:-tcp}
+      - MQTT_WS_PATH=${MQTT_WS_PATH:-/mqtt}
       - DATA_HOME=/data
       - API_HOST=0.0.0.0
       - API_PORT=8000
@@ -255,6 +270,7 @@ services:
       - WEB_PORT=8080
       - WEB_THEME=${WEB_THEME:-dark}
       - WEB_LOCALE=${WEB_LOCALE:-en}
+      - WEB_DATETIME_LOCALE=${WEB_DATETIME_LOCALE:-en-US}
       - WEB_ADMIN_ENABLED=${WEB_ADMIN_ENABLED:-false}
       - NETWORK_NAME=${NETWORK_NAME:-MeshCore Network}
       - NETWORK_CITY=${NETWORK_CITY:-}
@@ -267,6 +283,7 @@ services:
       - NETWORK_WELCOME_TEXT=${NETWORK_WELCOME_TEXT:-}
       - CONTENT_HOME=/content
       - TZ=${TZ:-UTC}
+      - COLLECTOR_LETSMESH_DECODER_KEYS=${COLLECTOR_LETSMESH_DECODER_KEYS:-}
       # Feature flags (set to false to disable specific pages)
       - FEATURE_DASHBOARD=${FEATURE_DASHBOARD:-true}
       - FEATURE_NODES=${FEATURE_NODES:-true}

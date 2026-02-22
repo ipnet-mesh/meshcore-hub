@@ -278,6 +278,8 @@ All components are configured via environment variables. Create a `.env` file or
 | `MQTT_PASSWORD` | *(none)* | MQTT password (optional) |
 | `MQTT_PREFIX` | `meshcore` | Topic prefix for all MQTT messages |
 | `MQTT_TLS` | `false` | Enable TLS/SSL for MQTT connection |
+| `MQTT_TRANSPORT` | `tcp` | MQTT transport (`tcp` or `websockets`) |
+| `MQTT_WS_PATH` | `/mqtt` | MQTT WebSocket path (used when `MQTT_TRANSPORT=websockets`) |
 
 ### Interface Settings
 
@@ -290,6 +292,39 @@ All components are configured via environment variables. Create a `.env` file or
 | `NODE_ADDRESS_SENDER` | *(none)* | Override for sender device public key |
 | `CONTACT_CLEANUP_ENABLED` | `true` | Enable automatic removal of stale contacts from companion node |
 | `CONTACT_CLEANUP_DAYS` | `7` | Remove contacts not advertised for this many days |
+
+### Collector Settings
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `COLLECTOR_INGEST_MODE` | `native` | Ingest mode (`native` or `letsmesh_upload`) |
+| `COLLECTOR_LETSMESH_DECODER_ENABLED` | `true` | Enable external LetsMesh packet decoding |
+| `COLLECTOR_LETSMESH_DECODER_COMMAND` | `meshcore-decoder` | Decoder CLI command |
+| `COLLECTOR_LETSMESH_DECODER_KEYS` | *(none)* | Additional decoder channel keys (`label=hex`, `label:hex`, or `hex`) |
+| `COLLECTOR_LETSMESH_DECODER_TIMEOUT_SECONDS` | `2.0` | Timeout per decoder invocation |
+
+#### LetsMesh Upload Compatibility Mode
+
+When `COLLECTOR_INGEST_MODE=letsmesh_upload`, the collector subscribes to:
+
+- `<prefix>/+/packets`
+- `<prefix>/+/status`
+- `<prefix>/+/internal`
+
+Normalization behavior:
+
+- `status` packets are mapped to `advertisement` events only when node identity metadata is present (`name`, node type, explicit flags, or location); heartbeat/counter-only status frames are stored as `letsmesh_status` logs.
+- Decoder payload types `4` and `11` are also mapped to `advertisement` events when node identity metadata is present.
+- `packet_type=5` packets are mapped to `channel_msg_recv`.
+- `packet_type=1`, `2`, and `7` packets are mapped to `contact_msg_recv` when decryptable text is available.
+- For channel packets, if a channel key is available, a channel label is attached (for example `Public` or `#test`) for UI display.
+- In the messages feed and dashboard channel sections, known channel indexes are preferred for labels (`17 -> Public`, `217 -> #test`) to avoid stale channel-name mismatches.
+- Additional channel names are loaded from `COLLECTOR_LETSMESH_DECODER_KEYS` when entries are provided as `label=hex` (for example `bot=<key>`).
+- Decoder-advertisement packets with location metadata update node GPS (`lat/lon`) for map display.
+- Status `stats.debug_flags` values are not used as advertisement capability flags.
+- Packets without decryptable message text are kept as informational `letsmesh_packet` events and are not shown in the messages feed; when decode succeeds the decoded JSON is attached to those packet log events.
+- When decoder output includes a human sender (`payload.decoded.decrypted.sender`), message text is normalized to `Name: Message` before storage; receiver/observer names are never used as sender fallback.
+- The collector keeps built-in keys for `Public` and `#test`, and merges any additional keys from `COLLECTOR_LETSMESH_DECODER_KEYS`.
 
 ### Webhooks
 
@@ -351,8 +386,9 @@ The collector automatically cleans up old event data and inactive nodes:
 | `API_KEY` | *(none)* | API key for web dashboard queries (optional) |
 | `WEB_THEME` | `dark` | Default theme (`dark` or `light`). Users can override via theme toggle in navbar. |
 | `WEB_LOCALE` | `en` | Locale/language for the web dashboard (e.g., `en`, `es`, `fr`) |
+| `WEB_DATETIME_LOCALE` | `en-US` | Locale used for date formatting in the web dashboard (e.g., `en-US` for MM/DD/YYYY, `en-GB` for DD/MM/YYYY). |
 | `WEB_AUTO_REFRESH_SECONDS` | `30` | Auto-refresh interval in seconds for list pages (0 to disable) |
-| `WEB_ADMIN_ENABLED` | `false` | Enable admin interface at /a/ (requires auth proxy) |
+| `WEB_ADMIN_ENABLED` | `false` | Enable admin interface at /a/ (requires auth proxy: `X-Forwarded-User`/`X-Auth-Request-User` or forwarded `Authorization: Basic ...`) |
 | `TZ` | `UTC` | Timezone for displaying dates/times (e.g., `America/New_York`, `Europe/London`) |
 | `NETWORK_DOMAIN` | *(none)* | Network domain name (optional) |
 | `NETWORK_NAME` | `MeshCore Network` | Display name for the network |
@@ -365,6 +401,59 @@ The collector automatically cleans up old event data and inactive nodes:
 | `NETWORK_CONTACT_GITHUB` | *(none)* | GitHub repository URL |
 | `NETWORK_CONTACT_YOUTUBE` | *(none)* | YouTube channel URL |
 | `CONTENT_HOME` | `./content` | Directory containing custom content (pages/, media/) |
+
+Timezone handling note:
+- API timestamps that omit an explicit timezone suffix are treated as UTC before rendering in the configured `TZ`.
+
+#### Nginx Proxy Manager (NPM) Admin Setup
+
+Use two hostnames so the public map/site stays open while admin stays protected:
+
+1. Public host: no Access List (normal users).
+2. Admin host: Access List enabled (operators only).
+
+Both proxy hosts should forward to the same web container:
+- Scheme: `http`
+- Forward Hostname/IP: your MeshCore Hub host
+- Forward Port: `18080` (or your mapped web port)
+- Websockets Support: `ON`
+- Block Common Exploits: `ON`
+
+Important:
+- Do not host this app under a subpath (for example `/meshcore`); proxy it at `/`.
+- `WEB_ADMIN_ENABLED` must be `true`.
+
+In NPM, for the **admin host**, paste this in the `Advanced` field:
+
+```nginx
+# Forward authenticated identity for MeshCore Hub admin checks
+proxy_set_header Authorization $http_authorization;
+proxy_set_header X-Forwarded-User $remote_user;
+proxy_set_header X-Auth-Request-User $remote_user;
+proxy_set_header X-Forwarded-Email "";
+proxy_set_header X-Forwarded-Groups "";
+```
+
+Then attach your NPM Access List (Basic auth users) to that admin host.
+
+Verify auth forwarding:
+
+```bash
+curl -s -u 'admin:password' "https://admin.example.com/config.js?t=$(date +%s)" \
+  | grep -o '"is_authenticated":[^,]*'
+```
+
+Expected:
+
+```text
+"is_authenticated": true
+```
+
+If it still shows `false`, check:
+1. You are using the admin hostname, not the public hostname.
+2. The Access List is attached to that admin host.
+3. The `Advanced` block above is present exactly.
+4. `WEB_ADMIN_ENABLED=true` is loaded in the running web container.
 
 #### Feature Flags
 
@@ -386,6 +475,8 @@ Control which pages are visible in the web dashboard. Disabled features are full
 
 The web dashboard supports custom content including markdown pages and media files. Content is organized in subdirectories:
 
+Custom logo note:
+- If a custom logo file is present, the UI keeps its original colors in both light/dark themes (no automatic light-mode darkening).
 ```
 content/
 ├── pages/     # Custom markdown pages
@@ -666,7 +757,7 @@ meshcore-hub/
 ├── content/                # Custom content directory (CONTENT_HOME, optional)
 │   ├── pages/              # Custom markdown pages
 │   └── media/              # Custom media files
-│       └── images/         # Custom images (logo.svg replaces default logo)
+│       └── images/         # Custom images (logo.svg/png/jpg/jpeg/webp replace default logo)
 ├── data/                   # Runtime data directory (DATA_HOME, created at runtime)
 ├── Dockerfile              # Docker build configuration
 ├── docker-compose.yml      # Docker Compose services

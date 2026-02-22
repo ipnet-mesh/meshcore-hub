@@ -1,6 +1,7 @@
 """Pydantic Settings for MeshCore Hub configuration."""
 
 from enum import Enum
+import re
 from typing import Optional
 
 from pydantic import Field, field_validator
@@ -22,6 +23,20 @@ class InterfaceMode(str, Enum):
 
     RECEIVER = "RECEIVER"
     SENDER = "SENDER"
+
+
+class MQTTTransport(str, Enum):
+    """MQTT transport type."""
+
+    TCP = "tcp"
+    WEBSOCKETS = "websockets"
+
+
+class CollectorIngestMode(str, Enum):
+    """Collector MQTT ingest mode."""
+
+    NATIVE = "native"
+    LETSMESH_UPLOAD = "letsmesh_upload"
 
 
 class CommonSettings(BaseSettings):
@@ -54,6 +69,14 @@ class CommonSettings(BaseSettings):
     mqtt_prefix: str = Field(default="meshcore", description="MQTT topic prefix")
     mqtt_tls: bool = Field(
         default=False, description="Enable TLS/SSL for MQTT connection"
+    )
+    mqtt_transport: MQTTTransport = Field(
+        default=MQTTTransport.TCP,
+        description="MQTT transport protocol (tcp or websockets)",
+    )
+    mqtt_ws_path: str = Field(
+        default="/mqtt",
+        description="WebSocket path for MQTT transport (used when MQTT_TRANSPORT=websockets)",
     )
 
 
@@ -162,6 +185,42 @@ class CollectorSettings(CommonSettings):
         description="Remove nodes not seen for this many days (last_seen)",
         ge=1,
     )
+    collector_ingest_mode: CollectorIngestMode = Field(
+        default=CollectorIngestMode.NATIVE,
+        description=(
+            "Collector MQTT ingest mode. "
+            "'native' expects <prefix>/<pubkey>/event/<event_name>. "
+            "'letsmesh_upload' expects LetsMesh observer uploads on "
+            "<prefix>/<pubkey>/(packets|status|internal)."
+        ),
+    )
+    collector_letsmesh_decoder_enabled: bool = Field(
+        default=True,
+        description=(
+            "Enable external LetsMesh packet decoding via meshcore-decoder. "
+            "Only applies when COLLECTOR_INGEST_MODE=letsmesh_upload."
+        ),
+    )
+    collector_letsmesh_decoder_command: str = Field(
+        default="meshcore-decoder",
+        description=(
+            "Command used to run LetsMesh packet decoder CLI "
+            "(for example: meshcore-decoder, /usr/local/bin/meshcore-decoder, "
+            "or 'npx meshcore-decoder')."
+        ),
+    )
+    collector_letsmesh_decoder_keys: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional channel secret keys for LetsMesh message decryption. "
+            "Provide as comma/space separated hex values."
+        ),
+    )
+    collector_letsmesh_decoder_timeout_seconds: float = Field(
+        default=2.0,
+        description="Timeout in seconds for each decoder invocation.",
+        ge=0.1,
+    )
 
     @property
     def collector_data_dir(self) -> str:
@@ -200,6 +259,17 @@ class CollectorSettings(CommonSettings):
         from pathlib import Path
 
         return str(Path(self.effective_seed_home) / "members.yaml")
+
+    @property
+    def collector_letsmesh_decoder_keys_list(self) -> list[str]:
+        """Parse configured LetsMesh decoder keys into a normalized list."""
+        if not self.collector_letsmesh_decoder_keys:
+            return []
+        return [
+            part.strip()
+            for part in re.split(r"[,\s]+", self.collector_letsmesh_decoder_keys)
+            if part.strip()
+        ]
 
     @field_validator("database_url")
     @classmethod
@@ -266,6 +336,13 @@ class WebSettings(CommonSettings):
     web_locale: str = Field(
         default="en",
         description="Locale/language for the web dashboard (e.g. 'en')",
+    )
+    web_datetime_locale: str = Field(
+        default="en-US",
+        description=(
+            "Locale used for date/time formatting in the web dashboard "
+            "(e.g. 'en-US', 'en-GB')."
+        ),
     )
 
     # Auto-refresh interval for list pages
