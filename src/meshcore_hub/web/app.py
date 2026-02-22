@@ -2,6 +2,8 @@
 
 import json
 import logging
+import os
+import re
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -16,6 +18,7 @@ from fastapi.templating import Jinja2Templates
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from meshcore_hub import __version__
+from meshcore_hub.collector.letsmesh_decoder import LetsMeshPacketDecoder
 from meshcore_hub.common.i18n import load_locale, t
 from meshcore_hub.common.schemas import RadioConfig
 from meshcore_hub.web.middleware import CacheControlMiddleware
@@ -27,6 +30,40 @@ logger = logging.getLogger(__name__)
 PACKAGE_DIR = Path(__file__).parent
 TEMPLATES_DIR = PACKAGE_DIR / "templates"
 STATIC_DIR = PACKAGE_DIR / "static"
+
+
+def _parse_decoder_key_entries(raw: str | None) -> list[str]:
+    """Parse COLLECTOR_LETSMESH_DECODER_KEYS into key entries."""
+    if not raw:
+        return []
+    return [part.strip() for part in re.split(r"[,\s]+", raw) if part.strip()]
+
+
+def _build_channel_labels() -> dict[str, str]:
+    """Build UI channel labels from built-in + configured decoder keys."""
+    raw_keys = os.getenv("COLLECTOR_LETSMESH_DECODER_KEYS")
+    decoder = LetsMeshPacketDecoder(
+        enabled=False,
+        channel_keys=_parse_decoder_key_entries(raw_keys),
+    )
+    labels = decoder.channel_labels_by_index()
+    return {str(idx): label for idx, label in sorted(labels.items())}
+
+
+def _is_authenticated_proxy_request(request: Request) -> bool:
+    """Check whether request is authenticated by an upstream auth proxy.
+
+    Supported patterns:
+    - OAuth2/OIDC proxy headers: X-Forwarded-User, X-Auth-Request-User
+    - Forwarded Basic auth header: Authorization: Basic ...
+    """
+    if request.headers.get("x-forwarded-user"):
+        return True
+    if request.headers.get("x-auth-request-user"):
+        return True
+
+    auth_header = request.headers.get("authorization", "")
+    return auth_header.lower().startswith("basic ")
 
 
 @asynccontextmanager
@@ -114,10 +151,12 @@ def _build_config_json(app: FastAPI, request: Request) -> str:
         "version": __version__,
         "timezone": app.state.timezone_abbr,
         "timezone_iana": app.state.timezone,
-        "is_authenticated": bool(request.headers.get("X-Forwarded-User")),
+        "is_authenticated": _is_authenticated_proxy_request(request),
         "default_theme": app.state.web_theme,
         "locale": app.state.web_locale,
+        "datetime_locale": app.state.web_datetime_locale,
         "auto_refresh_seconds": app.state.auto_refresh_seconds,
+        "channel_labels": app.state.channel_labels,
     }
 
     return json.dumps(config)
@@ -183,10 +222,12 @@ def create_app(
 
     # Load i18n translations
     app.state.web_locale = settings.web_locale or "en"
+    app.state.web_datetime_locale = settings.web_datetime_locale or "en-US"
     load_locale(app.state.web_locale)
 
     # Auto-refresh interval
     app.state.auto_refresh_seconds = settings.web_auto_refresh_seconds
+    app.state.channel_labels = _build_channel_labels()
 
     # Store configuration in app state (use args if provided, else settings)
     app.state.web_theme = (
@@ -310,7 +351,7 @@ def create_app(
         if (
             request.method in ("POST", "PUT", "DELETE", "PATCH")
             and request.app.state.admin_enabled
-            and not request.headers.get("x-forwarded-user")
+            and not _is_authenticated_proxy_request(request)
         ):
             return JSONResponse(
                 {"detail": "Authentication required"},

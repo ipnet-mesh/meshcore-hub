@@ -51,8 +51,12 @@ def create_app(
     admin_key: str | None = None,
     mqtt_host: str = "localhost",
     mqtt_port: int = 1883,
+    mqtt_username: str | None = None,
+    mqtt_password: str | None = None,
     mqtt_prefix: str = "meshcore",
     mqtt_tls: bool = False,
+    mqtt_transport: str = "tcp",
+    mqtt_ws_path: str = "/mqtt",
     cors_origins: list[str] | None = None,
     metrics_enabled: bool = True,
     metrics_cache_ttl: int = 60,
@@ -65,8 +69,12 @@ def create_app(
         admin_key: Admin API key
         mqtt_host: MQTT broker host
         mqtt_port: MQTT broker port
+        mqtt_username: MQTT username
+        mqtt_password: MQTT password
         mqtt_prefix: MQTT topic prefix
         mqtt_tls: Enable TLS/SSL for MQTT connection
+        mqtt_transport: MQTT transport protocol (tcp or websockets)
+        mqtt_ws_path: WebSocket path (used when transport=websockets)
         cors_origins: Allowed CORS origins
         metrics_enabled: Enable Prometheus metrics endpoint at /metrics
         metrics_cache_ttl: Seconds to cache metrics output
@@ -90,8 +98,12 @@ def create_app(
     app.state.admin_key = admin_key
     app.state.mqtt_host = mqtt_host
     app.state.mqtt_port = mqtt_port
+    app.state.mqtt_username = mqtt_username
+    app.state.mqtt_password = mqtt_password
     app.state.mqtt_prefix = mqtt_prefix
     app.state.mqtt_tls = mqtt_tls
+    app.state.mqtt_transport = mqtt_transport
+    app.state.mqtt_ws_path = mqtt_ws_path
     app.state.metrics_cache_ttl = metrics_cache_ttl
 
     # Configure CORS

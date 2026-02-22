@@ -28,6 +28,14 @@ class AdvertisementEvent(BaseModel):
         default=None,
         description="Capability/status flags bitmask",
     )
+    lat: Optional[float] = Field(
+        default=None,
+        description="Node latitude when location metadata is available",
+    )
+    lon: Optional[float] = Field(
+        default=None,
+        description="Node longitude when location metadata is available",
+    )
 
 
 class ContactMessageEvent(BaseModel):

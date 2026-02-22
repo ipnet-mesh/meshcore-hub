@@ -24,6 +24,8 @@ class MQTTConfig:
     keepalive: int = 60
     clean_session: bool = True
     tls: bool = False
+    transport: str = "tcp"
+    ws_path: str = "/mqtt"
 
 
 class TopicBuilder:
@@ -36,6 +38,10 @@ class TopicBuilder:
             prefix: MQTT topic prefix
         """
         self.prefix = prefix
+
+    def _prefix_parts(self) -> list[str]:
+        """Split configured prefix into path segments."""
+        return [part for part in self.prefix.strip("/").split("/") if part]
 
     def event_topic(self, public_key: str, event_name: str) -> str:
         """Build an event topic.
@@ -86,10 +92,16 @@ class TopicBuilder:
         Returns:
             Tuple of (public_key, event_name) or None if invalid
         """
-        parts = topic.split("/")
-        if len(parts) >= 4 and parts[0] == self.prefix and parts[2] == "event":
-            public_key = parts[1]
-            event_name = "/".join(parts[3:])
+        parts = [part for part in topic.strip("/").split("/") if part]
+        prefix_parts = self._prefix_parts()
+        prefix_len = len(prefix_parts)
+        if (
+            len(parts) >= prefix_len + 3
+            and parts[:prefix_len] == prefix_parts
+            and parts[prefix_len + 1] == "event"
+        ):
+            public_key = parts[prefix_len]
+            event_name = "/".join(parts[prefix_len + 2 :])
             return (public_key, event_name)
         return None
 
@@ -102,12 +114,38 @@ class TopicBuilder:
         Returns:
             Tuple of (public_key, command_name) or None if invalid
         """
-        parts = topic.split("/")
-        if len(parts) >= 4 and parts[0] == self.prefix and parts[2] == "command":
-            public_key = parts[1]
-            command_name = "/".join(parts[3:])
+        parts = [part for part in topic.strip("/").split("/") if part]
+        prefix_parts = self._prefix_parts()
+        prefix_len = len(prefix_parts)
+        if (
+            len(parts) >= prefix_len + 3
+            and parts[:prefix_len] == prefix_parts
+            and parts[prefix_len + 1] == "command"
+        ):
+            public_key = parts[prefix_len]
+            command_name = "/".join(parts[prefix_len + 2 :])
             return (public_key, command_name)
         return None
+
+    def parse_letsmesh_upload_topic(self, topic: str) -> tuple[str, str] | None:
+        """Parse a LetsMesh upload topic to extract public key and feed type.
+
+        LetsMesh upload topics are expected in this form:
+        <prefix>/<public_key>/(packets|status|internal)
+        """
+        parts = [part for part in topic.strip("/").split("/") if part]
+        prefix_parts = self._prefix_parts()
+        prefix_len = len(prefix_parts)
+
+        if len(parts) != prefix_len + 2 or parts[:prefix_len] != prefix_parts:
+            return None
+
+        public_key = parts[prefix_len]
+        feed_type = parts[prefix_len + 1]
+        if feed_type not in {"packets", "status", "internal"}:
+            return None
+
+        return (public_key, feed_type)
 
 
 MessageHandler = Callable[[str, str, dict[str, Any]], None]
@@ -124,13 +162,23 @@ class MQTTClient:
         """
         self.config = config
         self.topic_builder = TopicBuilder(config.prefix)
+        transport = config.transport.lower()
+        if transport not in {"tcp", "websockets"}:
+            raise ValueError(f"Unsupported MQTT transport: {config.transport}")
+
         self._client = mqtt.Client(
             callback_api_version=CallbackAPIVersion.VERSION2,  # type: ignore[call-arg]
             client_id=config.client_id,
             clean_session=config.clean_session,
+            transport=transport,
         )
         self._connected = False
         self._message_handlers: dict[str, list[MessageHandler]] = {}
+
+        # Set WebSocket path when using MQTT over WebSockets.
+        if transport == "websockets":
+            self._client.ws_set_options(path=config.ws_path)
+            logger.debug("MQTT WebSocket transport enabled (path=%s)", config.ws_path)
 
         # Set up TLS if enabled
         if config.tls:

@@ -55,6 +55,31 @@ if TYPE_CHECKING:
     help="Enable TLS/SSL for MQTT connection",
 )
 @click.option(
+    "--mqtt-transport",
+    type=click.Choice(["tcp", "websockets"], case_sensitive=False),
+    default="tcp",
+    envvar="MQTT_TRANSPORT",
+    help="MQTT transport protocol",
+)
+@click.option(
+    "--mqtt-ws-path",
+    type=str,
+    default="/mqtt",
+    envvar="MQTT_WS_PATH",
+    help="MQTT WebSocket path (used when transport=websockets)",
+)
+@click.option(
+    "--ingest-mode",
+    "collector_ingest_mode",
+    type=click.Choice(["native", "letsmesh_upload"], case_sensitive=False),
+    default="native",
+    envvar="COLLECTOR_INGEST_MODE",
+    help=(
+        "Collector ingest mode: native MeshCore events or LetsMesh upload "
+        "(packets/status/internal)"
+    ),
+)
+@click.option(
     "--data-home",
     type=str,
     default=None,
@@ -90,6 +115,9 @@ def collector(
     mqtt_password: str | None,
     prefix: str,
     mqtt_tls: bool,
+    mqtt_transport: str,
+    mqtt_ws_path: str,
+    collector_ingest_mode: str,
     data_home: str | None,
     seed_home: str | None,
     database_url: str | None,
@@ -134,6 +162,9 @@ def collector(
     ctx.obj["mqtt_password"] = mqtt_password
     ctx.obj["prefix"] = prefix
     ctx.obj["mqtt_tls"] = mqtt_tls
+    ctx.obj["mqtt_transport"] = mqtt_transport
+    ctx.obj["mqtt_ws_path"] = mqtt_ws_path
+    ctx.obj["collector_ingest_mode"] = collector_ingest_mode
     ctx.obj["data_home"] = data_home or settings.data_home
     ctx.obj["seed_home"] = settings.effective_seed_home
     ctx.obj["database_url"] = effective_db_url
@@ -149,6 +180,9 @@ def collector(
             mqtt_password=mqtt_password,
             prefix=prefix,
             mqtt_tls=mqtt_tls,
+            mqtt_transport=mqtt_transport,
+            mqtt_ws_path=mqtt_ws_path,
+            ingest_mode=collector_ingest_mode,
             database_url=effective_db_url,
             log_level=log_level,
             data_home=data_home or settings.data_home,
@@ -163,6 +197,9 @@ def _run_collector_service(
     mqtt_password: str | None,
     prefix: str,
     mqtt_tls: bool,
+    mqtt_transport: str,
+    mqtt_ws_path: str,
+    ingest_mode: str,
     database_url: str,
     log_level: str,
     data_home: str,
@@ -191,6 +228,8 @@ def _run_collector_service(
     click.echo(f"Data home: {data_home}")
     click.echo(f"Seed home: {seed_home}")
     click.echo(f"MQTT: {mqtt_host}:{mqtt_port} (prefix: {prefix})")
+    click.echo(f"MQTT transport: {mqtt_transport} (ws_path: {mqtt_ws_path})")
+    click.echo(f"Ingest mode: {ingest_mode}")
     click.echo(f"Database: {database_url}")
 
     # Load webhook configuration from settings
@@ -198,6 +237,7 @@ def _run_collector_service(
         WebhookDispatcher,
         create_webhooks_from_settings,
     )
+    from meshcore_hub.collector.letsmesh_decoder import LetsMeshPacketDecoder
     from meshcore_hub.common.config import get_collector_settings
 
     settings = get_collector_settings()
@@ -234,6 +274,24 @@ def _run_collector_service(
     if settings.data_retention_enabled or settings.node_cleanup_enabled:
         click.echo(f"  Interval: {settings.data_retention_interval_hours} hours")
 
+    if ingest_mode.lower() == "letsmesh_upload":
+        click.echo("")
+        click.echo("LetsMesh decode configuration:")
+        if settings.collector_letsmesh_decoder_enabled:
+            builtin_keys = len(LetsMeshPacketDecoder.BUILTIN_CHANNEL_KEYS)
+            env_keys = len(settings.collector_letsmesh_decoder_keys_list)
+            click.echo(
+                "  Decoder: Enabled " f"({settings.collector_letsmesh_decoder_command})"
+            )
+            click.echo(f"  Built-in keys: {builtin_keys}")
+            click.echo("  Additional keys from .env: " f"{env_keys} configured")
+            click.echo(
+                "  Timeout: "
+                f"{settings.collector_letsmesh_decoder_timeout_seconds:.2f}s"
+            )
+        else:
+            click.echo("  Decoder: Disabled")
+
     click.echo("")
     click.echo("Starting MQTT subscriber...")
     run_collector(
@@ -243,6 +301,9 @@ def _run_collector_service(
         mqtt_password=mqtt_password,
         mqtt_prefix=prefix,
         mqtt_tls=mqtt_tls,
+        mqtt_transport=mqtt_transport,
+        mqtt_ws_path=mqtt_ws_path,
+        ingest_mode=ingest_mode,
         database_url=database_url,
         webhook_dispatcher=webhook_dispatcher,
         cleanup_enabled=settings.data_retention_enabled,
@@ -250,6 +311,12 @@ def _run_collector_service(
         cleanup_interval_hours=settings.data_retention_interval_hours,
         node_cleanup_enabled=settings.node_cleanup_enabled,
         node_cleanup_days=settings.node_cleanup_days,
+        letsmesh_decoder_enabled=settings.collector_letsmesh_decoder_enabled,
+        letsmesh_decoder_command=settings.collector_letsmesh_decoder_command,
+        letsmesh_decoder_channel_keys=settings.collector_letsmesh_decoder_keys_list,
+        letsmesh_decoder_timeout_seconds=(
+            settings.collector_letsmesh_decoder_timeout_seconds
+        ),
     )
 
 
@@ -267,6 +334,9 @@ def run_cmd(ctx: click.Context) -> None:
         mqtt_password=ctx.obj["mqtt_password"],
         prefix=ctx.obj["prefix"],
         mqtt_tls=ctx.obj["mqtt_tls"],
+        mqtt_transport=ctx.obj["mqtt_transport"],
+        mqtt_ws_path=ctx.obj["mqtt_ws_path"],
+        ingest_mode=ctx.obj["collector_ingest_mode"],
         database_url=ctx.obj["database_url"],
         log_level=ctx.obj["log_level"],
         data_home=ctx.obj["data_home"],

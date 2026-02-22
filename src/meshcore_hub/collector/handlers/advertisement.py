@@ -14,6 +14,20 @@ from meshcore_hub.common.models import Advertisement, Node, add_event_receiver
 logger = logging.getLogger(__name__)
 
 
+def _coerce_float(value: Any) -> float | None:
+    """Convert int/float/string values to float when possible."""
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.strip())
+        except ValueError:
+            return None
+    return None
+
+
 def handle_advertisement(
     public_key: str,
     event_type: str,
@@ -40,6 +54,22 @@ def handle_advertisement(
     name = payload.get("name")
     adv_type = payload.get("adv_type")
     flags = payload.get("flags")
+    lat = payload.get("lat")
+    lon = payload.get("lon")
+
+    if lat is None:
+        lat = payload.get("adv_lat")
+    if lon is None:
+        lon = payload.get("adv_lon")
+
+    location = payload.get("location")
+    if isinstance(location, dict):
+        if lat is None:
+            lat = location.get("latitude")
+        if lon is None:
+            lon = location.get("longitude")
+    lat = _coerce_float(lat)
+    lon = _coerce_float(lon)
     now = datetime.now(timezone.utc)
 
     # Compute event hash for deduplication (30-second time bucket)
@@ -79,6 +109,10 @@ def handle_advertisement(
             node_query = select(Node).where(Node.public_key == adv_public_key)
             node = session.execute(node_query).scalar_one_or_none()
             if node:
+                if lat is not None:
+                    node.lat = lat
+                if lon is not None:
+                    node.lon = lon
                 node.last_seen = now
 
             # Add this receiver to the junction table
@@ -110,6 +144,10 @@ def handle_advertisement(
                 node.adv_type = adv_type
             if flags is not None:
                 node.flags = flags
+            if lat is not None:
+                node.lat = lat
+            if lon is not None:
+                node.lon = lon
             node.last_seen = now
         else:
             # Create new node
@@ -120,6 +158,8 @@ def handle_advertisement(
                 flags=flags,
                 first_seen=now,
                 last_seen=now,
+                lat=lat,
+                lon=lon,
             )
             session.add(node)
             session.flush()

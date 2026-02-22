@@ -65,8 +65,77 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # For serial port access
     udev \
+    # LetsMesh decoder runtime
+    nodejs \
+    npm \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /data
+
+# Install meshcore-decoder CLI and patch ESM compatibility for Node 18 runtime.
+RUN mkdir -p /opt/letsmesh-decoder \
+    && cd /opt/letsmesh-decoder \
+    && npm init -y >/dev/null 2>&1 \
+    && npm install --omit=dev @michaelhart/meshcore-decoder@0.2.7 \
+    && python - <<'PY'
+from pathlib import Path
+
+path = Path(
+    "/opt/letsmesh-decoder/node_modules/@michaelhart/meshcore-decoder/"
+    "dist/crypto/ed25519-verifier.js"
+)
+content = path.read_text(encoding="utf-8")
+
+old_import = 'const ed25519 = __importStar(require("@noble/ed25519"));'
+new_import = """let _ed25519 = null;
+async function getEd25519() {
+    if (_ed25519) {
+        return _ed25519;
+    }
+    const mod = await import("@noble/ed25519");
+    _ed25519 = mod.default ? mod.default : mod;
+    try {
+        _ed25519.etc.sha512Async = sha512Hash;
+    }
+    catch (error) {
+        console.debug("Could not set async SHA-512:", error);
+    }
+    try {
+        _ed25519.etc.sha512Sync = sha512HashSync;
+    }
+    catch (error) {
+        console.debug("Could not set up synchronous SHA-512:", error);
+    }
+    return _ed25519;
+}"""
+if old_import not in content:
+    raise RuntimeError("meshcore-decoder patch failed: import line not found")
+content = content.replace(old_import, new_import, 1)
+
+old_setup = """// Set up SHA-512 for @noble/ed25519
+ed25519.etc.sha512Async = sha512Hash;
+// Always set up sync version - @noble/ed25519 requires it
+// It will throw in browser environments, which @noble/ed25519 can handle
+try {
+    ed25519.etc.sha512Sync = sha512HashSync;
+}
+catch (error) {
+    console.debug('Could not set up synchronous SHA-512:', error);
+}
+"""
+if old_setup not in content:
+    raise RuntimeError("meshcore-decoder patch failed: sha512 setup block not found")
+content = content.replace(old_setup, "", 1)
+
+old_verify = "            return await ed25519.verify(signature, message, publicKey);"
+new_verify = """            const ed25519 = await getEd25519();
+            return await ed25519.verify(signature, message, publicKey);"""
+if old_verify not in content:
+    raise RuntimeError("meshcore-decoder patch failed: verify line not found")
+content = content.replace(old_verify, new_verify, 1)
+
+path.write_text(content, encoding="utf-8")
+PY
+RUN ln -s /opt/letsmesh-decoder/node_modules/.bin/meshcore-decoder /usr/local/bin/meshcore-decoder
 
 # Copy virtual environment from builder
 COPY --from=builder /opt/venv /opt/venv

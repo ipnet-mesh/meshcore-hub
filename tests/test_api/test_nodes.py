@@ -102,6 +102,52 @@ class TestListNodesFilters:
         data = response.json()
         assert len(data["items"]) == 0
 
+    def test_filter_by_adv_type_matches_legacy_labels(
+        self, client_no_auth, api_db_session
+    ):
+        """Canonical adv_type filters match legacy LetsMesh values and names."""
+        from datetime import datetime, timezone
+
+        from meshcore_hub.common.models import Node
+
+        repeater_node = Node(
+            public_key="ab" * 32,
+            name="Car Relay",
+            adv_type="PyMC-Repeater",
+            first_seen=datetime.now(timezone.utc),
+        )
+        companion_node = Node(
+            public_key="cd" * 32,
+            name="YC-Observer",
+            adv_type="offline",
+            first_seen=datetime.now(timezone.utc),
+        )
+        room_node = Node(
+            public_key="ef" * 32,
+            name="WAL-SE Room Server",
+            adv_type="unknown",
+            first_seen=datetime.now(timezone.utc),
+        )
+        api_db_session.add(repeater_node)
+        api_db_session.add(companion_node)
+        api_db_session.add(room_node)
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/nodes?adv_type=repeater")
+        assert response.status_code == 200
+        repeater_keys = {item["public_key"] for item in response.json()["items"]}
+        assert repeater_node.public_key in repeater_keys
+
+        response = client_no_auth.get("/api/v1/nodes?adv_type=companion")
+        assert response.status_code == 200
+        companion_keys = {item["public_key"] for item in response.json()["items"]}
+        assert companion_node.public_key in companion_keys
+
+        response = client_no_auth.get("/api/v1/nodes?adv_type=room")
+        assert response.status_code == 200
+        room_keys = {item["public_key"] for item in response.json()["items"]}
+        assert room_node.public_key in room_keys
+
     def test_filter_by_member_id(self, client_no_auth, sample_node_with_member_tag):
         """Test filtering nodes by member_id tag."""
         # Match alice
