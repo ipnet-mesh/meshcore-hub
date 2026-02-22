@@ -45,15 +45,19 @@ Node advertisements announcing presence and metadata.
   "public_key": "string (64 hex chars)",
   "name": "string (optional)",
   "adv_type": "string (optional)",
-  "flags": "integer (optional)"
+  "flags": "integer (optional)",
+  "lat": "number (optional)",
+  "lon": "number (optional)"
 }
 ```
 
 **Field Descriptions**:
 - `public_key`: Node's full 64-character hexadecimal public key (required)
 - `name`: Node name/alias (e.g., "Gateway-01", "Alice")
-- `adv_type`: Node type - one of: `"chat"`, `"repeater"`, `"room"`, `"none"`
+- `adv_type`: Node type - common values: `"chat"`, `"repeater"`, `"room"`, `"companion"` (other values may appear from upstream feeds and are normalized by the collector when possible)
 - `flags`: Node capability/status flags (bitmask)
+- `lat`: GPS latitude when provided by decoder metadata
+- `lon`: GPS longitude when provided by decoder metadata
 
 **Example**:
 ```json
@@ -61,7 +65,9 @@ Node advertisements announcing presence and metadata.
   "public_key": "4767c2897c256df8d85a5fa090574284bfd15b92d47359741b0abd5098ed30c4",
   "name": "Gateway-01",
   "adv_type": "repeater",
-  "flags": 218
+  "flags": 218,
+  "lat": 42.470001,
+  "lon": -71.330001
 }
 ```
 
@@ -90,7 +96,7 @@ Direct/private messages between two nodes.
 ```
 
 **Field Descriptions**:
-- `pubkey_prefix`: First 12 characters of sender's public key
+- `pubkey_prefix`: First 12 characters of sender's public key (or source hash prefix in compatibility ingest modes)
 - `path_len`: Number of hops message traveled
 - `txt_type`: Message type indicator (0=plain, 2=signed, etc.)
 - `signature`: Message signature (8 hex chars) when `txt_type=2`
@@ -128,7 +134,9 @@ Group/broadcast messages on specific channels.
 **Payload Schema**:
 ```json
 {
-  "channel_idx": "integer",
+  "channel_idx": "integer (optional)",
+  "channel_name": "string (optional)",
+  "pubkey_prefix": "string (12 chars, optional)",
   "path_len": "integer (optional)",
   "txt_type": "integer (optional)",
   "signature": "string (optional)",
@@ -139,7 +147,9 @@ Group/broadcast messages on specific channels.
 ```
 
 **Field Descriptions**:
-- `channel_idx`: Channel number (0-255)
+- `channel_idx`: Channel number (0-255) when available
+- `channel_name`: Channel display label (e.g., `"Public"`, `"#test"`) when available
+- `pubkey_prefix`: First 12 characters of sender's public key when available
 - `path_len`: Number of hops message traveled
 - `txt_type`: Message type indicator (0=plain, 2=signed, etc.)
 - `signature`: Message signature (8 hex chars) when `txt_type=2`
@@ -165,6 +175,17 @@ Group/broadcast messages on specific channels.
 **Webhook JSONPath Examples**:
 - Send only text: `$.data.text`
 - Send channel + text: `$.data.[channel_idx,text]`
+
+**Compatibility ingest note**:
+- In LetsMesh upload compatibility mode, packet type `5` is normalized to `CHANNEL_MSG_RECV` and packet types `1`, `2`, and `7` are normalized to `CONTACT_MSG_RECV` when decryptable text is available.
+- LetsMesh packets without decryptable message text are treated as informational `letsmesh_packet` events instead of message events.
+- For UI labels, known channel indexes are mapped (`17 -> Public`, `217 -> #test`) and preferred over ambiguous/stale channel-name hints.
+- Additional channel labels can be provided through `COLLECTOR_LETSMESH_DECODER_KEYS` using `label=hex` entries.
+- When decoder output includes a human sender (`payload.decoded.decrypted.sender`), message text is normalized to `Name: Message`; sender identity remains unknown when only hash/prefix metadata is available.
+
+**Compatibility ingest note (advertisements)**:
+- In LetsMesh upload compatibility mode, decoded payload types `4` and `11` are normalized to `ADVERTISEMENT` when node identity metadata is present.
+- Payload type `4` location metadata (`appData.location.latitude/longitude`) is mapped to node `lat/lon` for map rendering.
 
 ---
 

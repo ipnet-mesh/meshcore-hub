@@ -60,6 +60,22 @@ def auth_headers() -> dict:
 
 
 @pytest.fixture
+def auth_headers_basic() -> dict[str, str]:
+    """Basic auth header forwarded by reverse proxy."""
+    return {
+        "Authorization": "Basic dGVzdDp0ZXN0",
+    }
+
+
+@pytest.fixture
+def auth_headers_auth_request() -> dict[str, str]:
+    """Auth-request style header from upstream proxy."""
+    return {
+        "X-Auth-Request-User": "test-user-id",
+    }
+
+
+@pytest.fixture
 def admin_client(admin_app: Any, mock_http_client: MockHttpClient) -> TestClient:
     """Create a test client with admin enabled."""
     admin_app.state.http_client = mock_http_client
@@ -104,6 +120,34 @@ class TestAdminHome:
     def test_admin_home_config_authenticated(self, admin_client, auth_headers):
         """Test admin config shows is_authenticated: true with auth headers."""
         response = admin_client.get("/a/", headers=auth_headers)
+        text = response.text
+        config_start = text.find("window.__APP_CONFIG__ = ") + len(
+            "window.__APP_CONFIG__ = "
+        )
+        config_end = text.find(";", config_start)
+        config = json.loads(text[config_start:config_end])
+
+        assert config["is_authenticated"] is True
+
+    def test_admin_home_config_authenticated_with_basic_auth(
+        self, admin_client, auth_headers_basic
+    ):
+        """Test admin config shows is_authenticated: true with basic auth header."""
+        response = admin_client.get("/a/", headers=auth_headers_basic)
+        text = response.text
+        config_start = text.find("window.__APP_CONFIG__ = ") + len(
+            "window.__APP_CONFIG__ = "
+        )
+        config_end = text.find(";", config_start)
+        config = json.loads(text[config_start:config_end])
+
+        assert config["is_authenticated"] is True
+
+    def test_admin_home_config_authenticated_with_auth_request_header(
+        self, admin_client, auth_headers_auth_request
+    ):
+        """Test admin config shows is_authenticated with X-Auth-Request-User."""
+        response = admin_client.get("/a/", headers=auth_headers_auth_request)
         text = response.text
         config_start = text.find("window.__APP_CONFIG__ = ") + len(
             "window.__APP_CONFIG__ = "
@@ -245,6 +289,18 @@ class TestAdminApiProxyAuth:
             "/api/v1/members",
             json={"name": "Test", "member_id": "test"},
             headers=auth_headers,
+        )
+        assert response.status_code == 201
+
+    def test_proxy_post_allowed_with_basic_auth(
+        self, admin_client, auth_headers_basic, mock_http_client
+    ):
+        """POST to API proxy succeeds with basic auth header."""
+        mock_http_client.set_response("POST", "/api/v1/members", 201, {"id": "new"})
+        response = admin_client.post(
+            "/api/v1/members",
+            json={"name": "Test", "member_id": "test"},
+            headers=auth_headers_basic,
         )
         assert response.status_code == 201
 

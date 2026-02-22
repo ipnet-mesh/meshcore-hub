@@ -223,7 +223,8 @@ Mesh network node type labels:
 |-----|---------|---------|
 | `chat` | Chat | Chat node type |
 | `repeater` | Repeater | Repeater/relay node type |
-| `room` | Room | Room/group node type |
+| `companion` | Companion | Companion/observer node type |
+| `room` | Room Server | Room server/group node type |
 | `unknown` | Unknown | Unknown node type fallback |
 
 ### 7. `home`

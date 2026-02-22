@@ -209,7 +209,7 @@ ${heroHtml}
         const initQr = () => {
             const qrEl = document.getElementById('qr-code');
             if (!qrEl || typeof QRCode === 'undefined') return false;
-            const typeMap = { chat: 1, repeater: 2, room: 3, sensor: 4 };
+            const typeMap = { chat: 1, repeater: 2, room: 3, companion: 1, sensor: 4 };
             const typeNum = typeMap[(node.adv_type || '').toLowerCase()] || 1;
             const url = 'meshcore://contact/add?name=' + encodeURIComponent(displayName) + '&public_key=' + node.public_key + '&type=' + typeNum;
             new QRCode(qrEl, {

@@ -48,7 +48,44 @@ async def list_nodes(
         )
 
     if adv_type:
-        query = query.where(Node.adv_type == adv_type)
+        normalized_adv_type = adv_type.strip().lower()
+        if normalized_adv_type == "repeater":
+            query = query.where(
+                or_(
+                    Node.adv_type == "repeater",
+                    Node.adv_type.ilike("%repeater%"),
+                    Node.adv_type.ilike("%relay%"),
+                    Node.name.ilike("%repeater%"),
+                    Node.name.ilike("%relay%"),
+                )
+            )
+        elif normalized_adv_type == "companion":
+            query = query.where(
+                or_(
+                    Node.adv_type == "companion",
+                    Node.adv_type.ilike("%companion%"),
+                    Node.adv_type.ilike("%observer%"),
+                    Node.name.ilike("%companion%"),
+                    Node.name.ilike("%observer%"),
+                )
+            )
+        elif normalized_adv_type == "room":
+            query = query.where(
+                or_(
+                    Node.adv_type == "room",
+                    Node.adv_type.ilike("%room%"),
+                    Node.name.ilike("%room%"),
+                )
+            )
+        elif normalized_adv_type == "chat":
+            query = query.where(
+                or_(
+                    Node.adv_type == "chat",
+                    Node.adv_type.ilike("%chat%"),
+                )
+            )
+        else:
+            query = query.where(Node.adv_type == adv_type)
 
     if member_id:
         # Filter nodes that have a member_id tag with the specified value

@@ -71,6 +71,26 @@ class TestHandleAdvertisement:
         assert ad.public_key == "a" * 64
         assert ad.name == "TestNode"
 
+    def test_updates_node_location_fields(self, db_manager, db_session):
+        """Advertisement payload lat/lon updates node coordinates."""
+        payload = {
+            "public_key": "a" * 64,
+            "name": "LocNode",
+            "adv_type": "repeater",
+            "lat": 42.1234,
+            "lon": -71.9876,
+        }
+
+        handle_advertisement("b" * 64, "advertisement", payload, db_manager)
+
+        node = db_session.execute(
+            select(Node).where(Node.public_key == "a" * 64)
+        ).scalar_one_or_none()
+
+        assert node is not None
+        assert node.lat == 42.1234
+        assert node.lon == -71.9876
+
     def test_handles_missing_public_key(self, db_manager, db_session):
         """Test that missing public_key is handled gracefully."""
         payload = {

@@ -56,17 +56,25 @@ def get_mqtt_client(request: Request) -> MQTTClient:
     """
     mqtt_host = getattr(request.app.state, "mqtt_host", "localhost")
     mqtt_port = getattr(request.app.state, "mqtt_port", 1883)
+    mqtt_username = getattr(request.app.state, "mqtt_username", None)
+    mqtt_password = getattr(request.app.state, "mqtt_password", None)
     mqtt_prefix = getattr(request.app.state, "mqtt_prefix", "meshcore")
     mqtt_tls = getattr(request.app.state, "mqtt_tls", False)
+    mqtt_transport = getattr(request.app.state, "mqtt_transport", "tcp")
+    mqtt_ws_path = getattr(request.app.state, "mqtt_ws_path", "/mqtt")
 
     # Use unique client ID to allow multiple API instances
     unique_id = uuid.uuid4().hex[:8]
     config = MQTTConfig(
         host=mqtt_host,
         port=mqtt_port,
+        username=mqtt_username,
+        password=mqtt_password,
         prefix=mqtt_prefix,
         client_id=f"meshcore-api-{unique_id}",
         tls=mqtt_tls,
+        transport=mqtt_transport,
+        ws_path=mqtt_ws_path,
     )
 
     client = MQTTClient(config)

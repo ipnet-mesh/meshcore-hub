@@ -1,44 +1,51 @@
 import { apiGet } from '../api.js';
 import {
     html, litRender, nothing,
-    getConfig, typeEmoji, errorAlert, pageColors, t,
+    getConfig, typeEmoji, errorAlert, pageColors, t, formatDateTime,
 } from '../components.js';
 import {
     iconNodes, iconAdvertisements, iconMessages, iconChannel,
 } from '../icons.js';
 
-function formatTimeOnly(isoString) {
-    if (!isoString) return '-';
-    try {
-        const config = getConfig();
-        const tz = config.timezone_iana || 'UTC';
-        const date = new Date(isoString);
-        if (isNaN(date.getTime())) return '-';
-        return date.toLocaleString('en-GB', {
-            timeZone: tz,
-            hour: '2-digit', minute: '2-digit', second: '2-digit',
-            hour12: false,
-        });
-    } catch {
-        return '-';
+function knownChannelLabel(channelIdx) {
+    const config = getConfig();
+    const configuredChannelLabels = new Map(
+        Object.entries(config.channel_labels || {})
+            .map(([idx, label]) => [parseInt(idx, 10), typeof label === 'string' ? label.trim() : ''])
+            .filter(([idx, label]) => Number.isInteger(idx) && label.length > 0),
+    );
+    const builtInChannelLabels = new Map([
+        [17, 'Public'],
+        [217, '#test'],
+        [202, '#bot'],
+        [184, '#chat'],
+        [159, '#jokes'],
+        [221, '#sports'],
+        [104, '#emergency'],
+    ]);
+    return configuredChannelLabels.get(channelIdx) || builtInChannelLabels.get(channelIdx) || null;
+}
+
+function channelLabel(channel) {
+    const idx = parseInt(String(channel), 10);
+    if (Number.isInteger(idx)) {
+        return knownChannelLabel(idx) || `Ch ${idx}`;
     }
+    return String(channel);
+}
+
+function formatTimeOnly(isoString) {
+    return formatDateTime(isoString, {
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false,
+    });
 }
 
 function formatTimeShort(isoString) {
-    if (!isoString) return '-';
-    try {
-        const config = getConfig();
-        const tz = config.timezone_iana || 'UTC';
-        const date = new Date(isoString);
-        if (isNaN(date.getTime())) return '-';
-        return date.toLocaleString('en-GB', {
-            timeZone: tz,
-            hour: '2-digit', minute: '2-digit',
-            hour12: false,
-        });
-    } catch {
-        return '-';
-    }
+    return formatDateTime(isoString, {
+        hour: '2-digit', minute: '2-digit',
+        hour12: false,
+    });
 }
 
 function renderRecentAds(ads) {
@@ -81,6 +88,7 @@ function renderChannelMessages(channelMessages) {
     if (!channelMessages || Object.keys(channelMessages).length === 0) return nothing;
 
     const channels = Object.entries(channelMessages).map(([channel, messages]) => {
+        const label = channelLabel(channel);
         const msgLines = messages.map(msg => html`
             <div class="text-sm">
                 <span class="text-xs opacity-50">${formatTimeShort(msg.received_at)}</span>
@@ -89,8 +97,7 @@ function renderChannelMessages(channelMessages) {
 
         return html`<div>
             <h3 class="font-semibold text-sm mb-2 flex items-center gap-2">
-                <span class="badge badge-info badge-sm">CH${String(channel)}</span>
-                ${t('dashboard.channel', { number: String(channel) })}
+                <span class="badge badge-info badge-sm">${label}</span>
             </h3>
             <div class="space-y-1 pl-2 border-l-2 border-base-300">
                 ${msgLines}

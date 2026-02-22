@@ -506,6 +506,9 @@ ${DATA_HOME}/
 | WEB_PORT | 8080 | Web bind port |
 | API_BASE_URL | http://localhost:8000 | API endpoint |
 | API_KEY | | API key for queries |
+| WEB_LOCALE | en | UI translation locale |
+| WEB_DATETIME_LOCALE | en-US | Date formatting locale for UI timestamps |
+| TZ | UTC | Timezone used for UI timestamp rendering |
 | NETWORK_DOMAIN | | Network domain |
 | NETWORK_NAME | MeshCore Network | Network name |
 | NETWORK_CITY | | City location |

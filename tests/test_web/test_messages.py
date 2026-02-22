@@ -88,3 +88,17 @@ class TestMessagesConfig:
         config = json.loads(text[config_start:config_end])
 
         assert config["network_name"] == "Test Network"
+        assert config["datetime_locale"] == "en-US"
+
+    def test_messages_config_has_channel_labels(self, client: TestClient) -> None:
+        """Test that SPA config includes known channel labels."""
+        response = client.get("/messages")
+        text = response.text
+        config_start = text.find("window.__APP_CONFIG__ = ") + len(
+            "window.__APP_CONFIG__ = "
+        )
+        config_end = text.find(";", config_start)
+        config = json.loads(text[config_start:config_end])
+
+        assert config["channel_labels"]["17"] == "Public"
+        assert config["channel_labels"]["217"] == "#test"

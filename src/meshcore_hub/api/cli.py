@@ -61,10 +61,24 @@ import click
     help="MQTT broker port",
 )
 @click.option(
+    "--mqtt-username",
+    type=str,
+    default=None,
+    envvar="MQTT_USERNAME",
+    help="MQTT username",
+)
+@click.option(
+    "--mqtt-password",
+    type=str,
+    default=None,
+    envvar="MQTT_PASSWORD",
+    help="MQTT password",
+)
+@click.option(
     "--mqtt-prefix",
     type=str,
     default="meshcore",
-    envvar="MQTT_TOPIC_PREFIX",
+    envvar=["MQTT_PREFIX", "MQTT_TOPIC_PREFIX"],
     help="MQTT topic prefix",
 )
 @click.option(
@@ -73,6 +87,20 @@ import click
     default=False,
     envvar="MQTT_TLS",
     help="Enable TLS/SSL for MQTT connection",
+)
+@click.option(
+    "--mqtt-transport",
+    type=click.Choice(["tcp", "websockets"], case_sensitive=False),
+    default="tcp",
+    envvar="MQTT_TRANSPORT",
+    help="MQTT transport protocol",
+)
+@click.option(
+    "--mqtt-ws-path",
+    type=str,
+    default="/mqtt",
+    envvar="MQTT_WS_PATH",
+    help="MQTT WebSocket path (used when transport=websockets)",
 )
 @click.option(
     "--cors-origins",
@@ -111,8 +139,12 @@ def api(
     admin_key: str | None,
     mqtt_host: str,
     mqtt_port: int,
+    mqtt_username: str | None,
+    mqtt_password: str | None,
     mqtt_prefix: str,
     mqtt_tls: bool,
+    mqtt_transport: str,
+    mqtt_ws_path: str,
     cors_origins: str | None,
     metrics_enabled: bool,
     metrics_cache_ttl: int,
@@ -161,6 +193,7 @@ def api(
     click.echo(f"Data home: {effective_data_home}")
     click.echo(f"Database: {effective_db_url}")
     click.echo(f"MQTT: {mqtt_host}:{mqtt_port} (prefix: {mqtt_prefix})")
+    click.echo(f"MQTT transport: {mqtt_transport} (ws_path: {mqtt_ws_path})")
     click.echo(f"Read key configured: {read_key is not None}")
     click.echo(f"Admin key configured: {admin_key is not None}")
     click.echo(f"CORS origins: {cors_origins or 'none'}")
@@ -195,8 +228,12 @@ def api(
             admin_key=admin_key,
             mqtt_host=mqtt_host,
             mqtt_port=mqtt_port,
+            mqtt_username=mqtt_username,
+            mqtt_password=mqtt_password,
             mqtt_prefix=mqtt_prefix,
             mqtt_tls=mqtt_tls,
+            mqtt_transport=mqtt_transport,
+            mqtt_ws_path=mqtt_ws_path,
             cors_origins=origins_list,
             metrics_enabled=metrics_enabled,
             metrics_cache_ttl=metrics_cache_ttl,

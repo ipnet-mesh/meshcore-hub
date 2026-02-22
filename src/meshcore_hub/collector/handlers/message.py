@@ -70,7 +70,7 @@ def _handle_message(
     now = datetime.now(timezone.utc)
 
     # Extract fields based on message type
-    pubkey_prefix = payload.get("pubkey_prefix") if message_type == "contact" else None
+    pubkey_prefix = payload.get("pubkey_prefix")
     channel_idx = payload.get("channel_idx") if message_type == "channel" else None
     path_len = payload.get("path_len")
     txt_type = payload.get("txt_type")

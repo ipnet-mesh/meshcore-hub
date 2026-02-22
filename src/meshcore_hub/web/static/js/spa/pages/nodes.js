@@ -159,6 +159,7 @@ ${content}`, container);
                     <option value="">${t('common.all_types')}</option>
                     <option value="chat" ?selected=${adv_type === 'chat'}>${t('node_types.chat')}</option>
                     <option value="repeater" ?selected=${adv_type === 'repeater'}>${t('node_types.repeater')}</option>
+                    <option value="companion" ?selected=${adv_type === 'companion'}>${t('node_types.companion')}</option>
                     <option value="room" ?selected=${adv_type === 'room'}>${t('node_types.room')}</option>
                 </select>
             </div>

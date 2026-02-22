@@ -19,6 +19,169 @@ export async function render(container, params, router) {
     const tz = config.timezone || '';
     const tzBadge = tz && tz !== 'UTC' ? html`<span class="text-sm opacity-60">${tz}</span>` : nothing;
     const navigate = (url) => router.navigate(url);
+    const configuredChannelLabels = new Map(
+        Object.entries(config.channel_labels || {})
+            .map(([idx, label]) => [parseInt(idx, 10), typeof label === 'string' ? label.trim() : ''])
+            .filter(([idx, label]) => Number.isInteger(idx) && label.length > 0),
+    );
+    const builtInChannelLabels = new Map([
+        [17, 'Public'],
+        [217, '#test'],
+        [202, '#bot'],
+        [184, '#chat'],
+        [159, '#jokes'],
+        [221, '#sports'],
+        [104, '#emergency'],
+    ]);
+
+    function knownChannelLabel(channelIdx) {
+        return configuredChannelLabels.get(channelIdx) || builtInChannelLabels.get(channelIdx) || null;
+    }
+
+    function channelInfo(msg) {
+        if (msg.message_type !== 'channel') {
+            return { label: null, text: msg.text || '-' };
+        }
+        const rawText = msg.text || '';
+        const match = rawText.match(/^\[([^\]]+)\]\s+([\s\S]*)$/);
+        if (msg.channel_idx !== null && msg.channel_idx !== undefined) {
+            const knownLabel = knownChannelLabel(msg.channel_idx);
+            if (knownLabel) {
+                return {
+                    label: knownLabel,
+                    text: match ? (match[2] || '-') : (rawText || '-'),
+                };
+            }
+        }
+        if (msg.channel_name) {
+            return { label: msg.channel_name, text: msg.text || '-' };
+        }
+        if (match) {
+            return {
+                label: match[1],
+                text: match[2] || '-',
+            };
+        }
+        if (msg.channel_idx !== null && msg.channel_idx !== undefined) {
+            const knownLabel = knownChannelLabel(msg.channel_idx);
+            return { label: knownLabel || `Ch ${msg.channel_idx}`, text: rawText || '-' };
+        }
+        return { label: t('messages.type_channel'), text: rawText || '-' };
+    }
+
+    function senderBlock(msg, emphasize = false) {
+        const senderName = msg.sender_tag_name || msg.sender_name;
+        if (senderName) {
+            return emphasize
+                ? html`<span class="font-medium">${senderName}</span>`
+                : html`${senderName}`;
+        }
+        const prefix = (msg.pubkey_prefix || '').slice(0, 12);
+        if (prefix) {
+            return html`<span class="font-mono text-xs">${prefix}</span>`;
+        }
+        return html`<span class="opacity-50">-</span>`;
+    }
+
+    function parseSenderFromText(text) {
+        if (!text || typeof text !== 'string') {
+            return { sender: null, text: text || '-' };
+        }
+        const patterns = [
+            /^\s*ack\s+@\[(.+?)\]\s*:\s*([\s\S]+)$/i,
+            /^\s*@\[(.+?)\]\s*:\s*([\s\S]+)$/i,
+            /^\s*ack\s+([^:|\n]{1,80})\s*:\s*([\s\S]+)$/i,
+        ];
+        for (const pattern of patterns) {
+            const match = text.match(pattern);
+            if (!match) continue;
+            const sender = (match[1] || '').trim();
+            const remaining = (match[2] || '').trim();
+            if (!sender) continue;
+            return {
+                sender,
+                text: remaining || text,
+            };
+        }
+        return { sender: null, text };
+    }
+
+    function messageTextWithSender(msg, text) {
+        const parsed = parseSenderFromText(text || '-');
+        const explicitSender = msg.sender_tag_name || msg.sender_name || (msg.pubkey_prefix || '').slice(0, 12) || null;
+        const sender = explicitSender || parsed.sender;
+        const body = (parsed.text || text || '-').trim() || '-';
+        if (!sender) {
+            return body;
+        }
+        if (body.toLowerCase().startsWith(`${sender.toLowerCase()}:`)) {
+            return body;
+        }
+        return `${sender}: ${body}`;
+    }
+
+    function dedupeBySignature(items) {
+        const deduped = [];
+        const bySignature = new Map();
+
+        for (const msg of items) {
+            const signature = typeof msg.signature === 'string' ? msg.signature.trim().toUpperCase() : '';
+            const canDedupe = msg.message_type === 'channel' && signature.length >= 8;
+            if (!canDedupe) {
+                deduped.push(msg);
+                continue;
+            }
+
+            const existing = bySignature.get(signature);
+            if (!existing) {
+                const clone = {
+                    ...msg,
+                    receivers: [...(msg.receivers || [])],
+                };
+                bySignature.set(signature, clone);
+                deduped.push(clone);
+                continue;
+            }
+
+            const combined = [...(existing.receivers || []), ...(msg.receivers || [])];
+            const seenReceivers = new Set();
+            existing.receivers = combined.filter((recv) => {
+                const key = recv?.public_key || recv?.node_id || `${recv?.received_at || ''}:${recv?.snr || ''}`;
+                if (seenReceivers.has(key)) return false;
+                seenReceivers.add(key);
+                return true;
+            });
+
+            if (!existing.received_by && msg.received_by) existing.received_by = msg.received_by;
+            if (!existing.receiver_name && msg.receiver_name) existing.receiver_name = msg.receiver_name;
+            if (!existing.receiver_tag_name && msg.receiver_tag_name) existing.receiver_tag_name = msg.receiver_tag_name;
+            if (!existing.pubkey_prefix && msg.pubkey_prefix) existing.pubkey_prefix = msg.pubkey_prefix;
+            if (!existing.sender_name && msg.sender_name) existing.sender_name = msg.sender_name;
+            if (!existing.sender_tag_name && msg.sender_tag_name) existing.sender_tag_name = msg.sender_tag_name;
+            if (!existing.channel_name && msg.channel_name) existing.channel_name = msg.channel_name;
+            if (
+                existing.channel_name === 'Public'
+                && msg.channel_name
+                && msg.channel_name !== 'Public'
+            ) {
+                existing.channel_name = msg.channel_name;
+            }
+            if (existing.channel_idx === null || existing.channel_idx === undefined) {
+                if (msg.channel_idx !== null && msg.channel_idx !== undefined) {
+                    existing.channel_idx = msg.channel_idx;
+                }
+            } else if (
+                existing.channel_idx === 17
+                && msg.channel_idx !== null
+                && msg.channel_idx !== undefined
+                && msg.channel_idx !== 17
+            ) {
+                existing.channel_idx = msg.channel_idx;
+            }
+        }
+
+        return deduped;
+    }
 
     function renderPage(content, { total = null } = {}) {
         litRender(html`
@@ -39,7 +202,7 @@ ${content}`, container);
     async function fetchAndRenderData() {
         try {
             const data = await apiGet('/api/v1/messages', { limit, offset, message_type });
-            const messages = data.items || [];
+            const messages = dedupeBySignature(data.items || []);
             const total = data.total || 0;
             const totalPages = Math.ceil(total / limit);
 
@@ -49,17 +212,12 @@ ${content}`, container);
                     const isChannel = msg.message_type === 'channel';
                     const typeIcon = isChannel ? '\u{1F4FB}' : '\u{1F464}';
                     const typeTitle = isChannel ? t('messages.type_channel') : t('messages.type_contact');
-                    let senderBlock;
-                    if (isChannel) {
-                        senderBlock = html`<span class="opacity-60">${t('messages.type_public')}</span>`;
-                    } else {
-                        const senderName = msg.sender_tag_name || msg.sender_name;
-                        if (senderName) {
-                            senderBlock = senderName;
-                        } else {
-                            senderBlock = html`<span class="font-mono text-xs">${(msg.pubkey_prefix || '-').slice(0, 12)}</span>`;
-                        }
-                    }
+                    const chInfo = channelInfo(msg);
+                    const sender = senderBlock(msg);
+                    const displayMessage = messageTextWithSender(msg, chInfo.text);
+                    const fromPrimary = isChannel
+                        ? html`<span class="font-medium">${chInfo.label || t('messages.type_channel')}</span>`
+                        : sender;
                     let receiversBlock = nothing;
                     if (msg.receivers && msg.receivers.length >= 1) {
                         receiversBlock = html`<div class="flex gap-0.5">
@@ -81,7 +239,7 @@ ${content}`, container);
                         </span>
                         <div class="min-w-0">
                             <div class="font-medium text-sm truncate">
-                                ${senderBlock}
+                                ${fromPrimary}
                             </div>
                             <div class="text-xs opacity-60">
                                 ${formatDateTimeShort(msg.received_at)}
@@ -92,7 +250,7 @@ ${content}`, container);
                         ${receiversBlock}
                     </div>
                 </div>
-                <p class="text-sm mt-2 break-words whitespace-pre-wrap">${msg.text || '-'}</p>
+                <p class="text-sm mt-2 break-words whitespace-pre-wrap">${displayMessage}</p>
             </div>
         </div>`;
                 });
@@ -103,17 +261,12 @@ ${content}`, container);
                     const isChannel = msg.message_type === 'channel';
                     const typeIcon = isChannel ? '\u{1F4FB}' : '\u{1F464}';
                     const typeTitle = isChannel ? t('messages.type_channel') : t('messages.type_contact');
-                    let senderBlock;
-                    if (isChannel) {
-                        senderBlock = html`<span class="opacity-60">${t('messages.type_public')}</span>`;
-                    } else {
-                        const senderName = msg.sender_tag_name || msg.sender_name;
-                        if (senderName) {
-                            senderBlock = html`<span class="font-medium">${senderName}</span>`;
-                        } else {
-                            senderBlock = html`<span class="font-mono text-xs">${(msg.pubkey_prefix || '-').slice(0, 12)}</span>`;
-                        }
-                    }
+                    const chInfo = channelInfo(msg);
+                    const sender = senderBlock(msg, true);
+                    const displayMessage = messageTextWithSender(msg, chInfo.text);
+                    const fromPrimary = isChannel
+                        ? html`<span class="font-medium">${chInfo.label || t('messages.type_channel')}</span>`
+                        : sender;
                     let receiversBlock;
                     if (msg.receivers && msg.receivers.length >= 1) {
                         receiversBlock = html`<div class="flex gap-1">
@@ -131,8 +284,10 @@ ${content}`, container);
                     return html`<tr class="hover align-top">
                     <td class="text-lg" title=${typeTitle}>${typeIcon}</td>
                     <td class="text-sm whitespace-nowrap">${formatDateTime(msg.received_at)}</td>
-                    <td class="text-sm whitespace-nowrap">${senderBlock}</td>
-                    <td class="break-words max-w-md" style="white-space: pre-wrap;">${msg.text || '-'}</td>
+                    <td class="text-sm whitespace-nowrap">
+                        <div>${fromPrimary}</div>
+                    </td>
+                    <td class="break-words max-w-md" style="white-space: pre-wrap;">${displayMessage}</td>
                     <td>${receiversBlock}</td>
                 </tr>`;
                 });

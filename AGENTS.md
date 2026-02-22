@@ -12,6 +12,7 @@ This document provides context and guidelines for AI coding assistants working o
   - `source .venv/bin/activate`
 * You MUST install all project dependencies using `pip install -e ".[dev]"` command`
 * You MUST install `pre-commit` for quality checks
+* You MUST keep project documentation in sync with behavior/config/schema changes made in code (at minimum update relevant sections in `README.md`, `SCHEMAS.md`, `PLAN.md`, and/or `TASKS.md` when applicable)
 * Before commiting:
   - Run **targeted tests** for the components you changed, not the full suite:
     - `pytest tests/test_web/` for web-only changes (templates, static JS, web routes)
