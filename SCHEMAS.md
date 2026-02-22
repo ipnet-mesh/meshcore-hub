@@ -184,8 +184,10 @@ Group/broadcast messages on specific channels.
 - When decoder output includes a human sender (`payload.decoded.decrypted.sender`), message text is normalized to `Name: Message`; sender identity remains unknown when only hash/prefix metadata is available.
 
 **Compatibility ingest note (advertisements)**:
+- In LetsMesh upload compatibility mode, `status` feed payloads are normalized to `ADVERTISEMENT` only when identity metadata is present (`name`, node type, explicit `flags`, or location). Status heartbeat/counter frames are persisted as informational `letsmesh_status` events.
 - In LetsMesh upload compatibility mode, decoded payload types `4` and `11` are normalized to `ADVERTISEMENT` when node identity metadata is present.
 - Payload type `4` location metadata (`appData.location.latitude/longitude`) is mapped to node `lat/lon` for map rendering.
+- `stats.debug_flags` from LetsMesh status feeds are not persisted as advertisement capability flags.
 
 ---
 

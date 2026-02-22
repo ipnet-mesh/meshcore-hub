@@ -46,8 +46,8 @@
 /* Spacing between horizontal nav items */
 .menu-horizontal { gap: 0.125rem; }
 
-/* Invert white logos/images to dark for light mode */
-[data-theme="light"] .theme-logo {
+/* Invert monochrome logos to dark for light mode */
+[data-theme="light"] .theme-logo--invert-light {
     filter: brightness(0.15);
 }
 

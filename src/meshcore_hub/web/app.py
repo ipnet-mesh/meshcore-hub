@@ -50,6 +50,24 @@ def _build_channel_labels() -> dict[str, str]:
     return {str(idx): label for idx, label in sorted(labels.items())}
 
 
+def _resolve_logo(media_home: Path) -> tuple[str, bool, Path | None]:
+    """Resolve logo URL and whether light-mode inversion should be applied.
+
+    Returns:
+        tuple of (logo_url, invert_in_light_mode, resolved_path)
+    """
+    custom_logo_candidates = (("logo.svg", "/media/images/logo.svg"),)
+    for filename, url in custom_logo_candidates:
+        path = media_home / "images" / filename
+        if path.exists():
+            # Custom logos are assumed to be full-color and should not be darkened.
+            cache_buster = int(path.stat().st_mtime)
+            return f"{url}?v={cache_buster}", False, path
+
+    # Default packaged logo is monochrome and needs darkening in light mode.
+    return "/static/img/logo.svg", True, None
+
+
 def _is_authenticated_proxy_request(request: Request) -> bool:
     """Check whether request is authenticated by an upstream auth proxy.
 
@@ -157,6 +175,7 @@ def _build_config_json(app: FastAPI, request: Request) -> str:
         "datetime_locale": app.state.web_datetime_locale,
         "auto_refresh_seconds": app.state.auto_refresh_seconds,
         "channel_labels": app.state.channel_labels,
+        "logo_invert_light": app.state.logo_invert_light,
     }
 
     return json.dumps(config)
@@ -300,12 +319,11 @@ def create_app(
 
     # Check for custom logo and store media path
     media_home = Path(settings.effective_media_home)
-    custom_logo_path = media_home / "images" / "logo.svg"
-    if custom_logo_path.exists():
-        app.state.logo_url = "/media/images/logo.svg"
-        logger.info(f"Using custom logo from {custom_logo_path}")
-    else:
-        app.state.logo_url = "/static/img/logo.svg"
+    logo_url, logo_invert_light, logo_path = _resolve_logo(media_home)
+    app.state.logo_url = logo_url
+    app.state.logo_invert_light = logo_invert_light
+    if logo_path is not None:
+        logger.info("Using custom logo from %s", logo_path)
 
     # Mount static files
     if STATIC_DIR.exists():
@@ -697,6 +715,7 @@ def create_app(
                 "features": features,
                 "custom_pages": custom_pages,
                 "logo_url": request.app.state.logo_url,
+                "logo_invert_light": request.app.state.logo_invert_light,
                 "version": __version__,
                 "default_theme": request.app.state.web_theme,
                 "config_json": config_json,

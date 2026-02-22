@@ -110,7 +110,7 @@ class TestSubscriber:
                 "origin_id": "b" * 64,
                 "model": "Heltec V3",
                 "mode": "repeater",
-                "stats": {"debug_flags": 7},
+                "flags": 7,
             },
         )
 
@@ -118,10 +118,65 @@ class TestSubscriber:
         public_key, event_type, payload, _db = handler.call_args.args
         assert public_key == "a" * 64
         assert event_type == "advertisement"
-        assert payload["public_key"] == "b" * 64
+        assert payload["public_key"] == ("b" * 64).upper()
         assert payload["name"] == "Observer Node"
         assert payload["adv_type"] == "repeater"
         assert payload["flags"] == 7
+
+    def test_letsmesh_status_does_not_use_debug_flags_as_advert_flags(
+        self, mock_mqtt_client, db_manager
+    ) -> None:
+        """debug_flags should not be stored as node capability flags."""
+        subscriber = Subscriber(
+            mock_mqtt_client,
+            db_manager,
+            ingest_mode="letsmesh_upload",
+        )
+        handler = MagicMock()
+        subscriber.register_handler("advertisement", handler)
+        subscriber.start()
+
+        subscriber._handle_mqtt_message(
+            topic=f"meshcore/BOS/{'a' * 64}/status",
+            pattern="meshcore/BOS/+/status",
+            payload={
+                "origin": "Observer Node",
+                "origin_id": "b" * 64,
+                "mode": "repeater",
+                "stats": {"debug_flags": 7},
+            },
+        )
+
+        handler.assert_called_once()
+        _public_key, _event_type, payload, _db = handler.call_args.args
+        assert "flags" not in payload
+
+    def test_letsmesh_status_without_identity_maps_to_letsmesh_status(
+        self, mock_mqtt_client, db_manager
+    ) -> None:
+        """Status heartbeat payloads without identity metadata should not inflate adverts."""
+        subscriber = Subscriber(
+            mock_mqtt_client,
+            db_manager,
+            ingest_mode="letsmesh_upload",
+        )
+        advert_handler = MagicMock()
+        status_handler = MagicMock()
+        subscriber.register_handler("advertisement", advert_handler)
+        subscriber.register_handler("letsmesh_status", status_handler)
+        subscriber.start()
+
+        subscriber._handle_mqtt_message(
+            topic=f"meshcore/BOS/{'a' * 64}/status",
+            pattern="meshcore/BOS/+/status",
+            payload={
+                "origin_id": "b" * 64,
+                "stats": {"cpu": 27, "mem": 91, "debug_flags": 7},
+            },
+        )
+
+        advert_handler.assert_not_called()
+        status_handler.assert_called_once()
 
     def test_invalid_ingest_mode_raises(self, mock_mqtt_client, db_manager) -> None:
         """Invalid ingest mode values are rejected."""

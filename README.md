@@ -313,7 +313,7 @@ When `COLLECTOR_INGEST_MODE=letsmesh_upload`, the collector subscribes to:
 
 Normalization behavior:
 
-- `status` packets are mapped to `advertisement` events.
+- `status` packets are mapped to `advertisement` events only when node identity metadata is present (`name`, node type, explicit flags, or location); heartbeat/counter-only status frames are stored as `letsmesh_status` logs.
 - Decoder payload types `4` and `11` are also mapped to `advertisement` events when node identity metadata is present.
 - `packet_type=5` packets are mapped to `channel_msg_recv`.
 - `packet_type=1`, `2`, and `7` packets are mapped to `contact_msg_recv` when decryptable text is available.
@@ -321,6 +321,7 @@ Normalization behavior:
 - In the messages feed and dashboard channel sections, known channel indexes are preferred for labels (`17 -> Public`, `217 -> #test`) to avoid stale channel-name mismatches.
 - Additional channel names are loaded from `COLLECTOR_LETSMESH_DECODER_KEYS` when entries are provided as `label=hex` (for example `bot=<key>`).
 - Decoder-advertisement packets with location metadata update node GPS (`lat/lon`) for map display.
+- Status `stats.debug_flags` values are not used as advertisement capability flags.
 - Packets without decryptable message text are kept as informational `letsmesh_packet` events and are not shown in the messages feed; when decode succeeds the decoded JSON is attached to those packet log events.
 - When decoder output includes a human sender (`payload.decoded.decrypted.sender`), message text is normalized to `Name: Message` before storage; receiver/observer names are never used as sender fallback.
 - The collector keeps built-in keys for `Public` and `#test`, and merges any additional keys from `COLLECTOR_LETSMESH_DECODER_KEYS`.
@@ -425,6 +426,9 @@ Control which pages are visible in the web dashboard. Disabled features are full
 The web dashboard supports custom content including markdown pages and media files. Content is organized in subdirectories:
 
 ```
+
+Custom logo note:
+- If a custom logo file is present, the UI keeps its original colors in both light/dark themes (no automatic light-mode darkening).
 content/
 ├── pages/     # Custom markdown pages
 │   └── about.md
@@ -704,7 +708,7 @@ meshcore-hub/
 ├── content/                # Custom content directory (CONTENT_HOME, optional)
 │   ├── pages/              # Custom markdown pages
 │   └── media/              # Custom media files
-│       └── images/         # Custom images (logo.svg replaces default logo)
+│       └── images/         # Custom images (logo.svg/png/jpg/jpeg/webp replace default logo)
 ├── data/                   # Runtime data directory (DATA_HOME, created at runtime)
 ├── Dockerfile              # Docker build configuration
 ├── docker-compose.yml      # Docker Compose services

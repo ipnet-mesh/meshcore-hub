@@ -185,33 +185,13 @@ class Subscriber:
         observer_public_key, feed_type = parsed
 
         if feed_type == "status":
-            status_public_key = (
-                payload.get("origin_id")
-                or payload.get("public_key")
-                or observer_public_key
+            normalized_status = self._build_letsmesh_status_advertisement_payload(
+                payload,
+                observer_public_key=observer_public_key,
             )
-            normalized_payload = dict(payload)
-            normalized_payload["public_key"] = status_public_key
-
-            status_name = payload.get("origin") or payload.get("name")
-            if status_name and not normalized_payload.get("name"):
-                normalized_payload["name"] = status_name
-
-            normalized_adv_type = self._normalize_letsmesh_adv_type(normalized_payload)
-            if normalized_adv_type:
-                normalized_payload["adv_type"] = normalized_adv_type
-            else:
-                normalized_payload.pop("adv_type", None)
-
-            stats = payload.get("stats")
-            if (
-                isinstance(stats, dict)
-                and "flags" not in normalized_payload
-                and "debug_flags" in stats
-            ):
-                normalized_payload["flags"] = stats["debug_flags"]
-
-            return observer_public_key, "advertisement", normalized_payload
+            if normalized_status:
+                return observer_public_key, "advertisement", normalized_status
+            return observer_public_key, "letsmesh_status", dict(payload)
 
         if feed_type == "packets":
             decoded_packet = self._letsmesh_decoder.decode_payload(payload)
@@ -443,6 +423,59 @@ class Subscriber:
             if normalized_adv_type:
                 normalized_payload["adv_type"] = normalized_adv_type
 
+        return normalized_payload
+
+    def _build_letsmesh_status_advertisement_payload(
+        self,
+        payload: dict[str, Any],
+        observer_public_key: str,
+    ) -> dict[str, Any] | None:
+        """Normalize LetsMesh status feed payloads into advertisement events."""
+        status_public_key = self._normalize_full_public_key(
+            payload.get("origin_id") or payload.get("public_key") or observer_public_key
+        )
+        if not status_public_key:
+            return None
+
+        normalized_payload: dict[str, Any] = {"public_key": status_public_key}
+
+        status_name = payload.get("origin") or payload.get("name")
+        if isinstance(status_name, str) and status_name.strip():
+            normalized_payload["name"] = status_name.strip()
+
+        normalized_adv_type = self._normalize_letsmesh_adv_type(payload)
+        if normalized_adv_type:
+            normalized_payload["adv_type"] = normalized_adv_type
+
+        # Only trust explicit status payload flags. stats.debug_flags are observer/debug
+        # counters and cause false capability flags + inflated dedup churn.
+        explicit_flags = self._parse_int(payload.get("flags"))
+        if explicit_flags is not None:
+            normalized_payload["flags"] = explicit_flags
+
+        lat = self._parse_float(payload.get("lat"))
+        lon = self._parse_float(payload.get("lon"))
+        if lat is None:
+            lat = self._parse_float(payload.get("adv_lat"))
+        if lon is None:
+            lon = self._parse_float(payload.get("adv_lon"))
+        location = payload.get("location")
+        if isinstance(location, dict):
+            if lat is None:
+                lat = self._parse_float(location.get("latitude"))
+            if lon is None:
+                lon = self._parse_float(location.get("longitude"))
+        if lat is not None:
+            normalized_payload["lat"] = lat
+        if lon is not None:
+            normalized_payload["lon"] = lon
+
+        # Ignore status heartbeat/counter frames that have no node identity metadata.
+        if not any(
+            key in normalized_payload
+            for key in ("name", "adv_type", "flags", "lat", "lon")
+        ):
+            return None
         return normalized_payload
 
     @classmethod

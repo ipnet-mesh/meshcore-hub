@@ -30,6 +30,12 @@
 
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="{{ logo_url }}">
+    {% if not logo_invert_light %}
+    <style>
+        /* Keep custom network logos full-color in light mode */
+        [data-theme="light"] img[src="{{ logo_url }}"] { filter: none !important; }
+    </style>
+    {% endif %}
 
     <!-- Tailwind CSS with DaisyUI -->
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.19/dist/full.min.css" rel="stylesheet" type="text/css" />
@@ -87,7 +93,7 @@
                 </ul>
             </div>
             <a href="/" class="btn btn-ghost text-xl">
-                <img src="{{ logo_url }}" alt="{{ network_name }}" class="theme-logo h-6 w-6 mr-2" />
+                <img src="{{ logo_url }}" alt="{{ network_name }}" class="theme-logo{% if logo_invert_light %} theme-logo--invert-light{% endif %} h-6 w-6 mr-2" />
                 {{ network_name }}
             </a>
         </div>
