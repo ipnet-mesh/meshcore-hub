@@ -753,6 +753,9 @@ This document tracks implementation progress for the MeshCore Hub project. Each 
 ### Decisions Made
 *(Record architectural decisions and answers to clarifying questions here)*
 
+- [x] LetsMesh/native advertisement parity: in `letsmesh_upload` mode, observer `status` feed stays informational (`letsmesh_status`) and does not populate `advertisements`.
+- [x] LetsMesh advertisement persistence source: decoded packet payload type `4` maps to `advertisement`; payload type `11` maps to `contact` parity updates.
+- [x] LetsMesh native-event parity extensions: payload type `9` maps to `trace_data`, payload type `8` maps to informational `path_updated`, and payload type `1` can map to response-style native events when decryptable structured content exists.
 - [ ] Q1 (MQTT Broker):
 - [ ] Q2 (Database):
 - [ ] Q3 (Web Dashboard Separation):

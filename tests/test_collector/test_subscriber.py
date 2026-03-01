@@ -89,17 +89,19 @@ class TestSubscriber:
         mock_mqtt_client.subscribe.assert_has_calls(expected_calls, any_order=False)
         assert mock_mqtt_client.subscribe.call_count == 3
 
-    def test_letsmesh_status_maps_to_advertisement(
+    def test_letsmesh_status_maps_to_letsmesh_status(
         self, mock_mqtt_client, db_manager
     ) -> None:
-        """LetsMesh status payloads are normalized to advertisement events."""
+        """LetsMesh status payloads are stored as informational status events."""
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
             ingest_mode="letsmesh_upload",
         )
-        handler = MagicMock()
-        subscriber.register_handler("advertisement", handler)
+        advert_handler = MagicMock()
+        status_handler = MagicMock()
+        subscriber.register_handler("advertisement", advert_handler)
+        subscriber.register_handler("letsmesh_status", status_handler)
         subscriber.start()
 
         subscriber._handle_mqtt_message(
@@ -114,26 +116,28 @@ class TestSubscriber:
             },
         )
 
-        handler.assert_called_once()
-        public_key, event_type, payload, _db = handler.call_args.args
+        advert_handler.assert_not_called()
+        status_handler.assert_called_once()
+        public_key, event_type, payload, _db = status_handler.call_args.args
         assert public_key == "a" * 64
-        assert event_type == "advertisement"
-        assert payload["public_key"] == ("b" * 64).upper()
-        assert payload["name"] == "Observer Node"
-        assert payload["adv_type"] == "repeater"
-        assert payload["flags"] == 7
+        assert event_type == "letsmesh_status"
+        assert payload["origin_id"] == "b" * 64
+        assert payload["origin"] == "Observer Node"
+        assert payload["mode"] == "repeater"
 
-    def test_letsmesh_status_does_not_use_debug_flags_as_advert_flags(
+    def test_letsmesh_status_with_debug_flags_does_not_emit_advertisement(
         self, mock_mqtt_client, db_manager
     ) -> None:
-        """debug_flags should not be stored as node capability flags."""
+        """Status debug metadata should remain informational only."""
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
             ingest_mode="letsmesh_upload",
         )
-        handler = MagicMock()
-        subscriber.register_handler("advertisement", handler)
+        advert_handler = MagicMock()
+        status_handler = MagicMock()
+        subscriber.register_handler("advertisement", advert_handler)
+        subscriber.register_handler("letsmesh_status", status_handler)
         subscriber.start()
 
         subscriber._handle_mqtt_message(
@@ -147,14 +151,15 @@ class TestSubscriber:
             },
         )
 
-        handler.assert_called_once()
-        _public_key, _event_type, payload, _db = handler.call_args.args
-        assert "flags" not in payload
+        advert_handler.assert_not_called()
+        status_handler.assert_called_once()
+        _public_key, _event_type, payload, _db = status_handler.call_args.args
+        assert payload["stats"]["debug_flags"] == 7
 
     def test_letsmesh_status_without_identity_maps_to_letsmesh_status(
         self, mock_mqtt_client, db_manager
     ) -> None:
-        """Status heartbeat payloads without identity metadata should not inflate adverts."""
+        """Status heartbeat payloads without identity metadata stay informational."""
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
@@ -497,10 +502,10 @@ class TestSubscriber:
         assert payload["lat"] == 42.470001
         assert payload["lon"] == -71.330001
 
-    def test_letsmesh_packet_type_11_maps_to_advertisement(
+    def test_letsmesh_packet_type_11_maps_to_contact(
         self, mock_mqtt_client, db_manager
     ) -> None:
-        """Decoder packet type 11 is mapped to advertisement metadata updates."""
+        """Decoder packet type 11 is mapped to native contact events."""
         mock_mqtt_client.topic_builder.parse_letsmesh_upload_topic.return_value = (
             "a" * 64,
             "packets",
@@ -510,8 +515,10 @@ class TestSubscriber:
             db_manager,
             ingest_mode="letsmesh_upload",
         )
-        handler = MagicMock()
-        subscriber.register_handler("advertisement", handler)
+        contact_handler = MagicMock()
+        advert_handler = MagicMock()
+        subscriber.register_handler("contact", contact_handler)
+        subscriber.register_handler("advertisement", advert_handler)
         subscriber.start()
 
         with patch.object(
@@ -540,17 +547,126 @@ class TestSubscriber:
                 },
             )
 
-        handler.assert_called_once()
-        _public_key, event_type, payload, _db = handler.call_args.args
-        assert event_type == "advertisement"
+        advert_handler.assert_not_called()
+        contact_handler.assert_called_once()
+        _public_key, event_type, payload, _db = contact_handler.call_args.args
+        assert event_type == "contact"
         assert payload["public_key"] == "C" * 64
-        assert payload["adv_type"] == "repeater"
+        assert payload["type"] == 2
         assert payload["flags"] == 146
+
+    def test_letsmesh_packet_type_9_maps_to_trace_data(
+        self, mock_mqtt_client, db_manager
+    ) -> None:
+        """Decoder packet type 9 is mapped to native trace_data events."""
+        mock_mqtt_client.topic_builder.parse_letsmesh_upload_topic.return_value = (
+            "a" * 64,
+            "packets",
+        )
+        subscriber = Subscriber(
+            mock_mqtt_client,
+            db_manager,
+            ingest_mode="letsmesh_upload",
+        )
+        trace_handler = MagicMock()
+        subscriber.register_handler("trace_data", trace_handler)
+        subscriber.start()
+
+        with patch.object(
+            subscriber._letsmesh_decoder,
+            "decode_payload",
+            return_value={
+                "payloadType": 9,
+                "pathLength": 4,
+                "payload": {
+                    "decoded": {
+                        "type": 9,
+                        "traceTag": "DF9D7A20",
+                        "authCode": 0,
+                        "flags": 0,
+                        "pathHashes": ["71", "0B", "24", "0B"],
+                        "snrValues": [12.5, 11.5, 10, 6.25],
+                    }
+                },
+            },
+        ):
+            subscriber._handle_mqtt_message(
+                topic=f"meshcore/BOS/{'a' * 64}/packets",
+                pattern="meshcore/BOS/+/packets",
+                payload={
+                    "packet_type": "9",
+                    "hash": "99887766",
+                    "raw": "ABCDEF",
+                },
+            )
+
+        trace_handler.assert_called_once()
+        _public_key, event_type, payload, _db = trace_handler.call_args.args
+        assert event_type == "trace_data"
+        assert payload["initiator_tag"] == int("DF9D7A20", 16)
+        assert payload["path_hashes"] == ["71", "0B", "24", "0B"]
+        assert payload["hop_count"] == 4
+        assert payload["snr_values"] == [12.5, 11.5, 10.0, 6.25]
+
+    def test_letsmesh_packet_type_8_maps_to_path_updated(
+        self, mock_mqtt_client, db_manager
+    ) -> None:
+        """Decoder packet type 8 is mapped to native path_updated events."""
+        mock_mqtt_client.topic_builder.parse_letsmesh_upload_topic.return_value = (
+            "a" * 64,
+            "packets",
+        )
+        subscriber = Subscriber(
+            mock_mqtt_client,
+            db_manager,
+            ingest_mode="letsmesh_upload",
+        )
+        path_handler = MagicMock()
+        packet_handler = MagicMock()
+        subscriber.register_handler("path_updated", path_handler)
+        subscriber.register_handler("letsmesh_packet", packet_handler)
+        subscriber.start()
+
+        with patch.object(
+            subscriber._letsmesh_decoder,
+            "decode_payload",
+            return_value={
+                "payloadType": 8,
+                "payload": {
+                    "decoded": {
+                        "type": 8,
+                        "isValid": True,
+                        "pathLength": 2,
+                        "pathHashes": ["AA", "BB"],
+                        "extraType": 244,
+                        "extraData": "D" * 64,
+                    }
+                },
+            },
+        ):
+            subscriber._handle_mqtt_message(
+                topic=f"meshcore/BOS/{'a' * 64}/packets",
+                pattern="meshcore/BOS/+/packets",
+                payload={
+                    "packet_type": "8",
+                    "hash": "99887766",
+                    "raw": "ABCDEF",
+                },
+            )
+
+        packet_handler.assert_not_called()
+        path_handler.assert_called_once()
+        _public_key, event_type, payload, _db = path_handler.call_args.args
+        assert event_type == "path_updated"
+        assert payload["hop_count"] == 2
+        assert payload["path_hashes"] == ["AA", "BB"]
+        assert payload["extra_type"] == 244
+        assert payload["node_public_key"] == "D" * 64
 
     def test_letsmesh_packet_fallback_logs_decoded_payload(
         self, mock_mqtt_client, db_manager
     ) -> None:
-        """Non-mapped packets include decoder output in letsmesh_packet payload."""
+        """Unmapped packets include decoder output in letsmesh_packet payload."""
         mock_mqtt_client.topic_builder.parse_letsmesh_upload_topic.return_value = (
             "a" * 64,
             "packets",
@@ -565,12 +681,11 @@ class TestSubscriber:
         subscriber.start()
 
         decoded_packet = {
-            "payloadType": 8,
+            "payloadType": 10,
             "payload": {
                 "decoded": {
-                    "type": 8,
+                    "type": 10,
                     "isValid": True,
-                    "pathHashes": ["AA", "BB", "CC"],
                 }
             },
         }
@@ -583,7 +698,7 @@ class TestSubscriber:
                 topic=f"meshcore/BOS/{'a' * 64}/packets",
                 pattern="meshcore/BOS/+/packets",
                 payload={
-                    "packet_type": "8",
+                    "packet_type": "10",
                     "hash": "99887766",
                     "raw": "ABCDEF",
                 },
@@ -592,7 +707,7 @@ class TestSubscriber:
         packet_handler.assert_called_once()
         _public_key, event_type, payload, _db = packet_handler.call_args.args
         assert event_type == "letsmesh_packet"
-        assert payload["decoded_payload_type"] == 8
+        assert payload["decoded_payload_type"] == 10
         assert payload["decoded_packet"] == decoded_packet
 
     def test_letsmesh_packet_sender_fallback_from_payload_fields(

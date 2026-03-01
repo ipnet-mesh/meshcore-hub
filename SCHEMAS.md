@@ -184,10 +184,16 @@ Group/broadcast messages on specific channels.
 - When decoder output includes a human sender (`payload.decoded.decrypted.sender`), message text is normalized to `Name: Message`; sender identity remains unknown when only hash/prefix metadata is available.
 
 **Compatibility ingest note (advertisements)**:
-- In LetsMesh upload compatibility mode, `status` feed payloads are normalized to `ADVERTISEMENT` only when identity metadata is present (`name`, node type, explicit `flags`, or location). Status heartbeat/counter frames are persisted as informational `letsmesh_status` events.
-- In LetsMesh upload compatibility mode, decoded payload types `4` and `11` are normalized to `ADVERTISEMENT` when node identity metadata is present.
+- In LetsMesh upload compatibility mode, `status` feed payloads are persisted as informational `letsmesh_status` events and are not normalized to `ADVERTISEMENT`.
+- In LetsMesh upload compatibility mode, decoded payload type `4` is normalized to `ADVERTISEMENT` when node identity metadata is present.
 - Payload type `4` location metadata (`appData.location.latitude/longitude`) is mapped to node `lat/lon` for map rendering.
-- `stats.debug_flags` from LetsMesh status feeds are not persisted as advertisement capability flags.
+- This keeps advertisement persistence aligned with native mode expectations (advertisement traffic only).
+
+**Compatibility ingest note (non-message structured events)**:
+- Decoded payload type `9` is normalized to `TRACE_DATA` (`traceTag`, flags, auth, path hashes, and SNR values).
+- Decoded payload type `11` (`Control/NodeDiscoverResp`) is normalized to `contact` events for node upsert parity.
+- Decoded payload type `8` is normalized to informational `PATH_UPDATED` events (`hop_count` + path hashes).
+- Decoded payload type `1` can be normalized to `TELEMETRY_RESPONSE`, `BATTERY`, `PATH_UPDATED`, or `STATUS_RESPONSE` when decrypted response content is structured and parseable.
 
 ---
 

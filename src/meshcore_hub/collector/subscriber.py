@@ -10,7 +10,9 @@ The subscriber:
 """
 
 import asyncio
+import json
 import logging
+import re
 import signal
 import threading
 import time
@@ -185,12 +187,9 @@ class Subscriber:
         observer_public_key, feed_type = parsed
 
         if feed_type == "status":
-            normalized_status = self._build_letsmesh_status_advertisement_payload(
-                payload,
-                observer_public_key=observer_public_key,
-            )
-            if normalized_status:
-                return observer_public_key, "advertisement", normalized_status
+            # Keep status feed telemetry as informational event logs only.
+            # This preserves parity with native mode where advertisements are
+            # sourced from advertisement event traffic, not observer status frames.
             return observer_public_key, "letsmesh_status", dict(payload)
 
         if feed_type == "packets":
@@ -203,6 +202,14 @@ class Subscriber:
             if normalized_message:
                 event_type, message_payload = normalized_message
                 return observer_public_key, event_type, message_payload
+
+            normalized_structured_event = self._build_letsmesh_structured_event_payload(
+                payload,
+                decoded_packet=decoded_packet,
+            )
+            if normalized_structured_event:
+                event_type, structured_payload = normalized_structured_event
+                return observer_public_key, event_type, structured_payload
 
             normalized_advertisement = self._build_letsmesh_advertisement_payload(
                 payload,
@@ -340,6 +347,332 @@ class Subscriber:
 
         return event_type, normalized_payload
 
+    def _build_letsmesh_structured_event_payload(
+        self,
+        payload: dict[str, Any],
+        decoded_packet: dict[str, Any] | None = None,
+    ) -> tuple[str, dict[str, Any]] | None:
+        """Map LetsMesh packet payloads to native collector event types."""
+        packet_type = self._resolve_letsmesh_packet_type(payload, decoded_packet)
+        if packet_type is None:
+            return None
+
+        if packet_type == 9:
+            trace_payload = self._build_letsmesh_trace_payload(payload, decoded_packet)
+            if trace_payload:
+                return "trace_data", trace_payload
+            return None
+
+        if packet_type == 11:
+            contact_payload = self._build_letsmesh_contact_payload(
+                payload,
+                decoded_packet,
+            )
+            if contact_payload:
+                return "contact", contact_payload
+            status_payload = self._build_letsmesh_status_payload(
+                payload, decoded_packet
+            )
+            if status_payload:
+                return "status_response", status_payload
+            return None
+
+        if packet_type == 8:
+            path_payload = self._build_letsmesh_path_updated_payload(
+                payload,
+                decoded_packet,
+            )
+            if path_payload:
+                return "path_updated", path_payload
+            return None
+
+        if packet_type == 1:
+            return self._build_letsmesh_response_payload(payload, decoded_packet)
+
+        return None
+
+    def _build_letsmesh_trace_payload(
+        self,
+        payload: dict[str, Any],
+        decoded_packet: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        """Build native `trace_data` payload from LetsMesh trace packets."""
+        decoded_payload = self._extract_letsmesh_decoder_payload(decoded_packet)
+        if not decoded_payload:
+            return None
+
+        trace_tag = (
+            decoded_payload.get("traceTag")
+            or payload.get("traceTag")
+            or payload.get("trace_tag")
+        )
+        initiator_tag = self._parse_hex_or_int(trace_tag)
+        if initiator_tag is None:
+            return None
+
+        path_hashes = self._normalize_hash_list(decoded_payload.get("pathHashes"))
+        snr_values = self._normalize_float_list(decoded_payload.get("snrValues"))
+        path_len = self._parse_path_length(payload.get("path"))
+        if path_len is None:
+            path_len = self._parse_int(decoded_payload.get("pathLength"))
+        if path_len is None and path_hashes:
+            path_len = len(path_hashes)
+
+        hop_count: int | None = None
+        if path_hashes:
+            hop_count = len(path_hashes)
+        elif snr_values:
+            hop_count = len(snr_values)
+        elif path_len is not None:
+            hop_count = path_len
+
+        normalized_payload: dict[str, Any] = {
+            "initiator_tag": initiator_tag,
+        }
+        flags = self._parse_int(decoded_payload.get("flags"))
+        auth = self._parse_int(decoded_payload.get("authCode"))
+        if auth is None:
+            auth = self._parse_int(decoded_payload.get("auth"))
+        if path_len is not None:
+            normalized_payload["path_len"] = path_len
+        if flags is not None:
+            normalized_payload["flags"] = flags
+        if auth is not None:
+            normalized_payload["auth"] = auth
+        if path_hashes:
+            normalized_payload["path_hashes"] = path_hashes
+        if snr_values:
+            normalized_payload["snr_values"] = snr_values
+        if hop_count is not None:
+            normalized_payload["hop_count"] = hop_count
+
+        return normalized_payload
+
+    def _build_letsmesh_contact_payload(
+        self,
+        payload: dict[str, Any],
+        decoded_packet: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        """Build native `contact` payload from LetsMesh control discovery responses."""
+        decoded_payload = self._extract_letsmesh_decoder_payload(decoded_packet)
+        if not decoded_payload:
+            return None
+
+        sub_type = self._parse_int(decoded_payload.get("subType"))
+        # 0x90 (144): Node discover response with identity metadata.
+        if sub_type is not None and sub_type != 144:
+            return None
+
+        public_key = self._normalize_full_public_key(
+            decoded_payload.get("publicKey")
+            or payload.get("public_key")
+            or payload.get("origin_id")
+        )
+        if not public_key:
+            return None
+
+        normalized_payload: dict[str, Any] = {
+            "public_key": public_key,
+        }
+
+        node_type_raw = self._parse_int(decoded_payload.get("nodeType"))
+        node_type = self._normalize_letsmesh_node_type(
+            decoded_payload.get("nodeType") or decoded_payload.get("nodeTypeName")
+        )
+        if node_type_raw in {0, 1, 2, 3}:
+            normalized_payload["type"] = node_type_raw
+        elif node_type:
+            normalized_payload["node_type"] = node_type
+
+        flags = self._parse_int(decoded_payload.get("rawFlags"))
+        if flags is not None:
+            normalized_payload["flags"] = flags
+
+        display_name = payload.get("origin") or payload.get("name")
+        if isinstance(display_name, str) and display_name.strip():
+            normalized_payload["adv_name"] = display_name.strip()
+
+        return normalized_payload
+
+    def _build_letsmesh_status_payload(
+        self,
+        payload: dict[str, Any],
+        decoded_packet: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        """Build informational `status_response` payload from control packets."""
+        decoded_payload = self._extract_letsmesh_decoder_payload(decoded_packet)
+        if not decoded_payload:
+            return None
+
+        status_payload: dict[str, Any] = {}
+        node_public_key = self._normalize_full_public_key(
+            decoded_payload.get("publicKey")
+            or payload.get("public_key")
+            or payload.get("origin_id")
+        )
+        if node_public_key:
+            status_payload["node_public_key"] = node_public_key
+
+        sub_type = self._parse_int(decoded_payload.get("subType"))
+        if sub_type is not None:
+            status_payload["status"] = f"control_subtype_{sub_type}"
+            status_payload["control_subtype"] = sub_type
+
+        tag = self._parse_int(decoded_payload.get("tag"))
+        if tag is not None:
+            status_payload["tag"] = tag
+
+        snr = self._parse_float(decoded_payload.get("snr"))
+        if snr is not None:
+            status_payload["snr"] = snr
+
+        if "status" not in status_payload and "node_public_key" not in status_payload:
+            return None
+        return status_payload
+
+    def _build_letsmesh_path_updated_payload(
+        self,
+        payload: dict[str, Any],
+        decoded_packet: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        """Build informational `path_updated` payload from LetsMesh path packets."""
+        decoded_payload = self._extract_letsmesh_decoder_payload(decoded_packet)
+        if not decoded_payload:
+            return None
+
+        path_hashes = self._normalize_hash_list(decoded_payload.get("pathHashes"))
+        hop_count = None
+        if path_hashes:
+            hop_count = len(path_hashes)
+        else:
+            hop_count = self._parse_int(decoded_payload.get("pathLength"))
+
+        if hop_count is None:
+            return None
+
+        normalized_payload: dict[str, Any] = {
+            "hop_count": hop_count,
+        }
+        if path_hashes:
+            normalized_payload["path_hashes"] = path_hashes
+
+        extra_type = self._parse_int(decoded_payload.get("extraType"))
+        if extra_type is not None:
+            normalized_payload["extra_type"] = extra_type
+
+        extra_data = decoded_payload.get("extraData")
+        if isinstance(extra_data, str) and extra_data.strip():
+            clean_extra_data = extra_data.strip().upper()
+            normalized_payload["extra_data"] = clean_extra_data
+            extracted_public_key = self._extract_public_key_from_hex(clean_extra_data)
+            if extracted_public_key:
+                normalized_payload["node_public_key"] = extracted_public_key
+
+        node_public_key = self._normalize_full_public_key(
+            payload.get("public_key") or payload.get("origin_id")
+        )
+        if node_public_key and "node_public_key" not in normalized_payload:
+            normalized_payload["node_public_key"] = node_public_key
+
+        return normalized_payload
+
+    def _build_letsmesh_response_payload(
+        self,
+        payload: dict[str, Any],
+        decoded_packet: dict[str, Any] | None = None,
+    ) -> tuple[str, dict[str, Any]] | None:
+        """Build native events from decrypted response payloads when possible."""
+        decoded_payload = self._extract_letsmesh_decoder_payload(decoded_packet)
+        if not decoded_payload:
+            return None
+
+        decrypted = decoded_payload.get("decrypted")
+        if not isinstance(decrypted, dict):
+            return None
+
+        content_data = self._extract_response_content_data(decrypted.get("content"))
+        if not content_data:
+            return None
+
+        node_public_key = self._normalize_full_public_key(
+            content_data.get("node_public_key")
+            or content_data.get("public_key")
+            or content_data.get("nodePublicKey")
+            or payload.get("public_key")
+            or payload.get("origin_id")
+        )
+
+        battery_voltage = self._parse_float(
+            content_data.get("battery_voltage") or content_data.get("batteryVoltage")
+        )
+        battery_percentage = self._parse_int(
+            content_data.get("battery_percentage")
+            or content_data.get("batteryPercentage")
+        )
+        if battery_voltage is not None and battery_percentage is not None:
+            return "battery", {
+                "battery_voltage": battery_voltage,
+                "battery_percentage": battery_percentage,
+            }
+
+        telemetry_data = content_data.get("parsed_data")
+        if not isinstance(telemetry_data, dict):
+            telemetry_data = content_data.get("parsedData")
+        if not isinstance(telemetry_data, dict):
+            telemetry_data = {
+                key: value
+                for key, value in content_data.items()
+                if key
+                not in {
+                    "node_public_key",
+                    "public_key",
+                    "nodePublicKey",
+                    "lpp_data",
+                    "lppData",
+                }
+            }
+            if not telemetry_data:
+                telemetry_data = None
+
+        if node_public_key and telemetry_data:
+            telemetry_payload: dict[str, Any] = {
+                "node_public_key": node_public_key,
+                "parsed_data": telemetry_data,
+            }
+            lpp_data = content_data.get("lpp_data") or content_data.get("lppData")
+            if isinstance(lpp_data, str) and lpp_data.strip():
+                telemetry_payload["lpp_data"] = lpp_data.strip()
+            return "telemetry_response", telemetry_payload
+
+        if node_public_key:
+            hop_count = self._parse_int(content_data.get("hop_count"))
+            if hop_count is None:
+                hop_count = self._parse_int(content_data.get("hopCount"))
+            if hop_count is not None:
+                return "path_updated", {
+                    "node_public_key": node_public_key,
+                    "hop_count": hop_count,
+                }
+
+        status = content_data.get("status")
+        if isinstance(status, str) and status.strip():
+            status_payload: dict[str, Any] = {
+                "status": status.strip(),
+            }
+            if node_public_key:
+                status_payload["node_public_key"] = node_public_key
+            uptime = self._parse_int(content_data.get("uptime"))
+            message_count = self._parse_int(content_data.get("message_count"))
+            if message_count is None:
+                message_count = self._parse_int(content_data.get("messageCount"))
+            if uptime is not None:
+                status_payload["uptime"] = uptime
+            if message_count is not None:
+                status_payload["message_count"] = message_count
+            return "status_response", status_payload
+
+        return None
+
     def _build_letsmesh_advertisement_payload(
         self,
         payload: dict[str, Any],
@@ -355,7 +688,7 @@ class Subscriber:
             decoded_packet
         )
         # Primary packet forms that carry node identity/role/location metadata.
-        if decoded_payload_type not in {4, 11}:
+        if decoded_payload_type != 4:
             return None
 
         decoded_payload = self._extract_letsmesh_decoder_payload(decoded_packet)
@@ -423,59 +756,6 @@ class Subscriber:
             if normalized_adv_type:
                 normalized_payload["adv_type"] = normalized_adv_type
 
-        return normalized_payload
-
-    def _build_letsmesh_status_advertisement_payload(
-        self,
-        payload: dict[str, Any],
-        observer_public_key: str,
-    ) -> dict[str, Any] | None:
-        """Normalize LetsMesh status feed payloads into advertisement events."""
-        status_public_key = self._normalize_full_public_key(
-            payload.get("origin_id") or payload.get("public_key") or observer_public_key
-        )
-        if not status_public_key:
-            return None
-
-        normalized_payload: dict[str, Any] = {"public_key": status_public_key}
-
-        status_name = payload.get("origin") or payload.get("name")
-        if isinstance(status_name, str) and status_name.strip():
-            normalized_payload["name"] = status_name.strip()
-
-        normalized_adv_type = self._normalize_letsmesh_adv_type(payload)
-        if normalized_adv_type:
-            normalized_payload["adv_type"] = normalized_adv_type
-
-        # Only trust explicit status payload flags. stats.debug_flags are observer/debug
-        # counters and cause false capability flags + inflated dedup churn.
-        explicit_flags = self._parse_int(payload.get("flags"))
-        if explicit_flags is not None:
-            normalized_payload["flags"] = explicit_flags
-
-        lat = self._parse_float(payload.get("lat"))
-        lon = self._parse_float(payload.get("lon"))
-        if lat is None:
-            lat = self._parse_float(payload.get("adv_lat"))
-        if lon is None:
-            lon = self._parse_float(payload.get("adv_lon"))
-        location = payload.get("location")
-        if isinstance(location, dict):
-            if lat is None:
-                lat = self._parse_float(location.get("latitude"))
-            if lon is None:
-                lon = self._parse_float(location.get("longitude"))
-        if lat is not None:
-            normalized_payload["lat"] = lat
-        if lon is not None:
-            normalized_payload["lon"] = lon
-
-        # Ignore status heartbeat/counter frames that have no node identity metadata.
-        if not any(
-            key in normalized_payload
-            for key in ("name", "adv_type", "flags", "lat", "lon")
-        ):
-            return None
         return normalized_payload
 
     @classmethod
@@ -573,6 +853,83 @@ class Subscriber:
             return None
         decoded = payload.get("decoded")
         return decoded if isinstance(decoded, dict) else None
+
+    @staticmethod
+    def _extract_response_content_data(value: Any) -> dict[str, Any] | None:
+        """Parse response `content` payload into a dictionary when possible."""
+        if isinstance(value, dict):
+            return value
+        if not isinstance(value, str):
+            return None
+
+        text = value.strip()
+        if not text:
+            return None
+
+        if text.startswith("{") and text.endswith("}"):
+            try:
+                parsed = json.loads(text)
+            except json.JSONDecodeError:
+                return None
+            return parsed if isinstance(parsed, dict) else None
+
+        return None
+
+    @staticmethod
+    def _normalize_hash_list(value: Any) -> list[str] | None:
+        """Normalize a list of one-byte hash strings."""
+        if not isinstance(value, list):
+            return None
+
+        normalized: list[str] = []
+        for item in value:
+            if not isinstance(item, str):
+                continue
+            token = item.strip().upper()
+            if len(token) != 2:
+                continue
+            if any(ch not in "0123456789ABCDEF" for ch in token):
+                continue
+            normalized.append(token)
+        return normalized or None
+
+    @staticmethod
+    def _normalize_float_list(value: Any) -> list[float] | None:
+        """Normalize a list of numeric values as floats."""
+        if not isinstance(value, list):
+            return None
+
+        normalized: list[float] = []
+        for item in value:
+            if isinstance(item, (int, float)):
+                normalized.append(float(item))
+        return normalized or None
+
+    @staticmethod
+    def _extract_public_key_from_hex(value: str) -> str | None:
+        """Extract the first 64-char hex segment from a payload string."""
+        match = re.search(r"([0-9A-Fa-f]{64})", value)
+        if not match:
+            return None
+        return match.group(1).upper()
+
+    @classmethod
+    def _parse_hex_or_int(cls, value: Any) -> int | None:
+        """Parse integers represented as decimal or hexadecimal strings."""
+        parsed = cls._parse_int(value)
+        if parsed is not None:
+            return parsed
+        if not isinstance(value, str):
+            return None
+        token = value.strip().removeprefix("0x").removeprefix("0X")
+        if not token:
+            return None
+        if any(ch not in "0123456789ABCDEFabcdef" for ch in token):
+            return None
+        try:
+            return int(token, 16)
+        except ValueError:
+            return None
 
     @classmethod
     def _extract_letsmesh_decoder_payload_type(

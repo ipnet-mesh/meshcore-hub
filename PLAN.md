@@ -489,6 +489,16 @@ ${DATA_HOME}/
 |----------|---------|-------------|
 | DATABASE_URL | sqlite:///{DATA_HOME}/collector/meshcore.db | SQLAlchemy URL |
 | TAGS_FILE | {DATA_HOME}/collector/tags.json | Path to tags JSON file |
+| COLLECTOR_INGEST_MODE | native | Ingest mode (`native` or `letsmesh_upload`) |
+| COLLECTOR_LETSMESH_DECODER_ENABLED | true | Enable external packet decoding in LetsMesh mode |
+
+LetsMesh compatibility parity note:
+- `status` feed packets are stored as informational `letsmesh_status` events and do not create advertisement rows.
+- Advertisement rows in LetsMesh mode are created from decoded payload type `4` only.
+- Decoded payload type `11` is normalized to native `contact` updates.
+- Decoded payload type `9` is normalized to native `trace_data`.
+- Decoded payload type `8` is normalized to informational `path_updated`.
+- Decoded payload type `1` can map to native response-style events when decrypted structured content is available.
 
 ### API
 | Variable | Default | Description |
