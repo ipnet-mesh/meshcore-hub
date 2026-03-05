@@ -12,6 +12,19 @@ def test_decode_payload_returns_none_without_raw() -> None:
     assert decoder.decode_payload({"packet_type": 5}) is None
 
 
+def test_decode_payload_rejects_non_hex_raw_without_invoking_decoder() -> None:
+    """Decoder returns None and does not execute subprocess for invalid raw hex."""
+    decoder = LetsMeshPacketDecoder(enabled=True, command="meshcore-decoder")
+
+    with (
+        patch("meshcore_hub.collector.letsmesh_decoder.shutil.which", return_value="1"),
+        patch("meshcore_hub.collector.letsmesh_decoder.subprocess.run") as mock_run,
+    ):
+        assert decoder.decode_payload({"raw": "ZZ-not-hex"}) is None
+
+    mock_run.assert_not_called()
+
+
 def test_decode_payload_invokes_decoder_with_keys() -> None:
     """Decoder command includes channel keys and returns parsed JSON."""
     decoder = LetsMeshPacketDecoder(

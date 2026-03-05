@@ -2,6 +2,7 @@ import { apiGet } from '../api.js';
 import {
     html, litRender, nothing, t,
     getConfig, formatDateTime, formatDateTimeShort,
+    getChannelLabelsMap, resolveChannelLabel,
     truncateKey, errorAlert,
     pagination, timezoneIndicator,
     createFilterHandler, autoSubmit, submitOnEnter
@@ -16,27 +17,10 @@ export async function render(container, params, router) {
     const offset = (page - 1) * limit;
 
     const config = getConfig();
+    const channelLabels = getChannelLabelsMap(config);
     const tz = config.timezone || '';
     const tzBadge = tz && tz !== 'UTC' ? html`<span class="text-sm opacity-60">${tz}</span>` : nothing;
     const navigate = (url) => router.navigate(url);
-    const configuredChannelLabels = new Map(
-        Object.entries(config.channel_labels || {})
-            .map(([idx, label]) => [parseInt(idx, 10), typeof label === 'string' ? label.trim() : ''])
-            .filter(([idx, label]) => Number.isInteger(idx) && label.length > 0),
-    );
-    const builtInChannelLabels = new Map([
-        [17, 'Public'],
-        [217, '#test'],
-        [202, '#bot'],
-        [184, '#chat'],
-        [159, '#jokes'],
-        [221, '#sports'],
-        [104, '#emergency'],
-    ]);
-
-    function knownChannelLabel(channelIdx) {
-        return configuredChannelLabels.get(channelIdx) || builtInChannelLabels.get(channelIdx) || null;
-    }
 
     function channelInfo(msg) {
         if (msg.message_type !== 'channel') {
@@ -45,7 +29,7 @@ export async function render(container, params, router) {
         const rawText = msg.text || '';
         const match = rawText.match(/^\[([^\]]+)\]\s+([\s\S]*)$/);
         if (msg.channel_idx !== null && msg.channel_idx !== undefined) {
-            const knownLabel = knownChannelLabel(msg.channel_idx);
+            const knownLabel = resolveChannelLabel(msg.channel_idx, channelLabels);
             if (knownLabel) {
                 return {
                     label: knownLabel,
@@ -63,7 +47,7 @@ export async function render(container, params, router) {
             };
         }
         if (msg.channel_idx !== null && msg.channel_idx !== undefined) {
-            const knownLabel = knownChannelLabel(msg.channel_idx);
+            const knownLabel = resolveChannelLabel(msg.channel_idx, channelLabels);
             return { label: knownLabel || `Ch ${msg.channel_idx}`, text: rawText || '-' };
         }
         return { label: t('messages.type_channel'), text: rawText || '-' };

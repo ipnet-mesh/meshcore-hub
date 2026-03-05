@@ -183,6 +183,9 @@ class LetsMeshPacketDecoder:
         clean_hex = raw_hex.strip()
         if not clean_hex:
             return None
+        if not self._is_hex(clean_hex):
+            logger.debug("LetsMesh decoder skipped non-hex raw payload")
+            return None
         cached = self._decode_cache.get(clean_hex)
         if clean_hex in self._decode_cache:
             return cached

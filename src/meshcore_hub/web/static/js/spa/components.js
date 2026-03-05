@@ -23,6 +23,34 @@ export function getConfig() {
 }
 
 /**
+ * Build channel label map from app config.
+ * Keys are numeric channel indexes and values are non-empty labels.
+ *
+ * @param {Object} [config]
+ * @returns {Map<number, string>}
+ */
+export function getChannelLabelsMap(config = getConfig()) {
+    return new Map(
+        Object.entries(config.channel_labels || {})
+            .map(([idx, label]) => [parseInt(idx, 10), typeof label === 'string' ? label.trim() : ''])
+            .filter(([idx, label]) => Number.isInteger(idx) && label.length > 0),
+    );
+}
+
+/**
+ * Resolve a channel label from a numeric index.
+ *
+ * @param {number|string} channelIdx
+ * @param {Map<number, string>} [channelLabels]
+ * @returns {string|null}
+ */
+export function resolveChannelLabel(channelIdx, channelLabels = getChannelLabelsMap()) {
+    const parsed = parseInt(String(channelIdx), 10);
+    if (!Number.isInteger(parsed)) return null;
+    return channelLabels.get(parsed) || null;
+}
+
+/**
  * Parse API datetime strings reliably.
  * MeshCore API often returns UTC timestamps without an explicit timezone suffix.
  * In that case, treat them as UTC by appending 'Z' before Date parsing.

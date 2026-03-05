@@ -55,8 +55,6 @@ async def list_nodes(
                     Node.adv_type == "repeater",
                     Node.adv_type.ilike("%repeater%"),
                     Node.adv_type.ilike("%relay%"),
-                    Node.name.ilike("%repeater%"),
-                    Node.name.ilike("%relay%"),
                 )
             )
         elif normalized_adv_type == "companion":
@@ -65,8 +63,6 @@ async def list_nodes(
                     Node.adv_type == "companion",
                     Node.adv_type.ilike("%companion%"),
                     Node.adv_type.ilike("%observer%"),
-                    Node.name.ilike("%companion%"),
-                    Node.name.ilike("%observer%"),
                 )
             )
         elif normalized_adv_type == "room":
@@ -74,7 +70,6 @@ async def list_nodes(
                 or_(
                     Node.adv_type == "room",
                     Node.adv_type.ilike("%room%"),
-                    Node.name.ilike("%room%"),
                 )
             )
         elif normalized_adv_type == "chat":

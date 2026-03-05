@@ -1,35 +1,17 @@
 import { apiGet } from '../api.js';
 import {
     html, litRender, nothing,
-    getConfig, typeEmoji, errorAlert, pageColors, t, formatDateTime,
+    getConfig, getChannelLabelsMap, resolveChannelLabel,
+    typeEmoji, errorAlert, pageColors, t, formatDateTime,
 } from '../components.js';
 import {
     iconNodes, iconAdvertisements, iconMessages, iconChannel,
 } from '../icons.js';
 
-function knownChannelLabel(channelIdx) {
-    const config = getConfig();
-    const configuredChannelLabels = new Map(
-        Object.entries(config.channel_labels || {})
-            .map(([idx, label]) => [parseInt(idx, 10), typeof label === 'string' ? label.trim() : ''])
-            .filter(([idx, label]) => Number.isInteger(idx) && label.length > 0),
-    );
-    const builtInChannelLabels = new Map([
-        [17, 'Public'],
-        [217, '#test'],
-        [202, '#bot'],
-        [184, '#chat'],
-        [159, '#jokes'],
-        [221, '#sports'],
-        [104, '#emergency'],
-    ]);
-    return configuredChannelLabels.get(channelIdx) || builtInChannelLabels.get(channelIdx) || null;
-}
-
-function channelLabel(channel) {
+function channelLabel(channel, channelLabels) {
     const idx = parseInt(String(channel), 10);
     if (Number.isInteger(idx)) {
-        return knownChannelLabel(idx) || `Ch ${idx}`;
+        return resolveChannelLabel(idx, channelLabels) || `Ch ${idx}`;
     }
     return String(channel);
 }
@@ -84,11 +66,11 @@ function renderRecentAds(ads) {
     </div>`;
 }
 
-function renderChannelMessages(channelMessages) {
+function renderChannelMessages(channelMessages, channelLabels) {
     if (!channelMessages || Object.keys(channelMessages).length === 0) return nothing;
 
     const channels = Object.entries(channelMessages).map(([channel, messages]) => {
-        const label = channelLabel(channel);
+        const label = channelLabel(channel, channelLabels);
         const msgLines = messages.map(msg => html`
             <div class="text-sm">
                 <span class="text-xs opacity-50">${formatTimeShort(msg.received_at)}</span>
@@ -127,6 +109,7 @@ function gridCols(count) {
 export async function render(container, params, router) {
     try {
         const config = getConfig();
+        const channelLabels = getChannelLabelsMap(config);
         const features = config.features || {};
         const showNodes = features.nodes !== false;
         const showAdverts = features.advertisements !== false;
@@ -242,7 +225,7 @@ ${bottomCount > 0 ? html`
         </div>
     </div>` : nothing}
 
-    ${showMessages ? renderChannelMessages(stats.channel_messages) : nothing}
+    ${showMessages ? renderChannelMessages(stats.channel_messages, channelLabels) : nothing}
 </div>` : nothing}`, container);
 
         window.initDashboardCharts(
