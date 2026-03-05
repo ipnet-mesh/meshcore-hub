@@ -10,7 +10,7 @@ on:
       - ".python-version"
       - "pyproject.toml"
       - ".pre-commit-config.yaml"
-      - ".github/workflows/ci.yml"
+      - ".github/workflows/**"
 
 jobs:
   lint:
