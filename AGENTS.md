@@ -640,7 +640,8 @@ ${CONTENT_HOME}/
 │   └── getting-started.md # Example: Getting Started (/pages/getting-started)
 └── media/            # Custom media files
     └── images/
-        └── logo.svg  # Custom logo (replaces default favicon and navbar/home logo)
+        ├── logo.svg          # Full-color custom logo (default)
+        └── logo-invert.svg   # Monochrome custom logo (darkened in light mode)
 ```
 
 Pages use YAML frontmatter for metadata:
