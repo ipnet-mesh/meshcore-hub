@@ -480,15 +480,17 @@ Control which pages are visible in the web dashboard. Disabled features are full
 
 The web dashboard supports custom content including markdown pages and media files. Content is organized in subdirectories:
 
-Custom logo note:
-- If a custom logo file is present, the UI keeps its original colors in both light/dark themes (no automatic light-mode darkening).
+Custom logo options:
+- `logo.svg` — full-color logo, displayed as-is in both themes (no automatic darkening)
+- `logo-invert.svg` — monochrome/two-tone logo, automatically darkened in light mode for visibility
 ```
 content/
 ├── pages/     # Custom markdown pages
 │   └── about.md
 └── media/     # Custom media files
     └── images/
-        └── logo.svg   # Custom logo (replaces favicon and navbar/home logo)
+        ├── logo.svg          # Full-color custom logo (default)
+        └── logo-invert.svg   # Monochrome custom logo (darkened in light mode)
 ```
 
 **Setup:**

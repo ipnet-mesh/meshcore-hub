@@ -56,13 +56,15 @@ def _resolve_logo(media_home: Path) -> tuple[str, bool, Path | None]:
     Returns:
         tuple of (logo_url, invert_in_light_mode, resolved_path)
     """
-    custom_logo_candidates = (("logo.svg", "/media/images/logo.svg"),)
-    for filename, url in custom_logo_candidates:
+    custom_logo_candidates = (
+        ("logo-invert.svg", "/media/images/logo-invert.svg", True),
+        ("logo.svg", "/media/images/logo.svg", False),
+    )
+    for filename, url, invert_in_light_mode in custom_logo_candidates:
         path = media_home / "images" / filename
         if path.exists():
-            # Custom logos are assumed to be full-color and should not be darkened.
             cache_buster = int(path.stat().st_mtime)
-            return f"{url}?v={cache_buster}", False, path
+            return f"{url}?v={cache_buster}", invert_in_light_mode, path
 
     # Default packaged logo is monochrome and needs darkening in light mode.
     return "/static/img/logo.svg", True, None
