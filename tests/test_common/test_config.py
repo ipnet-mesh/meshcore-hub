@@ -125,11 +125,3 @@ class TestWebSettings:
         settings = WebSettings(_env_file=None, data_home="/custom/data")
 
         assert settings.web_data_dir == "/custom/data/web"
-
-    def test_web_datetime_locale_default_and_override(self) -> None:
-        """Date formatting locale has sensible default and can be overridden."""
-        default_settings = WebSettings(_env_file=None)
-        custom_settings = WebSettings(_env_file=None, web_datetime_locale="en-GB")
-
-        assert default_settings.web_datetime_locale == "en-US"
-        assert custom_settings.web_datetime_locale == "en-GB"

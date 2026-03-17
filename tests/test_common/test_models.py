@@ -137,6 +137,44 @@ class TestTracePathModel:
         assert trace.initiator_tag == 123456789
         assert trace.path_hashes == ["4a", "b3", "fa"]
 
+    def test_multibyte_path_hashes_round_trip(self, db_session) -> None:
+        """Test that multibyte (4-char) path hashes round-trip correctly."""
+        path_hashes = ["4a2b", "b3fa", "02cd"]
+        trace = TracePath(
+            initiator_tag=987654321,
+            path_len=3,
+            path_hashes=path_hashes,
+            snr_values=[20.0, 15.0, 10.0],
+            hop_count=3,
+        )
+        db_session.add(trace)
+        db_session.commit()
+
+        # Expire cached attributes to force reload from database
+        db_session.expire(trace)
+
+        assert trace.path_hashes == ["4a2b", "b3fa", "02cd"]
+        assert len(trace.path_hashes) == 3
+
+    def test_mixed_length_path_hashes_round_trip(self, db_session) -> None:
+        """Test that mixed-length path hashes round-trip correctly."""
+        path_hashes = ["4a", "b3fa", "02"]
+        trace = TracePath(
+            initiator_tag=111222333,
+            path_len=3,
+            path_hashes=path_hashes,
+            snr_values=[22.0, 17.5, 11.0],
+            hop_count=3,
+        )
+        db_session.add(trace)
+        db_session.commit()
+
+        # Expire cached attributes to force reload from database
+        db_session.expire(trace)
+
+        assert trace.path_hashes == ["4a", "b3fa", "02"]
+        assert len(trace.path_hashes) == 3
+
 
 class TestTelemetryModel:
     """Tests for Telemetry model."""

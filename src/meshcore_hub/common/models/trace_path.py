@@ -20,7 +20,7 @@ class TracePath(Base, UUIDMixin, TimestampMixin):
         path_len: Path length
         flags: Trace flags
         auth: Authentication data
-        path_hashes: JSON array of node hash identifiers
+        path_hashes: JSON array of hex-encoded node hash identifiers (variable length)
         snr_values: JSON array of SNR values per hop
         hop_count: Total number of hops
         received_at: When received by interface

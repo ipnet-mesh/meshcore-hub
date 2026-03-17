@@ -155,7 +155,8 @@ class TracePathRead(BaseModel):
     flags: Optional[int] = Field(default=None, description="Trace flags")
     auth: Optional[int] = Field(default=None, description="Auth data")
     path_hashes: Optional[list[str]] = Field(
-        default=None, description="Node hash identifiers"
+        default=None,
+        description="Hex-encoded node hash identifiers (variable length, e.g. '4a' for single-byte or 'b3fa' for multibyte)",
     )
     snr_values: Optional[list[float]] = Field(
         default=None, description="SNR values per hop"

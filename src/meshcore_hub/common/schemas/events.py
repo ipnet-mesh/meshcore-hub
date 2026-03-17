@@ -133,7 +133,7 @@ class TraceDataEvent(BaseModel):
     )
     path_hashes: Optional[list[str]] = Field(
         default=None,
-        description="Array of 2-character node hash identifiers",
+        description="Array of hex-encoded node hash identifiers (variable length, e.g. '4a' for single-byte or 'b3fa' for multibyte)",
     )
     snr_values: Optional[list[float]] = Field(
         default=None,

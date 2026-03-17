@@ -722,7 +722,12 @@ class LetsMeshNormalizer:
 
     @staticmethod
     def _normalize_hash_list(value: Any) -> list[str] | None:
-        """Normalize a list of one-byte hash strings."""
+        """Normalize a list of variable-length hex hash strings.
+
+        Accepts even-length hex strings of 2 or more characters.
+        Each string is uppercased and validated as hexadecimal.
+        Odd-length strings, empty strings, and non-hex strings are skipped.
+        """
         if not isinstance(value, list):
             return None
 
@@ -731,7 +736,7 @@ class LetsMeshNormalizer:
             if not isinstance(item, str):
                 continue
             token = item.strip().upper()
-            if len(token) != 2:
+            if len(token) < 2 or len(token) % 2 != 0:
                 continue
             if any(ch not in "0123456789ABCDEF" for ch in token):
                 continue

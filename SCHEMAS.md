@@ -225,7 +225,7 @@ Network trace path results showing route and signal strength.
 - `path_len`: Length of the path
 - `flags`: Trace flags/options
 - `auth`: Authentication/validation data
-- `path_hashes`: Array of 2-character node hash identifiers (ordered by hops)
+- `path_hashes`: Array of hex-encoded node hash identifiers, variable length (e.g., `"4a"` for single-byte, `"b3fa"` for multibyte), ordered by hops
 - `snr_values`: Array of SNR values corresponding to each hop
 - `hop_count`: Total number of hops
 
@@ -236,11 +236,13 @@ Network trace path results showing route and signal strength.
   "path_len": 3,
   "flags": 0,
   "auth": 1,
-  "path_hashes": ["4a", "b3", "fa"],
+  "path_hashes": ["4a", "b3fa", "02"],
   "snr_values": [25.3, 18.7, 12.4],
   "hop_count": 3
 }
 ```
+
+**Note**: MeshCore firmware v1.14+ supports multibyte path hashes. Older nodes use single-byte (2-character) hashes. Mixed-length hash arrays are expected in heterogeneous networks where nodes run different firmware versions.
 
 **Webhook Trigger**: No
 **REST API**: `GET /api/v1/trace-paths`

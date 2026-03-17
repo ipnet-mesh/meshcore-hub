@@ -2,6 +2,53 @@
 
 from datetime import datetime, timedelta, timezone
 
+from meshcore_hub.common.models import TracePath
+
+
+class TestMultibytePathHashes:
+    """Tests for multibyte path hash support in trace path API responses."""
+
+    def test_list_trace_paths_returns_multibyte_path_hashes(
+        self, client_no_auth, api_db_session
+    ):
+        """Test that GET /trace-paths returns multibyte path hashes faithfully."""
+        multibyte_hashes = ["4a2b", "b3fa"]
+        trace = TracePath(
+            initiator_tag=77777,
+            path_hashes=multibyte_hashes,
+            hop_count=2,
+            received_at=datetime.now(timezone.utc),
+        )
+        api_db_session.add(trace)
+        api_db_session.commit()
+        api_db_session.refresh(trace)
+
+        response = client_no_auth.get("/api/v1/trace-paths")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["items"]) == 1
+        assert data["items"][0]["path_hashes"] == multibyte_hashes
+
+    def test_get_trace_path_returns_mixed_length_path_hashes(
+        self, client_no_auth, api_db_session
+    ):
+        """Test that GET /trace-paths/{id} returns mixed-length path hashes."""
+        mixed_hashes = ["4a", "b3fa", "02"]
+        trace = TracePath(
+            initiator_tag=88888,
+            path_hashes=mixed_hashes,
+            hop_count=3,
+            received_at=datetime.now(timezone.utc),
+        )
+        api_db_session.add(trace)
+        api_db_session.commit()
+        api_db_session.refresh(trace)
+
+        response = client_no_auth.get(f"/api/v1/trace-paths/{trace.id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["path_hashes"] == mixed_hashes
+
 
 class TestListTracePaths:
     """Tests for GET /trace-paths endpoint."""

@@ -608,6 +608,107 @@ class TestSubscriber:
         assert payload["hop_count"] == 4
         assert payload["snr_values"] == [12.5, 11.5, 10.0, 6.25]
 
+    def test_letsmesh_trace_data_with_multibyte_path_hashes(
+        self, mock_mqtt_client, db_manager
+    ) -> None:
+        """Multibyte path hashes flow through the collector pipeline correctly."""
+        mock_mqtt_client.topic_builder.parse_letsmesh_upload_topic.return_value = (
+            "a" * 64,
+            "packets",
+        )
+        subscriber = Subscriber(
+            mock_mqtt_client,
+            db_manager,
+            ingest_mode="letsmesh_upload",
+        )
+        trace_handler = MagicMock()
+        subscriber.register_handler("trace_data", trace_handler)
+        subscriber.start()
+
+        with patch.object(
+            subscriber._letsmesh_decoder,
+            "decode_payload",
+            return_value={
+                "payloadType": 9,
+                "pathLength": 3,
+                "payload": {
+                    "decoded": {
+                        "type": 9,
+                        "traceTag": "DF9D7A20",
+                        "authCode": 0,
+                        "flags": 0,
+                        "pathHashes": ["71a2", "0Bcd", "24ef"],
+                        "snrValues": [12.5, 11.5, 10.0],
+                    }
+                },
+            },
+        ):
+            subscriber._handle_mqtt_message(
+                topic=f"meshcore/BOS/{'a' * 64}/packets",
+                pattern="meshcore/BOS/+/packets",
+                payload={
+                    "packet_type": "9",
+                    "hash": "99887766",
+                    "raw": "ABCDEF",
+                },
+            )
+
+        trace_handler.assert_called_once()
+        _public_key, event_type, payload, _db = trace_handler.call_args.args
+        assert event_type == "trace_data"
+        assert payload["path_hashes"] == ["71A2", "0BCD", "24EF"]
+        assert payload["hop_count"] == 3
+
+    def test_letsmesh_path_updated_with_multibyte_path_hashes(
+        self, mock_mqtt_client, db_manager
+    ) -> None:
+        """Multibyte path hashes in path_updated events are normalized correctly."""
+        mock_mqtt_client.topic_builder.parse_letsmesh_upload_topic.return_value = (
+            "a" * 64,
+            "packets",
+        )
+        subscriber = Subscriber(
+            mock_mqtt_client,
+            db_manager,
+            ingest_mode="letsmesh_upload",
+        )
+        path_handler = MagicMock()
+        subscriber.register_handler("path_updated", path_handler)
+        subscriber.start()
+
+        with patch.object(
+            subscriber._letsmesh_decoder,
+            "decode_payload",
+            return_value={
+                "payloadType": 8,
+                "payload": {
+                    "decoded": {
+                        "type": 8,
+                        "isValid": True,
+                        "pathLength": 2,
+                        "pathHashes": ["AA11", "BB22"],
+                        "extraType": 244,
+                        "extraData": "D" * 64,
+                    }
+                },
+            },
+        ):
+            subscriber._handle_mqtt_message(
+                topic=f"meshcore/BOS/{'a' * 64}/packets",
+                pattern="meshcore/BOS/+/packets",
+                payload={
+                    "packet_type": "8",
+                    "hash": "99887766",
+                    "raw": "ABCDEF",
+                },
+            )
+
+        path_handler.assert_called_once()
+        _public_key, event_type, payload, _db = path_handler.call_args.args
+        assert event_type == "path_updated"
+        assert payload["path_hashes"] == ["AA11", "BB22"]
+        assert payload["hop_count"] == 2
+
     def test_letsmesh_packet_type_8_maps_to_path_updated(
         self, mock_mqtt_client, db_manager
     ) -> None:
