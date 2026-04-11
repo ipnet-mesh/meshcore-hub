@@ -26,6 +26,8 @@ services:
 
   # ==========================================================================
   # Interface Receiver - MeshCore device to MQTT bridge (events)
+  # Native receiver using the built-in meshcore-hub interface.
+  # For the packet-capture based receiver, use --profile receiver instead.
   # ==========================================================================
   interface-receiver:
     image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
@@ -35,7 +37,7 @@ services:
     container_name: meshcore-interface-receiver
     profiles:
       - all
-      - receiver
+      - native-receiver
     restart: unless-stopped
     devices:
       - "${SERIAL_PORT:-/dev/ttyUSB0}:${SERIAL_PORT:-/dev/ttyUSB0}"
@@ -99,6 +101,73 @@ services:
       start_period: 30s
 
   # ==========================================================================
+  # Interface Packet Capture - MeshCore packet capture to MQTT (serial only)
+  # Uses ghcr.io/agessaman/meshcore-packet-capture (separate image)
+  # Publishes to local MQTT (broker 3) in LetsMesh upload format, which the
+  # collector ingests with COLLECTOR_INGEST_MODE=letsmesh_upload.
+  # Optionally publish to Let's Mesh (brokers 1 & 2) for cloud map integration.
+  # ==========================================================================
+  interface-packet-capture:
+    image: ghcr.io/agessaman/meshcore-packet-capture:${PACKETCAPTURE_IMAGE_VERSION:-latest}
+    container_name: meshcore-interface-packet-capture
+    profiles:
+      - all
+      - receiver
+    restart: unless-stopped
+    devices:
+      - "${SERIAL_PORT:-/dev/ttyUSB0}:${SERIAL_PORT:-/dev/ttyUSB0}"
+    user: root
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Connection (serial only)
+      - PACKETCAPTURE_CONNECTION_TYPE=serial
+      - PACKETCAPTURE_SERIAL_PORTS=${SERIAL_PORT:-/dev/ttyUSB0}
+      - PACKETCAPTURE_TIMEOUT=${PACKETCAPTURE_TIMEOUT:-30}
+      - PACKETCAPTURE_MAX_CONNECTION_RETRIES=${PACKETCAPTURE_MAX_CONNECTION_RETRIES:-5}
+      - PACKETCAPTURE_CONNECTION_RETRY_DELAY=${PACKETCAPTURE_CONNECTION_RETRY_DELAY:-5}
+      - PACKETCAPTURE_HEALTH_CHECK_INTERVAL=${PACKETCAPTURE_HEALTH_CHECK_INTERVAL:-30}
+      # Device
+      - PACKETCAPTURE_IATA=${PACKETCAPTURE_IATA:-LOC}
+      - PACKETCAPTURE_ORIGIN=${PACKETCAPTURE_ORIGIN:-}
+      - PACKETCAPTURE_ADVERT_INTERVAL_HOURS=${PACKETCAPTURE_ADVERT_INTERVAL_HOURS:-11}
+      - PACKETCAPTURE_RF_DATA_TIMEOUT=${PACKETCAPTURE_RF_DATA_TIMEOUT:-15.0}
+      # MQTT Broker 1 - Let's Mesh US (opt-in)
+      - PACKETCAPTURE_MQTT1_ENABLED=${PACKETCAPTURE_MQTT1_ENABLED:-false}
+      - PACKETCAPTURE_MQTT1_SERVER=${PACKETCAPTURE_MQTT1_SERVER:-mqtt-us-v1.letsmesh.net}
+      - PACKETCAPTURE_MQTT1_PORT=${PACKETCAPTURE_MQTT1_PORT:-443}
+      - PACKETCAPTURE_MQTT1_TRANSPORT=websockets
+      - PACKETCAPTURE_MQTT1_USE_TLS=${PACKETCAPTURE_MQTT1_USE_TLS:-true}
+      - PACKETCAPTURE_MQTT1_USE_AUTH_TOKEN=${PACKETCAPTURE_MQTT1_USE_AUTH_TOKEN:-true}
+      - PACKETCAPTURE_MQTT1_TOKEN_AUDIENCE=${PACKETCAPTURE_MQTT1_TOKEN_AUDIENCE:-mqtt-us-v1.letsmesh.net}
+      - PACKETCAPTURE_MQTT1_KEEPALIVE=${PACKETCAPTURE_MQTT1_KEEPALIVE:-120}
+      # MQTT Broker 2 - Let's Mesh EU (opt-in)
+      - PACKETCAPTURE_MQTT2_ENABLED=${PACKETCAPTURE_MQTT2_ENABLED:-false}
+      - PACKETCAPTURE_MQTT2_SERVER=${PACKETCAPTURE_MQTT2_SERVER:-mqtt-eu-v1.letsmesh.net}
+      - PACKETCAPTURE_MQTT2_PORT=${PACKETCAPTURE_MQTT2_PORT:-443}
+      - PACKETCAPTURE_MQTT2_TRANSPORT=websockets
+      - PACKETCAPTURE_MQTT2_USE_TLS=${PACKETCAPTURE_MQTT2_USE_TLS:-true}
+      - PACKETCAPTURE_MQTT2_USE_AUTH_TOKEN=${PACKETCAPTURE_MQTT2_USE_AUTH_TOKEN:-true}
+      - PACKETCAPTURE_MQTT2_TOKEN_AUDIENCE=${PACKETCAPTURE_MQTT2_TOKEN_AUDIENCE:-mqtt-eu-v1.letsmesh.net}
+      - PACKETCAPTURE_MQTT2_KEEPALIVE=${PACKETCAPTURE_MQTT2_KEEPALIVE:-120}
+      # MQTT Broker 3 - Local MQTT (wired to hub's MQTT_* vars)
+      - PACKETCAPTURE_MQTT3_ENABLED=${PACKETCAPTURE_MQTT3_ENABLED:-true}
+      - PACKETCAPTURE_MQTT3_SERVER=${MQTT_HOST}
+      - PACKETCAPTURE_MQTT3_PORT=${MQTT_PORT}
+      - PACKETCAPTURE_MQTT3_USERNAME=${MQTT_USERNAME:-}
+      - PACKETCAPTURE_MQTT3_PASSWORD=${MQTT_PASSWORD:-}
+      - PACKETCAPTURE_MQTT3_USE_TLS=${MQTT_TLS:-false}
+      - PACKETCAPTURE_MQTT3_KEEPALIVE=${PACKETCAPTURE_MQTT3_KEEPALIVE:-60}
+      # Topics match collector's expected <prefix>/<pubkey>/<feed> format
+      - PACKETCAPTURE_MQTT3_TOPIC_STATUS=meshcore/{PUBLIC_KEY}/status
+      - PACKETCAPTURE_MQTT3_TOPIC_PACKETS=meshcore/{PUBLIC_KEY}/packets
+      # MQTT reconnection
+      - PACKETCAPTURE_MAX_MQTT_RETRIES=${PACKETCAPTURE_MAX_MQTT_RETRIES:-5}
+      - PACKETCAPTURE_MQTT_RETRY_DELAY=${PACKETCAPTURE_MQTT_RETRY_DELAY:-5}
+      - PACKETCAPTURE_EXIT_ON_RECONNECT_FAIL=${PACKETCAPTURE_EXIT_ON_RECONNECT_FAIL:-true}
+    volumes:
+      - packetcapture_data:/app/data
+
+  # ==========================================================================
   # Interface Mock Receiver - For testing without real devices
   # ==========================================================================
   interface-mock-receiver:
@@ -109,7 +178,7 @@ services:
     container_name: meshcore-interface-mock-receiver
     profiles:
       - all
-      - mock
+      - native-receiver
     restart: unless-stopped
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
@@ -160,7 +229,7 @@ services:
       - MQTT_TLS=${MQTT_TLS:-false}
       - MQTT_TRANSPORT=${MQTT_TRANSPORT:-tcp}
       - MQTT_WS_PATH=${MQTT_WS_PATH:-/mqtt}
-      - COLLECTOR_INGEST_MODE=${COLLECTOR_INGEST_MODE:-native}
+      - COLLECTOR_INGEST_MODE=${COLLECTOR_INGEST_MODE:-letsmesh_upload}
       - COLLECTOR_LETSMESH_DECODER_ENABLED=${COLLECTOR_LETSMESH_DECODER_ENABLED:-true}
       - COLLECTOR_LETSMESH_DECODER_COMMAND=${COLLECTOR_LETSMESH_DECODER_COMMAND:-meshcore-decoder}
       - COLLECTOR_LETSMESH_DECODER_KEYS=${COLLECTOR_LETSMESH_DECODER_KEYS:-}
@@ -401,3 +470,5 @@ volumes:
     name: meshcore_prometheus_data
   alertmanager_data:
     name: meshcore_alertmanager_data
+  packetcapture_data:
+    name: meshcore_packetcapture_data

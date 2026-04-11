@@ -186,7 +186,7 @@ class CollectorSettings(CommonSettings):
         ge=1,
     )
     collector_ingest_mode: CollectorIngestMode = Field(
-        default=CollectorIngestMode.NATIVE,
+        default=CollectorIngestMode.LETSMESH_UPLOAD,
         description=(
             "Collector MQTT ingest mode. "
             "'native' expects <prefix>/<pubkey>/event/<event_name>. "
