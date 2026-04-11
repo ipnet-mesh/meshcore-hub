@@ -6,7 +6,6 @@ from typing import Optional
 
 from meshcore_hub.common.config import LogLevel
 
-
 # Default log format
 DEFAULT_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 

@@ -11,7 +11,6 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
-
 # revision identifiers, used by Alembic.
 revision: str = "002"
 down_revision: Union[str, None] = "001"
@@ -64,12 +63,10 @@ def upgrade() -> None:
 
         node_id = str(uuid.uuid4())
         connection.execute(
-            sa.text(
-                """
+            sa.text("""
                 INSERT INTO member_nodes (id, member_id, public_key, created_at, updated_at)
                 VALUES (:id, :member_id, :public_key, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                """
-            ),
+                """),
             {"id": node_id, "member_id": member_id, "public_key": public_key},
         )
 
@@ -88,9 +85,7 @@ def downgrade() -> None:
 
     # Migrate data back - take the first node for each member
     connection = op.get_bind()
-    member_nodes = connection.execute(
-        sa.text(
-            """
+    member_nodes = connection.execute(sa.text("""
             SELECT DISTINCT member_id, public_key
             FROM member_nodes
             WHERE (member_id, created_at) IN (
@@ -98,9 +93,7 @@ def downgrade() -> None:
                 FROM member_nodes
                 GROUP BY member_id
             )
-            """
-        )
-    ).fetchall()
+            """)).fetchall()
 
     for member_id, public_key in member_nodes:
         connection.execute(

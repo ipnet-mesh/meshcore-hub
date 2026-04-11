@@ -60,8 +60,7 @@ class TestPageLoader:
         """Test loading a page with full frontmatter."""
         with tempfile.TemporaryDirectory() as tmpdir:
             page_path = Path(tmpdir) / "about.md"
-            page_path.write_text(
-                """---
+            page_path.write_text("""---
 title: About Us
 slug: about
 menu_order: 10
@@ -70,8 +69,7 @@ menu_order: 10
 # About
 
 This is the about page.
-"""
-            )
+""")
 
             loader = PageLoader(tmpdir)
             loader.load_pages()
@@ -88,14 +86,12 @@ This is the about page.
         """Test that slug defaults to filename when not specified."""
         with tempfile.TemporaryDirectory() as tmpdir:
             page_path = Path(tmpdir) / "my-custom-page.md"
-            page_path.write_text(
-                """---
+            page_path.write_text("""---
 title: My Custom Page
 ---
 
 Content here.
-"""
-            )
+""")
 
             loader = PageLoader(tmpdir)
             loader.load_pages()
@@ -121,14 +117,12 @@ Content here.
         """Test that menu_order defaults to 100."""
         with tempfile.TemporaryDirectory() as tmpdir:
             page_path = Path(tmpdir) / "page.md"
-            page_path.write_text(
-                """---
+            page_path.write_text("""---
 title: Test Page
 ---
 
 Content.
-"""
-            )
+""")
 
             loader = PageLoader(tmpdir)
             loader.load_pages()
@@ -141,33 +135,27 @@ Content.
         """Test that pages are sorted by menu_order then title."""
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create pages with different menu_order values
-            (Path(tmpdir) / "page-z.md").write_text(
-                """---
+            (Path(tmpdir) / "page-z.md").write_text("""---
 title: Z Page
 menu_order: 30
 ---
 
 Content.
-"""
-            )
-            (Path(tmpdir) / "page-a.md").write_text(
-                """---
+""")
+            (Path(tmpdir) / "page-a.md").write_text("""---
 title: A Page
 menu_order: 10
 ---
 
 Content.
-"""
-            )
-            (Path(tmpdir) / "page-m.md").write_text(
-                """---
+""")
+            (Path(tmpdir) / "page-m.md").write_text("""---
 title: M Page
 menu_order: 20
 ---
 
 Content.
-"""
-            )
+""")
 
             loader = PageLoader(tmpdir)
             loader.load_pages()
@@ -179,24 +167,20 @@ Content.
     def test_load_pages_secondary_sort_by_title(self) -> None:
         """Test that pages with same menu_order are sorted by title."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            (Path(tmpdir) / "zebra.md").write_text(
-                """---
+            (Path(tmpdir) / "zebra.md").write_text("""---
 title: Zebra
 menu_order: 10
 ---
 
 Content.
-"""
-            )
-            (Path(tmpdir) / "apple.md").write_text(
-                """---
+""")
+            (Path(tmpdir) / "apple.md").write_text("""---
 title: Apple
 menu_order: 10
 ---
 
 Content.
-"""
-            )
+""")
 
             loader = PageLoader(tmpdir)
             loader.load_pages()
@@ -208,24 +192,20 @@ Content.
     def test_get_page_returns_correct_page(self) -> None:
         """Test that get_page returns the page with the given slug."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            (Path(tmpdir) / "about.md").write_text(
-                """---
+            (Path(tmpdir) / "about.md").write_text("""---
 title: About
 slug: about
 ---
 
 About content.
-"""
-            )
-            (Path(tmpdir) / "contact.md").write_text(
-                """---
+""")
+            (Path(tmpdir) / "contact.md").write_text("""---
 title: Contact
 slug: contact
 ---
 
 Contact content.
-"""
-            )
+""")
 
             loader = PageLoader(tmpdir)
             loader.load_pages()
@@ -250,14 +230,12 @@ Contact content.
         """Test that reload() clears existing pages and reloads from disk."""
         with tempfile.TemporaryDirectory() as tmpdir:
             page_path = Path(tmpdir) / "page.md"
-            page_path.write_text(
-                """---
+            page_path.write_text("""---
 title: Original
 ---
 
 Content.
-"""
-            )
+""")
 
             loader = PageLoader(tmpdir)
             loader.load_pages()
@@ -267,14 +245,12 @@ Content.
             assert pages[0].title == "Original"
 
             # Update the file
-            page_path.write_text(
-                """---
+            page_path.write_text("""---
 title: Updated
 ---
 
 New content.
-"""
-            )
+""")
 
             loader.reload()
 
@@ -299,16 +275,14 @@ New content.
     def test_markdown_tables_rendered(self) -> None:
         """Test that markdown tables are rendered to HTML."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            (Path(tmpdir) / "tables.md").write_text(
-                """---
+            (Path(tmpdir) / "tables.md").write_text("""---
 title: Tables
 ---
 
 | Header 1 | Header 2 |
 |----------|----------|
 | Cell 1   | Cell 2   |
-"""
-            )
+""")
 
             loader = PageLoader(tmpdir)
             loader.load_pages()
@@ -321,8 +295,7 @@ title: Tables
     def test_markdown_fenced_code_rendered(self) -> None:
         """Test that fenced code blocks are rendered."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            (Path(tmpdir) / "code.md").write_text(
-                """---
+            (Path(tmpdir) / "code.md").write_text("""---
 title: Code
 ---
 
@@ -330,8 +303,7 @@ title: Code
 def hello():
     print("Hello!")
 ```
-"""
-            )
+""")
 
             loader = PageLoader(tmpdir)
             loader.load_pages()
@@ -357,8 +329,7 @@ class TestPagesRoute:
             # Create pages subdirectory (CONTENT_HOME/pages)
             pages_subdir = Path(tmpdir) / "pages"
             pages_subdir.mkdir()
-            (pages_subdir / "about.md").write_text(
-                """---
+            (pages_subdir / "about.md").write_text("""---
 title: About Us
 slug: about
 menu_order: 10
@@ -367,10 +338,8 @@ menu_order: 10
 # About Our Network
 
 Welcome to the network.
-"""
-            )
-            (pages_subdir / "faq.md").write_text(
-                """---
+""")
+            (pages_subdir / "faq.md").write_text("""---
 title: FAQ
 slug: faq
 menu_order: 20
@@ -379,8 +348,7 @@ menu_order: 20
 # Frequently Asked Questions
 
 Here are some answers.
-"""
-            )
+""")
             yield tmpdir
 
     @pytest.fixture
@@ -505,15 +473,13 @@ class TestPagesInSitemap:
             # Create pages subdirectory (CONTENT_HOME/pages)
             pages_subdir = Path(tmpdir) / "pages"
             pages_subdir.mkdir()
-            (pages_subdir / "about.md").write_text(
-                """---
+            (pages_subdir / "about.md").write_text("""---
 title: About
 slug: about
 ---
 
 About page.
-"""
-            )
+""")
             yield tmpdir
 
     @pytest.fixture

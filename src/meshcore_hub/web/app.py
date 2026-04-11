@@ -648,12 +648,7 @@ def create_app(
                     disallow_lines.append(line)
 
         disallow_block = "\n".join(disallow_lines)
-        return (
-            f"User-agent: *\n"
-            f"{disallow_block}\n"
-            f"\n"
-            f"Sitemap: {base_url}/sitemap.xml\n"
-        )
+        return f"User-agent: *\n{disallow_block}\n\nSitemap: {base_url}/sitemap.xml\n"
 
     @app.get("/sitemap.xml")
     async def sitemap_xml(request: Request) -> Response:
@@ -721,9 +716,9 @@ def create_app(
         config_json = _build_config_json(request.app, request)
 
         return templates_inst.TemplateResponse(
+            request,
             "spa.html",
             {
-                "request": request,
                 "network_name": request.app.state.network_name,
                 "network_city": request.app.state.network_city,
                 "network_country": request.app.state.network_country,
