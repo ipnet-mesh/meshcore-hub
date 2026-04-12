@@ -259,20 +259,9 @@ def _run_collector_service(
         click.echo(f"  Interval: {settings.data_retention_interval_hours} hours")
 
     click.echo("")
-    click.echo("LetsMesh decode configuration:")
-    if settings.collector_letsmesh_decoder_enabled:
-        builtin_keys = len(LetsMeshPacketDecoder.BUILTIN_CHANNEL_KEYS)
-        env_keys = len(settings.collector_letsmesh_decoder_keys_list)
-        click.echo(
-            f"  Decoder: Enabled ({settings.collector_letsmesh_decoder_command})"
-        )
-        click.echo(f"  Built-in keys: {builtin_keys}")
-        click.echo(f"  Additional keys from .env: {env_keys} configured")
-        click.echo(
-            f"  Timeout: {settings.collector_letsmesh_decoder_timeout_seconds:.2f}s"
-        )
-    else:
-        click.echo("  Decoder: Disabled")
+    builtin_keys = len(LetsMeshPacketDecoder.BUILTIN_CHANNEL_KEYS)
+    env_keys = len(settings.collector_letsmesh_decoder_keys_list)
+    click.echo(f"Packet decoder: {builtin_keys} built-in keys, {env_keys} from .env")
 
     click.echo("")
     click.echo("Starting MQTT subscriber...")
@@ -292,12 +281,7 @@ def _run_collector_service(
         cleanup_interval_hours=settings.data_retention_interval_hours,
         node_cleanup_enabled=settings.node_cleanup_enabled,
         node_cleanup_days=settings.node_cleanup_days,
-        letsmesh_decoder_enabled=settings.collector_letsmesh_decoder_enabled,
-        letsmesh_decoder_command=settings.collector_letsmesh_decoder_command,
         letsmesh_decoder_channel_keys=settings.collector_letsmesh_decoder_keys_list,
-        letsmesh_decoder_timeout_seconds=(
-            settings.collector_letsmesh_decoder_timeout_seconds
-        ),
     )
 
 

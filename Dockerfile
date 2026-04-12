@@ -65,25 +65,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # For serial port access
     udev \
-    # LetsMesh decoder runtime
-    nodejs \
-    npm \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /data
-
-# Install meshcore-decoder CLI.
-RUN mkdir -p /opt/letsmesh-decoder \
-    && cd /opt/letsmesh-decoder \
-    && npm init -y >/dev/null 2>&1 \
-    && npm install --omit=dev @michaelhart/meshcore-decoder@0.2.7 patch-package
-
-# Apply maintained meshcore-decoder compatibility patch.
-COPY patches/@michaelhart+meshcore-decoder+0.2.7.patch /opt/letsmesh-decoder/patches/@michaelhart+meshcore-decoder+0.2.7.patch
-RUN cd /opt/letsmesh-decoder \
-    && npx patch-package --error-on-fail \
-    && npm uninstall patch-package \
-    && npm prune --omit=dev
-RUN ln -s /opt/letsmesh-decoder/node_modules/.bin/meshcore-decoder /usr/local/bin/meshcore-decoder
 
 # Copy virtual environment from builder
 COPY --from=builder /opt/venv /opt/venv

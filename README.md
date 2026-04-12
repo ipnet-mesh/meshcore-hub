@@ -185,10 +185,7 @@ All components are configured via environment variables. Create a `.env` file or
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `COLLECTOR_LETSMESH_DECODER_ENABLED` | `true` | Enable external LetsMesh packet decoding |
-| `COLLECTOR_LETSMESH_DECODER_COMMAND` | `meshcore-decoder` | Decoder CLI command |
 | `COLLECTOR_LETSMESH_DECODER_KEYS` | *(none)* | Additional decoder channel keys (`label=hex`, `label:hex`, or `hex`) |
-| `COLLECTOR_LETSMESH_DECODER_TIMEOUT_SECONDS` | `2.0` | Timeout per decoder invocation |
 
 #### LetsMesh Packet Decoding
 
@@ -216,7 +213,7 @@ Normalization behavior:
 - Packets without decryptable message text are kept as informational `letsmesh_packet` events and are not shown in the messages feed; when decode succeeds the decoded JSON is attached to those packet log events.
 - When decoder output includes a human sender (`payload.decoded.decrypted.sender`), message text is normalized to `Name: Message` before storage; receiver/observer names are never used as sender fallback.
 - The collector keeps built-in keys for `Public` and `#test`, and merges any additional keys from `COLLECTOR_LETSMESH_DECODER_KEYS`.
-- Docker runtime installs `@michaelhart/meshcore-decoder@0.2.7` and applies `patches/@michaelhart+meshcore-decoder+0.2.7.patch` via `patch-package` for Node compatibility.
+- Docker runtime uses the native Python `meshcoredecoder` library (no external Node.js dependency).
 
 ### Webhooks
 

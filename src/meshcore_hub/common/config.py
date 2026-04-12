@@ -138,29 +138,12 @@ class CollectorSettings(CommonSettings):
         description="Remove nodes not seen for this many days (last_seen)",
         ge=1,
     )
-    collector_letsmesh_decoder_enabled: bool = Field(
-        default=True,
-        description=("Enable external LetsMesh packet decoding via meshcore-decoder."),
-    )
-    collector_letsmesh_decoder_command: str = Field(
-        default="meshcore-decoder",
-        description=(
-            "Command used to run LetsMesh packet decoder CLI "
-            "(for example: meshcore-decoder, /usr/local/bin/meshcore-decoder, "
-            "or 'npx meshcore-decoder')."
-        ),
-    )
     collector_letsmesh_decoder_keys: Optional[str] = Field(
         default=None,
         description=(
             "Optional channel secret keys for LetsMesh message decryption. "
             "Provide as comma/space separated hex values."
         ),
-    )
-    collector_letsmesh_decoder_timeout_seconds: float = Field(
-        default=2.0,
-        description="Timeout in seconds for each decoder invocation.",
-        ge=0.1,
     )
 
     @property

@@ -42,6 +42,7 @@ dependencies = [
     "python-frontmatter>=1.0.0",
     "markdown>=3.5.0",
     "prometheus-client>=0.20.0",
+    "meshcoredecoder>=0.3.2",
 ]
 
 [project.optional-dependencies]
@@ -117,6 +118,7 @@ module = [
     "frontmatter.*",
     "markdown.*",
     "prometheus_client.*",
+    "meshcoredecoder.*",
 ]
 ignore_missing_imports = true
 

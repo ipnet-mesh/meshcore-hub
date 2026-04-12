@@ -47,10 +47,7 @@ class Subscriber(LetsMeshNormalizer):
         cleanup_interval_hours: int = 24,
         node_cleanup_enabled: bool = False,
         node_cleanup_days: int = 90,
-        letsmesh_decoder_enabled: bool = True,
-        letsmesh_decoder_command: str = "meshcore-decoder",
         letsmesh_decoder_channel_keys: list[str] | None = None,
-        letsmesh_decoder_timeout_seconds: float = 2.0,
     ):
         """Initialize subscriber.
 
@@ -63,10 +60,7 @@ class Subscriber(LetsMeshNormalizer):
             cleanup_interval_hours: Hours between cleanup runs
             node_cleanup_enabled: Enable automatic cleanup of inactive nodes
             node_cleanup_days: Remove nodes not seen for this many days
-            letsmesh_decoder_enabled: Enable external LetsMesh packet decoder
-            letsmesh_decoder_command: Decoder CLI command
             letsmesh_decoder_channel_keys: Optional channel keys for decrypting group text
-            letsmesh_decoder_timeout_seconds: Decoder CLI timeout
         """
         self.mqtt = mqtt_client
         self.db = db_manager
@@ -90,10 +84,7 @@ class Subscriber(LetsMeshNormalizer):
         self._cleanup_thread: Optional[threading.Thread] = None
         self._last_cleanup: Optional[datetime] = None
         self._letsmesh_decoder = LetsMeshPacketDecoder(
-            enabled=letsmesh_decoder_enabled,
-            command=letsmesh_decoder_command,
             channel_keys=letsmesh_decoder_channel_keys,
-            timeout_seconds=letsmesh_decoder_timeout_seconds,
         )
 
     @property
@@ -469,10 +460,7 @@ def create_subscriber(
     cleanup_interval_hours: int = 24,
     node_cleanup_enabled: bool = False,
     node_cleanup_days: int = 90,
-    letsmesh_decoder_enabled: bool = True,
-    letsmesh_decoder_command: str = "meshcore-decoder",
     letsmesh_decoder_channel_keys: list[str] | None = None,
-    letsmesh_decoder_timeout_seconds: float = 2.0,
 ) -> Subscriber:
     """Create a configured subscriber instance.
 
@@ -492,10 +480,7 @@ def create_subscriber(
         cleanup_interval_hours: Hours between cleanup runs
         node_cleanup_enabled: Enable automatic cleanup of inactive nodes
         node_cleanup_days: Remove nodes not seen for this many days
-        letsmesh_decoder_enabled: Enable external LetsMesh packet decoder
-        letsmesh_decoder_command: Decoder CLI command
         letsmesh_decoder_channel_keys: Optional channel keys for decrypting group text
-        letsmesh_decoder_timeout_seconds: Decoder CLI timeout
 
     Returns:
         Configured Subscriber instance
@@ -528,10 +513,7 @@ def create_subscriber(
         cleanup_interval_hours=cleanup_interval_hours,
         node_cleanup_enabled=node_cleanup_enabled,
         node_cleanup_days=node_cleanup_days,
-        letsmesh_decoder_enabled=letsmesh_decoder_enabled,
-        letsmesh_decoder_command=letsmesh_decoder_command,
         letsmesh_decoder_channel_keys=letsmesh_decoder_channel_keys,
-        letsmesh_decoder_timeout_seconds=letsmesh_decoder_timeout_seconds,
     )
 
     # Register handlers
@@ -558,10 +540,7 @@ def run_collector(
     cleanup_interval_hours: int = 24,
     node_cleanup_enabled: bool = False,
     node_cleanup_days: int = 90,
-    letsmesh_decoder_enabled: bool = True,
-    letsmesh_decoder_command: str = "meshcore-decoder",
     letsmesh_decoder_channel_keys: list[str] | None = None,
-    letsmesh_decoder_timeout_seconds: float = 2.0,
 ) -> None:
     """Run the collector (blocking).
 
@@ -581,10 +560,7 @@ def run_collector(
         cleanup_interval_hours: Hours between cleanup runs
         node_cleanup_enabled: Enable automatic cleanup of inactive nodes
         node_cleanup_days: Remove nodes not seen for this many days
-        letsmesh_decoder_enabled: Enable external LetsMesh packet decoder
-        letsmesh_decoder_command: Decoder CLI command
         letsmesh_decoder_channel_keys: Optional channel keys for decrypting group text
-        letsmesh_decoder_timeout_seconds: Decoder CLI timeout
     """
     subscriber = create_subscriber(
         mqtt_host=mqtt_host,
@@ -602,10 +578,7 @@ def run_collector(
         cleanup_interval_hours=cleanup_interval_hours,
         node_cleanup_enabled=node_cleanup_enabled,
         node_cleanup_days=node_cleanup_days,
-        letsmesh_decoder_enabled=letsmesh_decoder_enabled,
-        letsmesh_decoder_command=letsmesh_decoder_command,
         letsmesh_decoder_channel_keys=letsmesh_decoder_channel_keys,
-        letsmesh_decoder_timeout_seconds=letsmesh_decoder_timeout_seconds,
     )
 
     # Set up signal handlers

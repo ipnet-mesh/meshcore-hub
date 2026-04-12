@@ -67,6 +67,7 @@ MeshCore Hub is a Python 3.13+ monorepo for managing and orchestrating MeshCore 
 - Use type hints for all function signatures
 - Write docstrings for public modules, classes, and functions
 - Keep functions focused and under 50 lines where possible
+- **Always use parenthesized exception tuples** — `except (ValueError, TypeError):` not `except ValueError, TypeError:`. The comma form is Python 2 syntax and will fail at import time in Python 3
 
 ### Imports
 

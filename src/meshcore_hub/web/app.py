@@ -43,7 +43,6 @@ def _build_channel_labels() -> dict[str, str]:
     """Build UI channel labels from built-in + configured decoder keys."""
     raw_keys = os.getenv("COLLECTOR_LETSMESH_DECODER_KEYS")
     decoder = LetsMeshPacketDecoder(
-        enabled=False,
         channel_keys=_parse_decoder_key_entries(raw_keys),
     )
     labels = decoder.channel_labels_by_index()
