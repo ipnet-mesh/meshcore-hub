@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 
 from meshcore_hub.common.database import DatabaseManager
 from meshcore_hub.common.hash_utils import compute_trace_hash
-from meshcore_hub.common.models import Node, TracePath, add_event_receiver
+from meshcore_hub.common.models import Node, TracePath, add_event_observer
 
 logger = logging.getLogger(__name__)
 
@@ -71,13 +71,13 @@ def handle_trace_data(
         if existing:
             # Event already exists - just add this receiver to the junction table
             if receiver_node:
-                added = add_event_receiver(
+                added = add_event_observer(
                     session=session,
                     event_type="trace",
                     event_hash=event_hash,
-                    receiver_node_id=receiver_node.id,
+                    observer_node_id=receiver_node.id,
                     snr=None,  # Trace events don't have a single SNR value
-                    received_at=now,
+                    observed_at=now,
                 )
                 if added:
                     logger.debug(
@@ -88,7 +88,7 @@ def handle_trace_data(
 
         # Create trace path record
         trace_path = TracePath(
-            receiver_node_id=receiver_node.id if receiver_node else None,
+            observer_node_id=receiver_node.id if receiver_node else None,
             initiator_tag=initiator_tag,
             path_len=path_len,
             flags=flags,
@@ -103,13 +103,13 @@ def handle_trace_data(
 
         # Add first receiver to junction table
         if receiver_node:
-            add_event_receiver(
+            add_event_observer(
                 session=session,
                 event_type="trace",
                 event_hash=event_hash,
-                receiver_node_id=receiver_node.id,
+                observer_node_id=receiver_node.id,
                 snr=None,
-                received_at=now,
+                observed_at=now,
             )
 
         # Flush to check for duplicate constraint violation (race condition)
@@ -123,13 +123,13 @@ def handle_trace_data(
             )
             # Re-add receiver to existing event in a new transaction
             if receiver_node:
-                add_event_receiver(
+                add_event_observer(
                     session=session,
                     event_type="trace",
                     event_hash=event_hash,
-                    receiver_node_id=receiver_node.id,
+                    observer_node_id=receiver_node.id,
                     snr=None,
-                    received_at=now,
+                    observed_at=now,
                 )
             return
 

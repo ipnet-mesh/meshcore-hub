@@ -9,11 +9,11 @@ from sqlalchemy.orm import aliased, selectinload
 
 from meshcore_hub.api.auth import RequireRead
 from meshcore_hub.api.dependencies import DbSession
-from meshcore_hub.common.models import Advertisement, EventReceiver, Node, NodeTag
+from meshcore_hub.common.models import Advertisement, EventObserver, Node, NodeTag
 from meshcore_hub.common.schemas.messages import (
     AdvertisementList,
     AdvertisementRead,
-    ReceiverInfo,
+    ObserverInfo,
 )
 
 router = APIRouter()
@@ -39,32 +39,32 @@ def _get_tag_description(node: Optional[Node]) -> Optional[str]:
     return None
 
 
-def _fetch_receivers_for_events(
+def _fetch_observers_for_events(
     session: DbSession,
     event_type: str,
     event_hashes: list[str],
-) -> dict[str, list[ReceiverInfo]]:
+) -> dict[str, list[ObserverInfo]]:
     """Fetch receiver info for a list of events by their hashes."""
     if not event_hashes:
         return {}
 
     query = (
         select(
-            EventReceiver.event_hash,
-            EventReceiver.snr,
-            EventReceiver.received_at,
+            EventObserver.event_hash,
+            EventObserver.snr,
+            EventObserver.observed_at,
             Node.id.label("node_id"),
             Node.public_key,
             Node.name,
         )
-        .join(Node, EventReceiver.receiver_node_id == Node.id)
-        .where(EventReceiver.event_type == event_type)
-        .where(EventReceiver.event_hash.in_(event_hashes))
-        .order_by(EventReceiver.received_at)
+        .join(Node, EventObserver.observer_node_id == Node.id)
+        .where(EventObserver.event_type == event_type)
+        .where(EventObserver.event_hash.in_(event_hashes))
+        .order_by(EventObserver.observed_at)
     )
 
     results = session.execute(query).all()
-    receivers_by_hash: dict[str, list[ReceiverInfo]] = {}
+    observers_by_hash: dict[str, list[ObserverInfo]] = {}
 
     node_ids = [r.node_id for r in results]
     tag_names: dict[str, str] = {}
@@ -78,21 +78,21 @@ def _fetch_receivers_for_events(
             tag_names[node_id] = value
 
     for row in results:
-        if row.event_hash not in receivers_by_hash:
-            receivers_by_hash[row.event_hash] = []
+        if row.event_hash not in observers_by_hash:
+            observers_by_hash[row.event_hash] = []
 
-        receivers_by_hash[row.event_hash].append(
-            ReceiverInfo(
+        observers_by_hash[row.event_hash].append(
+            ObserverInfo(
                 node_id=row.node_id,
                 public_key=row.public_key,
                 name=row.name,
                 tag_name=tag_names.get(row.node_id),
                 snr=row.snr,
-                received_at=row.received_at,
+                observed_at=row.observed_at,
             )
         )
 
-    return receivers_by_hash
+    return observers_by_hash
 
 
 @router.get("", response_model=AdvertisementList)
@@ -103,7 +103,7 @@ async def list_advertisements(
         None, description="Search in name tag, node name, or public key"
     ),
     public_key: Optional[str] = Query(None, description="Filter by public key"),
-    received_by: Optional[str] = Query(
+    observed_by: Optional[str] = Query(
         None, description="Filter by receiver node public key"
     ),
     member_id: Optional[str] = Query(
@@ -116,21 +116,21 @@ async def list_advertisements(
 ) -> AdvertisementList:
     """List advertisements with filtering and pagination."""
     # Aliases for node joins
-    ReceiverNode = aliased(Node)
+    ObserverNode = aliased(Node)
     SourceNode = aliased(Node)
 
     # Build query with both receiver and source node joins
     query = (
         select(
             Advertisement,
-            ReceiverNode.public_key.label("receiver_pk"),
-            ReceiverNode.name.label("receiver_name"),
-            ReceiverNode.id.label("receiver_id"),
+            ObserverNode.public_key.label("observer_pk"),
+            ObserverNode.name.label("observer_name"),
+            ObserverNode.id.label("observer_id"),
             SourceNode.name.label("source_name"),
             SourceNode.id.label("source_id"),
             SourceNode.adv_type.label("source_adv_type"),
         )
-        .outerjoin(ReceiverNode, Advertisement.receiver_node_id == ReceiverNode.id)
+        .outerjoin(ObserverNode, Advertisement.observer_node_id == ObserverNode.id)
         .outerjoin(SourceNode, Advertisement.node_id == SourceNode.id)
     )
 
@@ -153,8 +153,8 @@ async def list_advertisements(
     if public_key:
         query = query.where(Advertisement.public_key == public_key)
 
-    if received_by:
-        query = query.where(ReceiverNode.public_key == received_by)
+    if observed_by:
+        query = query.where(ObserverNode.public_key == observed_by)
 
     if member_id:
         # Filter advertisements from nodes that have a member_id tag with the specified value
@@ -185,8 +185,8 @@ async def list_advertisements(
     # Collect node IDs to fetch tags
     node_ids = set()
     for row in results:
-        if row.receiver_id:
-            node_ids.add(row.receiver_id)
+        if row.observer_id:
+            node_ids.add(row.observer_id)
         if row.source_id:
             node_ids.add(row.source_id)
 
@@ -199,9 +199,9 @@ async def list_advertisements(
         nodes = session.execute(nodes_query).scalars().all()
         nodes_by_id = {n.id: n for n in nodes}
 
-    # Fetch all receivers for these advertisements
+    # Fetch all observers for these advertisements
     event_hashes = [r[0].event_hash for r in results if r[0].event_hash]
-    receivers_by_hash = _fetch_receivers_for_events(
+    observers_by_hash = _fetch_observers_for_events(
         session, "advertisement", event_hashes
     )
 
@@ -209,13 +209,13 @@ async def list_advertisements(
     items = []
     for row in results:
         adv = row[0]
-        receiver_node = nodes_by_id.get(row.receiver_id) if row.receiver_id else None
+        observer_node = nodes_by_id.get(row.observer_id) if row.observer_id else None
         source_node = nodes_by_id.get(row.source_id) if row.source_id else None
 
         data = {
-            "received_by": row.receiver_pk,
-            "receiver_name": row.receiver_name,
-            "receiver_tag_name": _get_tag_name(receiver_node),
+            "observed_by": row.observer_pk,
+            "observer_name": row.observer_name,
+            "observer_tag_name": _get_tag_name(observer_node),
             "public_key": adv.public_key,
             "name": adv.name,
             "node_name": row.source_name,
@@ -225,8 +225,8 @@ async def list_advertisements(
             "flags": adv.flags,
             "received_at": adv.received_at,
             "created_at": adv.created_at,
-            "receivers": (
-                receivers_by_hash.get(adv.event_hash, []) if adv.event_hash else []
+            "observers": (
+                observers_by_hash.get(adv.event_hash, []) if adv.event_hash else []
             ),
         }
         items.append(AdvertisementRead(**data))
@@ -246,19 +246,19 @@ async def get_advertisement(
     advertisement_id: str,
 ) -> AdvertisementRead:
     """Get a single advertisement by ID."""
-    ReceiverNode = aliased(Node)
+    ObserverNode = aliased(Node)
     SourceNode = aliased(Node)
     query = (
         select(
             Advertisement,
-            ReceiverNode.public_key.label("receiver_pk"),
-            ReceiverNode.name.label("receiver_name"),
-            ReceiverNode.id.label("receiver_id"),
+            ObserverNode.public_key.label("observer_pk"),
+            ObserverNode.name.label("observer_name"),
+            ObserverNode.id.label("observer_id"),
             SourceNode.name.label("source_name"),
             SourceNode.id.label("source_id"),
             SourceNode.adv_type.label("source_adv_type"),
         )
-        .outerjoin(ReceiverNode, Advertisement.receiver_node_id == ReceiverNode.id)
+        .outerjoin(ObserverNode, Advertisement.observer_node_id == ObserverNode.id)
         .outerjoin(SourceNode, Advertisement.node_id == SourceNode.id)
         .where(Advertisement.id == advertisement_id)
     )
@@ -271,8 +271,8 @@ async def get_advertisement(
 
     # Fetch nodes with tags for friendly names
     node_ids = []
-    if result.receiver_id:
-        node_ids.append(result.receiver_id)
+    if result.observer_id:
+        node_ids.append(result.observer_id)
     if result.source_id:
         node_ids.append(result.source_id)
 
@@ -284,21 +284,21 @@ async def get_advertisement(
         nodes = session.execute(nodes_query).scalars().all()
         nodes_by_id = {n.id: n for n in nodes}
 
-    receiver_node = nodes_by_id.get(result.receiver_id) if result.receiver_id else None
+    observer_node = nodes_by_id.get(result.observer_id) if result.observer_id else None
     source_node = nodes_by_id.get(result.source_id) if result.source_id else None
 
-    # Fetch receivers for this advertisement
-    receivers = []
+    # Fetch observers for this advertisement
+    observers = []
     if adv.event_hash:
-        receivers_by_hash = _fetch_receivers_for_events(
+        observers_by_hash = _fetch_observers_for_events(
             session, "advertisement", [adv.event_hash]
         )
-        receivers = receivers_by_hash.get(adv.event_hash, [])
+        observers = observers_by_hash.get(adv.event_hash, [])
 
     data = {
-        "received_by": result.receiver_pk,
-        "receiver_name": result.receiver_name,
-        "receiver_tag_name": _get_tag_name(receiver_node),
+        "observed_by": result.observer_pk,
+        "observer_name": result.observer_name,
+        "observer_tag_name": _get_tag_name(observer_node),
         "public_key": adv.public_key,
         "name": adv.name,
         "node_name": result.source_name,
@@ -308,6 +308,6 @@ async def get_advertisement(
         "flags": adv.flags,
         "received_at": adv.received_at,
         "created_at": adv.created_at,
-        "receivers": receivers,
+        "observers": observers,
     }
     return AdvertisementRead(**data)

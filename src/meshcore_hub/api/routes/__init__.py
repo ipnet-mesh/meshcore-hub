@@ -8,7 +8,6 @@ from meshcore_hub.api.routes.messages import router as messages_router
 from meshcore_hub.api.routes.advertisements import router as advertisements_router
 from meshcore_hub.api.routes.trace_paths import router as trace_paths_router
 from meshcore_hub.api.routes.telemetry import router as telemetry_router
-from meshcore_hub.api.routes.commands import router as commands_router
 from meshcore_hub.api.routes.dashboard import router as dashboard_router
 from meshcore_hub.api.routes.members import router as members_router
 
@@ -25,6 +24,5 @@ api_router.include_router(
     trace_paths_router, prefix="/trace-paths", tags=["Trace Paths"]
 )
 api_router.include_router(telemetry_router, prefix="/telemetry", tags=["Telemetry"])
-api_router.include_router(commands_router, prefix="/commands", tags=["Commands"])
 api_router.include_router(dashboard_router, prefix="/dashboard", tags=["Dashboard"])
 api_router.include_router(members_router, prefix="/members", tags=["Members"])

@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 
 from meshcore_hub.common.database import DatabaseManager
 from meshcore_hub.common.hash_utils import compute_message_hash
-from meshcore_hub.common.models import Message, Node, add_event_receiver
+from meshcore_hub.common.models import Message, Node, add_event_observer
 
 logger = logging.getLogger(__name__)
 
@@ -121,13 +121,13 @@ def _handle_message(
         if existing:
             # Event already exists - just add this receiver to the junction table
             if receiver_node:
-                added = add_event_receiver(
+                added = add_event_observer(
                     session=session,
                     event_type="message",
                     event_hash=event_hash,
-                    receiver_node_id=receiver_node.id,
+                    observer_node_id=receiver_node.id,
                     snr=snr,
-                    received_at=now,
+                    observed_at=now,
                 )
                 if added:
                     logger.debug(
@@ -138,7 +138,7 @@ def _handle_message(
 
         # Create message record
         message = Message(
-            receiver_node_id=receiver_node.id if receiver_node else None,
+            observer_node_id=receiver_node.id if receiver_node else None,
             message_type=message_type,
             pubkey_prefix=pubkey_prefix,
             channel_idx=channel_idx,
@@ -155,13 +155,13 @@ def _handle_message(
 
         # Add first receiver to junction table
         if receiver_node:
-            add_event_receiver(
+            add_event_observer(
                 session=session,
                 event_type="message",
                 event_hash=event_hash,
-                receiver_node_id=receiver_node.id,
+                observer_node_id=receiver_node.id,
                 snr=snr,
-                received_at=now,
+                observed_at=now,
             )
 
         # Flush to check for duplicate constraint violation (race condition)
@@ -175,13 +175,13 @@ def _handle_message(
             )
             # Re-add receiver to existing event in a new transaction
             if receiver_node:
-                add_event_receiver(
+                add_event_observer(
                     session=session,
                     event_type="message",
                     event_hash=event_hash,
-                    receiver_node_id=receiver_node.id,
+                    observer_node_id=receiver_node.id,
                     snr=snr,
-                    received_at=now,
+                    observed_at=now,
                 )
             return
 

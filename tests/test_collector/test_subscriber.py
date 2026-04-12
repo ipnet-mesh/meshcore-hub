@@ -45,7 +45,7 @@ class TestSubscriber:
 
         mock_mqtt_client.connect.assert_called_once()
         mock_mqtt_client.start_background.assert_called_once()
-        mock_mqtt_client.subscribe.assert_called_once()
+        assert mock_mqtt_client.subscribe.call_count == 3
 
     def test_stop_disconnects_mqtt(self, subscriber, mock_mqtt_client):
         """Test that stop disconnects MQTT."""
@@ -63,9 +63,21 @@ class TestSubscriber:
         subscriber.register_handler("advertisement", handler)
         subscriber.start()
 
+        mock_mqtt_client.topic_builder.parse_letsmesh_upload_topic.return_value = (
+            "a" * 64,
+            "status",
+        )
+        subscriber._normalize_letsmesh_event = MagicMock(
+            return_value=(
+                "a" * 64,
+                "advertisement",
+                {"public_key": "b" * 64, "name": "Test"},
+            )
+        )
+
         subscriber._handle_mqtt_message(
-            topic="meshcore/abc/event/advertisement",
-            pattern="meshcore/+/event/#",
+            topic="meshcore/abc/status",
+            pattern="meshcore/+/status",
             payload={"public_key": "b" * 64, "name": "Test"},
         )
 
@@ -76,7 +88,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
 
         subscriber.start()
@@ -96,7 +107,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         advert_handler = MagicMock()
         status_handler = MagicMock()
@@ -132,7 +142,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         advert_handler = MagicMock()
         status_handler = MagicMock()
@@ -163,7 +172,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         advert_handler = MagicMock()
         status_handler = MagicMock()
@@ -183,11 +191,6 @@ class TestSubscriber:
         advert_handler.assert_not_called()
         status_handler.assert_called_once()
 
-    def test_invalid_ingest_mode_raises(self, mock_mqtt_client, db_manager) -> None:
-        """Invalid ingest mode values are rejected."""
-        with pytest.raises(ValueError):
-            Subscriber(mock_mqtt_client, db_manager, ingest_mode="invalid_mode")
-
     def test_letsmesh_packet_maps_to_channel_message(
         self, mock_mqtt_client, db_manager
     ) -> None:
@@ -199,7 +202,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         handler = MagicMock()
         subscriber.register_handler("channel_msg_recv", handler)
@@ -252,7 +254,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         letsmesh_packet_handler = MagicMock()
         channel_handler = MagicMock()
@@ -289,7 +290,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         handler = MagicMock()
         subscriber.register_handler("channel_msg_recv", handler)
@@ -354,7 +354,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         handler = MagicMock()
         subscriber.register_handler("contact_msg_recv", handler)
@@ -403,7 +402,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         handler = MagicMock()
         subscriber.register_handler("channel_msg_recv", handler)
@@ -453,7 +451,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         handler = MagicMock()
         subscriber.register_handler("advertisement", handler)
@@ -513,7 +510,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         contact_handler = MagicMock()
         advert_handler = MagicMock()
@@ -566,7 +562,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         trace_handler = MagicMock()
         subscriber.register_handler("trace_data", trace_handler)
@@ -619,7 +614,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         trace_handler = MagicMock()
         subscriber.register_handler("trace_data", trace_handler)
@@ -670,7 +664,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         path_handler = MagicMock()
         subscriber.register_handler("path_updated", path_handler)
@@ -720,7 +713,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         path_handler = MagicMock()
         packet_handler = MagicMock()
@@ -775,7 +767,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         packet_handler = MagicMock()
         subscriber.register_handler("letsmesh_packet", packet_handler)
@@ -822,7 +813,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         handler = MagicMock()
         subscriber.register_handler("channel_msg_recv", handler)

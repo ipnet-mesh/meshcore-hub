@@ -18,16 +18,14 @@ This document provides context and guidelines for AI coding assistants working o
     - `pytest tests/test_web/` for web-only changes (templates, static JS, web routes)
     - `pytest tests/test_api/` for API changes
     - `pytest tests/test_collector/` for collector changes
-    - `pytest tests/test_interface/` for interface/sender/receiver changes
     - `pytest tests/test_common/` for common models/schemas/config changes
     - Only run the full `pytest` if changes span multiple components
   - Run `pre-commit run --all-files` to perform all quality checks
 
 ## Project Overview
 
-MeshCore Hub is a Python 3.13+ monorepo for managing and orchestrating MeshCore mesh networks. It consists of five main components:
+MeshCore Hub is a Python 3.13+ monorepo for managing and orchestrating MeshCore mesh networks. Data ingestion is done via [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture), which captures MeshCore mesh traffic and publishes events to MQTT. MeshCore Hub then collects, stores, and presents this data. It consists of four main components:
 
-- **meshcore_interface**: Serial/USB interface to MeshCore companion nodes, publishes/subscribes to MQTT
 - **meshcore_collector**: Collects MeshCore events from MQTT and stores them in a database
 - **meshcore_api**: REST API for querying data and sending commands via MQTT
 - **meshcore_web**: Web dashboard for visualizing network status
@@ -52,7 +50,6 @@ MeshCore Hub is a Python 3.13+ monorepo for managing and orchestrating MeshCore 
 | Migrations | Alembic |
 | REST API | FastAPI |
 | MQTT Client | paho-mqtt |
-| MeshCore Interface | meshcore |
 | Templates | Jinja2 (server), lit-html (SPA) |
 | Frontend | ES Modules SPA with client-side routing |
 | CSS Framework | Tailwind CSS + DaisyUI |
@@ -263,12 +260,6 @@ meshcore-hub/
 │   │   └── schemas/          # Pydantic schemas
 │   │       ├── members.py    # Member API schemas
 │   │       └── ...
-│   ├── interface/
-│   │   ├── cli.py
-│   │   ├── device.py         # MeshCore device wrapper
-│   │   ├── mock_device.py    # Mock for testing
-│   │   ├── receiver.py       # RECEIVER mode
-│   │   └── sender.py         # SENDER mode
 │   ├── collector/
 │   │   ├── cli.py            # Collector CLI with seed commands
 │   │   ├── subscriber.py     # MQTT subscriber
@@ -305,7 +296,6 @@ meshcore-hub/
 ├── tests/
 │   ├── conftest.py
 │   ├── test_common/
-│   ├── test_interface/
 │   ├── test_collector/
 │   ├── test_api/
 │   └── test_web/
@@ -338,7 +328,7 @@ meshcore-hub/
 
 ## MQTT Topic Structure
 
-### Events (Published by Interface RECEIVER)
+### Events
 ```
 <prefix>/<public_key>/event/<event_name>
 ```
@@ -347,16 +337,6 @@ Examples:
 - `meshcore/abc123.../event/advertisement`
 - `meshcore/abc123.../event/contact_msg_recv`
 - `meshcore/abc123.../event/channel_msg_recv`
-
-### Commands (Subscribed by Interface SENDER)
-```
-<prefix>/+/command/<command_name>
-```
-
-Examples:
-- `meshcore/+/command/send_msg`
-- `meshcore/+/command/send_channel_msg`
-- `meshcore/+/command/send_advert`
 
 ## Database Conventions
 
@@ -393,26 +373,16 @@ Node tags are flexible key-value pairs that allow custom metadata to be attached
 import pytest
 from unittest.mock import AsyncMock, patch
 
-@pytest.fixture
-def mock_mqtt_client():
-    client = AsyncMock()
-    client.publish = AsyncMock()
-    return client
-
 @pytest.mark.asyncio
-async def test_receiver_publishes_event(mock_mqtt_client):
-    """Test that receiver publishes events to correct MQTT topic."""
-    # Arrange
-    receiver = Receiver(mqtt_client=mock_mqtt_client, prefix="test")
+async def test_collector_handles_advertisement():
+    """Test that collector handler processes advertisement events."""
+    handler = AdvertisementHandler(db_session=AsyncMock())
 
-    # Act
-    await receiver.handle_advertisement(event_data)
+    await handler.handle(event_data)
 
-    # Assert
-    mock_mqtt_client.publish.assert_called_once()
-    call_args = mock_mqtt_client.publish.call_args
-    assert "test/" in call_args[0][0]
-    assert "/event/advertisement" in call_args[0][0]
+    handler.db_session.add.assert_called_once()
+    node = handler.db_session.add.call_args[0][0]
+    assert node.public_key == event_data["public_key"]
 ```
 
 ### Integration Tests
@@ -597,7 +567,6 @@ pytest
 # Run specific component
 meshcore-hub api --reload
 meshcore-hub collector
-meshcore-hub interface receiver --mock
 ```
 
 ## Environment Variables
@@ -734,22 +703,6 @@ When enabled, the collector automatically removes nodes where:
 
 **Note:** Both event data and node cleanup run on the same schedule (DATA_RETENTION_INTERVAL_HOURS).
 
-**Contact Cleanup (Interface RECEIVER):**
-
-The interface RECEIVER mode can automatically remove stale contacts from the MeshCore companion node's contact database. This prevents the companion node from resyncing old/dead contacts back to the collector, freeing up memory on the device (typically limited to ~100 contacts).
-
-| Variable | Description |
-|----------|-------------|
-| `CONTACT_CLEANUP_ENABLED` | Enable automatic removal of stale contacts (default: true) |
-| `CONTACT_CLEANUP_DAYS` | Remove contacts not advertised for this many days (default: 7) |
-
-When enabled, during each contact sync the receiver checks each contact's `last_advert` timestamp:
-- Contacts with `last_advert` older than `CONTACT_CLEANUP_DAYS` are removed from the device
-- Stale contacts are not published to MQTT (preventing collector database pollution)
-- Contacts without a `last_advert` timestamp are preserved (no removal without data)
-
-This cleanup runs automatically whenever the receiver syncs contacts (on startup and after each advertisement event).
-
 Manual cleanup can be triggered at any time with:
 ```bash
 # Dry run to see what would be deleted
@@ -792,75 +745,9 @@ logging.basicConfig(level=logging.DEBUG)
 export LOG_LEVEL=DEBUG
 ```
 
-## MeshCore Library Integration
-
-The interface component uses the `meshcore` Python library to communicate with MeshCore devices. Key patterns:
-
-### Device Commands
-
-Commands are accessed via `mc.commands.*` on the MeshCore instance:
-
-```python
-# Set device time
-await mc.commands.set_time(unix_timestamp)
-
-# Send advertisement
-await mc.commands.send_advert(flood=False)
-
-# Send messages
-await mc.commands.send_msg(destination, text)
-await mc.commands.send_chan_msg(channel_idx, text)
-
-# Request data
-await mc.commands.send_statusreq(target)
-await mc.commands.send_telemetry_req(target)
-```
-
-### Event Subscription
-
-Events are received via the subscription system. The `Event` object has:
-- `event.type` - The event type enum
-- `event.payload` - Full event data (dict with all fields like `text`, `pubkey_prefix`, etc.)
-- `event.attributes` - Subset of fields for filtering
-
-**Important**: Use `event.payload` (not `event.attributes`) to get full message data.
-
-### Auto Message Fetching
-
-The library requires explicit message fetching. Call `start_auto_message_fetching()` to:
-1. Subscribe to `MESSAGES_WAITING` events
-2. Automatically call `get_msg()` to fetch pending messages
-3. Immediately fetch any queued messages on startup
-
-```python
-await mc.start_auto_message_fetching()
-```
-
-### Receiver Initialization
-
-On startup, the receiver performs these initialization steps:
-1. Set device clock to current Unix timestamp
-2. Optionally set the device name (if `MESHCORE_DEVICE_NAME` is configured)
-3. Send a flood advertisement (broadcasts device name to the mesh)
-4. Start automatic message fetching
-5. Sync the device's contact database
-
-### Contact Sync Behavior
-
-The receiver syncs the device's contact database in two scenarios:
-
-1. **Startup**: Initial sync when receiver starts
-2. **Advertisement Events**: Automatic sync triggered whenever an advertisement is received from the mesh
-
-Since advertisements are typically received every ~20 minutes, contact sync happens automatically without manual intervention. Each contact from the device is published individually to MQTT:
-- Topic: `{prefix}/{device_public_key}/event/contact`
-- Payload: `{public_key, adv_name, type}`
-
-This ensures the collector's database stays current with all nodes discovered on the mesh network.
-
 ## References
 
-- [meshcore Documentation](https://github.com/fdlamotte/meshcore)
+- [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture)
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
 - [SQLAlchemy 2.0 Documentation](https://docs.sqlalchemy.org/en/20/)
 - [Pydantic Documentation](https://docs.pydantic.dev/)

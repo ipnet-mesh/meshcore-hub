@@ -20,15 +20,10 @@ from meshcore_hub.common.schemas.nodes import (
     NodeTagRead,
 )
 from meshcore_hub.common.schemas.messages import (
-    ReceiverInfo,
+    ObserverInfo,
     MessageRead,
     MessageList,
     MessageFilters,
-)
-from meshcore_hub.common.schemas.commands import (
-    SendMessageCommand,
-    SendChannelMessageCommand,
-    SendAdvertCommand,
 )
 from meshcore_hub.common.schemas.members import (
     MemberCreate,
@@ -59,14 +54,10 @@ __all__ = [
     "NodeTagUpdate",
     "NodeTagRead",
     # Messages & Events
-    "ReceiverInfo",
+    "ObserverInfo",
     "MessageRead",
     "MessageList",
     "MessageFilters",
-    # Commands
-    "SendMessageCommand",
-    "SendChannelMessageCommand",
-    "SendAdvertCommand",
     # Members
     "MemberCreate",
     "MemberUpdate",

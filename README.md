@@ -15,11 +15,10 @@ Python 3.13+ platform for managing and orchestrating MeshCore mesh networks.
 
 ## Overview
 
-MeshCore Hub provides a complete solution for monitoring, collecting, and interacting with MeshCore mesh networks. It consists of multiple components that work together:
+MeshCore Hub provides a complete solution for monitoring, collecting, and interacting with MeshCore mesh networks. Data ingestion is handled by [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture), which observes MeshCore RF traffic and publishes decoded packets to MQTT. It consists of multiple components that work together:
 
 | Component | Description |
 |-----------|-------------|
-| **Interface** | Connects to MeshCore companion nodes via Serial/USB, bridges events to/from MQTT |
 | **Collector** | Subscribes to MQTT events and persists them to a database |
 | **API** | REST API for querying data and sending commands to the network |
 | **Web Dashboard** | Single Page Application (SPA) for visualizing network status |
@@ -34,21 +33,13 @@ flowchart LR
         D3["Device 3"]
     end
 
-    subgraph Interfaces["Interface Layer"]
-        I1["RECEIVER"]
-        I2["RECEIVER"]
-        I3["SENDER"]
-    end
+    PCAP["meshcore-packet-capture"]
 
-    D1 -->|Serial| I1
-    D2 -->|Serial| I2
-    D3 -->|Serial| I3
+    D1 -.->|RF| PCAP
+    D2 -.->|RF| PCAP
+    D3 -.->|RF| PCAP
 
-    I1 -->|Publish| MQTT
-    I2 -->|Publish| MQTT
-    MQTT -->|Subscribe| I3
-
-    MQTT["MQTT Broker"]
+    PCAP -->|Publish| MQTT["MQTT Broker"]
 
     subgraph Backend["Backend Services"]
         Collector --> Database --> API
@@ -58,7 +49,7 @@ flowchart LR
     API --> Web["Web Dashboard"]
 
     style Devices fill:none,stroke:#0288d1,stroke-width:2px
-    style Interfaces fill:none,stroke:#f57c00,stroke-width:2px
+    style PCAP fill:none,stroke:#f57c00,stroke-width:2px
     style Backend fill:none,stroke:#388e3c,stroke-width:2px
     style MQTT fill:none,stroke:#7b1fa2,stroke-width:3px
     style Collector fill:none,stroke:#388e3c,stroke-width:2px
@@ -69,7 +60,6 @@ flowchart LR
 
 ## Features
 
-- **Multi-node Support**: Connect multiple receiver nodes for better network coverage
 - **Event Persistence**: Store messages, advertisements, telemetry, and trace data
 - **REST API**: Query historical data with filtering and pagination
 - **Command Dispatch**: Send messages and advertisements via the API
@@ -82,11 +72,10 @@ flowchart LR
 
 ### Simple Self-Hosted Setup
 
-The quickest way to get started is running the entire stack on a single machine with a connected MeshCore device.
+The quickest way to get started is running the entire stack on a single machine alongside [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture).
 
 **Prerequisites:**
-1. Flash the [USB Companion firmware](https://meshcore.dev/) onto a compatible device (e.g., Heltec V3, T-Beam)
-2. Connect the device via USB to a machine that supports Docker or Python
+1. Set up [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) on a device with a compatible LoRa radio (e.g., Heltec V3, T-Beam) to observe MeshCore RF traffic
 
 **Steps:**
 ```bash
@@ -100,75 +89,16 @@ wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/.
 
 # Copy and configure environment
 cp .env.example .env
-# Edit .env: set SERIAL_PORT to your device (e.g., /dev/ttyUSB0 or /dev/ttyACM0)
+# Edit .env: set MQTT_HOST to your MQTT broker if not using the local one
 
 # Start the entire stack with local MQTT broker
-docker compose --profile mqtt --profile core --profile receiver up -d
+docker compose --profile mqtt --profile core up -d
 
 # View the web dashboard
 open http://localhost:8080
 ```
 
-This starts all services: MQTT broker, collector, API, web dashboard, and the interface receiver that bridges your MeshCore device to the system.
-
-### Distributed Community Setup
-
-For larger deployments, you can separate receiver nodes from the central infrastructure. This allows multiple community members to contribute receiver coverage while hosting the backend centrally.
-
-```mermaid
-flowchart TB
-    subgraph Community["Community Members"]
-        R1["Raspberry Pi + MeshCore"]
-        R2["Raspberry Pi + MeshCore"]
-        R3["Any Linux + MeshCore"]
-    end
-
-    subgraph Server["Community VPS / Server"]
-        MQTT["MQTT Broker"]
-        Collector
-        API
-        Web["Web Dashboard (public)"]
-
-        MQTT --> Collector --> API
-        API <--- Web
-    end
-
-    R1 -->|MQTT port 1883| MQTT
-    R2 -->|MQTT port 1883| MQTT
-    R3 -->|MQTT port 1883| MQTT
-
-    style Community fill:none,stroke:#0288d1,stroke-width:2px
-    style Server fill:none,stroke:#388e3c,stroke-width:2px
-    style MQTT fill:none,stroke:#7b1fa2,stroke-width:3px
-    style Collector fill:none,stroke:#388e3c,stroke-width:2px
-    style API fill:none,stroke:#1976d2,stroke-width:2px
-    style Web fill:none,stroke:#ffa000,stroke-width:2px
-```
-
-**On each receiver node (Raspberry Pi, etc.):**
-```bash
-# Only run the receiver component
-# Configure .env with MQTT_HOST pointing to your central server
-MQTT_HOST=your-community-server.com
-SERIAL_PORT=/dev/ttyUSB0
-
-docker compose --profile receiver up -d
-```
-
-**On the central server (VPS/cloud):**
-```bash
-# Run the core infrastructure with local MQTT broker
-docker compose --profile mqtt --profile core up -d
-
-# Or connect to an existing MQTT broker (set MQTT_HOST in .env)
-docker compose --profile core up -d
-```
-
-This architecture allows:
-- Multiple receivers for better RF coverage across a geographic area
-- Centralized data storage and web interface
-- Community members to contribute coverage with minimal setup
-- The central server to be hosted anywhere with internet access
+This starts all services: MQTT broker, collector, API, and web dashboard. MeshCore packet data is ingested via [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture), which publishes decoded packets to MQTT.
 
 ## Deployment
 
@@ -178,16 +108,15 @@ Docker Compose uses **profiles** to select which services to run:
 
 | Profile | Services | Use Case |
 |---------|----------|----------|
+| `all` | db-migrate, collector, api, web | Everything on one host |
 | `core` | db-migrate, collector, api, web | Central server infrastructure |
-| `receiver` | interface-receiver | Receiver node (events to MQTT) |
-| `sender` | interface-sender | Sender node (MQTT to device) |
 | `mqtt` | mosquitto broker | Local MQTT broker (optional) |
-| `mock` | interface-mock-receiver | Testing without hardware |
-| `migrate` | db-migrate | One-time database migration |
-| `seed` | seed | One-time seed data import |
+| `receiver` | packet capture observer | Observes RF traffic and publishes to MQTT |
 | `metrics` | prometheus, alertmanager | Prometheus metrics and alerting |
+| `seed` | seed | One-time seed data import |
+| `migrate` | db-migrate | One-time database migration |
 
-**Note:** Most deployments connect to an external MQTT broker. Add `--profile mqtt` only if you need a local broker.
+**Note:** Most deployments connect to an external MQTT broker. Add `--profile mqtt` only if you need a local broker. The `receiver` profile runs [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) to observe MeshCore RF traffic and publish decoded packets to MQTT.
 
 ```bash
 # Create database schema
@@ -202,43 +131,14 @@ docker compose --profile mqtt --profile core up -d
 # Or connect to external MQTT (configure MQTT_HOST in .env)
 docker compose --profile core up -d
 
-# Start just the receiver (connects to MQTT_HOST from .env)
-docker compose --profile receiver up -d
+# Start everything including packet capture observer
+docker compose --profile mqtt --profile core --profile receiver up -d
 
 # View logs
 docker compose logs -f
 
 # Stop services
 docker compose down
-```
-
-### Serial Device Access
-
-For production with real MeshCore devices, ensure the serial port is accessible:
-
-```bash
-# Check device path
-ls -la /dev/ttyUSB*
-
-# Add user to dialout group (Linux)
-sudo usermod -aG dialout $USER
-
-# Configure in .env
-SERIAL_PORT=/dev/ttyUSB0
-SERIAL_PORT_SENDER=/dev/ttyUSB1  # If using separate sender device
-```
-
-**Tip:** If USB devices reconnect as different numeric IDs (e.g., `/dev/ttyUSB0` becomes `/dev/ttyUSB1`), use the stable `/dev/serial/by-id/` path instead:
-
-```bash
-# List available devices by ID
-ls -la /dev/serial/by-id/
-
-# Example output:
-# usb-Silicon_Labs_CP2102N_USB_to_UART_Bridge_abc123-if00-port0 -> ../../ttyUSB0
-
-# Configure using the stable ID
-SERIAL_PORT=/dev/serial/by-id/usb-Silicon_Labs_CP2102N_USB_to_UART_Bridge_abc123-if00-port0
 ```
 
 ### Manual Installation
@@ -255,7 +155,6 @@ pip install -e ".[dev]"
 meshcore-hub db upgrade
 
 # Start components (in separate terminals)
-meshcore-hub interface receiver --port /dev/ttyUSB0
 meshcore-hub collector
 meshcore-hub api
 meshcore-hub web
@@ -281,31 +180,18 @@ All components are configured via environment variables. Create a `.env` file or
 | `MQTT_TRANSPORT` | `tcp` | MQTT transport (`tcp` or `websockets`) |
 | `MQTT_WS_PATH` | `/mqtt` | MQTT WebSocket path (used when `MQTT_TRANSPORT=websockets`) |
 
-### Interface Settings
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SERIAL_PORT` | `/dev/ttyUSB0` | Serial port for MeshCore device |
-| `SERIAL_BAUD` | `115200` | Serial baud rate |
-| `MESHCORE_DEVICE_NAME` | *(none)* | Device/node name set on startup (broadcast in advertisements) |
-| `NODE_ADDRESS` | *(none)* | Override for device public key (64-char hex string) |
-| `NODE_ADDRESS_SENDER` | *(none)* | Override for sender device public key |
-| `CONTACT_CLEANUP_ENABLED` | `true` | Enable automatic removal of stale contacts from companion node |
-| `CONTACT_CLEANUP_DAYS` | `7` | Remove contacts not advertised for this many days |
-
 ### Collector Settings
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `COLLECTOR_INGEST_MODE` | `native` | Ingest mode (`native` or `letsmesh_upload`) |
 | `COLLECTOR_LETSMESH_DECODER_ENABLED` | `true` | Enable external LetsMesh packet decoding |
 | `COLLECTOR_LETSMESH_DECODER_COMMAND` | `meshcore-decoder` | Decoder CLI command |
 | `COLLECTOR_LETSMESH_DECODER_KEYS` | *(none)* | Additional decoder channel keys (`label=hex`, `label:hex`, or `hex`) |
 | `COLLECTOR_LETSMESH_DECODER_TIMEOUT_SECONDS` | `2.0` | Timeout per decoder invocation |
 
-#### LetsMesh Upload Compatibility Mode
+#### LetsMesh Packet Decoding
 
-When `COLLECTOR_INGEST_MODE=letsmesh_upload`, the collector subscribes to:
+The collector subscribes to packets published by [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture):
 
 - `<prefix>/+/packets`
 - `<prefix>/+/status`
@@ -325,7 +211,7 @@ Normalization behavior:
 - In the messages feed and dashboard channel sections, known channel indexes are preferred for labels (`17 -> Public`, `217 -> #test`) to avoid stale channel-name mismatches.
 - Additional channel names are loaded from `COLLECTOR_LETSMESH_DECODER_KEYS` when entries are provided as `label=hex` (for example `bot=<key>`).
 - Decoder-advertisement packets with location metadata update node GPS (`lat/lon`) for map display.
-- This keeps advertisement listings closer to native mode behavior (node advert traffic only, not observer status telemetry).
+- This keeps advertisement listings focused on node advert traffic only, not observer status telemetry.
 - Packets without decryptable message text are kept as informational `letsmesh_packet` events and are not shown in the messages feed; when decode succeeds the decoded JSON is attached to those packet log events.
 - When decoder output includes a human sender (`payload.decoded.decrypted.sender`), message text is normalized to `Name: Message` before storage; receiver/observer names are never used as sender fallback.
 - The collector keeps built-in keys for `Public` and `#test`, and merges any additional keys from `COLLECTOR_LETSMESH_DECODER_KEYS`.
@@ -741,7 +627,6 @@ meshcore-hub db upgrade
 meshcore-hub/
 ├── src/meshcore_hub/       # Main package
 │   ├── common/             # Shared code (models, schemas, config)
-│   ├── interface/          # MeshCore device interface
 │   ├── collector/          # MQTT event collector
 │   ├── api/                # REST API
 │   └── web/                # Web dashboard
@@ -802,3 +687,4 @@ This project is licensed under the GNU General Public License v3.0 or later (GPL
 
 - [MeshCore](https://meshcore.dev/) - The mesh networking protocol
 - [meshcore](https://github.com/fdlamotte/meshcore) - Python library for MeshCore devices
+- [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) - RF packet capture and MQTT publisher for data ingestion

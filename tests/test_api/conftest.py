@@ -324,7 +324,7 @@ def sample_message_with_receiver(api_db_session, receiver_node):
         pubkey_prefix="xyz789",
         text="Channel message with receiver",
         received_at=datetime.now(timezone.utc),
-        receiver_node_id=receiver_node.id,
+        observer_node_id=receiver_node.id,
     )
     api_db_session.add(message)
     api_db_session.commit()
@@ -341,7 +341,7 @@ def sample_advertisement_with_receiver(api_db_session, sample_node, receiver_nod
         adv_type="REPEATER",
         received_at=datetime.now(timezone.utc),
         node_id=sample_node.id,
-        receiver_node_id=receiver_node.id,
+        observer_node_id=receiver_node.id,
     )
     api_db_session.add(advert)
     api_db_session.commit()
@@ -356,7 +356,7 @@ def sample_telemetry_with_receiver(api_db_session, receiver_node):
         node_public_key="xyz789xyz789xyz789xyz789xyz789xy",
         parsed_data={"battery_level": 50.0},
         received_at=datetime.now(timezone.utc),
-        receiver_node_id=receiver_node.id,
+        observer_node_id=receiver_node.id,
     )
     api_db_session.add(telemetry)
     api_db_session.commit()
@@ -372,7 +372,7 @@ def sample_trace_path_with_receiver(api_db_session, receiver_node):
         path_hashes=["aaa111", "bbb222"],
         hop_count=2,
         received_at=datetime.now(timezone.utc),
-        receiver_node_id=receiver_node.id,
+        observer_node_id=receiver_node.id,
     )
     api_db_session.add(trace)
     api_db_session.commit()

@@ -83,7 +83,7 @@ class TestListAdvertisementsFilters:
         data = response.json()
         assert len(data["items"]) == 1
 
-    def test_filter_by_received_by(
+    def test_filter_by_observed_by(
         self,
         client_no_auth,
         sample_advertisement,
@@ -92,7 +92,7 @@ class TestListAdvertisementsFilters:
     ):
         """Test filtering advertisements by receiver node."""
         response = client_no_auth.get(
-            f"/api/v1/advertisements?received_by={receiver_node.public_key}"
+            f"/api/v1/advertisements?observed_by={receiver_node.public_key}"
         )
         assert response.status_code == 200
         data = response.json()

@@ -95,7 +95,7 @@ class TestListMessagesFilters:
         data = response.json()
         assert len(data["items"]) == 0
 
-    def test_filter_by_received_by(
+    def test_filter_by_observed_by(
         self,
         client_no_auth,
         sample_message,
@@ -104,7 +104,7 @@ class TestListMessagesFilters:
     ):
         """Test filtering messages by receiver node."""
         response = client_no_auth.get(
-            f"/api/v1/messages?received_by={receiver_node.public_key}"
+            f"/api/v1/messages?observed_by={receiver_node.public_key}"
         )
         assert response.status_code == 200
         data = response.json()

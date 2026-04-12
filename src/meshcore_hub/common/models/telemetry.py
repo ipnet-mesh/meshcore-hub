@@ -15,7 +15,7 @@ class Telemetry(Base, UUIDMixin, TimestampMixin):
 
     Attributes:
         id: UUID primary key
-        receiver_node_id: FK to nodes (receiving interface)
+        observer_node_id: FK to nodes (observing interface)
         node_id: FK to nodes (reporting node)
         node_public_key: Reporting node's public key
         lpp_data: Raw LPP-encoded sensor data
@@ -26,7 +26,7 @@ class Telemetry(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "telemetry"
 
-    receiver_node_id: Mapped[Optional[str]] = mapped_column(
+    observer_node_id: Mapped[Optional[str]] = mapped_column(
         ForeignKey("nodes.id", ondelete="SET NULL"),
         nullable=True,
         index=True,

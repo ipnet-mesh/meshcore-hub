@@ -58,7 +58,7 @@ class TestGetTelemetry:
 class TestListTelemetryFilters:
     """Tests for telemetry list query filters."""
 
-    def test_filter_by_received_by(
+    def test_filter_by_observed_by(
         self,
         client_no_auth,
         sample_telemetry,
@@ -67,7 +67,7 @@ class TestListTelemetryFilters:
     ):
         """Test filtering telemetry by receiver node."""
         response = client_no_auth.get(
-            f"/api/v1/telemetry?received_by={receiver_node.public_key}"
+            f"/api/v1/telemetry?observed_by={receiver_node.public_key}"
         )
         assert response.status_code == 200
         data = response.json()

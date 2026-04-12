@@ -2,7 +2,6 @@
 
 from meshcore_hub.common.config import (
     CommonSettings,
-    InterfaceSettings,
     CollectorSettings,
     APISettings,
     WebSettings,
@@ -28,19 +27,6 @@ class TestCommonSettings:
 
         assert settings.mqtt_transport.value == "websockets"
         assert settings.mqtt_ws_path == "/"
-
-
-class TestInterfaceSettings:
-    """Tests for InterfaceSettings."""
-
-    def test_custom_values(self) -> None:
-        """Test custom setting values."""
-        settings = InterfaceSettings(
-            _env_file=None, serial_port="/dev/ttyACM0", serial_baud=9600
-        )
-
-        assert settings.serial_port == "/dev/ttyACM0"
-        assert settings.serial_baud == 9600
 
 
 class TestCollectorSettings:
@@ -73,15 +59,6 @@ class TestCollectorSettings:
         assert settings.effective_seed_home == "/seed/data"
         assert settings.node_tags_file == "/seed/data/node_tags.yaml"
         assert settings.members_file == "/seed/data/members.yaml"
-
-    def test_collector_ingest_mode_letsmesh_upload(self) -> None:
-        """Test collector ingest mode can be set to LetsMesh upload."""
-        settings = CollectorSettings(
-            _env_file=None,
-            collector_ingest_mode="letsmesh_upload",
-        )
-
-        assert settings.collector_ingest_mode.value == "letsmesh_upload"
 
     def test_collector_letsmesh_decoder_keys_list(self) -> None:
         """LetsMesh decoder keys are parsed from comma/space-separated env values."""

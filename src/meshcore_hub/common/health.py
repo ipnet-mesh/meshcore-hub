@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 
 # Default health file locations
 DEFAULT_HEALTH_DIR = "/tmp/meshcore-hub"
-DEFAULT_HEALTH_FILE_INTERFACE = "interface-health.json"
 DEFAULT_HEALTH_FILE_COLLECTOR = "collector-health.json"
 
 # Health status is considered stale after this many seconds
@@ -94,9 +93,7 @@ def get_health_file(component: str) -> Path:
         Path to health file
     """
     health_dir = get_health_dir()
-    if component == "interface":
-        return health_dir / DEFAULT_HEALTH_FILE_INTERFACE
-    elif component == "collector":
+    if component == "collector":
         return health_dir / DEFAULT_HEALTH_FILE_COLLECTOR
     else:
         return health_dir / f"{component}-health.json"

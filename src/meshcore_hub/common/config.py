@@ -18,25 +18,11 @@ class LogLevel(str, Enum):
     CRITICAL = "CRITICAL"
 
 
-class InterfaceMode(str, Enum):
-    """Interface component mode."""
-
-    RECEIVER = "RECEIVER"
-    SENDER = "SENDER"
-
-
 class MQTTTransport(str, Enum):
     """MQTT transport type."""
 
     TCP = "tcp"
     WEBSOCKETS = "websockets"
-
-
-class CollectorIngestMode(str, Enum):
-    """Collector MQTT ingest mode."""
-
-    NATIVE = "native"
-    LETSMESH_UPLOAD = "letsmesh_upload"
 
 
 class CommonSettings(BaseSettings):
@@ -77,39 +63,6 @@ class CommonSettings(BaseSettings):
     mqtt_ws_path: str = Field(
         default="/mqtt",
         description="WebSocket path for MQTT transport (used when MQTT_TRANSPORT=websockets)",
-    )
-
-
-class InterfaceSettings(CommonSettings):
-    """Settings for the Interface component."""
-
-    # Mode
-    interface_mode: InterfaceMode = Field(
-        default=InterfaceMode.RECEIVER,
-        description="Interface mode: RECEIVER or SENDER",
-    )
-
-    # Serial connection
-    serial_port: str = Field(default="/dev/ttyUSB0", description="Serial port path")
-    serial_baud: int = Field(default=115200, description="Serial baud rate")
-
-    # Mock device
-    mock_device: bool = Field(default=False, description="Use mock device for testing")
-
-    # Device name
-    meshcore_device_name: Optional[str] = Field(
-        default=None, description="Device/node name (optional)"
-    )
-
-    # Contact cleanup settings
-    contact_cleanup_enabled: bool = Field(
-        default=True,
-        description="Enable automatic removal of stale contacts from companion node",
-    )
-    contact_cleanup_days: int = Field(
-        default=7,
-        description="Remove contacts not advertised for this many days",
-        ge=1,
     )
 
 
@@ -185,21 +138,9 @@ class CollectorSettings(CommonSettings):
         description="Remove nodes not seen for this many days (last_seen)",
         ge=1,
     )
-    collector_ingest_mode: CollectorIngestMode = Field(
-        default=CollectorIngestMode.LETSMESH_UPLOAD,
-        description=(
-            "Collector MQTT ingest mode. "
-            "'native' expects <prefix>/<pubkey>/event/<event_name>. "
-            "'letsmesh_upload' expects LetsMesh observer uploads on "
-            "<prefix>/<pubkey>/(packets|status|internal)."
-        ),
-    )
     collector_letsmesh_decoder_enabled: bool = Field(
         default=True,
-        description=(
-            "Enable external LetsMesh packet decoding via meshcore-decoder. "
-            "Only applies when COLLECTOR_INGEST_MODE=letsmesh_upload."
-        ),
+        description=("Enable external LetsMesh packet decoding via meshcore-decoder."),
     )
     collector_letsmesh_decoder_command: str = Field(
         default="meshcore-decoder",
@@ -481,11 +422,6 @@ class WebSettings(CommonSettings):
 def get_common_settings() -> CommonSettings:
     """Get common settings instance."""
     return CommonSettings()
-
-
-def get_interface_settings() -> InterfaceSettings:
-    """Get interface settings instance."""
-    return InterfaceSettings()
 
 
 def get_collector_settings() -> CollectorSettings:

@@ -97,15 +97,15 @@ ${content}`, container);
                     const adName = ad.node_tag_name || ad.node_name || ad.name;
                     const adDescription = ad.node_tag_description;
                     let receiversBlock = nothing;
-                    if (ad.receivers && ad.receivers.length >= 1) {
+                    if (ad.observers && ad.observers.length >= 1) {
                         receiversBlock = html`<div class="flex gap-0.5 justify-end mt-1">
-                            ${ad.receivers.map(recv => {
+                            ${ad.observers.map(recv => {
                                 const recvName = recv.tag_name || recv.name || truncateKey(recv.public_key, 12);
                                 return html`<span class="text-sm" title=${recvName}>\u{1F4E1}</span>`;
                             })}
                         </div>`;
-                    } else if (ad.received_by) {
-                        const recvTitle = ad.receiver_tag_name || ad.receiver_name || truncateKey(ad.received_by, 12);
+                    } else if (ad.observed_by) {
+                        const recvTitle = ad.observer_tag_name || ad.observer_name || truncateKey(ad.observed_by, 12);
                         receiversBlock = html`<span class="text-sm" title=${recvTitle}>\u{1F4E1}</span>`;
                     }
                     return html`<a href="/nodes/${ad.public_key}" class="card bg-base-100 shadow-sm block">
@@ -133,16 +133,16 @@ ${content}`, container);
                     const adName = ad.node_tag_name || ad.node_name || ad.name;
                     const adDescription = ad.node_tag_description;
                     let receiversBlock;
-                    if (ad.receivers && ad.receivers.length >= 1) {
+                    if (ad.observers && ad.observers.length >= 1) {
                         receiversBlock = html`<div class="flex gap-1">
-                            ${ad.receivers.map(recv => {
+                            ${ad.observers.map(recv => {
                                 const recvName = recv.tag_name || recv.name || truncateKey(recv.public_key, 12);
                                 return html`<a href="/nodes/${recv.public_key}" class="text-lg hover:opacity-70" title=${recvName}>\u{1F4E1}</a>`;
                             })}
                         </div>`;
-                    } else if (ad.received_by) {
-                        const recvTitle = ad.receiver_tag_name || ad.receiver_name || truncateKey(ad.received_by, 12);
-                        receiversBlock = html`<a href="/nodes/${ad.received_by}" class="text-lg hover:opacity-70" title=${recvTitle}>\u{1F4E1}</a>`;
+                    } else if (ad.observed_by) {
+                        const recvTitle = ad.observer_tag_name || ad.observer_name || truncateKey(ad.observed_by, 12);
+                        receiversBlock = html`<a href="/nodes/${ad.observed_by}" class="text-lg hover:opacity-70" title=${recvTitle}>\u{1F4E1}</a>`;
                     } else {
                         receiversBlock = html`<span class="opacity-50">-</span>`;
                     }

@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 
 from meshcore_hub.common.database import DatabaseManager
 from meshcore_hub.common.hash_utils import compute_advertisement_hash
-from meshcore_hub.common.models import Advertisement, Node, add_event_receiver
+from meshcore_hub.common.models import Advertisement, Node, add_event_observer
 
 logger = logging.getLogger(__name__)
 
@@ -117,13 +117,13 @@ def handle_advertisement(
 
             # Add this receiver to the junction table
             if receiver_node:
-                added = add_event_receiver(
+                added = add_event_observer(
                     session=session,
                     event_type="advertisement",
                     event_hash=event_hash,
-                    receiver_node_id=receiver_node.id,
+                    observer_node_id=receiver_node.id,
                     snr=None,  # Advertisements don't have SNR
-                    received_at=now,
+                    observed_at=now,
                 )
                 if added:
                     logger.debug(
@@ -166,7 +166,7 @@ def handle_advertisement(
 
         # Create advertisement record
         advertisement = Advertisement(
-            receiver_node_id=receiver_node.id if receiver_node else None,
+            observer_node_id=receiver_node.id if receiver_node else None,
             node_id=node.id,
             public_key=adv_public_key,
             name=name,
@@ -179,13 +179,13 @@ def handle_advertisement(
 
         # Add first receiver to junction table
         if receiver_node:
-            add_event_receiver(
+            add_event_observer(
                 session=session,
                 event_type="advertisement",
                 event_hash=event_hash,
-                receiver_node_id=receiver_node.id,
+                observer_node_id=receiver_node.id,
                 snr=None,
-                received_at=now,
+                observed_at=now,
             )
 
         # Flush to check for duplicate constraint violation (race condition)
@@ -200,17 +200,16 @@ def handle_advertisement(
             )
             # Re-add receiver to existing event in a new transaction
             if receiver_node:
-                add_event_receiver(
+                add_event_observer(
                     session=session,
                     event_type="advertisement",
                     event_hash=event_hash,
-                    receiver_node_id=receiver_node.id,
+                    observer_node_id=receiver_node.id,
                     snr=None,
-                    received_at=now,
+                    observed_at=now,
                 )
             return
 
     logger.info(
-        f"Stored advertisement from {name or adv_public_key[:12]!r} "
-        f"(type={adv_type})"
+        f"Stored advertisement from {name or adv_public_key[:12]!r} (type={adv_type})"
     )

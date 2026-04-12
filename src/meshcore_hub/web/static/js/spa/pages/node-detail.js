@@ -82,16 +82,16 @@ export async function render(container, params, router) {
                             const advTypeHtml = adv.adv_type
                                 ? html`<span title=${adv.adv_type.charAt(0).toUpperCase() + adv.adv_type.slice(1)}>${advEmoji}</span>`
                                 : html`<span class="opacity-50">-</span>`;
-                            const recvName = adv.received_by ? (adv.receiver_tag_name || adv.receiver_name) : null;
-                            const receiverHtml = !adv.received_by
+                            const recvName = adv.observed_by ? (adv.observer_tag_name || adv.observer_name) : null;
+                            const receiverHtml = !adv.observed_by
                                 ? html`<span class="opacity-50">-</span>`
                                 : recvName
-                                    ? html`<a href="/nodes/${adv.received_by}" class="link link-hover">
+                                    ? html`<a href="/nodes/${adv.observed_by}" class="link link-hover">
                                         <div class="font-medium text-sm">${recvName}</div>
-                                        <div class="text-xs font-mono opacity-70">${adv.received_by.slice(0, 16)}...</div>
+                                        <div class="text-xs font-mono opacity-70">${adv.observed_by.slice(0, 16)}...</div>
                                     </a>`
-                                    : html`<a href="/nodes/${adv.received_by}" class="link link-hover">
-                                        <span class="font-mono text-xs">${adv.received_by.slice(0, 16)}...</span>
+                                    : html`<a href="/nodes/${adv.observed_by}" class="link link-hover">
+                                        <span class="font-mono text-xs">${adv.observed_by.slice(0, 16)}...</span>
                                     </a>`;
                             return html`<tr>
                                 <td class="text-xs whitespace-nowrap">${formatDateTime(adv.received_at)}</td>

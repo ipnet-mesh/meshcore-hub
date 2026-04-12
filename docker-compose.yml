@@ -18,98 +18,34 @@ services:
       - mosquitto_data:/mosquitto/data
       - mosquitto_log:/mosquitto/log
     healthcheck:
-      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-i", "healthcheck", "-W", "3"]
+      test:
+        [
+          "CMD",
+          "mosquitto_sub",
+          "-t",
+          "$$SYS/#",
+          "-C",
+          "1",
+          "-i",
+          "healthcheck",
+          "-W",
+          "3",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
 
   # ==========================================================================
-  # Interface Receiver - MeshCore device to MQTT bridge (events)
-  # Native receiver using the built-in meshcore-hub interface.
-  # For the packet-capture based receiver, use --profile receiver instead.
-  # ==========================================================================
-  interface-receiver:
-    image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: meshcore-interface-receiver
-    profiles:
-      - all
-      - native-receiver
-    restart: unless-stopped
-    devices:
-      - "${SERIAL_PORT:-/dev/ttyUSB0}:${SERIAL_PORT:-/dev/ttyUSB0}"
-    user: root  # Required for device access
-    environment:
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - MQTT_HOST=${MQTT_HOST:-mqtt}
-      - MQTT_PORT=${MQTT_PORT:-1883}
-      - MQTT_USERNAME=${MQTT_USERNAME:-}
-      - MQTT_PASSWORD=${MQTT_PASSWORD:-}
-      - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
-      - MQTT_TLS=${MQTT_TLS:-false}
-      - MQTT_TRANSPORT=${MQTT_TRANSPORT:-tcp}
-      - MQTT_WS_PATH=${MQTT_WS_PATH:-/mqtt}
-      - SERIAL_PORT=${SERIAL_PORT:-/dev/ttyUSB0}
-      - SERIAL_BAUD=${SERIAL_BAUD:-115200}
-      - NODE_ADDRESS=${NODE_ADDRESS:-}
-    command: ["interface", "receiver"]
-    healthcheck:
-      test: ["CMD", "meshcore-hub", "health", "interface"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
-  # ==========================================================================
-  # Interface Sender - MQTT to MeshCore device bridge (commands)
-  # ==========================================================================
-  interface-sender:
-    image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: meshcore-interface-sender
-    profiles:
-      - all
-      - sender
-    restart: unless-stopped
-    devices:
-      - "${SERIAL_PORT_SENDER:-/dev/ttyUSB1}:${SERIAL_PORT_SENDER:-/dev/ttyUSB1}"
-    user: root  # Required for device access
-    environment:
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - MQTT_HOST=${MQTT_HOST:-mqtt}
-      - MQTT_PORT=${MQTT_PORT:-1883}
-      - MQTT_USERNAME=${MQTT_USERNAME:-}
-      - MQTT_PASSWORD=${MQTT_PASSWORD:-}
-      - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
-      - MQTT_TLS=${MQTT_TLS:-false}
-      - MQTT_TRANSPORT=${MQTT_TRANSPORT:-tcp}
-      - MQTT_WS_PATH=${MQTT_WS_PATH:-/mqtt}
-      - SERIAL_PORT=${SERIAL_PORT_SENDER:-/dev/ttyUSB1}
-      - SERIAL_BAUD=${SERIAL_BAUD:-115200}
-      - NODE_ADDRESS=${NODE_ADDRESS_SENDER:-}
-    command: ["interface", "sender"]
-    healthcheck:
-      test: ["CMD", "meshcore-hub", "health", "interface"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
-  # ==========================================================================
-  # Interface Packet Capture - MeshCore packet capture to MQTT (serial only)
-  # Uses ghcr.io/agessaman/meshcore-packet-capture (separate image)
+  # Packet Capture - MeshCore packet capture to MQTT (serial only)
+  # Uses ghcr.io/agessaman/meshcore-packet-capture (separate project)
   # Publishes to local MQTT (broker 3) in LetsMesh upload format, which the
   # collector ingests with COLLECTOR_INGEST_MODE=letsmesh_upload.
   # Optionally publish to Let's Mesh (brokers 1 & 2) for cloud map integration.
   # ==========================================================================
-  interface-packet-capture:
+  packet-capture:
     image: ghcr.io/agessaman/meshcore-packet-capture:${PACKETCAPTURE_IMAGE_VERSION:-latest}
-    container_name: meshcore-interface-packet-capture
+    container_name: meshcore-packet-capture
     profiles:
       - all
       - receiver
@@ -168,39 +104,6 @@ services:
       - packetcapture_data:/app/data
 
   # ==========================================================================
-  # Interface Mock Receiver - For testing without real devices
-  # ==========================================================================
-  interface-mock-receiver:
-    image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: meshcore-interface-mock-receiver
-    profiles:
-      - all
-      - native-receiver
-    restart: unless-stopped
-    environment:
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - MQTT_HOST=${MQTT_HOST:-mqtt}
-      - MQTT_PORT=${MQTT_PORT:-1883}
-      - MQTT_USERNAME=${MQTT_USERNAME:-}
-      - MQTT_PASSWORD=${MQTT_PASSWORD:-}
-      - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
-      - MQTT_TLS=${MQTT_TLS:-false}
-      - MQTT_TRANSPORT=${MQTT_TRANSPORT:-tcp}
-      - MQTT_WS_PATH=${MQTT_WS_PATH:-/mqtt}
-      - MOCK_DEVICE=true
-      - NODE_ADDRESS=${NODE_ADDRESS:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
-    command: ["interface", "receiver", "--mock"]
-    healthcheck:
-      test: ["CMD", "meshcore-hub", "health", "interface"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # ==========================================================================
   # Collector - MQTT subscriber and database storage
   # ==========================================================================
   collector:
@@ -229,7 +132,6 @@ services:
       - MQTT_TLS=${MQTT_TLS:-false}
       - MQTT_TRANSPORT=${MQTT_TRANSPORT:-tcp}
       - MQTT_WS_PATH=${MQTT_WS_PATH:-/mqtt}
-      - COLLECTOR_INGEST_MODE=${COLLECTOR_INGEST_MODE:-letsmesh_upload}
       - COLLECTOR_LETSMESH_DECODER_ENABLED=${COLLECTOR_LETSMESH_DECODER_ENABLED:-true}
       - COLLECTOR_LETSMESH_DECODER_COMMAND=${COLLECTOR_LETSMESH_DECODER_COMMAND:-meshcore-decoder}
       - COLLECTOR_LETSMESH_DECODER_KEYS=${COLLECTOR_LETSMESH_DECODER_KEYS:-}
@@ -263,7 +165,7 @@ services:
       start_period: 10s
 
   # ==========================================================================
-  # API Server - REST API for querying data and sending commands
+  # API Server - REST API for querying data
   # ==========================================================================
   api:
     image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
@@ -303,7 +205,13 @@ services:
       - METRICS_CACHE_TTL=${METRICS_CACHE_TTL:-60}
     command: ["api"]
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -363,7 +271,13 @@ services:
       - FEATURE_PAGES=${FEATURE_PAGES:-true}
     command: ["web"]
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -430,8 +344,8 @@ services:
     ports:
       - "${PROMETHEUS_PORT:-9090}:9090"
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.retention.time=30d'
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=30d"
     volumes:
       - ./etc/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./etc/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
@@ -453,8 +367,8 @@ services:
       - ./etc/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - alertmanager_data:/alertmanager
     command:
-      - '--config.file=/etc/alertmanager/alertmanager.yml'
-      - '--storage.path=/alertmanager'
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
 
 # ==========================================================================
 # Volumes

@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 
 from meshcore_hub.common.database import DatabaseManager
 from meshcore_hub.common.hash_utils import compute_telemetry_hash
-from meshcore_hub.common.models import Node, Telemetry, add_event_receiver
+from meshcore_hub.common.models import Node, Telemetry, add_event_observer
 
 logger = logging.getLogger(__name__)
 
@@ -84,13 +84,13 @@ def handle_telemetry(
         if existing:
             # Event already exists - just add this receiver to the junction table
             if receiver_node:
-                added = add_event_receiver(
+                added = add_event_observer(
                     session=session,
                     event_type="telemetry",
                     event_hash=event_hash,
-                    receiver_node_id=receiver_node.id,
+                    observer_node_id=receiver_node.id,
                     snr=None,
-                    received_at=now,
+                    observed_at=now,
                 )
                 if added:
                     logger.debug(
@@ -118,7 +118,7 @@ def handle_telemetry(
 
         # Create telemetry record
         telemetry = Telemetry(
-            receiver_node_id=receiver_node.id if receiver_node else None,
+            observer_node_id=receiver_node.id if receiver_node else None,
             node_id=reporting_node.id if reporting_node else None,
             node_public_key=node_public_key,
             lpp_data=lpp_bytes,
@@ -130,13 +130,13 @@ def handle_telemetry(
 
         # Add first receiver to junction table
         if receiver_node:
-            add_event_receiver(
+            add_event_observer(
                 session=session,
                 event_type="telemetry",
                 event_hash=event_hash,
-                receiver_node_id=receiver_node.id,
+                observer_node_id=receiver_node.id,
                 snr=None,
-                received_at=now,
+                observed_at=now,
             )
 
         # Flush to check for duplicate constraint violation (race condition)
@@ -151,13 +151,13 @@ def handle_telemetry(
             )
             # Re-add receiver to existing event in a new transaction
             if receiver_node:
-                add_event_receiver(
+                add_event_observer(
                     session=session,
                     event_type="telemetry",
                     event_hash=event_hash,
-                    receiver_node_id=receiver_node.id,
+                    observer_node_id=receiver_node.id,
                     snr=None,
-                    received_at=now,
+                    observed_at=now,
                 )
             return
 

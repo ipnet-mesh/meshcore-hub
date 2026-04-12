@@ -51,7 +51,7 @@ def handle_event_log(
 
         # Create event log record
         event_log = EventLog(
-            receiver_node_id=receiver_node.id if receiver_node else None,
+            observer_node_id=receiver_node.id if receiver_node else None,
             event_type=event_type,
             payload=payload,
             received_at=now,
