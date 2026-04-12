@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/ipnet-mesh/meshcore-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/ipnet-mesh/meshcore-hub/actions/workflows/ci.yml)
 [![Docker](https://github.com/ipnet-mesh/meshcore-hub/actions/workflows/docker.yml/badge.svg)](https://github.com/ipnet-mesh/meshcore-hub/actions/workflows/docker.yml)
+[![codecov](https://codecov.io/github/ipnet-mesh/meshcore-hub/graph/badge.svg?token=DO4F82DLKS)](https://codecov.io/github/ipnet-mesh/meshcore-hub)
 [![BuyMeACoffee](https://raw.githubusercontent.com/pachadotdev/buymeacoffee-badges/main/bmc-donate-yellow.svg)](https://www.buymeacoffee.com/jinglemansweep)
 
 Python 3.13+ platform for managing and orchestrating MeshCore mesh networks.
