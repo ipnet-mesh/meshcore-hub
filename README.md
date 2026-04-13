@@ -647,19 +647,15 @@ meshcore-hub/
 ├── data/                   # Runtime data directory (DATA_HOME, created at runtime)
 ├── Dockerfile              # Docker build configuration
 ├── docker-compose.yml      # Docker Compose services
-├── PROMPT.md               # Project specification
 ├── SCHEMAS.md              # Event schema documentation
-├── PLAN.md                 # Implementation plan
-├── TASKS.md                # Task tracker
+├── UPGRADING.md            # Upgrade guide for breaking changes
 └── AGENTS.md               # AI assistant guidelines
 ```
 
 ## Documentation
 
-- [PROMPT.md](PROMPT.md) - Original project specification
 - [SCHEMAS.md](SCHEMAS.md) - MeshCore event schemas
-- [PLAN.md](PLAN.md) - Architecture and implementation plan
-- [TASKS.md](TASKS.md) - Development task tracker
+- [UPGRADING.md](UPGRADING.md) - Upgrade guide for breaking changes
 - [AGENTS.md](AGENTS.md) - Guidelines for AI coding assistants
 
 ## Contributing
