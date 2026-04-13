@@ -14,7 +14,7 @@ class TestSubscriber:
         """Create a mock MQTT client."""
         client = MagicMock()
         client.topic_builder = MagicMock()
-        client.topic_builder.prefix = "meshcore/BOS"
+        client.topic_builder.prefix = "meshcore"
         client.topic_builder.all_events_topic.return_value = "meshcore/+/event/#"
         client.topic_builder.parse_event_topic.return_value = (
             "a" * 64,
@@ -76,8 +76,8 @@ class TestSubscriber:
         )
 
         subscriber._handle_mqtt_message(
-            topic="meshcore/abc/status",
-            pattern="meshcore/+/status",
+            topic="meshcore/STN/abc/status",
+            pattern="meshcore/+/+/status",
             payload={"public_key": "b" * 64, "name": "Test"},
         )
 
@@ -93,9 +93,9 @@ class TestSubscriber:
         subscriber.start()
 
         expected_calls = [
-            call("meshcore/BOS/+/packets", subscriber._handle_mqtt_message),
-            call("meshcore/BOS/+/status", subscriber._handle_mqtt_message),
-            call("meshcore/BOS/+/internal", subscriber._handle_mqtt_message),
+            call("meshcore/+/+/packets", subscriber._handle_mqtt_message),
+            call("meshcore/+/+/status", subscriber._handle_mqtt_message),
+            call("meshcore/+/+/internal", subscriber._handle_mqtt_message),
         ]
         mock_mqtt_client.subscribe.assert_has_calls(expected_calls, any_order=False)
         assert mock_mqtt_client.subscribe.call_count == 3
@@ -115,8 +115,8 @@ class TestSubscriber:
         subscriber.start()
 
         subscriber._handle_mqtt_message(
-            topic=f"meshcore/BOS/{'a' * 64}/status",
-            pattern="meshcore/BOS/+/status",
+            topic=f"meshcore/STN/{'a' * 64}/status",
+            pattern="meshcore/+/+/status",
             payload={
                 "origin": "Observer Node",
                 "origin_id": "b" * 64,
@@ -150,8 +150,8 @@ class TestSubscriber:
         subscriber.start()
 
         subscriber._handle_mqtt_message(
-            topic=f"meshcore/BOS/{'a' * 64}/status",
-            pattern="meshcore/BOS/+/status",
+            topic=f"meshcore/STN/{'a' * 64}/status",
+            pattern="meshcore/+/+/status",
             payload={
                 "origin": "Observer Node",
                 "origin_id": "b" * 64,
@@ -180,8 +180,8 @@ class TestSubscriber:
         subscriber.start()
 
         subscriber._handle_mqtt_message(
-            topic=f"meshcore/BOS/{'a' * 64}/status",
-            pattern="meshcore/BOS/+/status",
+            topic=f"meshcore/STN/{'a' * 64}/status",
+            pattern="meshcore/+/+/status",
             payload={
                 "origin_id": "b" * 64,
                 "stats": {"cpu": 27, "mem": 91, "debug_flags": 7},
@@ -222,8 +222,8 @@ class TestSubscriber:
             },
         ):
             subscriber._handle_mqtt_message(
-                topic=f"meshcore/BOS/{'a' * 64}/packets",
-                pattern="meshcore/BOS/+/packets",
+                topic=f"meshcore/STN/{'a' * 64}/packets",
+                pattern="meshcore/+/+/packets",
                 payload={
                     "packet_type": "5",
                     "hash": "ABCDEF1234",
@@ -267,8 +267,8 @@ class TestSubscriber:
             return_value=None,
         ):
             subscriber._handle_mqtt_message(
-                topic=f"meshcore/BOS/{'a' * 64}/packets",
-                pattern="meshcore/BOS/+/packets",
+                topic=f"meshcore/STN/{'a' * 64}/packets",
+                pattern="meshcore/+/+/packets",
                 payload={
                     "packet_type": "5",
                     "hash": "ABCDEF1234",
@@ -321,8 +321,8 @@ class TestSubscriber:
             ),
         ):
             subscriber._handle_mqtt_message(
-                topic=f"meshcore/BOS/{'a' * 64}/packets",
-                pattern="meshcore/BOS/+/packets",
+                topic=f"meshcore/STN/{'a' * 64}/packets",
+                pattern="meshcore/+/+/packets",
                 payload={
                     "packet_type": "5",
                     "hash": "ABCDEF1234",
@@ -375,8 +375,8 @@ class TestSubscriber:
             },
         ):
             subscriber._handle_mqtt_message(
-                topic=f"meshcore/BOS/{'a' * 64}/packets",
-                pattern="meshcore/BOS/+/packets",
+                topic=f"meshcore/STN/{'a' * 64}/packets",
+                pattern="meshcore/+/+/packets",
                 payload={
                     "packet_type": "1",
                     "hash": "ABABAB1234",
@@ -424,8 +424,8 @@ class TestSubscriber:
             },
         ):
             subscriber._handle_mqtt_message(
-                topic=f"meshcore/BOS/{'a' * 64}/packets",
-                pattern="meshcore/BOS/+/packets",
+                topic=f"meshcore/STN/{'a' * 64}/packets",
+                pattern="meshcore/+/+/packets",
                 payload={
                     "packet_type": "5",
                     "hash": "FEEDC0DE",
@@ -479,8 +479,8 @@ class TestSubscriber:
             },
         ):
             subscriber._handle_mqtt_message(
-                topic=f"meshcore/BOS/{'a' * 64}/packets",
-                pattern="meshcore/BOS/+/packets",
+                topic=f"meshcore/STN/{'a' * 64}/packets",
+                pattern="meshcore/+/+/packets",
                 payload={
                     "packet_type": "4",
                     "hash": "A1B2C3D4",
@@ -534,8 +534,8 @@ class TestSubscriber:
             },
         ):
             subscriber._handle_mqtt_message(
-                topic=f"meshcore/BOS/{'a' * 64}/packets",
-                pattern="meshcore/BOS/+/packets",
+                topic=f"meshcore/STN/{'a' * 64}/packets",
+                pattern="meshcore/+/+/packets",
                 payload={
                     "packet_type": "11",
                     "hash": "E5F6A7B8",
@@ -586,8 +586,8 @@ class TestSubscriber:
             },
         ):
             subscriber._handle_mqtt_message(
-                topic=f"meshcore/BOS/{'a' * 64}/packets",
-                pattern="meshcore/BOS/+/packets",
+                topic=f"meshcore/STN/{'a' * 64}/packets",
+                pattern="meshcore/+/+/packets",
                 payload={
                     "packet_type": "9",
                     "hash": "99887766",
@@ -638,8 +638,8 @@ class TestSubscriber:
             },
         ):
             subscriber._handle_mqtt_message(
-                topic=f"meshcore/BOS/{'a' * 64}/packets",
-                pattern="meshcore/BOS/+/packets",
+                topic=f"meshcore/STN/{'a' * 64}/packets",
+                pattern="meshcore/+/+/packets",
                 payload={
                     "packet_type": "9",
                     "hash": "99887766",
@@ -687,8 +687,8 @@ class TestSubscriber:
             },
         ):
             subscriber._handle_mqtt_message(
-                topic=f"meshcore/BOS/{'a' * 64}/packets",
-                pattern="meshcore/BOS/+/packets",
+                topic=f"meshcore/STN/{'a' * 64}/packets",
+                pattern="meshcore/+/+/packets",
                 payload={
                     "packet_type": "8",
                     "hash": "99887766",
@@ -738,8 +738,8 @@ class TestSubscriber:
             },
         ):
             subscriber._handle_mqtt_message(
-                topic=f"meshcore/BOS/{'a' * 64}/packets",
-                pattern="meshcore/BOS/+/packets",
+                topic=f"meshcore/STN/{'a' * 64}/packets",
+                pattern="meshcore/+/+/packets",
                 payload={
                     "packet_type": "8",
                     "hash": "99887766",
@@ -787,8 +787,8 @@ class TestSubscriber:
             return_value=decoded_packet,
         ):
             subscriber._handle_mqtt_message(
-                topic=f"meshcore/BOS/{'a' * 64}/packets",
-                pattern="meshcore/BOS/+/packets",
+                topic=f"meshcore/STN/{'a' * 64}/packets",
+                pattern="meshcore/+/+/packets",
                 payload={
                     "packet_type": "10",
                     "hash": "99887766",
@@ -833,8 +833,8 @@ class TestSubscriber:
             },
         ):
             subscriber._handle_mqtt_message(
-                topic=f"meshcore/BOS/{'a' * 64}/packets",
-                pattern="meshcore/BOS/+/packets",
+                topic=f"meshcore/STN/{'a' * 64}/packets",
+                pattern="meshcore/+/+/packets",
                 payload={
                     "packet_type": "5",
                     "hash": "ABABAB1234",

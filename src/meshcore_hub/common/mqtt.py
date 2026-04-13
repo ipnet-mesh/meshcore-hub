@@ -131,17 +131,17 @@ class TopicBuilder:
         """Parse a LetsMesh upload topic to extract public key and feed type.
 
         LetsMesh upload topics are expected in this form:
-        <prefix>/<public_key>/(packets|status|internal)
+        <prefix>/<iata>/<public_key>/(packets|status|internal)
         """
         parts = [part for part in topic.strip("/").split("/") if part]
         prefix_parts = self._prefix_parts()
         prefix_len = len(prefix_parts)
 
-        if len(parts) != prefix_len + 2 or parts[:prefix_len] != prefix_parts:
+        if len(parts) != prefix_len + 3 or parts[:prefix_len] != prefix_parts:
             return None
 
-        public_key = parts[prefix_len]
-        feed_type = parts[prefix_len + 1]
+        public_key = parts[prefix_len + 1]
+        feed_type = parts[prefix_len + 2]
         if feed_type not in {"packets", "status", "internal"}:
             return None
 
@@ -399,6 +399,8 @@ def create_mqtt_client(
     prefix: str = "meshcore",
     client_id: Optional[str] = None,
     tls: bool = False,
+    transport: str = "tcp",
+    ws_path: str = "/mqtt",
 ) -> MQTTClient:
     """Create and configure an MQTT client.
 
@@ -410,6 +412,8 @@ def create_mqtt_client(
         prefix: Topic prefix
         client_id: Client identifier (optional)
         tls: Enable TLS/SSL connection (optional)
+        transport: Transport protocol (tcp or websockets)
+        ws_path: WebSocket path (used when transport=websockets)
 
     Returns:
         Configured MQTTClient instance
@@ -422,5 +426,7 @@ def create_mqtt_client(
         prefix=prefix,
         client_id=client_id,
         tls=tls,
+        transport=transport,
+        ws_path=ws_path,
     )
     return MQTTClient(config)

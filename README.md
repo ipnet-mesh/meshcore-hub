@@ -5,9 +5,12 @@
 [![codecov](https://codecov.io/github/ipnet-mesh/meshcore-hub/graph/badge.svg?token=DO4F82DLKS)](https://codecov.io/github/ipnet-mesh/meshcore-hub)
 [![BuyMeACoffee](https://raw.githubusercontent.com/pachadotdev/buymeacoffee-badges/main/bmc-donate-yellow.svg)](https://www.buymeacoffee.com/jinglemansweep)
 
-Python 3.13+ platform for managing and orchestrating MeshCore mesh networks.
+Python 3.14+ platform for managing and orchestrating MeshCore mesh networks.
 
 ![MeshCore Hub Web Dashboard](docs/images/web.png)
+
+> [!WARNING]
+> **Breaking Changes** — The latest release replaces Mosquitto with a JWT-based MQTT broker, removes the proprietary receiver service in favor of [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture), and renames `receiver_node_id` to `observer_node_id` in the database. If upgrading from a previous version, see [UPGRADING.md](UPGRADING.md) for migration steps.
 
 > [!IMPORTANT]
 > **Help Translate MeshCore Hub** 🌍
@@ -21,7 +24,7 @@ MeshCore Hub provides a complete solution for monitoring, collecting, and intera
 | Component | Description |
 |-----------|-------------|
 | **Collector** | Subscribes to MQTT events and persists them to a database |
-| **API** | REST API for querying data and sending commands to the network |
+| **API** | REST API for querying data |
 | **Web Dashboard** | Single Page Application (SPA) for visualizing network status |
 
 ## Architecture
@@ -63,7 +66,6 @@ flowchart LR
 
 - **Event Persistence**: Store messages, advertisements, telemetry, and trace data
 - **REST API**: Query historical data with filtering and pagination
-- **Command Dispatch**: Send messages and advertisements via the API
 - **Node Tagging**: Add custom metadata to nodes for organization
 - **Web Dashboard**: Visualize network status, node locations, and message history
 - **Internationalization**: Full i18n support with composable translation patterns
@@ -111,7 +113,7 @@ Docker Compose uses **profiles** to select which services to run:
 |---------|----------|----------|
 | `all` | db-migrate, collector, api, web | Everything on one host |
 | `core` | db-migrate, collector, api, web | Central server infrastructure |
-| `mqtt` | mosquitto broker | Local MQTT broker (optional) |
+| `mqtt` | meshcore-mqtt-broker | Local MQTT broker (optional) |
 | `receiver` | packet capture observer | Observes RF traffic and publishes to MQTT |
 | `metrics` | prometheus, alertmanager | Prometheus metrics and alerting |
 | `seed` | seed | One-time seed data import |
@@ -178,8 +180,8 @@ All components are configured via environment variables. Create a `.env` file or
 | `MQTT_PASSWORD` | *(none)* | MQTT password (optional) |
 | `MQTT_PREFIX` | `meshcore` | Topic prefix for all MQTT messages |
 | `MQTT_TLS` | `false` | Enable TLS/SSL for MQTT connection |
-| `MQTT_TRANSPORT` | `tcp` | MQTT transport (`tcp` or `websockets`) |
-| `MQTT_WS_PATH` | `/mqtt` | MQTT WebSocket path (used when `MQTT_TRANSPORT=websockets`) |
+| `MQTT_TRANSPORT` | `websockets` | MQTT transport (`tcp` or `websockets`) |
+| `MQTT_WS_PATH` | `/` | MQTT WebSocket path (used when `MQTT_TRANSPORT=websockets`) |
 
 ### Collector Settings
 
@@ -191,9 +193,9 @@ All components are configured via environment variables. Create a `.env` file or
 
 The collector subscribes to packets published by [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture):
 
-- `<prefix>/+/packets`
-- `<prefix>/+/status`
-- `<prefix>/+/internal`
+- `<prefix>/+/+/packets`
+- `<prefix>/+/+/status`
+- `<prefix>/+/+/internal`
 
 Normalization behavior:
 
@@ -261,7 +263,7 @@ The collector automatically cleans up old event data and inactive nodes:
 | `API_HOST` | `0.0.0.0` | API bind address |
 | `API_PORT` | `8000` | API port |
 | `API_READ_KEY` | *(none)* | Read-only API key |
-| `API_ADMIN_KEY` | *(none)* | Admin API key (required for commands) |
+| `API_ADMIN_KEY` | *(none)* | Admin API key |
 | `METRICS_ENABLED` | `true` | Enable Prometheus metrics endpoint at `/metrics` |
 | `METRICS_CACHE_TTL` | `60` | Seconds to cache metrics output (reduces database load) |
 
@@ -537,12 +539,8 @@ The API supports optional bearer token authentication:
 # Read-only access
 curl -H "Authorization: Bearer <API_READ_KEY>" http://localhost:8000/api/v1/nodes
 
-# Admin access (required for commands)
-curl -X POST \
-  -H "Authorization: Bearer <API_ADMIN_KEY>" \
-  -H "Content-Type: application/json" \
-  -d '{"destination": "abc123...", "text": "Hello!"}' \
-  http://localhost:8000/api/v1/commands/send-message
+# Admin access
+curl -H "Authorization: Bearer <API_ADMIN_KEY>" http://localhost:8000/api/v1/members
 ```
 
 ### Example Endpoints
@@ -559,9 +557,6 @@ curl -X POST \
 | GET | `/api/v1/telemetry` | List telemetry data |
 | GET | `/api/v1/trace-paths` | List trace paths |
 | GET | `/api/v1/members` | List network members |
-| POST | `/api/v1/commands/send-message` | Send direct message |
-| POST | `/api/v1/commands/send-channel-message` | Send channel message |
-| POST | `/api/v1/commands/send-advertisement` | Send advertisement |
 | GET | `/api/v1/dashboard/stats` | Get network statistics |
 | GET | `/api/v1/dashboard/activity` | Get daily advertisement activity |
 | GET | `/api/v1/dashboard/message-activity` | Get daily message activity |

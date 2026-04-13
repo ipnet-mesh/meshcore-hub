@@ -364,22 +364,41 @@ class Subscriber(LetsMeshNormalizer):
             logger.error(f"Failed to connect to database: {e}")
             raise
 
-        # Connect to MQTT broker
-        try:
-            self.mqtt.connect()
-            self.mqtt.start_background()
-            self._mqtt_connected = True
-            logger.info("Connected to MQTT broker")
-        except Exception as e:
-            self._mqtt_connected = False
-            logger.error(f"Failed to connect to MQTT broker: {e}")
-            raise
+        # Connect to MQTT broker with retry
+        max_retries = 10
+        retry_delay = 2.0
+        for attempt in range(1, max_retries + 1):
+            try:
+                self.mqtt.connect()
+                self.mqtt.start_background()
+                self._mqtt_connected = True
+                logger.info("Connected to MQTT broker")
+                break
+            except Exception as e:
+                self._mqtt_connected = False
+                if attempt < max_retries:
+                    logger.warning(
+                        "MQTT connection attempt %d/%d failed: %s. Retrying in %.1fs...",
+                        attempt,
+                        max_retries,
+                        e,
+                        retry_delay,
+                    )
+                    time.sleep(retry_delay)
+                    retry_delay = min(retry_delay * 2, 30.0)
+                else:
+                    logger.error(
+                        "Failed to connect to MQTT broker after %d attempts: %s",
+                        max_retries,
+                        e,
+                    )
+                    raise
 
         # Subscribe to LetsMesh upload topics
         letsmesh_topics = [
-            f"{self.mqtt.topic_builder.prefix}/+/packets",
-            f"{self.mqtt.topic_builder.prefix}/+/status",
-            f"{self.mqtt.topic_builder.prefix}/+/internal",
+            f"{self.mqtt.topic_builder.prefix}/+/+/packets",
+            f"{self.mqtt.topic_builder.prefix}/+/+/status",
+            f"{self.mqtt.topic_builder.prefix}/+/+/internal",
         ]
         for letsmesh_topic in letsmesh_topics:
             self.mqtt.subscribe(letsmesh_topic, self._handle_mqtt_message)

@@ -24,25 +24,23 @@ This document provides context and guidelines for AI coding assistants working o
 
 ## Project Overview
 
-MeshCore Hub is a Python 3.13+ monorepo for managing and orchestrating MeshCore mesh networks. Data ingestion is done via [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture), which captures MeshCore mesh traffic and publishes events to MQTT. MeshCore Hub then collects, stores, and presents this data. It consists of four main components:
+MeshCore Hub is a Python 3.14+ monorepo for managing and orchestrating MeshCore mesh networks. Data ingestion is done via [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture), which captures MeshCore mesh traffic and publishes events to MQTT. MeshCore Hub then collects, stores, and presents this data. It consists of four main components:
 
 - **meshcore_collector**: Collects MeshCore events from MQTT and stores them in a database
-- **meshcore_api**: REST API for querying data and sending commands via MQTT
+- **meshcore_api**: REST API for querying data
 - **meshcore_web**: Web dashboard for visualizing network status
 - **meshcore_common**: Shared utilities, models, and configurations
 
 ## Key Documentation
 
-- [PROMPT.md](PROMPT.md) - Original project specification and requirements
 - [SCHEMAS.md](SCHEMAS.md) - MeshCore event JSON schemas and database mappings
-- [PLAN.md](PLAN.md) - Implementation plan and architecture decisions
-- [TASKS.md](TASKS.md) - Detailed task breakdown with checkboxes for progress tracking
+- [UPGRADING.md](UPGRADING.md) - Upgrade guide for breaking changes
 
 ## Technology Stack
 
 | Category | Technology |
 |----------|------------|
-| Language | Python 3.13+ |
+| Language | Python 3.14+ |
 | Package Management | pip with pyproject.toml |
 | CLI Framework | Click |
 | Configuration | Pydantic Settings |
@@ -50,6 +48,7 @@ MeshCore Hub is a Python 3.13+ monorepo for managing and orchestrating MeshCore 
 | Migrations | Alembic |
 | REST API | FastAPI |
 | MQTT Client | paho-mqtt |
+| MQTT Broker | [meshcore-mqtt-broker](https://github.com/michaelhart/meshcore-mqtt-broker) (WebSocket + JWT auth) |
 | Templates | Jinja2 (server), lit-html (SPA) |
 | Frontend | ES Modules SPA with client-side routing |
 | CSS Framework | Tailwind CSS + DaisyUI |
@@ -265,6 +264,8 @@ meshcore-hub/
 │   │   ├── cli.py            # Collector CLI with seed commands
 │   │   ├── subscriber.py     # MQTT subscriber
 │   │   ├── cleanup.py        # Data retention/cleanup service
+│   │   ├── letsmesh_decoder.py     # Native Python packet decoder
+│   │   ├── letsmesh_normalizer.py  # LetsMesh upload topic normalizer
 │   │   ├── tag_import.py     # Tag import from YAML
 │   │   ├── member_import.py  # Member import from YAML
 │   │   ├── handlers/         # Event handlers
@@ -304,7 +305,6 @@ meshcore-hub/
 │   ├── env.py
 │   └── versions/
 ├── etc/
-│   ├── mosquitto.conf        # MQTT broker configuration
 │   ├── prometheus/            # Prometheus configuration
 │   │   ├── prometheus.yml    # Scrape and alerting config
 │   │   └── alerts.yml        # Alert rules
@@ -329,15 +329,25 @@ meshcore-hub/
 
 ## MQTT Topic Structure
 
-### Events
+The MQTT broker ([meshcore-mqtt-broker](https://github.com/michaelhart/meshcore-mqtt-broker)) uses WebSocket transport with MeshCore public key authentication for publishers and subscriber accounts for consumers.
+
+### Upload Topics (published by packet capture)
 ```
-<prefix>/<public_key>/event/<event_name>
+<prefix>/<IATA>/<public_key>/<feed_type>
 ```
 
 Examples:
-- `meshcore/abc123.../event/advertisement`
-- `meshcore/abc123.../event/contact_msg_recv`
-- `meshcore/abc123.../event/channel_msg_recv`
+- `meshcore/STN/abc123.../packets`
+- `meshcore/STN/abc123.../status`
+- `meshcore/STN/abc123.../internal`
+
+The `<IATA>` segment is a 3-letter airport code (e.g., `STN`, `SEA`) or `test`, validated by the MQTT broker. The hub ignores this segment during parsing.
+
+### Subscriber Subscriptions
+The collector subscribes to:
+- `{prefix}/+/+/packets`
+- `{prefix}/+/+/status`
+- `{prefix}/+/+/internal`
 
 ## Database Conventions
 
@@ -579,7 +589,10 @@ Key variables:
 - `SEED_HOME` - Directory containing seed data files (default: `./seed`)
 - `CONTENT_HOME` - Directory containing custom content (pages, media) (default: `./content`)
 - `MQTT_HOST`, `MQTT_PORT`, `MQTT_PREFIX` - MQTT broker connection
-- `MQTT_TLS` - Enable TLS/SSL for MQTT (default: `false`)
+- `MQTT_TRANSPORT` - MQTT transport protocol (default: `websockets`)
+- `MQTT_WS_PATH` - WebSocket path (default: `/`)
+- `MQTT_TLS` - Enable TLS/SSL for MQTT (default: `false`, set `true` for `wss://`)
+- `MQTT_TOKEN_AUDIENCE` - JWT audience claim for packet capture auth tokens (default: `mqtt.localhost`)
 - `API_READ_KEY`, `API_ADMIN_KEY` - API authentication keys
 - `WEB_ADMIN_ENABLED` - Enable admin interface at /a/ (default: `false`, requires auth proxy)
 - `WEB_TRUSTED_PROXY_HOSTS` - Comma-separated list of trusted proxy hosts for admin authentication headers. Default: `*` (all hosts). Recommended: set to your reverse proxy IP in production. A startup warning is emitted when using the default `*` with admin enabled.

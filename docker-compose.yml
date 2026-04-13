@@ -1,35 +1,55 @@
 services:
   # ==========================================================================
-  # MQTT Broker - Eclipse Mosquitto (optional, use --profile mqtt)
+  # MQTT Broker - MeshCore MQTT Broker (optional, use --profile mqtt)
+  # WebSocket-only broker with MeshCore public key authentication
   # Most users will connect to an external MQTT broker instead
+  # See: https://github.com/michaelhart/meshcore-mqtt-broker
   # ==========================================================================
   mqtt:
-    image: eclipse-mosquitto:2
+    image: ghcr.io/ipnet-mesh/meshcore-mqtt-broker:latest
     container_name: meshcore-mqtt
     profiles:
       - all
       - mqtt
     restart: unless-stopped
     ports:
-      - "${MQTT_EXTERNAL_PORT:-1883}:1883"
-      - "${MQTT_WS_PORT:-9001}:9001"
+      - "${MQTT_PORT:-1883}:${MQTT_PORT:-1883}"
     volumes:
-      # - ./etc/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-      - mosquitto_data:/mosquitto/data
-      - mosquitto_log:/mosquitto/log
+      - mqtt_broker_data:/data
+    environment:
+      # Broker listener
+      - MQTT_WS_PORT=${MQTT_PORT:-1883}
+      - MQTT_HOST=0.0.0.0
+      # JWT audience validation
+      - AUTH_EXPECTED_AUDIENCE=${MQTT_TOKEN_AUDIENCE:-mqtt.localhost}
+      # Subscriber accounts (hub connects as role 1 = admin for /internal access)
+      - SUBSCRIBER_MAX_CONNECTIONS_DEFAULT=5
+      - SUBSCRIBER_1=${MQTT_USERNAME:-admin}:${MQTT_PASSWORD:-admin}:1
+      # Abuse detection
+      - ABUSE_ENFORCEMENT_ENABLED=false
+      - ABUSE_DUPLICATE_WINDOW_SIZE=100
+      - ABUSE_DUPLICATE_WINDOW_MS=300000
+      - ABUSE_DUPLICATE_THRESHOLD=10
+      - ABUSE_MAX_DUPLICATES_PER_PACKET=5
+      - ABUSE_DUPLICATE_RATE_THRESHOLD=0.3
+      - ABUSE_DUPLICATE_RATE_WINDOW_MS=300000
+      - ABUSE_BUCKET_CAPACITY=20
+      - ABUSE_BUCKET_REFILL_RATE=3
+      - ABUSE_MAX_PACKET_SIZE=255
+      - ABUSE_MAX_TOPICS_PER_DAY=3
+      - ABUSE_ANOMALY_THRESHOLD=10
+      - ABUSE_MAX_IATA_CHANGES_24H=3
+      - ABUSE_TOPIC_HISTORY_SIZE=50
+      - ABUSE_TOPIC_HISTORY_WINDOW_MS=86400000
+      - ABUSE_PERSISTENCE_PATH=/data/abuse-detection.db
+      - ABUSE_PERSISTENCE_INTERVAL_MS=300000
     healthcheck:
       test:
         [
           "CMD",
-          "mosquitto_sub",
-          "-t",
-          "$$SYS/#",
-          "-C",
-          "1",
-          "-i",
-          "healthcheck",
-          "-W",
-          "3",
+          "node",
+          "-e",
+          "const net=require('net');const s=net.createConnection(process.env.MQTT_WS_PORT||1883,'127.0.0.1',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),3000)",
         ]
       interval: 30s
       timeout: 10s
@@ -49,6 +69,9 @@ services:
     profiles:
       - all
       - receiver
+    depends_on:
+      mqtt:
+        condition: service_healthy
     restart: unless-stopped
     devices:
       - "${SERIAL_PORT:-/dev/ttyUSB0}:${SERIAL_PORT:-/dev/ttyUSB0}"
@@ -91,11 +114,14 @@ services:
       - PACKETCAPTURE_MQTT3_PORT=${MQTT_PORT}
       - PACKETCAPTURE_MQTT3_USERNAME=${MQTT_USERNAME:-}
       - PACKETCAPTURE_MQTT3_PASSWORD=${MQTT_PASSWORD:-}
+      - PACKETCAPTURE_MQTT3_TRANSPORT=websockets
       - PACKETCAPTURE_MQTT3_USE_TLS=${MQTT_TLS:-false}
+      - PACKETCAPTURE_MQTT3_USE_AUTH_TOKEN=true
+      - PACKETCAPTURE_MQTT3_TOKEN_AUDIENCE=${MQTT_TOKEN_AUDIENCE:-mqtt.localhost}
       - PACKETCAPTURE_MQTT3_KEEPALIVE=${PACKETCAPTURE_MQTT3_KEEPALIVE:-60}
-      # Topics match collector's expected <prefix>/<pubkey>/<feed> format
-      - PACKETCAPTURE_MQTT3_TOPIC_STATUS=meshcore/{PUBLIC_KEY}/status
-      - PACKETCAPTURE_MQTT3_TOPIC_PACKETS=meshcore/{PUBLIC_KEY}/packets
+      # Topics match broker's <prefix>/<IATA>/<pubkey>/<feed> format
+      - PACKETCAPTURE_MQTT3_TOPIC_STATUS=meshcore/{IATA}/{PUBLIC_KEY}/status
+      - PACKETCAPTURE_MQTT3_TOPIC_PACKETS=meshcore/{IATA}/{PUBLIC_KEY}/packets
       # MQTT reconnection
       - PACKETCAPTURE_MAX_MQTT_RETRIES=${PACKETCAPTURE_MAX_MQTT_RETRIES:-5}
       - PACKETCAPTURE_MQTT_RETRY_DELAY=${PACKETCAPTURE_MQTT_RETRY_DELAY:-5}
@@ -115,10 +141,12 @@ services:
     profiles:
       - all
       - core
-    restart: unless-stopped
     depends_on:
       db-migrate:
         condition: service_completed_successfully
+      mqtt:
+        condition: service_healthy
+    restart: unless-stopped
     volumes:
       - hub_data:/data
       - ${SEED_HOME:-./seed}:/seed
@@ -130,8 +158,8 @@ services:
       - MQTT_PASSWORD=${MQTT_PASSWORD:-}
       - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
       - MQTT_TLS=${MQTT_TLS:-false}
-      - MQTT_TRANSPORT=${MQTT_TRANSPORT:-tcp}
-      - MQTT_WS_PATH=${MQTT_WS_PATH:-/mqtt}
+      - MQTT_TRANSPORT=${MQTT_TRANSPORT:-websockets}
+      - MQTT_WS_PATH=${MQTT_WS_PATH:-/}
       - COLLECTOR_LETSMESH_DECODER_KEYS=${COLLECTOR_LETSMESH_DECODER_KEYS:-}
       - DATA_HOME=/data
       - SEED_HOME=/seed
@@ -191,8 +219,8 @@ services:
       - MQTT_PASSWORD=${MQTT_PASSWORD:-}
       - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
       - MQTT_TLS=${MQTT_TLS:-false}
-      - MQTT_TRANSPORT=${MQTT_TRANSPORT:-tcp}
-      - MQTT_WS_PATH=${MQTT_WS_PATH:-/mqtt}
+      - MQTT_TRANSPORT=${MQTT_TRANSPORT:-websockets}
+      - MQTT_WS_PATH=${MQTT_WS_PATH:-/}
       - DATA_HOME=/data
       - API_HOST=0.0.0.0
       - API_PORT=8000
@@ -373,10 +401,8 @@ services:
 volumes:
   hub_data:
     name: meshcore_hub_data
-  mosquitto_data:
-    name: meshcore_mosquitto_data
-  mosquitto_log:
-    name: meshcore_mosquitto_log
+  mqtt_broker_data:
+    name: meshcore_mqtt_broker_data
   prometheus_data:
     name: meshcore_prometheus_data
   alertmanager_data:

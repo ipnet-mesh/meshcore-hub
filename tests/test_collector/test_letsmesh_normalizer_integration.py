@@ -55,7 +55,7 @@ class TestStatusFeed:
             "status",
         )
         payload = {"uptime": 3600, "nodes_seen": 5}
-        result = norm._normalize_letsmesh_event("meshcore/BB.../status", payload)
+        result = norm._normalize_letsmesh_event("meshcore/STN/BB.../status", payload)
         assert result is not None
         pk, event_type, pl = result
         assert pk == OBSERVER_KEY
@@ -72,7 +72,7 @@ class TestInternalFeed:
             "internal",
         )
         payload = {"info": "restart"}
-        result = norm._normalize_letsmesh_event("meshcore/BB.../internal", payload)
+        result = norm._normalize_letsmesh_event("meshcore/STN/BB.../internal", payload)
         assert result is not None
         pk, event_type, pl = result
         assert pk == OBSERVER_KEY

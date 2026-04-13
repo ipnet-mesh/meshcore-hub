@@ -38,20 +38,20 @@ class TestTopicBuilder:
 
     def test_parse_letsmesh_upload_topic(self) -> None:
         """LetsMesh upload topics map to public key and feed type."""
-        builder = TopicBuilder(prefix="meshcore/BOS")
+        builder = TopicBuilder(prefix="meshcore")
 
         parsed = builder.parse_letsmesh_upload_topic(
-            "meshcore/BOS/ABCDEF1234567890/status"
+            "meshcore/STN/ABCDEF1234567890/status"
         )
 
         assert parsed == ("ABCDEF1234567890", "status")
 
     def test_parse_letsmesh_upload_topic_rejects_unknown_feed(self) -> None:
         """Unknown LetsMesh feed topics are rejected."""
-        builder = TopicBuilder(prefix="meshcore/BOS")
+        builder = TopicBuilder(prefix="meshcore")
 
         parsed = builder.parse_letsmesh_upload_topic(
-            "meshcore/BOS/ABCDEF1234567890/something_else"
+            "meshcore/STN/ABCDEF1234567890/something_else"
         )
 
         assert parsed is None
