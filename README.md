@@ -7,10 +7,10 @@
 
 Python 3.14+ platform for managing and orchestrating MeshCore mesh networks.
 
-![MeshCore Hub Web Dashboard](docs/images/web.png)
-
 > [!WARNING]
 > **Breaking Changes** — The latest release replaces Mosquitto with a JWT-based MQTT broker, removes the proprietary receiver service in favor of [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture), and renames `receiver_node_id` to `observer_node_id` in the database. If upgrading from a previous version, see [UPGRADING.md](UPGRADING.md) for migration steps.
+
+![MeshCore Hub Web Dashboard](docs/images/web.png)
 
 > [!IMPORTANT]
 > **Help Translate MeshCore Hub** 🌍
