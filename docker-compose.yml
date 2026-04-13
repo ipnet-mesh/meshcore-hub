@@ -22,7 +22,7 @@ services:
       - MQTT_HOST=0.0.0.0
       # JWT audience validation
       - AUTH_EXPECTED_AUDIENCE=${MQTT_TOKEN_AUDIENCE:-mqtt.localhost}
-      # Subscriber accounts (hub connects as role 1 = admin for /internal access)
+      # Subscriber accounts (hub connects as role 1 = admin for /internal topics)
       - SUBSCRIBER_MAX_CONNECTIONS_DEFAULT=5
       - SUBSCRIBER_1=${MQTT_USERNAME:-admin}:${MQTT_PASSWORD:-admin}:1
       # Abuse detection
@@ -59,8 +59,7 @@ services:
   # ==========================================================================
   # Packet Capture - MeshCore packet capture to MQTT (serial only)
   # Uses ghcr.io/agessaman/meshcore-packet-capture (separate project)
-  # Publishes to local MQTT (broker 3) in LetsMesh upload format, which the
-  # collector ingests with COLLECTOR_INGEST_MODE=letsmesh_upload.
+  # Publishes to local MQTT (broker 3) for the hub collector to ingest.
   # Optionally publish to Let's Mesh (brokers 1 & 2) for cloud map integration.
   # ==========================================================================
   packet-capture:
