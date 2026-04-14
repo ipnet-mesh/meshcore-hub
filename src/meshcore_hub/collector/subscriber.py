@@ -47,7 +47,8 @@ class Subscriber(LetsMeshNormalizer):
         cleanup_interval_hours: int = 24,
         node_cleanup_enabled: bool = False,
         node_cleanup_days: int = 90,
-        letsmesh_decoder_channel_keys: list[str] | None = None,
+        channel_keys: list[str] | None = None,
+        include_test_channel: bool = False,
     ):
         """Initialize subscriber.
 
@@ -60,7 +61,8 @@ class Subscriber(LetsMeshNormalizer):
             cleanup_interval_hours: Hours between cleanup runs
             node_cleanup_enabled: Enable automatic cleanup of inactive nodes
             node_cleanup_days: Remove nodes not seen for this many days
-            letsmesh_decoder_channel_keys: Optional channel keys for decrypting group text
+            channel_keys: Optional channel keys for decrypting group text
+            include_test_channel: Include built-in test channel messages
         """
         self.mqtt = mqtt_client
         self.db = db_manager
@@ -84,8 +86,9 @@ class Subscriber(LetsMeshNormalizer):
         self._cleanup_thread: Optional[threading.Thread] = None
         self._last_cleanup: Optional[datetime] = None
         self._letsmesh_decoder = LetsMeshPacketDecoder(
-            channel_keys=letsmesh_decoder_channel_keys,
+            channel_keys=channel_keys,
         )
+        self._include_test_channel = include_test_channel
 
     @property
     def is_healthy(self) -> bool:
@@ -479,7 +482,8 @@ def create_subscriber(
     cleanup_interval_hours: int = 24,
     node_cleanup_enabled: bool = False,
     node_cleanup_days: int = 90,
-    letsmesh_decoder_channel_keys: list[str] | None = None,
+    channel_keys: list[str] | None = None,
+    include_test_channel: bool = False,
 ) -> Subscriber:
     """Create a configured subscriber instance.
 
@@ -499,7 +503,8 @@ def create_subscriber(
         cleanup_interval_hours: Hours between cleanup runs
         node_cleanup_enabled: Enable automatic cleanup of inactive nodes
         node_cleanup_days: Remove nodes not seen for this many days
-        letsmesh_decoder_channel_keys: Optional channel keys for decrypting group text
+        channel_keys: Optional channel keys for decrypting group text
+        include_test_channel: Include built-in test channel messages
 
     Returns:
         Configured Subscriber instance
@@ -532,7 +537,8 @@ def create_subscriber(
         cleanup_interval_hours=cleanup_interval_hours,
         node_cleanup_enabled=node_cleanup_enabled,
         node_cleanup_days=node_cleanup_days,
-        letsmesh_decoder_channel_keys=letsmesh_decoder_channel_keys,
+        channel_keys=channel_keys,
+        include_test_channel=include_test_channel,
     )
 
     # Register handlers
@@ -559,7 +565,8 @@ def run_collector(
     cleanup_interval_hours: int = 24,
     node_cleanup_enabled: bool = False,
     node_cleanup_days: int = 90,
-    letsmesh_decoder_channel_keys: list[str] | None = None,
+    channel_keys: list[str] | None = None,
+    include_test_channel: bool = False,
 ) -> None:
     """Run the collector (blocking).
 
@@ -579,7 +586,8 @@ def run_collector(
         cleanup_interval_hours: Hours between cleanup runs
         node_cleanup_enabled: Enable automatic cleanup of inactive nodes
         node_cleanup_days: Remove nodes not seen for this many days
-        letsmesh_decoder_channel_keys: Optional channel keys for decrypting group text
+        channel_keys: Optional channel keys for decrypting group text
+        include_test_channel: Include built-in test channel messages
     """
     subscriber = create_subscriber(
         mqtt_host=mqtt_host,
@@ -597,7 +605,8 @@ def run_collector(
         cleanup_interval_hours=cleanup_interval_hours,
         node_cleanup_enabled=node_cleanup_enabled,
         node_cleanup_days=node_cleanup_days,
-        letsmesh_decoder_channel_keys=letsmesh_decoder_channel_keys,
+        channel_keys=channel_keys,
+        include_test_channel=include_test_channel,
     )
 
     # Set up signal handlers

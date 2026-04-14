@@ -260,7 +260,7 @@ def _run_collector_service(
 
     click.echo("")
     builtin_keys = len(LetsMeshPacketDecoder.BUILTIN_CHANNEL_KEYS)
-    env_keys = len(settings.collector_letsmesh_decoder_keys_list)
+    env_keys = len(settings.collector_channel_keys_list)
     click.echo(f"Packet decoder: {builtin_keys} built-in keys, {env_keys} from .env")
 
     click.echo("")
@@ -281,7 +281,8 @@ def _run_collector_service(
         cleanup_interval_hours=settings.data_retention_interval_hours,
         node_cleanup_enabled=settings.node_cleanup_enabled,
         node_cleanup_days=settings.node_cleanup_days,
-        letsmesh_decoder_channel_keys=settings.collector_letsmesh_decoder_keys_list,
+        channel_keys=settings.collector_channel_keys_list,
+        include_test_channel=settings.collector_include_test_channel,
     )
 
 

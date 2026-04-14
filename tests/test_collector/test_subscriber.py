@@ -402,6 +402,7 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
+            include_test_channel=True,
         )
         handler = MagicMock()
         subscriber.register_handler("channel_msg_recv", handler)

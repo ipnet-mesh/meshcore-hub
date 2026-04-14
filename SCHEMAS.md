@@ -180,7 +180,7 @@ Group/broadcast messages on specific channels.
 - In LetsMesh upload compatibility mode, packet type `5` is normalized to `CHANNEL_MSG_RECV` and packet types `1`, `2`, and `7` are normalized to `CONTACT_MSG_RECV` when decryptable text is available.
 - LetsMesh packets without decryptable message text are treated as informational `letsmesh_packet` events instead of message events.
 - For UI labels, known channel indexes are mapped (`17 -> Public`, `217 -> #test`) and preferred over ambiguous/stale channel-name hints.
-- Additional channel labels can be provided through `COLLECTOR_LETSMESH_DECODER_KEYS` using `label=hex` entries.
+- Additional channel labels can be provided through `COLLECTOR_CHANNEL_KEYS` using `label=hex` entries.
 - When decoder output includes a human sender (`payload.decoded.decrypted.sender`), message text is normalized to `Name: Message`; sender identity remains unknown when only hash/prefix metadata is available.
 
 **Compatibility ingest note (advertisements)**:

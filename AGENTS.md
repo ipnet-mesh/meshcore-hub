@@ -4,6 +4,9 @@ This document provides context and guidelines for AI coding assistants working o
 
 ## Agent Rules
 
+### Critical Rules (MUST follow)
+
+* **Always use parenthesized exception tuples** — `except (ValueError, TypeError):` not `except ValueError, TypeError:`. The comma form is Python 2 syntax and will fail at import time in Python 3. This is the most common error that passes visual review but breaks the application.
 * You MUST use Python (version in `.python-version` file)
 * You MUST activate a Python virtual environment in the `.venv` directory or create one if it does not exist:
   - `ls ./.venv` to check if it exists
@@ -66,7 +69,6 @@ MeshCore Hub is a Python 3.14+ monorepo for managing and orchestrating MeshCore 
 - Use type hints for all function signatures
 - Write docstrings for public modules, classes, and functions
 - Keep functions focused and under 50 lines where possible
-- **Always use parenthesized exception tuples** — `except (ValueError, TypeError):` not `except ValueError, TypeError:`. The comma form is Python 2 syntax and will fail at import time in Python 3
 
 ### Imports
 
@@ -598,6 +600,7 @@ Key variables:
 - `MQTT_WS_PATH` - WebSocket path (default: `/`)
 - `MQTT_TLS` - Enable TLS/SSL for MQTT (default: `false`, set `true` for `wss://`)
 - `MQTT_TOKEN_AUDIENCE` - JWT audience claim for packet capture auth tokens (default: `mqtt.localhost`)
+- `COLLECTOR_INCLUDE_TEST_CHANNEL` - Include built-in 'test' channel messages (default: `false`)
 - `API_READ_KEY`, `API_ADMIN_KEY` - API authentication keys
 - `WEB_ADMIN_ENABLED` - Enable admin interface at /a/ (default: `false`, requires auth proxy)
 - `WEB_TRUSTED_PROXY_HOSTS` - Comma-separated list of trusted proxy hosts for admin authentication headers. Default: `*` (all hosts). Recommended: set to your reverse proxy IP in production. A startup warning is emitted when using the default `*` with admin enabled.

@@ -18,6 +18,7 @@ class LetsMeshNormalizer:
     # Attributes are provided by Subscriber at runtime.
     mqtt: Any
     _letsmesh_decoder: LetsMeshPacketDecoder
+    _include_test_channel: bool
 
     def _normalize_letsmesh_event(
         self,
@@ -99,6 +100,20 @@ class LetsMeshNormalizer:
         packet_hash_text = packet_hash if isinstance(packet_hash, str) else None
         if decoded_packet is None:
             decoded_packet = self._letsmesh_decoder.decode_payload(payload)
+
+        # Filter test channel messages when not explicitly included.
+        if packet_type == 5 and not self._include_test_channel:
+            channel_hash = self._extract_letsmesh_decoder_channel_hash(decoded_packet)
+            if (
+                channel_hash
+                and channel_hash.upper() == LetsMeshPacketDecoder.TEST_CHANNEL_HASH
+            ):
+                logger.debug(
+                    "Skipping LetsMesh packet %s (type=%s): test channel excluded",
+                    packet_hash_text or "unknown",
+                    packet_type,
+                )
+                return None
 
         # In LetsMesh compatibility mode, only show messages that decrypt.
         text = self._extract_letsmesh_decoder_text(decoded_packet)

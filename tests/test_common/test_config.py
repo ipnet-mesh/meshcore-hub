@@ -60,14 +60,14 @@ class TestCollectorSettings:
         assert settings.node_tags_file == "/seed/data/node_tags.yaml"
         assert settings.members_file == "/seed/data/members.yaml"
 
-    def test_collector_letsmesh_decoder_keys_list(self) -> None:
-        """LetsMesh decoder keys are parsed from comma/space-separated env values."""
+    def test_collector_channel_keys_list(self) -> None:
+        """Channel keys are parsed from comma/space-separated env values."""
         settings = CollectorSettings(
             _env_file=None,
-            collector_letsmesh_decoder_keys="aa11, bb22 cc33",
+            collector_channel_keys="aa11, bb22 cc33",
         )
 
-        assert settings.collector_letsmesh_decoder_keys_list == [
+        assert settings.collector_channel_keys_list == [
             "aa11",
             "bb22",
             "cc33",

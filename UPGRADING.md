@@ -377,4 +377,5 @@ The Node.js `meshcore-decoder` CLI tool has been replaced by the native Python `
 - No Node.js runtime is needed in the Docker image
 - The decoder is always enabled (no toggle)
 - The `COLLECTOR_LETSMESH_DECODER_*` configuration variables have been removed
-- `COLLECTOR_LETSMESH_DECODER_KEYS` is still supported for providing additional channel decryption keys
+- `COLLECTOR_LETSMESH_DECODER_KEYS` has been renamed to `COLLECTOR_CHANNEL_KEYS`
+- New `COLLECTOR_INCLUDE_TEST_CHANNEL` variable controls whether built-in test channel messages are collected (default: `false`)

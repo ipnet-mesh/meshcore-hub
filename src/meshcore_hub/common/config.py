@@ -138,12 +138,16 @@ class CollectorSettings(CommonSettings):
         description="Remove nodes not seen for this many days (last_seen)",
         ge=1,
     )
-    collector_letsmesh_decoder_keys: Optional[str] = Field(
+    collector_channel_keys: Optional[str] = Field(
         default=None,
         description=(
-            "Optional channel secret keys for LetsMesh message decryption. "
+            "Optional channel secret keys for message decryption. "
             "Provide as comma/space separated hex values."
         ),
+    )
+    collector_include_test_channel: bool = Field(
+        default=False,
+        description="Include built-in 'test' channel messages (channel_idx 217).",
     )
 
     @property
@@ -185,13 +189,13 @@ class CollectorSettings(CommonSettings):
         return str(Path(self.effective_seed_home) / "members.yaml")
 
     @property
-    def collector_letsmesh_decoder_keys_list(self) -> list[str]:
-        """Parse configured LetsMesh decoder keys into a normalized list."""
-        if not self.collector_letsmesh_decoder_keys:
+    def collector_channel_keys_list(self) -> list[str]:
+        """Parse configured channel keys into a normalized list."""
+        if not self.collector_channel_keys:
             return []
         return [
             part.strip()
-            for part in re.split(r"[,\s]+", self.collector_letsmesh_decoder_keys)
+            for part in re.split(r"[,\s]+", self.collector_channel_keys)
             if part.strip()
         ]
 

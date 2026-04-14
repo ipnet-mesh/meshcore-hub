@@ -34,6 +34,9 @@ class LetsMeshPacketDecoder:
         ("test", "9CD8FCF22A47333B591D96A2B848B73F"),
     )
 
+    TEST_CHANNEL_HASH: str = "D9"
+    TEST_CHANNEL_IDX: int = 217
+
     def __init__(
         self,
         channel_keys: list[str] | None = None,

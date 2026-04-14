@@ -18,6 +18,7 @@ class _TestNormalizer(LetsMeshNormalizer):
 
     def __init__(self, decoder: LetsMeshPacketDecoder) -> None:
         self._letsmesh_decoder = decoder
+        self._include_test_channel = True
         self.mqtt = MagicMock()
         self.mqtt.topic_builder.parse_letsmesh_upload_topic = MagicMock(
             return_value=None,
