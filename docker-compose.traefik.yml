@@ -3,7 +3,7 @@
 # Adds Traefik auto-discovery labels to api and web services.
 # Requires docker-compose.prod.yml (for the proxy-net network).
 #
-# Set DOMAIN in your .env file to the hostname for this instance.
+# Set TRAEFIK_DOMAIN in your .env file to the hostname for this instance.
 #
 # Prerequisites:
 #   - Traefik configured with Docker provider and attached to proxy-net
