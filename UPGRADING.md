@@ -204,21 +204,16 @@ MQTT_WS_PORT=9001
 |----------|-----------|-----------|-------|
 | `MQTT_TRANSPORT` | `tcp` | `websockets` | Required by the new JWT-based broker |
 | `MQTT_WS_PATH` | `/mqtt` | `/` | New broker accepts connections on `/` |
+| `MQTT_USERNAME` | (empty/optional) | Subscriber username | Now **required** for collector subscriber auth. Set to match your broker's `SUBSCRIBER_1` config. |
+| `MQTT_PASSWORD` | (empty/optional) | Subscriber password | Now **required** for collector subscriber auth. Generate a secure password: `openssl rand -base64 32` |
+
+> **Note:** The Python-level defaults for `MQTT_TRANSPORT` and `MQTT_WS_PATH` remain `tcp` and `/mqtt` respectively. The new values above are set in `.env.example` and `docker-compose.yml`, which override the Python defaults for Docker deployments. Non-Docker users must set these environment variables explicitly.
 
 ### Variables to Add
 
 ```bash
 # Docker Compose project name (container and volume prefix)
 COMPOSE_PROJECT_NAME=hub-dev
-
-# MQTT subscriber authentication for the collector
-# The collector connects as a subscriber to read all published topics
-# including /internal. Set these to match your broker's SUBSCRIBER_1 config.
-MQTT_USERNAME=subscriber
-
-# Generate a secure password (do not use a simple password in production):
-#   openssl rand -base64 32
-MQTT_PASSWORD=<generate-a-secure-password>
 
 # JWT audience claim for packet capture authentication tokens
 # Must match AUTH_EXPECTED_AUDIENCE on the broker
@@ -234,7 +229,7 @@ All other `PACKETCAPTURE_*` variables have sensible defaults in `docker-compose.
 
 ## Step 6: Run Database Migration
 
-The migration renames `receiver_node_id` → `observer_node_id` across all event tables and `event_receivers` → `event_observers`:
+The migration renames `receiver_node_id` → `observer_node_id` across all event tables, `event_receivers` → `event_observers`, and `received_at` → `observed_at` in the event observers table:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile core run --rm db-migrate
