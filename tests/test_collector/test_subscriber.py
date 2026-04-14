@@ -336,7 +336,7 @@ class TestSubscriber:
         assert public_key == "a" * 64
         assert event_type == "channel_msg_recv"
         assert payload["text"] == "decoded hello"
-        assert payload["channel_name"] == "#test"
+        assert payload["channel_name"] == "test"
         assert payload["sender_timestamp"] == 1771695860
         assert payload["txt_type"] == 5
         assert payload["path_len"] == 4

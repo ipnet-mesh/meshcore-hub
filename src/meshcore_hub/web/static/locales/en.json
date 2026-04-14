@@ -14,7 +14,8 @@
         "member": "Member",
         "admin": "Admin",
         "tags": "Tags",
-        "tag": "Tag"
+        "tag": "Tag",
+        "channel": "Channel"
     },
     "common": {
         "filter": "Filter",
@@ -78,6 +79,7 @@
         "sign_out": "Sign Out",
         "view_details": "View Details",
         "all_types": "All Types",
+        "all_channels": "All Channels",
         "node_type": "Node Type",
         "show": "Show",
         "search_placeholder": "Search by name, ID, or public key...",

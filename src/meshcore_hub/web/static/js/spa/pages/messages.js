@@ -12,6 +12,7 @@ import { createAutoRefresh } from '../auto-refresh.js';
 export async function render(container, params, router) {
     const query = params.query || {};
     const message_type = query.message_type || '';
+    const channel_idx = query.channel_idx || '';
     const page = parseInt(query.page, 10) || 1;
     const limit = parseInt(query.limit, 10) || 50;
     const offset = (page - 1) * limit;
@@ -185,7 +186,7 @@ ${content}`, container);
 
     async function fetchAndRenderData() {
         try {
-            const data = await apiGet('/api/v1/messages', { limit, offset, message_type });
+            const data = await apiGet('/api/v1/messages', { limit, offset, message_type, channel_idx });
             const messages = dedupeBySignature(data.items || []);
             const total = data.total || 0;
             const totalPages = Math.ceil(total / limit);
@@ -277,7 +278,7 @@ ${content}`, container);
                 });
 
             const paginationBlock = pagination(page, totalPages, '/messages', {
-                message_type, limit,
+                message_type, channel_idx, limit,
             });
 
             renderPage(html`
@@ -292,6 +293,17 @@ ${content}`, container);
                     <option value="">${t('common.all_types')}</option>
                     <option value="contact" ?selected=${message_type === 'contact'}>${t('messages.type_direct')}</option>
                     <option value="channel" ?selected=${message_type === 'channel'}>${t('messages.type_channel')}</option>
+                </select>
+            </div>
+            <div class="form-control">
+                <label class="label py-1">
+                    <span class="label-text">${t('entities.channel')}</span>
+                </label>
+                <select name="channel_idx" class="select select-bordered select-sm" @change=${autoSubmit}>
+                    <option value="">${t('common.all_channels')}</option>
+                    ${[...channelLabels.entries()].map(([idx, label]) =>
+                        html`<option value=${idx} ?selected=${channel_idx === String(idx)}>${label}</option>`
+                    )}
                 </select>
             </div>
             <div class="flex gap-2 w-full sm:w-auto">

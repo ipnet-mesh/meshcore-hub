@@ -48,6 +48,14 @@ class LetsMeshPacketDecoder:
         self._decode_cache: dict[str, dict[str, Any] | None] = {}
         self._decode_cache_maxsize = 2048
         self._key_store = self._build_key_store()
+        logger.debug(
+            "LetsMesh decoder initialized: %d channel keys loaded (%s)",
+            len(self._channel_key_infos),
+            ", ".join(
+                f"{info.label or 'unlabeled'}=0x{info.channel_hash}"
+                for info in self._channel_key_infos
+            ),
+        )
 
     def _build_key_store(self) -> MeshCoreKeyStore:
         """Build a MeshCoreKeyStore from configured channel keys."""
@@ -88,7 +96,7 @@ class LetsMeshPacketDecoder:
         if value is None:
             return None
 
-        candidate = value.strip()
+        candidate = value.strip().strip('"').strip("'")
         if not candidate:
             return None
 
@@ -158,17 +166,12 @@ class LetsMeshPacketDecoder:
             if not info.label:
                 continue
 
-            label = info.label.strip()
+            label = info.label.strip().strip('"').strip("'")
             if not label:
                 continue
 
-            if label.lower() == "public":
-                normalized_label = "Public"
-            else:
-                normalized_label = label if label.startswith("#") else f"#{label}"
-
             channel_idx = int(info.channel_hash, 16)
-            labels.setdefault(channel_idx, normalized_label)
+            labels.setdefault(channel_idx, label)
 
         return labels
 

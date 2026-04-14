@@ -118,9 +118,9 @@ def test_channel_labels_by_index_includes_labeled_entries() -> None:
     labels = decoder.channel_labels_by_index()
 
     assert labels[17] == "Public"
-    assert labels[217] == "#test"
-    assert labels[202] == "#bot"
-    assert labels[184] == "#chat"
+    assert labels[217] == "test"
+    assert labels[202] == "bot"
+    assert labels[184] == "chat"
 
 
 def test_decode_payload_caches_results() -> None:

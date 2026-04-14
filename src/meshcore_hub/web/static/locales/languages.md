@@ -42,6 +42,7 @@ Core entity names used throughout the application. These are referenced by other
 | `admin` | Admin | Admin panel |
 | `tags` | Tags | Node metadata tags (plural) |
 | `tag` | Tag | Single tag |
+| `channel` | Channel | Mesh network channel |
 
 **Usage:** These are used with composite patterns. For example, `t('common.add_entity', { entity: t('entities.node') })` produces "Add Node".
 
@@ -158,6 +159,7 @@ Toast/flash messages after successful operations:
 | `updated` | Updated | Last updated timestamp |
 | `view_details` | View Details | View details link |
 | `all_types` | All Types | "All types" filter option |
+| `all_channels` | All Channels | "All channels" filter option |
 | `node_type` | Node Type | Node type field |
 | `show` | Show | Show/display action |
 | `search_placeholder` | Search by name, ID, or public key... | Search input placeholder |
