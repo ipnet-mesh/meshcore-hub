@@ -82,12 +82,13 @@ The quickest way to get started is running the entire stack on a single machine 
 
 **Steps:**
 ```bash
-# Create a directory, download the Docker Compose file and
+# Create a directory, download the Docker Compose files and
 # example environment configuration file
 
 mkdir meshcore-hub
 cd meshcore-hub
 wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/docker-compose.yml
+wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/docker-compose.dev.yml
 wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/.env.example
 
 # Copy and configure environment
@@ -95,7 +96,7 @@ cp .env.example .env
 # Edit .env: set MQTT_HOST to your MQTT broker if not using the local one
 
 # Start the entire stack with local MQTT broker
-docker compose --profile mqtt --profile core up -d
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile mqtt --profile core up -d
 
 # View the web dashboard
 open http://localhost:8080
@@ -107,7 +108,29 @@ This starts all services: MQTT broker, collector, API, and web dashboard. MeshCo
 
 ### Docker Compose Profiles
 
-Docker Compose uses **profiles** to select which services to run:
+Docker Compose uses **profiles** to select which services to run. The configuration is split across multiple files:
+
+| File | Purpose |
+|------|---------|
+| `docker-compose.yml` | Base shared config (services, profiles, healthchecks, environment) |
+| `docker-compose.dev.yml` | Development overrides (port mappings for direct access) |
+| `docker-compose.prod.yml` | Production overrides (external proxy network, no exposed ports) |
+| `docker-compose.traefik.yml` | Optional Traefik auto-discovery labels |
+
+All `docker compose` commands require explicit file selection with `-f`:
+
+```bash
+# Development (default — exposes ports for local access)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+# Production (generic reverse proxy — nginx, caddy, etc.)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+# Production (Traefik)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml up -d
+```
+
+Service profiles:
 
 | Profile | Services | Use Case |
 |---------|----------|----------|
@@ -123,26 +146,111 @@ Docker Compose uses **profiles** to select which services to run:
 
 ```bash
 # Create database schema
-docker compose --profile migrate run --rm db-migrate
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile migrate run --rm db-migrate
 
 # Seed the database
-docker compose --profile seed run --rm seed
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile seed run --rm seed
 
 # Start core services with local MQTT broker
-docker compose --profile mqtt --profile core up -d
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile mqtt --profile core up -d
 
 # Or connect to external MQTT (configure MQTT_HOST in .env)
-docker compose --profile core up -d
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile core up -d
 
 # Start everything including packet capture observer
-docker compose --profile mqtt --profile core --profile receiver up -d
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile mqtt --profile core --profile receiver up -d
 
 # View logs
-docker compose logs -f
+docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f
 
 # Stop services
-docker compose down
+docker compose -f docker-compose.yml -f docker-compose.dev.yml down
 ```
+
+### Multi-Instance Deployment
+
+Multiple MeshCore Hub instances can run on the same Docker host (e.g., production, beta, staging). Each instance uses a unique `COMPOSE_PROJECT_NAME` to isolate containers, volumes, and networking.
+
+**1. Create a shared proxy network** (once):
+
+```bash
+docker network create proxy-net
+```
+
+**2. Set up each instance in its own directory:**
+
+```bash
+# Production instance
+mkdir hub-prod && cd hub-prod
+cp ../docker-compose.yml ../docker-compose.prod.yml ../.env.example .
+cp .env.example .env
+# Edit .env: set COMPOSE_PROJECT_NAME=hub-prod
+```
+
+```bash
+# Beta instance
+mkdir hub-beta && cd hub-beta
+cp ../docker-compose.yml ../docker-compose.prod.yml ../.env.example .
+cp .env.example .env
+# Edit .env: set COMPOSE_PROJECT_NAME=hub-beta
+```
+
+**3. Configure your reverse proxy** to route traffic to the container names:
+
+| Instance | API Container | Web Container |
+|----------|--------------|---------------|
+| Production | `hub-prod-api:8000` | `hub-prod-web:8080` |
+| Beta | `hub-beta-api:8000` | `hub-beta-web:8080` |
+
+**4. Start each instance:**
+
+```bash
+# Production (generic reverse proxy)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile core up -d
+
+# Beta (with Traefik)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml --profile core up -d
+```
+
+Containers and volumes are automatically prefixed with the project name — no compose file edits needed per instance.
+
+### Backup & Restore
+
+#### Using Makefile
+
+```bash
+# Back up all volumes to backup/
+make backup
+
+# Restore a specific volume
+make restore FILE=backup/hub-dev_hub_data-20260414-120000.tar.gz
+```
+
+#### Using shell commands
+
+```bash
+# Back up all volumes
+source .env 2>/dev/null || true
+mkdir -p backup
+for vol in ${COMPOSE_PROJECT_NAME:-hub-dev}_hub_data \
+           ${COMPOSE_PROJECT_NAME:-hub-dev}_mqtt_broker_data \
+           ${COMPOSE_PROJECT_NAME:-hub-dev}_prometheus_data \
+           ${COMPOSE_PROJECT_NAME:-hub-dev}_alertmanager_data \
+           ${COMPOSE_PROJECT_NAME:-hub-dev}_packetcapture_data; do
+  echo "Backing up $vol..."
+  docker run --rm -v $vol:/data -v $(pwd)/backup:/backup \
+    alpine tar czf /backup/$vol-$(date +%Y%m%d-%H%M%S).tar.gz -C / data
+done
+
+# Restore a specific volume (volume name derived from tarball filename)
+source .env 2>/dev/null || true
+FILE=backup/${COMPOSE_PROJECT_NAME:-hub-dev}_hub_data-20260414-120000.tar.gz
+vol=$(basename "$FILE" | sed 's/-[0-9]\{8\}-[0-9]\{6\}\.tar\.gz//')
+docker run --rm -v $vol:/data -v $(pwd)/backup:/backup \
+  alpine sh -c "cd / && tar xzf /backup/$(basename $FILE)"
+```
+
+> **Note:** Replace `hub-dev` with your `COMPOSE_PROJECT_NAME` if using a different instance name.
 
 ### Manual Installation
 
@@ -417,8 +525,7 @@ The markdown content is rendered as-is, so include your own `# Heading` if desir
 Pages automatically appear in the navigation menu and sitemap. With Docker, mount the content directory:
 
 ```yaml
-# docker-compose.yml (already configured)
-volumes:
+# docker-compose.yml (already configured)volumes:
   - ${CONTENT_HOME:-./content}:/content:ro
 environment:
   - CONTENT_HOME=/content
@@ -433,7 +540,7 @@ The database can be seeded with node tags and network members from YAML files in
 Seeding is a separate process and must be run explicitly:
 
 ```bash
-docker compose --profile seed up
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile seed up
 ```
 
 This imports data from the following files (if they exist):
@@ -646,7 +753,10 @@ meshcore-hub/
 │       └── images/         # Custom images (logo.svg/png/jpg/jpeg/webp replace default logo)
 ├── data/                   # Runtime data directory (DATA_HOME, created at runtime)
 ├── Dockerfile              # Docker build configuration
-├── docker-compose.yml      # Docker Compose services
+├── docker-compose.yml      # Docker Compose base config
+├── docker-compose.dev.yml  # Development overrides (port mappings)
+├── docker-compose.prod.yml # Production overrides (proxy network)
+├── docker-compose.traefik.yml # Optional Traefik labels
 ├── SCHEMAS.md              # Event schema documentation
 ├── UPGRADING.md            # Upgrade guide for breaking changes
 └── AGENTS.md               # AI assistant guidelines

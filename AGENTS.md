@@ -324,7 +324,11 @@ meshcore-hub/
 │   └── collector/            # Collector data
 │       └── meshcore.db       # SQLite database
 ├── Dockerfile                # Docker build configuration
-└── docker-compose.yml        # Docker Compose services
+├── docker-compose.yml        # Docker Compose base config
+├── docker-compose.dev.yml    # Development overrides (port mappings)
+├── docker-compose.prod.yml   # Production overrides (proxy network)
+├── docker-compose.traefik.yml # Optional Traefik labels
+└── SCHEMAS.md
 ```
 
 ## MQTT Topic Structure
@@ -585,6 +589,7 @@ meshcore-hub collector
 See [PLAN.md](PLAN.md#configuration-environment-variables) for complete list.
 
 Key variables:
+- `COMPOSE_PROJECT_NAME` - Docker Compose project prefix for containers and volumes (default: `hub-dev`)
 - `DATA_HOME` - Base directory for runtime data (default: `./data`)
 - `SEED_HOME` - Directory containing seed data files (default: `./seed`)
 - `CONTENT_HOME` - Directory containing custom content (pages, media) (default: `./content`)
@@ -663,7 +668,7 @@ The database can be seeded with node tags and network members from YAML files in
 meshcore-hub collector seed
 
 # With Docker Compose
-docker compose --profile seed up
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile seed up
 ```
 
 **Note:** Once the admin UI is enabled (`WEB_ADMIN_ENABLED=true`), tags should be managed through the web interface rather than seed files.

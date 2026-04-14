@@ -7,13 +7,11 @@ services:
   # ==========================================================================
   mqtt:
     image: ghcr.io/ipnet-mesh/meshcore-mqtt-broker:latest
-    container_name: meshcore-mqtt
+    container_name: ${COMPOSE_PROJECT_NAME:-hub-dev}-mqtt
     profiles:
       - all
       - mqtt
     restart: unless-stopped
-    ports:
-      - "${MQTT_PORT:-1883}:${MQTT_PORT:-1883}"
     volumes:
       - mqtt_broker_data:/data
     environment:
@@ -64,7 +62,7 @@ services:
   # ==========================================================================
   packet-capture:
     image: ghcr.io/agessaman/meshcore-packet-capture:${PACKETCAPTURE_IMAGE_VERSION:-latest}
-    container_name: meshcore-packet-capture
+    container_name: ${COMPOSE_PROJECT_NAME:-hub-dev}-packet-capture
     profiles:
       - all
       - receiver
@@ -136,7 +134,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: meshcore-collector
+    container_name: ${COMPOSE_PROJECT_NAME:-hub-dev}-collector
     profiles:
       - all
       - core
@@ -196,7 +194,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: meshcore-api
+    container_name: ${COMPOSE_PROJECT_NAME:-hub-dev}-api
     profiles:
       - all
       - core
@@ -206,8 +204,6 @@ services:
         condition: service_completed_successfully
       collector:
         condition: service_started
-    ports:
-      - "${API_PORT:-8000}:8000"
     volumes:
       - hub_data:/data
     environment:
@@ -249,7 +245,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: meshcore-web
+    container_name: ${COMPOSE_PROJECT_NAME:-hub-dev}-web
     profiles:
       - all
       - core
@@ -257,8 +253,6 @@ services:
     depends_on:
       api:
         condition: service_healthy
-    ports:
-      - "${WEB_PORT:-8080}:8080"
     volumes:
       - ${CONTENT_HOME:-./content}:/content:ro
     environment:
@@ -315,7 +309,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: meshcore-db-migrate
+    container_name: ${COMPOSE_PROJECT_NAME:-hub-dev}-db-migrate
     profiles:
       - all
       - core
@@ -338,7 +332,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: meshcore-seed
+    container_name: ${COMPOSE_PROJECT_NAME:-hub-dev}-seed
     profiles:
       - seed
     restart: "no"
@@ -357,7 +351,7 @@ services:
   # ==========================================================================
   prometheus:
     image: prom/prometheus:latest
-    container_name: meshcore-prometheus
+    container_name: ${COMPOSE_PROJECT_NAME:-hub-dev}-prometheus
     profiles:
       - all
       - metrics
@@ -365,8 +359,6 @@ services:
     depends_on:
       api:
         condition: service_healthy
-    ports:
-      - "${PROMETHEUS_PORT:-9090}:9090"
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.retention.time=30d"
@@ -380,13 +372,11 @@ services:
   # ==========================================================================
   alertmanager:
     image: prom/alertmanager:latest
-    container_name: meshcore-alertmanager
+    container_name: ${COMPOSE_PROJECT_NAME:-hub-dev}-alertmanager
     profiles:
       - all
       - metrics
     restart: unless-stopped
-    ports:
-      - "${ALERTMANAGER_PORT:-9093}:9093"
     volumes:
       - ./etc/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - alertmanager_data:/alertmanager
@@ -399,12 +389,12 @@ services:
 # ==========================================================================
 volumes:
   hub_data:
-    name: meshcore_hub_data
+    name: ${COMPOSE_PROJECT_NAME:-hub-dev}_hub_data
   mqtt_broker_data:
-    name: meshcore_mqtt_broker_data
+    name: ${COMPOSE_PROJECT_NAME:-hub-dev}_mqtt_broker_data
   prometheus_data:
-    name: meshcore_prometheus_data
+    name: ${COMPOSE_PROJECT_NAME:-hub-dev}_prometheus_data
   alertmanager_data:
-    name: meshcore_alertmanager_data
+    name: ${COMPOSE_PROJECT_NAME:-hub-dev}_alertmanager_data
   packetcapture_data:
-    name: meshcore_packetcapture_data
+    name: ${COMPOSE_PROJECT_NAME:-hub-dev}_packetcapture_data
