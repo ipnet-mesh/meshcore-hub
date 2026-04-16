@@ -24,31 +24,32 @@ This guide covers upgrading from a previous MeshCore Hub release to the current 
 
 **Do not skip this step.** Back up all data volumes before proceeding.
 
-### Using Makefile
+Back up the database volume. Volume names use the old `meshcore_*` prefix:
 
 ```bash
-make backup
-```
-
-### Using shell commands
-
-```bash
-source .env 2>/dev/null || true
 mkdir -p backup
-for vol in ${COMPOSE_PROJECT_NAME:-hub-dev}_hub_data \
-           ${COMPOSE_PROJECT_NAME:-hub-dev}_mqtt_broker_data \
-           ${COMPOSE_PROJECT_NAME:-hub-dev}_prometheus_data \
-           ${COMPOSE_PROJECT_NAME:-hub-dev}_alertmanager_data \
-           ${COMPOSE_PROJECT_NAME:-hub-dev}_packetcapture_data; do
-  docker run --rm -v $vol:/data -v $(pwd)/backup:/backup \
-    alpine tar czf /backup/$vol-$(date +%Y%m%d-%H%M%S).tar.gz -C / data
-done
+docker run --rm -v meshcore_hub_data:/data -v $(pwd)/backup:/backup \
+  alpine tar czf /backup/meshcore_hub_data-$(date +%Y%m%d-%H%M%S).tar.gz -C / data
 ```
+
+Optionally back up monitoring volumes (only if you used the monitoring profile):
+
+```bash
+docker run --rm -v meshcore_prometheus_data:/data -v $(pwd)/backup:/backup \
+  alpine tar czf /backup/meshcore_prometheus_data-$(date +%Y%m%d-%H%M%S).tar.gz -C / data
+
+docker run --rm -v meshcore_alertmanager_data:/data -v $(pwd)/backup:/backup \
+  alpine tar czf /backup/meshcore_alertmanager_data-$(date +%Y%m%d-%H%M%S).tar.gz -C / data
+```
+
+> **Note:** Only `meshcore_hub_data` (the database) is critical. The others contain metrics and alerting state that will be recreated.
 
 To restore from backup if needed:
 
 ```bash
-make restore FILE=backup/hub-dev_hub_data-YYYYMMDD-HHMMSS.tar.gz
+# Extract the volume name from the backup filename
+docker run --rm -v meshcore_hub_data:/data -v $(pwd)/backup:/backup \
+  alpine sh -c "cd / && tar xzf /backup/meshcore_hub_data-YYYYMMDD-HHMMSS.tar.gz"
 ```
 
 ## Step 2: Stop and Remove Containers
@@ -80,14 +81,8 @@ These volumes always need migrating:
 | `meshcore_hub_data` | `hub-dev_hub_data` |
 | `meshcore_prometheus_data` | `hub-dev_prometheus_data` |
 | `meshcore_alertmanager_data` | `hub-dev_alertmanager_data` |
-| `meshcore_packetcapture_data` | `hub-dev_packetcapture_data` |
 
-For the MQTT broker, it depends on your current version:
-
-| Your Current Broker | Volume to Migrate | Action |
-|---------------------|-------------------|--------|
-| `meshcore-mqtt-broker` | `meshcore_mqtt_broker_data` → `hub-dev_mqtt_broker_data` | Rename or copy below |
-| Mosquitto (older) | `meshcore_mosquitto_data`, `meshcore_mosquitto_log` | **Remove** — no longer used. New volume created automatically on first run. |
+> **Note:** `packetcapture_data` and `mqtt_broker_data` are new — they are created automatically on first run and do not need migrating.
 
 ### Option A: Rename (Docker Engine 23.0+)
 
@@ -97,10 +92,6 @@ For the MQTT broker, it depends on your current version:
 docker volume rename meshcore_hub_data hub-dev_hub_data
 docker volume rename meshcore_prometheus_data hub-dev_prometheus_data
 docker volume rename meshcore_alertmanager_data hub-dev_alertmanager_data
-docker volume rename meshcore_packetcapture_data hub-dev_packetcapture_data
-
-# Only if you already have meshcore-mqtt-broker (skip if still on Mosquitto)
-docker volume rename meshcore_mqtt_broker_data hub-dev_mqtt_broker_data
 ```
 
 ### Option B: Copy (all Docker versions)
@@ -118,27 +109,8 @@ docker run --rm -v meshcore_prometheus_data:/from -v hub-dev_prometheus_data:/to
 docker volume create hub-dev_alertmanager_data
 docker run --rm -v meshcore_alertmanager_data:/from -v hub-dev_alertmanager_data:/to alpine sh -c "cp -a /from/. /to/"
 
-docker volume create hub-dev_packetcapture_data
-docker run --rm -v meshcore_packetcapture_data:/from -v hub-dev_packetcapture_data:/to alpine sh -c "cp -a /from/. /to/"
-
-# Only if you already have meshcore-mqtt-broker (skip if still on Mosquitto)
-docker volume create hub-dev_mqtt_broker_data
-docker run --rm -v meshcore_mqtt_broker_data:/from -v hub-dev_mqtt_broker_data:/to alpine sh -c "cp -a /from/. /to/"
-
 # Verify the new volumes have data, then remove old ones
-docker volume rm meshcore_hub_data meshcore_prometheus_data meshcore_alertmanager_data meshcore_packetcapture_data
-
-# Only if you already have meshcore-mqtt-broker
-docker volume rm meshcore_mqtt_broker_data
-```
-
-### Clean up old Mosquitto volumes (if applicable)
-
-If upgrading from the Mosquitto era, remove the unused volumes:
-
-```bash
-# Skip if these don't exist
-docker volume rm meshcore_mosquitto_data meshcore_mosquitto_log
+docker volume rm meshcore_hub_data meshcore_prometheus_data meshcore_alertmanager_data
 ```
 
 > **Note:** If any volumes show "in use", remove any stopped containers first: `docker rm -f <container_id>`.

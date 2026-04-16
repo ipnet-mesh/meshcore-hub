@@ -3,6 +3,7 @@ ifneq (,$(wildcard ./.env))
     export
 endif
 
+COMPOSE_PROJECT_NAME ?= hub-dev
 PROFILES ?= mqtt core
 COMPOSE_FILES = -f docker-compose.yml -f docker-compose.dev.yml
 VOLUMES = $(COMPOSE_PROJECT_NAME)_hub_data $(COMPOSE_PROJECT_NAME)_mqtt_broker_data \
