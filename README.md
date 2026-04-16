@@ -101,8 +101,8 @@ Service profiles:
 
 | Profile    | Services                        | Use Case                                  |
 | ---------- | ------------------------------- | ----------------------------------------- |
-| `all`      | migrate, collector, api, web | Everything on one host                    |
-| `core`     | migrate, collector, api, web | Central server infrastructure             |
+| `all`      | mqtt, observer, migrate, collector, api, web | Everything on one host        |
+| `core`     | migrate, collector, api, web                 | Central server infrastructure |
 | `mqtt`     | meshcore-mqtt-broker            | Local MQTT broker (optional)              |
 | `observer` | packet capture observer         | Observes RF traffic and publishes to MQTT |
 | `seed`     | seed                            | One-time seed data import                 |
