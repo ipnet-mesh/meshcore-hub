@@ -73,40 +73,6 @@ flowchart LR
 
 ## Getting Started
 
-### Simple Self-Hosted Setup
-
-The quickest way to get started is running the entire stack on a single machine with a connected LoRa radio.
-
-**Prerequisites:**
-1. A compatible LoRa radio (e.g., Heltec V3, T-Beam) connected via serial
-
-**Steps:**
-```bash
-# Create a directory, download the Docker Compose files and
-# example environment configuration file
-
-mkdir meshcore-hub
-cd meshcore-hub
-wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/docker-compose.yml
-wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/docker-compose.dev.yml
-wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/.env.example
-
-# Copy and configure environment
-cp .env.example .env
-# Edit .env: set PACKETCAPTURE_IATA to your 3-letter airport code
-#            set SERIAL_PORT if not /dev/ttyUSB0
-
-# Start the entire stack with local MQTT broker and packet capture
-docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile mqtt --profile core --profile receiver up -d
-
-# View the web dashboard
-open http://localhost:8080
-```
-
-This starts all services: MQTT broker, collector, API, web dashboard, and packet capture. The `receiver` profile runs [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) to observe MeshCore RF traffic and publish decoded packets to MQTT.
-
-## Deployment
-
 ### Docker Compose Profiles
 
 Docker Compose uses **profiles** to select which services to run. The configuration is split across multiple files:
@@ -167,6 +133,99 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile all log
 docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile all down
 ```
 
+### Simple Self-Hosted Setup
+
+The quickest way to get started is running the entire stack on a single machine with a connected LoRa radio.
+
+**Prerequisites:**
+1. A compatible LoRa radio (e.g., Heltec V3, T-Beam) connected via serial
+
+**Steps:**
+```bash
+# Create a directory, download the Docker Compose files and
+# example environment configuration file
+
+mkdir meshcore-hub
+cd meshcore-hub
+wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/docker-compose.yml
+wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/docker-compose.dev.yml
+wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/.env.example
+
+# Copy and configure environment
+cp .env.example .env
+# Edit .env: set PACKETCAPTURE_IATA to your 3-letter airport code
+#            set SERIAL_PORT if not /dev/ttyUSB0
+
+# Start the entire stack with local MQTT broker and packet capture
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile mqtt --profile core --profile receiver up -d
+
+# View the web dashboard
+open http://localhost:8080
+```
+
+This starts all services: MQTT broker, collector, API, web dashboard, and packet capture. The `receiver` profile runs [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) to observe MeshCore RF traffic and publish decoded packets to MQTT.
+
+## Deployment
+
+### Production Setup
+
+For production deployments, use `docker-compose.prod.yml` which connects services to an external proxy network. No ports are exposed directly — all traffic goes through your reverse proxy.
+
+**Prerequisites:**
+1. A reverse proxy (Nginx Proxy Manager, Caddy, Traefik, etc.)
+2. Docker network for proxy communication
+
+**Steps:**
+
+```bash
+# Create proxy network (once)
+docker network create proxy-net
+
+# Download compose files and config
+mkdir meshcore-hub && cd meshcore-hub
+wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/docker-compose.yml
+wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/docker-compose.prod.yml
+wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/.env.example
+cp .env.example .env
+# Edit .env: set COMPOSE_PROJECT_NAME, MQTT credentials, API keys, etc.
+
+# Start core services
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile core up -d
+
+# Or include local MQTT broker
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile mqtt --profile core up -d
+
+# Or include packet capture on the same host
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile mqtt --profile core --profile receiver up -d
+```
+
+Configure your reverse proxy to forward to the containers:
+
+| Service | Container | Port | Path |
+|---------|-----------|------|------|
+| Web Dashboard | `{COMPOSE_PROJECT_NAME}-web` | 8080 | `/` |
+| API | `{COMPOSE_PROJECT_NAME}-api` | 8000 | `/api`, `/metrics`, `/health` |
+| MQTT WebSocket | `{COMPOSE_PROJECT_NAME}-mqtt` | 1883 | `/` (only if using local broker) |
+
+> **Important:** Do not host under a subpath (e.g., `/meshcore`). Proxy at `/`.
+
+#### Traefik
+
+A Traefik override file is provided with pre-configured labels:
+
+```bash
+# Download the Traefik override
+wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/docker-compose.traefik.yml
+
+# Set your domain in .env
+echo "TRAEFIK_DOMAIN=meshcore.example.com" >> .env
+
+# Start with Traefik labels
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml --profile core up -d
+```
+
+This routes the web dashboard and API to `TRAEFIK_DOMAIN` with automatic TLS.
+
 ### Adding Remote Observers
 
 Other operators can run their own [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) instance and publish decoded packets to your MeshCore Hub. They can also optionally contribute to the LetsMesh network.
@@ -211,53 +270,6 @@ PACKETCAPTURE_MQTT3_TRANSPORT=websockets
 PACKETCAPTURE_MQTT3_USE_TLS=false
 PACKETCAPTURE_MQTT3_TOKEN_AUDIENCE=mqtt.localhost
 ```
-
-### Multi-Instance Deployment
-
-Multiple MeshCore Hub instances can run on the same Docker host (e.g., production, beta, staging). Each instance uses a unique `COMPOSE_PROJECT_NAME` to isolate containers, volumes, and networking.
-
-**1. Create a shared proxy network** (once):
-
-```bash
-docker network create proxy-net
-```
-
-**2. Set up each instance in its own directory:**
-
-```bash
-# Production instance
-mkdir hub-prod && cd hub-prod
-cp ../docker-compose.yml ../docker-compose.prod.yml ../.env.example .
-cp .env.example .env
-# Edit .env: set COMPOSE_PROJECT_NAME=hub-prod
-```
-
-```bash
-# Beta instance
-mkdir hub-beta && cd hub-beta
-cp ../docker-compose.yml ../docker-compose.prod.yml ../.env.example .
-cp .env.example .env
-# Edit .env: set COMPOSE_PROJECT_NAME=hub-beta
-```
-
-**3. Configure your reverse proxy** to route traffic to the container names:
-
-| Instance | API Container | Web Container |
-|----------|--------------|---------------|
-| Production | `hub-prod-api:8000` | `hub-prod-web:8080` |
-| Beta | `hub-beta-api:8000` | `hub-beta-web:8080` |
-
-**4. Start each instance:**
-
-```bash
-# Production (generic reverse proxy)
-docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile core up -d
-
-# Beta (with Traefik)
-docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml --profile core up -d
-```
-
-Containers and volumes are automatically prefixed with the project name — no compose file edits needed per instance.
 
 ### Backup & Restore
 
