@@ -15,10 +15,10 @@ This guide covers upgrading from a previous MeshCore Hub release to the current 
 | DB columns | `receiver_node_id` | `observer_node_id` |
 | DB table | `event_receivers` | `event_observers` |
 | API commands | `/api/v1/commands/*` | Removed |
-| Compose profiles | `receiver`, `sender`, `mock` | `receiver` (packet-capture) |
+| Compose profiles | `receiver`, `sender`, `mock` | `observer` |
 | Compose files | Single `docker-compose.yml` | Base + environment overrides (`.dev.yml`, `.prod.yml`) |
-| Container names | `meshcore-*` | Parameterized via `COMPOSE_PROJECT_NAME` (default: `hub-dev-*`) |
-| Volume names | `meshcore_*` | Parameterized via `COMPOSE_PROJECT_NAME` (default: `hub-dev_*`) |
+| Container names | `meshcore-*` | Parameterized via `COMPOSE_PROJECT_NAME` (default: `hub-*`) |
+| Volume names | `meshcore_*` | Parameterized via `COMPOSE_PROJECT_NAME` (default: `hub_*`) |
 
 ## Step 1: Backup
 
@@ -52,7 +52,7 @@ docker compose --profile all down --remove-orphans
 
 ## Step 3: Rename Docker Volumes
 
-Container and volume names are now parameterized via `COMPOSE_PROJECT_NAME`. The default is `hub-dev`, so volumes are renamed from `meshcore_*` to `hub-dev_*`.
+Container and volume names are now parameterized via `COMPOSE_PROJECT_NAME`. The default is `hub`, so volumes are renamed from `meshcore_*` to `hub_*`.
 
 First, check which volumes you have:
 
@@ -66,16 +66,16 @@ These volumes always need migrating:
 
 | Old Name | New Name |
 |----------|----------|
-| `meshcore_hub_data` | `hub-dev_hub_data` |
+| `meshcore_hub_data` | `hub_hub_data` |
 
-> **Note:** `packetcapture_data` and `mqtt_broker_data` are new — they are created automatically on first run and do not need migrating. Monitoring infrastructure (Prometheus, Alertmanager) is no longer bundled — if you used the previous `metrics` profile, manage those volumes separately.
+> **Note:** `observer_data` and `mqtt_broker_data` are new — they are created automatically on first run and do not need migrating. Monitoring infrastructure (Prometheus, Alertmanager) is no longer bundled — if you used the previous `metrics` profile, manage those volumes separately.
 
 ### Option A: Rename (Docker Engine 23.0+)
 
 > **Note:** `docker volume rename` is not available in all Docker builds (e.g., Docker Desktop). If the command is not found, use Option B instead.
 
 ```bash
-docker volume rename meshcore_hub_data hub-dev_hub_data
+docker volume rename meshcore_hub_data hub_hub_data
 ```
 
 ### Option B: Copy (all Docker versions)
@@ -84,8 +84,8 @@ If `docker volume rename` is not available in your Docker build:
 
 ```bash
 # Create new volume, copy data, remove old
-docker volume create hub-dev_hub_data
-docker run --rm -v meshcore_hub_data:/from -v hub-dev_hub_data:/to alpine sh -c "cp -a /from/. /to/"
+docker volume create hub_hub_data
+docker run --rm -v meshcore_hub_data:/from -v hub_hub_data:/to alpine sh -c "cp -a /from/. /to/"
 
 # Verify the new volume has data, then remove old one
 docker volume rm meshcore_hub_data
@@ -93,9 +93,9 @@ docker volume rm meshcore_hub_data
 
 > **Note:** If any volumes show "in use", remove any stopped containers first: `docker rm -f <container_id>`.
 
-> **Note:** If setting up a multi-instance deployment (e.g., `hub-prod`, `hub-beta`), use that project name instead of `hub-dev`.
+> **Note:** If setting up a multi-instance deployment (e.g., `hub-prod`, `hub-beta`), use that project name instead of `hub`.
 
-> **Note:** After migrating volumes, you may see warnings like `volume "hub-dev_hub_data" already exists but was not created by Docker Compose. Use \`external: true\` to use an existing volume`. This is safe to ignore — it appears because the volumes were created manually during migration rather than by Docker Compose. Fresh deployments will not see this warning.
+> **Note:** After migrating volumes, you may see warnings like `volume "hub_hub_data" already exists but was not created by Docker Compose. Use \`external: true\` to use an existing volume`. This is safe to ignore — it appears because the volumes were created manually during migration rather than by Docker Compose. Fresh deployments will not see this warning.
 
 ## Step 4: Update Configuration Files
 
@@ -163,7 +163,7 @@ MQTT_WS_PORT=9001
 
 ```bash
 # Docker Compose project name (container and volume prefix)
-COMPOSE_PROJECT_NAME=hub-dev
+COMPOSE_PROJECT_NAME=hub
 
 # JWT audience claim for packet capture authentication tokens
 # Must match AUTH_EXPECTED_AUDIENCE on the broker
@@ -200,7 +200,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile migrate
 docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile mqtt --profile core up -d
 
 # Or include packet capture on the same host
-docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile mqtt --profile core --profile receiver up -d
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile mqtt --profile core --profile observer up -d
 ```
 
 ### With external MQTT broker
@@ -275,11 +275,11 @@ The following Docker Compose services have been removed:
 
 | Old Service | Replacement |
 |-------------|-------------|
-| `interface-receiver` | `packet-capture` (profile: `receiver`) |
+| `interface-receiver` | `observer` (profile: `observer`) |
 | `interface-sender` | None (removed) |
 | `interface-mock-receiver` | None (removed) |
 
-The `packet-capture` service uses the [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) image and is included in `docker-compose.yml` under the `receiver` profile for an easy transition.
+The `observer` service uses the [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) image and is included in `docker-compose.yml` under the `observer` profile for an easy transition.
 
 ### New Docker Compose File Structure
 

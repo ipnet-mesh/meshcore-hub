@@ -596,7 +596,7 @@ meshcore-hub collector
 See [PLAN.md](PLAN.md#configuration-environment-variables) for complete list.
 
 Key variables:
-- `COMPOSE_PROJECT_NAME` - Docker Compose project prefix for containers and volumes (default: `hub-dev`)
+- `COMPOSE_PROJECT_NAME` - Docker Compose project prefix for containers and volumes (default: `hub`)
 - `DATA_HOME` - Base directory for runtime data (default: `./data`)
 - `SEED_HOME` - Directory containing seed data files (default: `./seed`)
 - `CONTENT_HOME` - Directory containing custom content (pages, media) (default: `./content`)

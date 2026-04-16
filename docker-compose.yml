@@ -7,7 +7,7 @@ services:
   # ==========================================================================
   mqtt:
     image: ghcr.io/ipnet-mesh/meshcore-mqtt-broker:latest
-    container_name: ${COMPOSE_PROJECT_NAME:-hub-dev}-mqtt
+    container_name: ${COMPOSE_PROJECT_NAME:-hub}-mqtt
     profiles:
       - all
       - mqtt
@@ -55,17 +55,17 @@ services:
       start_period: 10s
 
   # ==========================================================================
-  # Packet Capture - MeshCore packet capture to MQTT (serial only)
+  # Observer - MeshCore packet capture to MQTT (serial only)
   # Uses ghcr.io/agessaman/meshcore-packet-capture (separate project)
   # Publishes to local MQTT (broker 3) for the hub collector to ingest.
   # Optionally publish to Let's Mesh (brokers 1 & 2) for cloud map integration.
   # ==========================================================================
-  packet-capture:
+  observer:
     image: ghcr.io/agessaman/meshcore-packet-capture:${PACKETCAPTURE_IMAGE_VERSION:-latest}
-    container_name: ${COMPOSE_PROJECT_NAME:-hub-dev}-packet-capture
+    container_name: ${COMPOSE_PROJECT_NAME:-hub}-observer
     profiles:
       - all
-      - receiver
+      - observer
     depends_on:
       mqtt:
         condition: service_healthy
@@ -124,7 +124,7 @@ services:
       - PACKETCAPTURE_MQTT_RETRY_DELAY=${PACKETCAPTURE_MQTT_RETRY_DELAY:-5}
       - PACKETCAPTURE_EXIT_ON_RECONNECT_FAIL=${PACKETCAPTURE_EXIT_ON_RECONNECT_FAIL:-true}
     volumes:
-      - packetcapture_data:/app/data
+      - observer_data:/app/data
 
   # ==========================================================================
   # Collector - MQTT subscriber and database storage
@@ -134,7 +134,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ${COMPOSE_PROJECT_NAME:-hub-dev}-collector
+    container_name: ${COMPOSE_PROJECT_NAME:-hub}-collector
     profiles:
       - all
       - core
@@ -193,7 +193,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ${COMPOSE_PROJECT_NAME:-hub-dev}-api
+    container_name: ${COMPOSE_PROJECT_NAME:-hub}-api
     profiles:
       - all
       - core
@@ -244,7 +244,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ${COMPOSE_PROJECT_NAME:-hub-dev}-web
+    container_name: ${COMPOSE_PROJECT_NAME:-hub}-web
     profiles:
       - all
       - core
@@ -309,7 +309,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ${COMPOSE_PROJECT_NAME:-hub-dev}-db-migrate
+    container_name: ${COMPOSE_PROJECT_NAME:-hub}-db-migrate
     profiles:
       - all
       - core
@@ -332,7 +332,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ${COMPOSE_PROJECT_NAME:-hub-dev}-seed
+    container_name: ${COMPOSE_PROJECT_NAME:-hub}-seed
     profiles:
       - seed
     restart: "no"
@@ -351,8 +351,8 @@ services:
 # ==========================================================================
 volumes:
   hub_data:
-    name: ${COMPOSE_PROJECT_NAME:-hub-dev}_hub_data
+    name: ${COMPOSE_PROJECT_NAME:-hub}_hub_data
   mqtt_broker_data:
-    name: ${COMPOSE_PROJECT_NAME:-hub-dev}_mqtt_broker_data
-  packetcapture_data:
-    name: ${COMPOSE_PROJECT_NAME:-hub-dev}_packetcapture_data
+    name: ${COMPOSE_PROJECT_NAME:-hub}_mqtt_broker_data
+  observer_data:
+    name: ${COMPOSE_PROJECT_NAME:-hub}_observer_data

@@ -1,6 +1,6 @@
 # MeshCore Hub - End-to-End Test Docker Compose
 #
-# This configuration runs all services with a mock device for integration testing.
+# This configuration runs all services for integration testing.
 #
 # Usage:
 #   docker compose -f tests/e2e/docker-compose.test.yml up -d
@@ -45,30 +45,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
-
-  # Interface with mock device
-  interface-mock:
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-    container_name: meshcore-test-interface
-    depends_on:
-      mqtt:
-        condition: service_healthy
-    environment:
-      - LOG_LEVEL=DEBUG
-      - MQTT_HOST=mqtt
-      - MQTT_PORT=1883
-      - MQTT_PREFIX=test
-      - MOCK_DEVICE=true
-      - NODE_ADDRESS=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-    command: ["interface", "receiver", "--mock"]
-    healthcheck:
-      test: ["CMD", "pgrep", "-f", "meshcore-hub"]
-      interval: 5s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
 
   # Collector
   collector:

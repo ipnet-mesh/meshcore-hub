@@ -8,7 +8,7 @@
 Python 3.14+ platform for managing and orchestrating MeshCore mesh networks.
 
 > [!WARNING]
-> **Breaking Changes** — The latest release replaces Mosquitto with a JWT-based MQTT broker, removes the proprietary receiver service in favor of [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture), and renames `receiver_node_id` to `observer_node_id` in the database. If upgrading from a previous version, see [UPGRADING.md](UPGRADING.md) for migration steps.
+> **BREAKING CHANGES** - The latest release replaces Mosquitto with a JWT-based MQTT broker, removes the proprietary receiver service in favor of [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture), and renames `receiver_node_id` to `observer_node_id` in the database. If upgrading from a previous version, see [UPGRADING.md](UPGRADING.md) for migration steps.
 
 ![MeshCore Hub Web Dashboard](docs/images/web.png)
 
@@ -21,10 +21,10 @@ Python 3.14+ platform for managing and orchestrating MeshCore mesh networks.
 
 MeshCore Hub provides a complete solution for monitoring, collecting, and interacting with MeshCore mesh networks. Data ingestion is handled by [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture), which observes MeshCore RF traffic and publishes decoded packets to MQTT. It consists of multiple components that work together:
 
-| Component | Description |
-|-----------|-------------|
-| **Collector** | Subscribes to MQTT events and persists them to a database |
-| **API** | REST API for querying data |
+| Component         | Description                                                  |
+| ----------------- | ------------------------------------------------------------ |
+| **Collector**     | Subscribes to MQTT events and persists them to a database    |
+| **API**           | REST API for querying data                                   |
 | **Web Dashboard** | Single Page Application (SPA) for visualizing network status |
 
 ## Architecture
@@ -77,12 +77,12 @@ flowchart LR
 
 Docker Compose uses **profiles** to select which services to run. The configuration is split across multiple files:
 
-| File | Purpose |
-|------|---------|
-| `docker-compose.yml` | Base shared config (services, profiles, healthchecks, environment) |
-| `docker-compose.dev.yml` | Development overrides (port mappings for direct access) |
-| `docker-compose.prod.yml` | Production overrides (external proxy network, no exposed ports) |
-| `docker-compose.traefik.yml` | Optional Traefik auto-discovery labels |
+| File                         | Purpose                                                            |
+| ---------------------------- | ------------------------------------------------------------------ |
+| `docker-compose.yml`         | Base shared config (services, profiles, healthchecks, environment) |
+| `docker-compose.dev.yml`     | Development overrides (port mappings for direct access)            |
+| `docker-compose.prod.yml`    | Production overrides (external proxy network, no exposed ports)    |
+| `docker-compose.traefik.yml` | Optional Traefik auto-discovery labels                             |
 
 All `docker compose` commands require explicit file selection with `-f`:
 
@@ -99,16 +99,16 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compos
 
 Service profiles:
 
-| Profile | Services | Use Case |
-|---------|----------|----------|
-| `all` | db-migrate, collector, api, web | Everything on one host |
-| `core` | db-migrate, collector, api, web | Central server infrastructure |
-| `mqtt` | meshcore-mqtt-broker | Local MQTT broker (optional) |
-| `receiver` | packet capture observer | Observes RF traffic and publishes to MQTT |
-| `seed` | seed | One-time seed data import |
-| `migrate` | db-migrate | One-time database migration |
+| Profile    | Services                        | Use Case                                  |
+| ---------- | ------------------------------- | ----------------------------------------- |
+| `all`      | db-migrate, collector, api, web | Everything on one host                    |
+| `core`     | db-migrate, collector, api, web | Central server infrastructure             |
+| `mqtt`     | meshcore-mqtt-broker            | Local MQTT broker (optional)              |
+| `observer` | packet capture observer         | Observes RF traffic and publishes to MQTT |
+| `seed`     | seed                            | One-time seed data import                 |
+| `migrate`  | db-migrate                      | One-time database migration               |
 
-**Note:** Most deployments connect to an external MQTT broker. Add `--profile mqtt` only if you need a local broker. The `receiver` profile runs [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) to observe MeshCore RF traffic and publish decoded packets to MQTT.
+**Note:** Most deployments connect to an external MQTT broker. Add `--profile mqtt` only if you need a local broker. The `observer` profile runs [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) to observe MeshCore RF traffic and publish decoded packets to MQTT.
 
 ```bash
 # Create database schema
@@ -124,7 +124,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile mqtt --
 docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile core up -d
 
 # Start everything including packet capture observer
-docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile mqtt --profile core --profile receiver up -d
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile mqtt --profile core --profile observer up -d
 
 # View logs
 docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile all logs -f
@@ -138,9 +138,11 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile all dow
 The quickest way to get started is running the entire stack on a single machine with a connected LoRa radio.
 
 **Prerequisites:**
+
 1. A compatible LoRa radio (e.g., Heltec V3, T-Beam) connected via serial
 
 **Steps:**
+
 ```bash
 # Create a directory, download the Docker Compose files and
 # example environment configuration file
@@ -157,13 +159,13 @@ cp .env.example .env
 #            set SERIAL_PORT if not /dev/ttyUSB0
 
 # Start the entire stack with local MQTT broker and packet capture
-docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile mqtt --profile core --profile receiver up -d
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile mqtt --profile core --profile observer up -d
 
 # View the web dashboard
 open http://localhost:8080
 ```
 
-This starts all services: MQTT broker, collector, API, web dashboard, and packet capture. The `receiver` profile runs [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) to observe MeshCore RF traffic and publish decoded packets to MQTT.
+This starts all services: MQTT broker, collector, API, web dashboard, and packet capture. The `observer` profile runs [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) to observe MeshCore RF traffic and publish decoded packets to MQTT.
 
 ## Deployment
 
@@ -172,6 +174,7 @@ This starts all services: MQTT broker, collector, API, web dashboard, and packet
 For production deployments, use `docker-compose.prod.yml` which connects services to an external proxy network. No ports are exposed directly — all traffic goes through your reverse proxy.
 
 **Prerequisites:**
+
 1. A reverse proxy (Nginx Proxy Manager, Caddy, Traefik, etc.)
 2. Docker network for proxy communication
 
@@ -196,15 +199,15 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile core u
 docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile mqtt --profile core up -d
 
 # Or include packet capture on the same host
-docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile mqtt --profile core --profile receiver up -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile mqtt --profile core --profile observer up -d
 ```
 
 Configure your reverse proxy to forward to the containers:
 
-| Service | Container | Port | Path |
-|---------|-----------|------|------|
-| Web Dashboard | `{COMPOSE_PROJECT_NAME}-web` | 8080 | `/` |
-| API | `{COMPOSE_PROJECT_NAME}-api` | 8000 | `/api`, `/metrics`, `/health` |
+| Service        | Container                     | Port | Path                             |
+| -------------- | ----------------------------- | ---- | -------------------------------- |
+| Web Dashboard  | `{COMPOSE_PROJECT_NAME}-web`  | 8080 | `/`                              |
+| API            | `{COMPOSE_PROJECT_NAME}-api`  | 8000 | `/api`, `/metrics`, `/health`    |
 | MQTT WebSocket | `{COMPOSE_PROJECT_NAME}-mqtt` | 1883 | `/` (only if using local broker) |
 
 > **Important:** Do not host under a subpath (e.g., `/meshcore`). Proxy at `/`.
@@ -280,7 +283,7 @@ PACKETCAPTURE_MQTT3_TOKEN_AUDIENCE=mqtt.localhost
 make backup
 
 # Restore a specific volume
-make restore FILE=backup/hub-dev_hub_data-20260414-120000.tar.gz
+make restore FILE=backup/hub_hub_data-20260414-120000.tar.gz
 ```
 
 #### Using shell commands
@@ -289,19 +292,19 @@ make restore FILE=backup/hub-dev_hub_data-20260414-120000.tar.gz
 # Back up the database volume
 source .env 2>/dev/null || true
 mkdir -p backup
-vol=${COMPOSE_PROJECT_NAME:-hub-dev}_hub_data
+vol=${COMPOSE_PROJECT_NAME:-hub}_hub_data
 docker run --rm -v $vol:/data -v $(pwd)/backup:/backup \
   alpine tar czf /backup/$vol-$(date +%Y%m%d-%H%M%S).tar.gz -C / data
 
 # Restore a specific volume (volume name derived from tarball filename)
 source .env 2>/dev/null || true
-FILE=backup/${COMPOSE_PROJECT_NAME:-hub-dev}_hub_data-20260414-120000.tar.gz
+FILE=backup/${COMPOSE_PROJECT_NAME:-hub}_hub_data-20260414-120000.tar.gz
 vol=$(basename "$FILE" | sed 's/-[0-9]\{8\}-[0-9]\{6\}\.tar\.gz//')
 docker run --rm -v $vol:/data -v $(pwd)/backup:/backup \
   alpine sh -c "cd / && tar xzf /backup/$(basename $FILE)"
 ```
 
-> **Note:** Replace `hub-dev` with your `COMPOSE_PROJECT_NAME` if using a different instance name. Monitoring infrastructure (Prometheus, Alertmanager) manages its own data — consult your monitoring stack's documentation for backup procedures.
+> **Note:** Replace `hub` with your `COMPOSE_PROJECT_NAME` if using a different instance name. Monitoring infrastructure (Prometheus, Alertmanager) manages its own data — consult your monitoring stack's documentation for backup procedures.
 
 ### Manual Installation
 
@@ -328,26 +331,26 @@ All components are configured via environment variables. Create a `.env` file or
 
 ### Common Settings
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `LOG_LEVEL` | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR) |
-| `DATA_HOME` | `./data` | Base directory for runtime data |
-| `SEED_HOME` | `./seed` | Directory containing seed data files |
-| `MQTT_HOST` | `localhost` | MQTT broker hostname |
-| `MQTT_PORT` | `1883` | MQTT broker port |
-| `MQTT_USERNAME` | *(none)* | MQTT username (optional) |
-| `MQTT_PASSWORD` | *(none)* | MQTT password (optional) |
-| `MQTT_PREFIX` | `meshcore` | Topic prefix for all MQTT messages |
-| `MQTT_TLS` | `false` | Enable TLS/SSL for MQTT connection |
-| `MQTT_TRANSPORT` | `websockets` | MQTT transport (`tcp` or `websockets`) |
-| `MQTT_WS_PATH` | `/` | MQTT WebSocket path (used when `MQTT_TRANSPORT=websockets`) |
+| Variable         | Default      | Description                                                 |
+| ---------------- | ------------ | ----------------------------------------------------------- |
+| `LOG_LEVEL`      | `INFO`       | Logging level (DEBUG, INFO, WARNING, ERROR)                 |
+| `DATA_HOME`      | `./data`     | Base directory for runtime data                             |
+| `SEED_HOME`      | `./seed`     | Directory containing seed data files                        |
+| `MQTT_HOST`      | `localhost`  | MQTT broker hostname                                        |
+| `MQTT_PORT`      | `1883`       | MQTT broker port                                            |
+| `MQTT_USERNAME`  | _(none)_     | MQTT username (optional)                                    |
+| `MQTT_PASSWORD`  | _(none)_     | MQTT password (optional)                                    |
+| `MQTT_PREFIX`    | `meshcore`   | Topic prefix for all MQTT messages                          |
+| `MQTT_TLS`       | `false`      | Enable TLS/SSL for MQTT connection                          |
+| `MQTT_TRANSPORT` | `websockets` | MQTT transport (`tcp` or `websockets`)                      |
+| `MQTT_WS_PATH`   | `/`          | MQTT WebSocket path (used when `MQTT_TRANSPORT=websockets`) |
 
 ### Collector Settings
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `COLLECTOR_CHANNEL_KEYS` | *(none)* | Additional decoder channel keys (`label=hex`, `label:hex`, or `hex`) |
-| `COLLECTOR_INCLUDE_TEST_CHANNEL` | `false` | Include built-in 'test' channel messages |
+| Variable                         | Default  | Description                                                          |
+| -------------------------------- | -------- | -------------------------------------------------------------------- |
+| `COLLECTOR_CHANNEL_KEYS`         | _(none)_ | Additional decoder channel keys (`label=hex`, `label:hex`, or `hex`) |
+| `COLLECTOR_INCLUDE_TEST_CHANNEL` | `false`  | Include built-in 'test' channel messages                             |
 
 #### LetsMesh Packet Decoding
 
@@ -381,21 +384,22 @@ Normalization behavior:
 
 The collector can forward certain events to external HTTP endpoints:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WEBHOOK_ADVERTISEMENT_URL` | *(none)* | Webhook URL for advertisement events |
-| `WEBHOOK_ADVERTISEMENT_SECRET` | *(none)* | Secret sent as `X-Webhook-Secret` header |
-| `WEBHOOK_MESSAGE_URL` | *(none)* | Webhook URL for all message events |
-| `WEBHOOK_MESSAGE_SECRET` | *(none)* | Secret for message webhook |
-| `WEBHOOK_CHANNEL_MESSAGE_URL` | *(none)* | Override URL for channel messages only |
-| `WEBHOOK_CHANNEL_MESSAGE_SECRET` | *(none)* | Secret for channel message webhook |
-| `WEBHOOK_DIRECT_MESSAGE_URL` | *(none)* | Override URL for direct messages only |
-| `WEBHOOK_DIRECT_MESSAGE_SECRET` | *(none)* | Secret for direct message webhook |
-| `WEBHOOK_TIMEOUT` | `10.0` | Request timeout in seconds |
-| `WEBHOOK_MAX_RETRIES` | `3` | Max retry attempts on failure |
-| `WEBHOOK_RETRY_BACKOFF` | `2.0` | Exponential backoff multiplier |
+| Variable                         | Default  | Description                              |
+| -------------------------------- | -------- | ---------------------------------------- |
+| `WEBHOOK_ADVERTISEMENT_URL`      | _(none)_ | Webhook URL for advertisement events     |
+| `WEBHOOK_ADVERTISEMENT_SECRET`   | _(none)_ | Secret sent as `X-Webhook-Secret` header |
+| `WEBHOOK_MESSAGE_URL`            | _(none)_ | Webhook URL for all message events       |
+| `WEBHOOK_MESSAGE_SECRET`         | _(none)_ | Secret for message webhook               |
+| `WEBHOOK_CHANNEL_MESSAGE_URL`    | _(none)_ | Override URL for channel messages only   |
+| `WEBHOOK_CHANNEL_MESSAGE_SECRET` | _(none)_ | Secret for channel message webhook       |
+| `WEBHOOK_DIRECT_MESSAGE_URL`     | _(none)_ | Override URL for direct messages only    |
+| `WEBHOOK_DIRECT_MESSAGE_SECRET`  | _(none)_ | Secret for direct message webhook        |
+| `WEBHOOK_TIMEOUT`                | `10.0`   | Request timeout in seconds               |
+| `WEBHOOK_MAX_RETRIES`            | `3`      | Max retry attempts on failure            |
+| `WEBHOOK_RETRY_BACKOFF`          | `2.0`    | Exponential backoff multiplier           |
 
 Webhook payload format:
+
 ```json
 {
   "event_type": "advertisement",
@@ -408,53 +412,54 @@ Webhook payload format:
 
 The collector automatically cleans up old event data and inactive nodes:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DATA_RETENTION_ENABLED` | `true` | Enable automatic cleanup of old events |
-| `DATA_RETENTION_DAYS` | `30` | Days to retain event data |
-| `DATA_RETENTION_INTERVAL_HOURS` | `24` | Hours between cleanup runs |
-| `NODE_CLEANUP_ENABLED` | `true` | Enable removal of inactive nodes |
-| `NODE_CLEANUP_DAYS` | `7` | Remove nodes not seen for this many days |
+| Variable                        | Default | Description                              |
+| ------------------------------- | ------- | ---------------------------------------- |
+| `DATA_RETENTION_ENABLED`        | `true`  | Enable automatic cleanup of old events   |
+| `DATA_RETENTION_DAYS`           | `30`    | Days to retain event data                |
+| `DATA_RETENTION_INTERVAL_HOURS` | `24`    | Hours between cleanup runs               |
+| `NODE_CLEANUP_ENABLED`          | `true`  | Enable removal of inactive nodes         |
+| `NODE_CLEANUP_DAYS`             | `7`     | Remove nodes not seen for this many days |
 
 ### API Settings
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `API_HOST` | `0.0.0.0` | API bind address |
-| `API_PORT` | `8000` | API port |
-| `API_READ_KEY` | *(none)* | Read-only API key |
-| `API_ADMIN_KEY` | *(none)* | Admin API key |
-| `METRICS_ENABLED` | `true` | Enable Prometheus metrics endpoint at `/metrics` |
-| `METRICS_CACHE_TTL` | `60` | Seconds to cache metrics output (reduces database load) |
+| Variable            | Default   | Description                                             |
+| ------------------- | --------- | ------------------------------------------------------- |
+| `API_HOST`          | `0.0.0.0` | API bind address                                        |
+| `API_PORT`          | `8000`    | API port                                                |
+| `API_READ_KEY`      | _(none)_  | Read-only API key                                       |
+| `API_ADMIN_KEY`     | _(none)_  | Admin API key                                           |
+| `METRICS_ENABLED`   | `true`    | Enable Prometheus metrics endpoint at `/metrics`        |
+| `METRICS_CACHE_TTL` | `60`      | Seconds to cache metrics output (reduces database load) |
 
 ### Web Dashboard Settings
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WEB_HOST` | `0.0.0.0` | Web server bind address |
-| `WEB_PORT` | `8080` | Web server port |
-| `API_BASE_URL` | `http://localhost:8000` | API endpoint URL |
-| `API_KEY` | *(none)* | API key for web dashboard queries (optional) |
-| `WEB_THEME` | `dark` | Default theme (`dark` or `light`). Users can override via theme toggle in navbar. |
-| `WEB_LOCALE` | `en` | Locale/language for the web dashboard (e.g., `en`, `es`, `fr`) |
-| `WEB_DATETIME_LOCALE` | `en-US` | Locale used for date formatting in the web dashboard (e.g., `en-US` for MM/DD/YYYY, `en-GB` for DD/MM/YYYY). |
-| `WEB_AUTO_REFRESH_SECONDS` | `30` | Auto-refresh interval in seconds for list pages (0 to disable) |
-| `WEB_ADMIN_ENABLED` | `false` | Enable admin interface at /a/ (requires auth proxy: `X-Forwarded-User`/`X-Auth-Request-User` or forwarded `Authorization: Basic ...`) |
-| `WEB_TRUSTED_PROXY_HOSTS` | `*` | Comma-separated list of trusted proxy hosts for admin authentication headers. Default: `*` (all hosts). Recommended: set to your reverse proxy IP in production. A startup warning is emitted when using the default `*` with admin enabled. |
-| `TZ` | `UTC` | Timezone for displaying dates/times (e.g., `America/New_York`, `Europe/London`) |
-| `NETWORK_DOMAIN` | *(none)* | Network domain name (optional) |
-| `NETWORK_NAME` | `MeshCore Network` | Display name for the network |
-| `NETWORK_CITY` | *(none)* | City where network is located |
-| `NETWORK_COUNTRY` | *(none)* | Country code (ISO 3166-1 alpha-2) |
-| `NETWORK_RADIO_CONFIG` | *(none)* | Radio config (comma-delimited: profile,freq,bw,sf,cr,power) |
-| `NETWORK_WELCOME_TEXT` | *(none)* | Custom welcome text for homepage |
-| `NETWORK_CONTACT_EMAIL` | *(none)* | Contact email address |
-| `NETWORK_CONTACT_DISCORD` | *(none)* | Discord server link |
-| `NETWORK_CONTACT_GITHUB` | *(none)* | GitHub repository URL |
-| `NETWORK_CONTACT_YOUTUBE` | *(none)* | YouTube channel URL |
-| `CONTENT_HOME` | `./content` | Directory containing custom content (pages/, media/) |
+| Variable                   | Default                 | Description                                                                                                                                                                                                                                  |
+| -------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WEB_HOST`                 | `0.0.0.0`               | Web server bind address                                                                                                                                                                                                                      |
+| `WEB_PORT`                 | `8080`                  | Web server port                                                                                                                                                                                                                              |
+| `API_BASE_URL`             | `http://localhost:8000` | API endpoint URL                                                                                                                                                                                                                             |
+| `API_KEY`                  | _(none)_                | API key for web dashboard queries (optional)                                                                                                                                                                                                 |
+| `WEB_THEME`                | `dark`                  | Default theme (`dark` or `light`). Users can override via theme toggle in navbar.                                                                                                                                                            |
+| `WEB_LOCALE`               | `en`                    | Locale/language for the web dashboard (e.g., `en`, `es`, `fr`)                                                                                                                                                                               |
+| `WEB_DATETIME_LOCALE`      | `en-US`                 | Locale used for date formatting in the web dashboard (e.g., `en-US` for MM/DD/YYYY, `en-GB` for DD/MM/YYYY).                                                                                                                                 |
+| `WEB_AUTO_REFRESH_SECONDS` | `30`                    | Auto-refresh interval in seconds for list pages (0 to disable)                                                                                                                                                                               |
+| `WEB_ADMIN_ENABLED`        | `false`                 | Enable admin interface at /a/ (requires auth proxy: `X-Forwarded-User`/`X-Auth-Request-User` or forwarded `Authorization: Basic ...`)                                                                                                        |
+| `WEB_TRUSTED_PROXY_HOSTS`  | `*`                     | Comma-separated list of trusted proxy hosts for admin authentication headers. Default: `*` (all hosts). Recommended: set to your reverse proxy IP in production. A startup warning is emitted when using the default `*` with admin enabled. |
+| `TZ`                       | `UTC`                   | Timezone for displaying dates/times (e.g., `America/New_York`, `Europe/London`)                                                                                                                                                              |
+| `NETWORK_DOMAIN`           | _(none)_                | Network domain name (optional)                                                                                                                                                                                                               |
+| `NETWORK_NAME`             | `MeshCore Network`      | Display name for the network                                                                                                                                                                                                                 |
+| `NETWORK_CITY`             | _(none)_                | City where network is located                                                                                                                                                                                                                |
+| `NETWORK_COUNTRY`          | _(none)_                | Country code (ISO 3166-1 alpha-2)                                                                                                                                                                                                            |
+| `NETWORK_RADIO_CONFIG`     | _(none)_                | Radio config (comma-delimited: profile,freq,bw,sf,cr,power)                                                                                                                                                                                  |
+| `NETWORK_WELCOME_TEXT`     | _(none)_                | Custom welcome text for homepage                                                                                                                                                                                                             |
+| `NETWORK_CONTACT_EMAIL`    | _(none)_                | Contact email address                                                                                                                                                                                                                        |
+| `NETWORK_CONTACT_DISCORD`  | _(none)_                | Discord server link                                                                                                                                                                                                                          |
+| `NETWORK_CONTACT_GITHUB`   | _(none)_                | GitHub repository URL                                                                                                                                                                                                                        |
+| `NETWORK_CONTACT_YOUTUBE`  | _(none)_                | YouTube channel URL                                                                                                                                                                                                                          |
+| `CONTENT_HOME`             | `./content`             | Directory containing custom content (pages/, media/)                                                                                                                                                                                         |
 
 Timezone handling note:
+
 - API timestamps that omit an explicit timezone suffix are treated as UTC before rendering in the configured `TZ`.
 
 #### Nginx Proxy Manager (NPM) Admin Setup
@@ -465,6 +470,7 @@ Use two hostnames so the public map/site stays open while admin stays protected:
 2. Admin host: Access List enabled (operators only).
 
 Both proxy hosts should forward to the same web container:
+
 - Scheme: `http`
 - Forward Hostname/IP: your MeshCore Hub host
 - Forward Port: `18080` (or your mapped web port)
@@ -472,6 +478,7 @@ Both proxy hosts should forward to the same web container:
 - Block Common Exploits: `ON`
 
 Important:
+
 - Do not host this app under a subpath (for example `/meshcore`); proxy it at `/`.
 - `WEB_ADMIN_ENABLED` must be `true`.
 
@@ -502,6 +509,7 @@ Expected:
 ```
 
 If it still shows `false`, check:
+
 1. You are using the admin hostname, not the public hostname.
 2. The Access List is attached to that admin host.
 3. The `Advanced` block above is present exactly.
@@ -511,15 +519,15 @@ If it still shows `false`, check:
 
 Control which pages are visible in the web dashboard. Disabled features are fully hidden: removed from navigation, return 404 on their routes, and excluded from sitemap/robots.txt.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `FEATURE_DASHBOARD` | `true` | Enable the `/dashboard` page |
-| `FEATURE_NODES` | `true` | Enable the `/nodes` pages (list, detail, short links) |
-| `FEATURE_ADVERTISEMENTS` | `true` | Enable the `/advertisements` page |
-| `FEATURE_MESSAGES` | `true` | Enable the `/messages` page |
-| `FEATURE_MAP` | `true` | Enable the `/map` page and `/map/data` endpoint |
-| `FEATURE_MEMBERS` | `true` | Enable the `/members` page |
-| `FEATURE_PAGES` | `true` | Enable custom markdown pages |
+| Variable                 | Default | Description                                           |
+| ------------------------ | ------- | ----------------------------------------------------- |
+| `FEATURE_DASHBOARD`      | `true`  | Enable the `/dashboard` page                          |
+| `FEATURE_NODES`          | `true`  | Enable the `/nodes` pages (list, detail, short links) |
+| `FEATURE_ADVERTISEMENTS` | `true`  | Enable the `/advertisements` page                     |
+| `FEATURE_MESSAGES`       | `true`  | Enable the `/messages` page                           |
+| `FEATURE_MAP`            | `true`  | Enable the `/map` page and `/map/data` endpoint       |
+| `FEATURE_MEMBERS`        | `true`  | Enable the `/members` page                            |
+| `FEATURE_PAGES`          | `true`  | Enable custom markdown pages                          |
 
 **Dependencies:** Dashboard auto-disables when all of Nodes/Advertisements/Messages are disabled. Map auto-disables when Nodes is disabled.
 
@@ -528,8 +536,10 @@ Control which pages are visible in the web dashboard. Disabled features are full
 The web dashboard supports custom content including markdown pages and media files. Content is organized in subdirectories:
 
 Custom logo options:
+
 - `logo.svg` — full-color logo, displayed as-is in both themes (no automatic darkening)
 - `logo-invert.svg` — monochrome/two-tone logo, automatically darkened in light mode for visibility
+
 ```
 content/
 ├── pages/     # Custom markdown pages
@@ -541,6 +551,7 @@ content/
 ```
 
 **Setup:**
+
 ```bash
 # Create content directory structure
 mkdir -p content/pages content/media
@@ -596,6 +607,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile seed up
 ```
 
 This imports data from the following files (if they exist):
+
 - `{SEED_HOME}/node_tags.yaml` - Node tag definitions
 - `{SEED_HOME}/members.yaml` - Network member definitions
 
@@ -637,6 +649,7 @@ fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210:
 ```
 
 Tag values can be:
+
 - **YAML primitives** (auto-detected type): strings, numbers, booleans
 - **Explicit type** (when you need to force a specific type):
   ```yaml
@@ -666,15 +679,15 @@ Network members represent the people operating nodes in your network. Members ca
   description: IPNet Member
 ```
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `member_id` | Yes | Unique identifier for the member |
-| `name` | Yes | Member's display name |
-| `callsign` | No | Amateur radio callsign |
-| `role` | No | Member's role in the network |
-| `description` | No | Additional description |
-| `contact` | No | Contact information |
-| `public_key` | No | Associated node public key (64-char hex) |
+| Field         | Required | Description                              |
+| ------------- | -------- | ---------------------------------------- |
+| `member_id`   | Yes      | Unique identifier for the member         |
+| `name`        | Yes      | Member's display name                    |
+| `callsign`    | No       | Amateur radio callsign                   |
+| `role`        | No       | Member's role in the network             |
+| `description` | No       | Additional description                   |
+| `contact`     | No       | Contact information                      |
+| `public_key`  | No       | Associated node public key (64-char hex) |
 
 ## API Documentation
 
@@ -704,22 +717,22 @@ curl -H "Authorization: Bearer <API_ADMIN_KEY>" http://localhost:8000/api/v1/mem
 
 ### Example Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/v1/nodes` | List all known nodes |
-| GET | `/api/v1/nodes/{public_key}` | Get node details |
-| GET | `/api/v1/nodes/prefix/{prefix}` | Get node by public key prefix |
-| GET | `/api/v1/nodes/{public_key}/tags` | Get node tags |
-| POST | `/api/v1/nodes/{public_key}/tags` | Create node tag |
-| GET | `/api/v1/messages` | List messages with filters |
-| GET | `/api/v1/advertisements` | List advertisements |
-| GET | `/api/v1/telemetry` | List telemetry data |
-| GET | `/api/v1/trace-paths` | List trace paths |
-| GET | `/api/v1/members` | List network members |
-| GET | `/api/v1/dashboard/stats` | Get network statistics |
-| GET | `/api/v1/dashboard/activity` | Get daily advertisement activity |
-| GET | `/api/v1/dashboard/message-activity` | Get daily message activity |
-| GET | `/api/v1/dashboard/node-count` | Get cumulative node count history |
+| Method | Endpoint                             | Description                       |
+| ------ | ------------------------------------ | --------------------------------- |
+| GET    | `/api/v1/nodes`                      | List all known nodes              |
+| GET    | `/api/v1/nodes/{public_key}`         | Get node details                  |
+| GET    | `/api/v1/nodes/prefix/{prefix}`      | Get node by public key prefix     |
+| GET    | `/api/v1/nodes/{public_key}/tags`    | Get node tags                     |
+| POST   | `/api/v1/nodes/{public_key}/tags`    | Create node tag                   |
+| GET    | `/api/v1/messages`                   | List messages with filters        |
+| GET    | `/api/v1/advertisements`             | List advertisements               |
+| GET    | `/api/v1/telemetry`                  | List telemetry data               |
+| GET    | `/api/v1/trace-paths`                | List trace paths                  |
+| GET    | `/api/v1/members`                    | List network members              |
+| GET    | `/api/v1/dashboard/stats`            | Get network statistics            |
+| GET    | `/api/v1/dashboard/activity`         | Get daily advertisement activity  |
+| GET    | `/api/v1/dashboard/message-activity` | Get daily message activity        |
+| GET    | `/api/v1/dashboard/node-count`       | Get cumulative node count history |
 
 ## Development
 
