@@ -1,6 +1,6 @@
 # MeshCore Hub - Traefik Docker Compose Override
 #
-# Adds Traefik auto-discovery labels to api and web services.
+# Adds Traefik auto-discovery labels to core services.
 # Requires docker-compose.prod.yml (for the proxy-net network).
 #
 # Set TRAEFIK_DOMAIN in your .env file to the hostname for this instance.

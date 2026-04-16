@@ -7,7 +7,6 @@ COMPOSE_PROJECT_NAME ?= hub-dev
 PROFILES ?= mqtt core
 COMPOSE_FILES = -f docker-compose.yml -f docker-compose.dev.yml
 VOLUMES = $(COMPOSE_PROJECT_NAME)_hub_data $(COMPOSE_PROJECT_NAME)_mqtt_broker_data \
-          $(COMPOSE_PROJECT_NAME)_prometheus_data $(COMPOSE_PROJECT_NAME)_alertmanager_data \
           $(COMPOSE_PROJECT_NAME)_packetcapture_data
 
 .PHONY: build up down logs backup restore

@@ -75,10 +75,10 @@ flowchart LR
 
 ### Simple Self-Hosted Setup
 
-The quickest way to get started is running the entire stack on a single machine alongside [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture).
+The quickest way to get started is running the entire stack on a single machine with a connected LoRa radio.
 
 **Prerequisites:**
-1. Set up [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) on a device with a compatible LoRa radio (e.g., Heltec V3, T-Beam) to observe MeshCore RF traffic
+1. A compatible LoRa radio (e.g., Heltec V3, T-Beam) connected via serial
 
 **Steps:**
 ```bash
@@ -93,16 +93,17 @@ wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/.
 
 # Copy and configure environment
 cp .env.example .env
-# Edit .env: set MQTT_HOST to your MQTT broker if not using the local one
+# Edit .env: set PACKETCAPTURE_IATA to your 3-letter airport code
+#            set SERIAL_PORT if not /dev/ttyUSB0
 
-# Start the entire stack with local MQTT broker
-docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile mqtt --profile core up -d
+# Start the entire stack with local MQTT broker and packet capture
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile mqtt --profile core --profile receiver up -d
 
 # View the web dashboard
 open http://localhost:8080
 ```
 
-This starts all services: MQTT broker, collector, API, and web dashboard. MeshCore packet data is ingested via [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture), which publishes decoded packets to MQTT.
+This starts all services: MQTT broker, collector, API, web dashboard, and packet capture. The `receiver` profile runs [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) to observe MeshCore RF traffic and publish decoded packets to MQTT.
 
 ## Deployment
 
@@ -121,13 +122,13 @@ All `docker compose` commands require explicit file selection with `-f`:
 
 ```bash
 # Development (default — exposes ports for local access)
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile all up -d
 
 # Production (generic reverse proxy — nginx, caddy, etc.)
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile all up -d
 
 # Production (Traefik)
-docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml --profile all up -d
 ```
 
 Service profiles:
@@ -138,7 +139,6 @@ Service profiles:
 | `core` | db-migrate, collector, api, web | Central server infrastructure |
 | `mqtt` | meshcore-mqtt-broker | Local MQTT broker (optional) |
 | `receiver` | packet capture observer | Observes RF traffic and publishes to MQTT |
-| `metrics` | prometheus, alertmanager | Prometheus metrics and alerting |
 | `seed` | seed | One-time seed data import |
 | `migrate` | db-migrate | One-time database migration |
 
@@ -161,10 +161,55 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile core up
 docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile mqtt --profile core --profile receiver up -d
 
 # View logs
-docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile all logs -f
 
 # Stop services
-docker compose -f docker-compose.yml -f docker-compose.dev.yml down
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile all down
+```
+
+### Adding Remote Observers
+
+Other operators can run their own [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) instance and publish decoded packets to your MeshCore Hub. They can also optionally contribute to the LetsMesh network.
+
+> **Prerequisite:** Your MQTT broker must be accessible to remote observers. In production, this means exposing the WebSocket listener via a reverse proxy with TLS (e.g., `wss://mqtt.example.com/mqtt`).
+
+#### Example: Observer contributing to LetsMesh and your community Hub
+
+```bash
+# In the observer's .env or docker-compose environment:
+
+# Server 1 - Let's Mesh US (opt-in)
+PACKETCAPTURE_MQTT1_ENABLED=true
+PACKETCAPTURE_MQTT1_SERVER=mqtt-us-v1.letsmesh.net
+PACKETCAPTURE_MQTT1_PORT=443
+PACKETCAPTURE_MQTT1_TRANSPORT=websockets
+PACKETCAPTURE_MQTT1_USE_TLS=true
+PACKETCAPTURE_MQTT1_USE_AUTH_TOKEN=true
+PACKETCAPTURE_MQTT1_TOKEN_AUDIENCE=mqtt-us-v1.letsmesh.net
+
+# Server 2 - Let's Mesh EU (opt-in)
+PACKETCAPTURE_MQTT2_ENABLED=false
+
+# Server 3 - Your MeshCore Hub
+PACKETCAPTURE_MQTT3_ENABLED=true
+PACKETCAPTURE_MQTT3_SERVER=mqtt.example.com
+PACKETCAPTURE_MQTT3_PORT=443
+PACKETCAPTURE_MQTT3_TRANSPORT=websockets
+PACKETCAPTURE_MQTT3_USE_TLS=true
+PACKETCAPTURE_MQTT3_USE_AUTH_TOKEN=true
+PACKETCAPTURE_MQTT3_TOKEN_AUDIENCE=mqtt.example.com
+```
+
+Replace `mqtt.example.com` with your public MQTT domain. The `TOKEN_AUDIENCE` must match the `MQTT_TOKEN_AUDIENCE` or `AUTH_EXPECTED_AUDIENCE` configured on your broker.
+
+For local network observers (no TLS):
+
+```bash
+PACKETCAPTURE_MQTT3_SERVER=192.168.1.100
+PACKETCAPTURE_MQTT3_PORT=1883
+PACKETCAPTURE_MQTT3_TRANSPORT=websockets
+PACKETCAPTURE_MQTT3_USE_TLS=false
+PACKETCAPTURE_MQTT3_TOKEN_AUDIENCE=mqtt.localhost
 ```
 
 ### Multi-Instance Deployment
@@ -229,18 +274,12 @@ make restore FILE=backup/hub-dev_hub_data-20260414-120000.tar.gz
 #### Using shell commands
 
 ```bash
-# Back up all volumes
+# Back up the database volume
 source .env 2>/dev/null || true
 mkdir -p backup
-for vol in ${COMPOSE_PROJECT_NAME:-hub-dev}_hub_data \
-           ${COMPOSE_PROJECT_NAME:-hub-dev}_mqtt_broker_data \
-           ${COMPOSE_PROJECT_NAME:-hub-dev}_prometheus_data \
-           ${COMPOSE_PROJECT_NAME:-hub-dev}_alertmanager_data \
-           ${COMPOSE_PROJECT_NAME:-hub-dev}_packetcapture_data; do
-  echo "Backing up $vol..."
-  docker run --rm -v $vol:/data -v $(pwd)/backup:/backup \
-    alpine tar czf /backup/$vol-$(date +%Y%m%d-%H%M%S).tar.gz -C / data
-done
+vol=${COMPOSE_PROJECT_NAME:-hub-dev}_hub_data
+docker run --rm -v $vol:/data -v $(pwd)/backup:/backup \
+  alpine tar czf /backup/$vol-$(date +%Y%m%d-%H%M%S).tar.gz -C / data
 
 # Restore a specific volume (volume name derived from tarball filename)
 source .env 2>/dev/null || true
@@ -250,7 +289,7 @@ docker run --rm -v $vol:/data -v $(pwd)/backup:/backup \
   alpine sh -c "cd / && tar xzf /backup/$(basename $FILE)"
 ```
 
-> **Note:** Replace `hub-dev` with your `COMPOSE_PROJECT_NAME` if using a different instance name.
+> **Note:** Replace `hub-dev` with your `COMPOSE_PROJECT_NAME` if using a different instance name. Monitoring infrastructure (Prometheus, Alertmanager) manages its own data — consult your monitoring stack's documentation for backup procedures.
 
 ### Manual Installation
 
@@ -637,7 +676,7 @@ Health check endpoints are also available:
 
 - **Health**: http://localhost:8000/health
 - **Ready**: http://localhost:8000/health/ready (includes database check)
-- **Metrics**: http://localhost:8000/metrics (Prometheus format)
+- **Metrics**: http://localhost:8000/metrics (Prometheus format — point your Prometheus scraper here)
 
 ### Authentication
 

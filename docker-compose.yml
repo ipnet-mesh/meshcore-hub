@@ -141,8 +141,6 @@ services:
     depends_on:
       db-migrate:
         condition: service_completed_successfully
-      mqtt:
-        condition: service_healthy
     restart: unless-stopped
     volumes:
       - hub_data:/data
@@ -348,44 +346,6 @@ services:
     # Imports both node_tags.yaml and members.yaml if they exist
     command: ["collector", "seed"]
 
-  # ==========================================================================
-  # Prometheus - Metrics collection and monitoring (optional, use --profile metrics)
-  # ==========================================================================
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: ${COMPOSE_PROJECT_NAME:-hub-dev}-prometheus
-    profiles:
-      - all
-      - metrics
-    restart: unless-stopped
-    depends_on:
-      api:
-        condition: service_healthy
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.retention.time=30d"
-    volumes:
-      - ./etc/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./etc/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
-      - prometheus_data:/prometheus
-
-  # ==========================================================================
-  # Alertmanager - Alert routing and notifications (optional, use --profile metrics)
-  # ==========================================================================
-  alertmanager:
-    image: prom/alertmanager:latest
-    container_name: ${COMPOSE_PROJECT_NAME:-hub-dev}-alertmanager
-    profiles:
-      - all
-      - metrics
-    restart: unless-stopped
-    volumes:
-      - ./etc/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-      - alertmanager_data:/alertmanager
-    command:
-      - "--config.file=/etc/alertmanager/alertmanager.yml"
-      - "--storage.path=/alertmanager"
-
 # ==========================================================================
 # Volumes
 # ==========================================================================
@@ -394,9 +354,5 @@ volumes:
     name: ${COMPOSE_PROJECT_NAME:-hub-dev}_hub_data
   mqtt_broker_data:
     name: ${COMPOSE_PROJECT_NAME:-hub-dev}_mqtt_broker_data
-  prometheus_data:
-    name: ${COMPOSE_PROJECT_NAME:-hub-dev}_prometheus_data
-  alertmanager_data:
-    name: ${COMPOSE_PROJECT_NAME:-hub-dev}_alertmanager_data
   packetcapture_data:
     name: ${COMPOSE_PROJECT_NAME:-hub-dev}_packetcapture_data

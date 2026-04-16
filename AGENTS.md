@@ -307,11 +307,16 @@ meshcore-hub/
 │   ├── env.py
 │   └── versions/
 ├── etc/
+│   ├── docker/                # Docker configuration examples
+│   │   └── meshcore-mqtt-broker/
 │   ├── prometheus/            # Prometheus configuration
 │   │   ├── prometheus.yml    # Scrape and alerting config
 │   │   └── alerts.yml        # Alert rules
-│   └── alertmanager/          # Alertmanager configuration
-│       └── alertmanager.yml  # Routing and receiver config
+│   ├── alertmanager/          # Alertmanager configuration
+│   │   └── alertmanager.yml  # Routing and receiver config
+│   └── systemd/               # Systemd service templates
+│       ├── meshcore-hub-update@.service  # Auto-update service
+│       └── meshcore-hub-update@.timer    # Auto-update timer
 ├── example/
 │   ├── seed/                 # Example seed data files
 │   │   ├── node_tags.yaml    # Example node tags

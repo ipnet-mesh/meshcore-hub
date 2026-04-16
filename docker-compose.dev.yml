@@ -7,6 +7,13 @@
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 
 services:
+  collector:
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      mqtt:
+        condition: service_healthy
+
   mqtt:
     ports:
       - "${MQTT_PORT:-1883}:${MQTT_PORT:-1883}"
@@ -18,11 +25,3 @@ services:
   web:
     ports:
       - "${WEB_PORT:-8080}:8080"
-
-  prometheus:
-    ports:
-      - "${PROMETHEUS_PORT:-9090}:9090"
-
-  alertmanager:
-    ports:
-      - "${ALERTMANAGER_PORT:-9093}:9093"

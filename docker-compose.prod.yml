@@ -1,6 +1,6 @@
 # MeshCore Hub - Production Docker Compose Override
 #
-# Connects api and web services to an external proxy network for
+# Connects core services to an external proxy network for
 # reverse proxy access (Traefik, Nginx, Caddy, etc.).
 # No ports are exposed directly — all traffic goes through the reverse proxy.
 #
@@ -14,6 +14,11 @@
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml up -d
 
 services:
+  collector:
+    networks:
+      - default
+      - proxy-net
+
   api:
     networks:
       - default

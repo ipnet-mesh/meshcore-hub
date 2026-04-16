@@ -1,7 +1,8 @@
 # Prometheus scrape configuration for MeshCore Hub
 #
-# This file is used when running Prometheus via Docker Compose:
-#   docker compose --profile core --profile metrics up -d
+# Example configuration — copy and adapt for your Prometheus deployment.
+# Point your scraper at the MeshCore Hub API /metrics endpoint:
+#   http://api:8000/metrics
 #
 # The scrape interval matches the default metrics cache TTL (60s)
 # to avoid unnecessary database queries.

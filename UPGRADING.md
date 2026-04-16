@@ -32,18 +32,6 @@ docker run --rm -v meshcore_hub_data:/data -v $(pwd)/backup:/backup \
   alpine tar czf /backup/meshcore_hub_data-$(date +%Y%m%d-%H%M%S).tar.gz -C / data
 ```
 
-Optionally back up monitoring volumes (only if you used the monitoring profile):
-
-```bash
-docker run --rm -v meshcore_prometheus_data:/data -v $(pwd)/backup:/backup \
-  alpine tar czf /backup/meshcore_prometheus_data-$(date +%Y%m%d-%H%M%S).tar.gz -C / data
-
-docker run --rm -v meshcore_alertmanager_data:/data -v $(pwd)/backup:/backup \
-  alpine tar czf /backup/meshcore_alertmanager_data-$(date +%Y%m%d-%H%M%S).tar.gz -C / data
-```
-
-> **Note:** Only `meshcore_hub_data` (the database) is critical. The others contain metrics and alerting state that will be recreated.
-
 To restore from backup if needed:
 
 ```bash
@@ -57,7 +45,7 @@ docker run --rm -v meshcore_hub_data:/data -v $(pwd)/backup:/backup \
 Stop all services and remove orphaned containers from the old configuration:
 
 ```bash
-docker compose down --remove-orphans
+docker compose --profile all down --remove-orphans
 ```
 
 > **Important:** Do NOT use `--volumes` / `-v`. That would delete your database. The `--remove-orphans` flag cleans up old services (like `interface-receiver`, `interface-sender`) that no longer exist in the new compose file.
@@ -79,10 +67,8 @@ These volumes always need migrating:
 | Old Name | New Name |
 |----------|----------|
 | `meshcore_hub_data` | `hub-dev_hub_data` |
-| `meshcore_prometheus_data` | `hub-dev_prometheus_data` |
-| `meshcore_alertmanager_data` | `hub-dev_alertmanager_data` |
 
-> **Note:** `packetcapture_data` and `mqtt_broker_data` are new — they are created automatically on first run and do not need migrating.
+> **Note:** `packetcapture_data` and `mqtt_broker_data` are new — they are created automatically on first run and do not need migrating. Monitoring infrastructure (Prometheus, Alertmanager) is no longer bundled — if you used the previous `metrics` profile, manage those volumes separately.
 
 ### Option A: Rename (Docker Engine 23.0+)
 
@@ -90,8 +76,6 @@ These volumes always need migrating:
 
 ```bash
 docker volume rename meshcore_hub_data hub-dev_hub_data
-docker volume rename meshcore_prometheus_data hub-dev_prometheus_data
-docker volume rename meshcore_alertmanager_data hub-dev_alertmanager_data
 ```
 
 ### Option B: Copy (all Docker versions)
@@ -99,18 +83,12 @@ docker volume rename meshcore_alertmanager_data hub-dev_alertmanager_data
 If `docker volume rename` is not available in your Docker build:
 
 ```bash
-# For each volume: create new, copy data, remove old
+# Create new volume, copy data, remove old
 docker volume create hub-dev_hub_data
 docker run --rm -v meshcore_hub_data:/from -v hub-dev_hub_data:/to alpine sh -c "cp -a /from/. /to/"
 
-docker volume create hub-dev_prometheus_data
-docker run --rm -v meshcore_prometheus_data:/from -v hub-dev_prometheus_data:/to alpine sh -c "cp -a /from/. /to/"
-
-docker volume create hub-dev_alertmanager_data
-docker run --rm -v meshcore_alertmanager_data:/from -v hub-dev_alertmanager_data:/to alpine sh -c "cp -a /from/. /to/"
-
-# Verify the new volumes have data, then remove old ones
-docker volume rm meshcore_hub_data meshcore_prometheus_data meshcore_alertmanager_data
+# Verify the new volume has data, then remove old one
+docker volume rm meshcore_hub_data
 ```
 
 > **Note:** If any volumes show "in use", remove any stopped containers first: `docker rm -f <container_id>`.
@@ -236,10 +214,10 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile core up
 
 ```bash
 # Check all containers are running
-docker compose -f docker-compose.yml -f docker-compose.dev.yml ps
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile all ps
 
 # Check collector connected to MQTT
-docker compose -f docker-compose.yml -f docker-compose.dev.yml logs collector | grep -i "connected to mqtt"
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile all logs collector | grep -i "connected to mqtt"
 
 # Check the web dashboard
 open http://localhost:8080
@@ -318,13 +296,13 @@ All `docker compose` commands now require explicit file selection:
 
 ```bash
 # Development (exposes ports for local access)
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile all up -d
 
 # Production (connects to reverse proxy network)
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile all up -d
 
 # Production with Traefik
-docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml --profile all up -d
 ```
 
 Container and volume names are parameterized via `COMPOSE_PROJECT_NAME` in `.env`. This enables multiple instances (e.g., `hub-prod`, `hub-beta`) on the same Docker host.
