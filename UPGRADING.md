@@ -66,16 +66,16 @@ These volumes always need migrating:
 
 | Old Name | New Name |
 |----------|----------|
-| `meshcore_hub_data` | `hub_hub_data` |
+| `meshcore_hub_data` | `hub_data` |
 
-> **Note:** `observer_data` and `mqtt_broker_data` are new — they are created automatically on first run and do not need migrating. Monitoring infrastructure (Prometheus, Alertmanager) is no longer bundled — if you used the previous `metrics` profile, manage those volumes separately.
+> **Note:** `observer_data` and `mqtt_data` are new — they are created automatically on first run and do not need migrating.
 
 ### Option A: Rename (Docker Engine 23.0+)
 
 > **Note:** `docker volume rename` is not available in all Docker builds (e.g., Docker Desktop). If the command is not found, use Option B instead.
 
 ```bash
-docker volume rename meshcore_hub_data hub_hub_data
+docker volume rename meshcore_hub_data hub_data
 ```
 
 ### Option B: Copy (all Docker versions)
@@ -84,8 +84,8 @@ If `docker volume rename` is not available in your Docker build:
 
 ```bash
 # Create new volume, copy data, remove old
-docker volume create hub_hub_data
-docker run --rm -v meshcore_hub_data:/from -v hub_hub_data:/to alpine sh -c "cp -a /from/. /to/"
+docker volume create hub_data
+docker run --rm -v meshcore_hub_data:/from -v hub_data:/to alpine sh -c "cp -a /from/. /to/"
 
 # Verify the new volume has data, then remove old one
 docker volume rm meshcore_hub_data
@@ -95,7 +95,7 @@ docker volume rm meshcore_hub_data
 
 > **Note:** If setting up a multi-instance deployment (e.g., `hub-prod`, `hub-beta`), use that project name instead of `hub`.
 
-> **Note:** After migrating volumes, you may see warnings like `volume "hub_hub_data" already exists but was not created by Docker Compose. Use \`external: true\` to use an existing volume`. This is safe to ignore — it appears because the volumes were created manually during migration rather than by Docker Compose. Fresh deployments will not see this warning.
+> **Note:** After migrating volumes, you may see warnings like `volume "hub_data" already exists but was not created by Docker Compose. Use \`external: true\` to use an existing volume`. This is safe to ignore — it appears because the volumes were created manually during migration rather than by Docker Compose. Fresh deployments will not see this warning.
 
 ## Step 4: Update Configuration Files
 
@@ -182,13 +182,13 @@ All other `PACKETCAPTURE_*` variables have sensible defaults in `docker-compose.
 The migration renames `receiver_node_id` → `observer_node_id` across all event tables, `event_receivers` → `event_observers`, and `received_at` → `observed_at` in the event observers table:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile core run --rm db-migrate
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile core run --rm migrate
 ```
 
 This runs automatically as part of the `core` profile, but can also be run standalone with the `migrate` profile:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile migrate run --rm db-migrate
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile migrate run --rm migrate
 ```
 
 ## Step 7: Start Services

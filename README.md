@@ -101,18 +101,18 @@ Service profiles:
 
 | Profile    | Services                        | Use Case                                  |
 | ---------- | ------------------------------- | ----------------------------------------- |
-| `all`      | db-migrate, collector, api, web | Everything on one host                    |
-| `core`     | db-migrate, collector, api, web | Central server infrastructure             |
+| `all`      | migrate, collector, api, web | Everything on one host                    |
+| `core`     | migrate, collector, api, web | Central server infrastructure             |
 | `mqtt`     | meshcore-mqtt-broker            | Local MQTT broker (optional)              |
 | `observer` | packet capture observer         | Observes RF traffic and publishes to MQTT |
 | `seed`     | seed                            | One-time seed data import                 |
-| `migrate`  | db-migrate                      | One-time database migration               |
+| `migrate`  | migrate                         | One-time database migration               |
 
 **Note:** Most deployments connect to an external MQTT broker. Add `--profile mqtt` only if you need a local broker. The `observer` profile runs [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) to observe MeshCore RF traffic and publish decoded packets to MQTT.
 
 ```bash
 # Create database schema
-docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile migrate run --rm db-migrate
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile migrate run --rm migrate
 
 # Seed the database
 docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile seed run --rm seed
@@ -283,7 +283,7 @@ PACKETCAPTURE_MQTT3_TOKEN_AUDIENCE=mqtt.localhost
 make backup
 
 # Restore a specific volume
-make restore FILE=backup/hub_hub_data-20260414-120000.tar.gz
+make restore FILE=backup/hub_data-20260414-120000.tar.gz
 ```
 
 #### Using shell commands
@@ -292,13 +292,13 @@ make restore FILE=backup/hub_hub_data-20260414-120000.tar.gz
 # Back up the database volume
 source .env 2>/dev/null || true
 mkdir -p backup
-vol=${COMPOSE_PROJECT_NAME:-hub}_hub_data
+vol=${COMPOSE_PROJECT_NAME:-hub}_data
 docker run --rm -v $vol:/data -v $(pwd)/backup:/backup \
   alpine tar czf /backup/$vol-$(date +%Y%m%d-%H%M%S).tar.gz -C / data
 
 # Restore a specific volume (volume name derived from tarball filename)
 source .env 2>/dev/null || true
-FILE=backup/${COMPOSE_PROJECT_NAME:-hub}_hub_data-20260414-120000.tar.gz
+FILE=backup/${COMPOSE_PROJECT_NAME:-hub}_data-20260414-120000.tar.gz
 vol=$(basename "$FILE" | sed 's/-[0-9]\{8\}-[0-9]\{6\}\.tar\.gz//')
 docker run --rm -v $vol:/data -v $(pwd)/backup:/backup \
   alpine sh -c "cd / && tar xzf /backup/$(basename $FILE)"

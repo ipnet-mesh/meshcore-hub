@@ -9,7 +9,7 @@
 services:
   collector:
     depends_on:
-      db-migrate:
+      migrate:
         condition: service_completed_successfully
       mqtt:
         condition: service_healthy

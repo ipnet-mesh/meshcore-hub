@@ -13,7 +13,7 @@ services:
       - mqtt
     restart: unless-stopped
     volumes:
-      - mqtt_broker_data:/data
+      - mqtt_data:/data
     environment:
       # Broker listener
       - MQTT_WS_PORT=${MQTT_PORT:-1883}
@@ -139,11 +139,11 @@ services:
       - all
       - core
     depends_on:
-      db-migrate:
+      migrate:
         condition: service_completed_successfully
     restart: unless-stopped
     volumes:
-      - hub_data:/data
+      - data:/data
       - ${SEED_HOME:-./seed}:/seed
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
@@ -199,12 +199,12 @@ services:
       - core
     restart: unless-stopped
     depends_on:
-      db-migrate:
+      migrate:
         condition: service_completed_successfully
       collector:
         condition: service_started
     volumes:
-      - hub_data:/data
+      - data:/data
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - MQTT_HOST=${MQTT_HOST:-mqtt}
@@ -304,19 +304,19 @@ services:
   # ==========================================================================
   # Database Migrations - Run Alembic migrations
   # ==========================================================================
-  db-migrate:
+  migrate:
     image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ${COMPOSE_PROJECT_NAME:-hub}-db-migrate
+    container_name: ${COMPOSE_PROJECT_NAME:-hub}-migrate
     profiles:
       - all
       - core
       - migrate
     restart: "no"
     volumes:
-      - hub_data:/data
+      - data:/data
     environment:
       - DATA_HOME=/data
     command: ["db", "upgrade"]
@@ -337,7 +337,7 @@ services:
       - seed
     restart: "no"
     volumes:
-      - hub_data:/data
+      - data:/data
       - ${SEED_HOME:-./seed}:/seed:ro
     environment:
       - DATA_HOME=/data
@@ -350,9 +350,9 @@ services:
 # Volumes
 # ==========================================================================
 volumes:
-  hub_data:
-    name: ${COMPOSE_PROJECT_NAME:-hub}_hub_data
-  mqtt_broker_data:
-    name: ${COMPOSE_PROJECT_NAME:-hub}_mqtt_broker_data
+  data:
+    name: ${COMPOSE_PROJECT_NAME:-hub}_data
+  mqtt_data:
+    name: ${COMPOSE_PROJECT_NAME:-hub}_mqtt_data
   observer_data:
     name: ${COMPOSE_PROJECT_NAME:-hub}_observer_data
