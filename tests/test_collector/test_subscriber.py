@@ -850,6 +850,126 @@ class TestSubscriber:
         assert payload["pubkey_prefix"] == "1A2B3C4D5E6F"
 
 
+class TestSubscriberDispatch:
+    """Tests for _dispatch_event and lifecycle methods."""
+
+    @pytest.fixture
+    def mock_mqtt_client(self):
+        """Create a mock MQTT client."""
+        client = MagicMock()
+        client.topic_builder = MagicMock()
+        client.topic_builder.prefix = "meshcore"
+        client.topic_builder.all_events_topic.return_value = "meshcore/+/event/#"
+        client.topic_builder.parse_letsmesh_upload_topic.return_value = (
+            "a" * 64,
+            "status",
+        )
+        return client
+
+    @pytest.fixture
+    def subscriber(self, mock_mqtt_client, db_manager):
+        """Create a subscriber instance."""
+        return Subscriber(mock_mqtt_client, db_manager)
+
+    def test_dispatch_event_with_no_handler_falls_back_to_event_log(self, subscriber):
+        """Unregistered event types fall back to event_log handler."""
+        with patch(
+            "meshcore_hub.collector.handlers.event_log.handle_event_log"
+        ) as mock_log:
+            subscriber._dispatch_event("a" * 64, "unknown_type", {"data": 1})
+            mock_log.assert_called_once()
+
+    def test_dispatch_event_handler_exception_logged(self, subscriber):
+        """Handler exceptions are caught and logged, not re-raised."""
+        handler = MagicMock(side_effect=RuntimeError("boom"))
+        subscriber.register_handler("test_event", handler)
+
+        subscriber._dispatch_event("a" * 64, "test_event", {"data": 1})
+
+        handler.assert_called_once()
+
+    def test_dispatch_event_event_log_exception_logged(self, subscriber):
+        """Event log handler exceptions are caught and logged."""
+        with patch(
+            "meshcore_hub.collector.handlers.event_log.handle_event_log",
+            side_effect=RuntimeError("log boom"),
+        ):
+            subscriber._dispatch_event("a" * 64, "unknown_type", {"data": 1})
+
+    def test_dispatch_event_queues_webhook(self, subscriber):
+        """Events are queued for webhook when dispatcher is configured."""
+        mock_dispatcher = MagicMock()
+        mock_dispatcher.webhooks = [MagicMock()]
+        subscriber._webhook_dispatcher = mock_dispatcher
+
+        handler = MagicMock()
+        subscriber.register_handler("test_event", handler)
+
+        subscriber._dispatch_event("a" * 64, "test_event", {"data": 1})
+
+        assert len(subscriber._webhook_queue) == 1
+        assert subscriber._webhook_queue[0][0] == "test_event"
+
+    def test_dispatch_event_no_webhook_without_dispatcher(self, subscriber):
+        """No webhook queued when dispatcher is not configured."""
+        handler = MagicMock()
+        subscriber.register_handler("test_event", handler)
+
+        subscriber._dispatch_event("a" * 64, "test_event", {"data": 1})
+
+        assert len(subscriber._webhook_queue) == 0
+
+    def test_start_with_mqtt_retry(self, mock_mqtt_client, db_manager):
+        """MQTT connection is retried on failure."""
+        mock_mqtt_client.connect.side_effect = [
+            ConnectionError("fail"),
+            None,
+        ]
+
+        subscriber = Subscriber(mock_mqtt_client, db_manager)
+        with patch("meshcore_hub.collector.subscriber.time.sleep"):
+            subscriber.start()
+
+        assert mock_mqtt_client.connect.call_count == 2
+        assert subscriber._mqtt_connected is True
+        subscriber.stop()
+
+    def test_start_mqtt_all_retries_exhausted(self, mock_mqtt_client, db_manager):
+        """Subscriber raises when all MQTT retries fail."""
+        mock_mqtt_client.connect.side_effect = ConnectionError("fail")
+
+        subscriber = Subscriber(mock_mqtt_client, db_manager)
+        with (
+            patch("meshcore_hub.collector.subscriber.time.sleep"),
+            pytest.raises(ConnectionError),
+        ):
+            subscriber.start()
+
+    def test_run_calls_start_when_not_running(self, mock_mqtt_client, db_manager):
+        """run() calls start() if subscriber is not running."""
+        subscriber = Subscriber(mock_mqtt_client, db_manager)
+
+        with patch.object(subscriber, "start") as mock_start:
+            mock_start.side_effect = lambda: setattr(subscriber, "_running", True)
+            subscriber._shutdown_event.set()
+            subscriber.run()
+
+        mock_start.assert_called_once()
+
+    def test_stop_when_not_running(self, subscriber):
+        """stop() is a no-op when not running."""
+        subscriber._running = False
+        subscriber.stop()
+
+    def test_health_status(self, subscriber):
+        """Health status reports correct state."""
+        status = subscriber.get_health_status()
+        assert status["running"] is False
+        assert status["mqtt_connected"] is False
+        assert status["database_connected"] is False
+        assert status["healthy"] is False
+
+
 class TestCreateSubscriber:
     """Tests for create_subscriber factory function."""
 
