@@ -442,7 +442,7 @@ Timezone handling note:
 
 - API timestamps that omit an explicit timezone suffix are treated as UTC before rendering in the configured `TZ`.
 
-#### Feature Flags
+### Feature Flags
 
 Control which pages are visible in the web dashboard. Disabled features are fully hidden: removed from navigation, return 404 on their routes, and excluded from sitemap/robots.txt.
 
