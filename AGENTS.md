@@ -15,7 +15,7 @@ This document provides context and guidelines for AI coding assistants working o
   - `source .venv/bin/activate`
 * You MUST install all project dependencies using `pip install -e ".[dev]"` command`
 * You MUST install `pre-commit` for quality checks
-* You MUST keep project documentation in sync with behavior/config/schema changes made in code (at minimum update relevant sections in `README.md`, `SCHEMAS.md`, and/or `UPGRADING.md` when applicable)
+* You MUST keep project documentation in sync with behavior/config/schema changes made in code (at minimum update relevant sections in `README.md`, `SCHEMAS.md`, `docs/upgrading.md`, `docs/letsmesh.md` when applicable)
 * Before commiting:
   - Run **targeted tests** for the components you changed, not the full suite:
     - `pytest tests/test_web/` for web-only changes (templates, static JS, web routes)
@@ -37,7 +37,8 @@ MeshCore Hub is a Python 3.14+ monorepo for managing and orchestrating MeshCore 
 ## Key Documentation
 
 - [SCHEMAS.md](SCHEMAS.md) - MeshCore event JSON schemas and database mappings
-- [UPGRADING.md](UPGRADING.md) - Upgrade guide for breaking changes
+- [docs/upgrading.md](docs/upgrading.md) - Upgrade guide for breaking changes
+- [docs/letsmesh.md](docs/letsmesh.md) - LetsMesh packet decoding details
 
 ## Technology Stack
 
@@ -335,6 +336,10 @@ meshcore-hub/
 ├── docker-compose.dev.yml    # Development overrides (port mappings)
 ├── docker-compose.prod.yml   # Production overrides (proxy network)
 ├── docker-compose.traefik.yml # Optional Traefik labels
+├── docs/                    # Documentation
+│   ├── images/              # Screenshots and images
+│   ├── letsmesh.md          # LetsMesh packet decoding details
+│   └── upgrading.md         # Upgrade guide for breaking changes
 └── SCHEMAS.md
 ```
 

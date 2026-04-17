@@ -1,8 +1,12 @@
 # Upgrading MeshCore Hub
 
-This guide covers upgrading from a previous MeshCore Hub release to the current version. The latest release includes **breaking changes** to the MQTT broker, packet capture service, and data ingestion pipeline.
+This guide covers upgrading from a previous MeshCore Hub release to the current version. Check the relevant version section below before upgrading.
 
-## Overview of Changes
+## v0.9.0
+
+This release includes **breaking changes** to the MQTT broker, packet capture service, and data ingestion pipeline.
+
+### Overview of Changes
 
 | Area | Before | After |
 |------|--------|-------|
@@ -20,7 +24,7 @@ This guide covers upgrading from a previous MeshCore Hub release to the current 
 | Container names | `meshcore-*` | Parameterized via `COMPOSE_PROJECT_NAME` (default: `hub-*`) |
 | Volume names | `meshcore_*` | Parameterized via `COMPOSE_PROJECT_NAME` (default: `hub_*`) |
 
-## Step 1: Backup
+### Step 1: Backup
 
 **Do not skip this step.** Back up all data volumes before proceeding.
 
@@ -40,7 +44,7 @@ docker run --rm -v meshcore_hub_data:/data -v $(pwd)/backup:/backup \
   alpine sh -c "cd / && tar xzf /backup/meshcore_hub_data-YYYYMMDD-HHMMSS.tar.gz"
 ```
 
-## Step 2: Stop and Remove Containers
+### Step 2: Stop and Remove Containers
 
 Stop all services and remove orphaned containers from the old configuration:
 
@@ -50,7 +54,7 @@ docker compose --profile all down --remove-orphans
 
 > **Important:** Do NOT use `--volumes` / `-v`. That would delete your database. The `--remove-orphans` flag cleans up old services (like `interface-receiver`, `interface-sender`) that no longer exist in the new compose file.
 
-## Step 3: Rename Docker Volumes
+### Step 3: Rename Docker Volumes
 
 Container and volume names are now parameterized via `COMPOSE_PROJECT_NAME`. The default is `hub`, so volumes are renamed from `meshcore_*` to `hub_*`.
 
@@ -60,7 +64,7 @@ First, check which volumes you have:
 docker volume ls | grep meshcore
 ```
 
-### Volumes to migrate
+#### Volumes to migrate
 
 These volumes always need migrating:
 
@@ -70,7 +74,7 @@ These volumes always need migrating:
 
 > **Note:** `observer_data` and `mqtt_data` are new — they are created automatically on first run and do not need migrating.
 
-### Option A: Rename (Docker Engine 23.0+)
+#### Option A: Rename (Docker Engine 23.0+)
 
 > **Note:** `docker volume rename` is not available in all Docker builds (e.g., Docker Desktop). If the command is not found, use Option B instead.
 
@@ -78,7 +82,7 @@ These volumes always need migrating:
 docker volume rename meshcore_hub_data hub_data
 ```
 
-### Option B: Copy (all Docker versions)
+#### Option B: Copy (all Docker versions)
 
 If `docker volume rename` is not available in your Docker build:
 
@@ -97,7 +101,7 @@ docker volume rm meshcore_hub_data
 
 > **Note:** After migrating volumes, you may see warnings like `volume "hub_data" already exists but was not created by Docker Compose. Use \`external: true\` to use an existing volume`. This is safe to ignore — it appears because the volumes were created manually during migration rather than by Docker Compose. Fresh deployments will not see this warning.
 
-## Step 4: Update Configuration Files
+### Step 4: Update Configuration Files
 
 Download the latest configuration files:
 
@@ -113,9 +117,9 @@ wget -O .env.example https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/m
 
 Then compare your existing `.env` against the new `.env.example` and update it (see Step 5).
 
-## Step 5: Migrate Your `.env` File
+### Step 5: Migrate Your `.env` File
 
-### Variables to Remove
+#### Variables to Remove
 
 These variables no longer exist and should be removed from your `.env`:
 
@@ -148,7 +152,7 @@ MQTT_EXTERNAL_PORT=1883
 MQTT_WS_PORT=9001
 ```
 
-### Variables to Update
+#### Variables to Update
 
 | Variable | Old Value | New Value | Notes |
 |----------|-----------|-----------|-------|
@@ -159,7 +163,7 @@ MQTT_WS_PORT=9001
 
 > **Note:** The Python-level defaults for `MQTT_TRANSPORT` and `MQTT_WS_PATH` are now `websockets` and `/`, matching the Docker Compose and `.env.example` values. No additional configuration is needed for non-Docker users.
 
-### Variables to Add
+#### Variables to Add
 
 ```bash
 # Docker Compose project name (container and volume prefix)
@@ -177,7 +181,7 @@ PACKETCAPTURE_IATA=LOC
 
 All other `PACKETCAPTURE_*` variables have sensible defaults in `docker-compose.yml` and only need to be set in `.env` if you want to override them. See `.env.example` for the full list.
 
-## Step 6: Run Database Migration
+### Step 6: Run Database Migration
 
 The migration renames `receiver_node_id` → `observer_node_id` across all event tables, `event_receivers` → `event_observers`, and `received_at` → `observed_at` in the event observers table:
 
@@ -191,9 +195,9 @@ This runs automatically as part of the `core` profile, but can also be run stand
 docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile migrate run --rm migrate
 ```
 
-## Step 7: Start Services
+### Step 7: Start Services
 
-### With local MQTT broker (single-host deployment)
+#### With local MQTT broker (single-host deployment)
 
 ```bash
 # Start everything including the MQTT broker
@@ -203,14 +207,14 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile mqtt --
 docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile mqtt --profile core --profile observer up -d
 ```
 
-### With external MQTT broker
+#### With external MQTT broker
 
 ```bash
 # Start core services only (broker runs elsewhere)
 docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile core up -d
 ```
 
-### Verify
+#### Verify
 
 ```bash
 # Check all containers are running
@@ -223,16 +227,16 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile all log
 open http://localhost:8080
 ```
 
-## Notes
+### Notes
 
-### JWT-Based Packet Capture Authentication
+#### JWT-Based Packet Capture Authentication
 
 The new packet capture service ([meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture)) uses the LetsMesh Observer model:
 
 - **No custom MQTT credentials needed for publishing.** Authentication is handled via JWT tokens signed by the capture device's hardware public key. The MQTT broker validates the JWT and authorizes publishing automatically.
 - The collector connects as a **subscriber** to read all published events, including `/internal` topics. Configure `MQTT_USERNAME` and `MQTT_PASSWORD` to match the broker's subscriber account.
 
-### Production MQTT Configuration
+#### Production MQTT Configuration
 
 In production, the MQTT WebSocket server should be hosted behind a TLS/SSL-terminated reverse proxy (e.g., Nginx Proxy Manager, Caddy, Traefik) under the `/mqtt` path. The proxy handles TLS termination and forwards plain WebSocket connections to the broker on port 1883.
 
@@ -254,7 +258,7 @@ MQTT_TLS=true
 MQTT_TOKEN_AUDIENCE=mqtt.example.com   # your public domain
 ```
 
-### Existing LetsMesh Observer Installs
+#### Existing LetsMesh Observer Installs
 
 If you already run [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) separately, configure **MQTT server #3** to point at your MeshCore Hub MQTT broker. Servers #1 and #2 are reserved for Let's Mesh US (`mqtt-us-v1.letsmesh.net`) and Let's Mesh EU (`mqtt-eu-v1.letsmesh.net`) respectively.
 
@@ -269,7 +273,7 @@ PACKETCAPTURE_MQTT3_USE_AUTH_TOKEN=true
 PACKETCAPTURE_MQTT3_TOKEN_AUDIENCE=mqtt.localhost
 ```
 
-### Removed Services
+#### Removed Services
 
 The following Docker Compose services have been removed:
 
@@ -281,7 +285,7 @@ The following Docker Compose services have been removed:
 
 The `observer` service uses the [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) image and is included in `docker-compose.yml` under the `observer` profile for an easy transition.
 
-### New Docker Compose File Structure
+#### New Docker Compose File Structure
 
 The Docker Compose configuration is now split into multiple files:
 
@@ -307,7 +311,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compos
 
 Container and volume names are parameterized via `COMPOSE_PROJECT_NAME` in `.env`. This enables multiple instances (e.g., `hub-prod`, `hub-beta`) on the same Docker host.
 
-### Removed API Endpoints
+#### Removed API Endpoints
 
 The command dispatch API endpoints have been removed:
 
@@ -315,7 +319,7 @@ The command dispatch API endpoints have been removed:
 - `POST /api/v1/commands/send-channel-message`
 - `POST /api/v1/commands/send-advertisement`
 
-### Native Python Decoder
+#### Native Python Decoder
 
 The Node.js `meshcore-decoder` CLI tool has been replaced by the native Python `meshcoredecoder` library. This means:
 

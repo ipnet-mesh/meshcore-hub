@@ -96,13 +96,14 @@ AGENTS.md has a "Key variables" subsection under "Environment Variables". Verify
 - [ ] References to `PLAN.md` — should be removed (file deleted)
 - [ ] References to `TASKS.md` — should be removed (file deleted)
 - [ ] References to `SCHEMAS.md` — should remain (file exists)
-- [ ] References to `UPGRADING.md` — should remain (file exists)
+- [ ] References to `docs/upgrading.md` — should remain (file exists)
+- [ ] References to `docs/letsmesh.md` — should remain (file exists)
 
-## 3. UPGRADING.md
+## 3. docs/upgrading.md
 
 ### Deprecated Variables
 
-UPGRADING.md lists variables to remove during upgrade. Verify:
+docs/upgrading.md lists variables to remove during upgrade. Verify:
 
 - [ ] Each deprecated var truly no longer exists in `config.py` or any CLI module
 - [ ] Removal instructions are clear
@@ -130,6 +131,20 @@ UPGRADING.md lists variables to remove during upgrade. Verify:
 
 - [ ] Column renames documented accurately (e.g., `receiver_node_id` → `observer_node_id`)
 - [ ] Table renames documented accurately (e.g., `event_receivers` → `event_observers`)
+
+## 3b. docs/letsmesh.md
+
+### Packet Decoding Documentation
+
+docs/letsmesh.md documents the LetsMesh packet normalization and decoding behavior. Verify:
+
+- [ ] MQTT subscription topics match `subscriber.py` topic patterns
+- [ ] Payload type mappings match `letsmesh_decoder.py` and `letsmesh_normalizer.py` logic
+- [ ] Channel key handling documented matches `COLLECTOR_CHANNEL_KEYS` config behavior
+- [ ] Known channel indexes (`17 -> Public`, `217 -> #test`) match built-in defaults in decoder
+- [ ] Message normalization rules match collector handler implementations
+- [ ] GPS/location update behavior documented matches advertisement handler logic
+- [ ] No stale decoder behavior documented (e.g., references to Node.js decoder)
 
 ## 4. .env.example
 
@@ -209,7 +224,7 @@ For each table documented in SCHEMAS.md:
 
 ## Cross-File Consistency Checks
 
-These checks ensure all 5 files are consistent with each other:
+These checks ensure all primary documentation files are consistent with each other:
 
 ### Env Var Coverage Matrix
 
@@ -221,7 +236,7 @@ Every hub-consumed env var should appear in:
 | `README.md` | Yes | Table row with default + description |
 | `AGENTS.md` | Yes | Mentioned in env vars section |
 | `.env.example` | Yes | Entry with default + comment |
-| `UPGRADING.md` | Only if new/renamed/deprecated | Migration instruction |
+| `docs/upgrading.md` | Only if new/renamed/deprecated | Migration instruction |
 
 Every passthrough env var should appear in:
 
@@ -240,13 +255,13 @@ Every passthrough env var should appear in:
 
 ### Stale Reference Sweep
 
-Check all 5 files for references to removed items:
+Check all primary documentation files for references to removed items:
 
 - [ ] `PLAN.md` — removed, references should be deleted from AGENTS.md
 - [ ] `TASKS.md` — removed, references should be deleted from AGENTS.md
-- [ ] Old compose profiles (`receiver`, `sender`, `mock`) — should only exist in UPGRADING.md as deprecated
-- [ ] Old service names (`interface-receiver`, `interface-sender`) — should only exist in UPGRADING.md as deprecated
-- [ ] Old env var names (`COLLECTOR_LETSMESH_DECODER_*`, `SERIAL_BAUD`, etc.) — should only exist in UPGRADING.md as deprecated
+- [ ] Old compose profiles (`receiver`, `sender`, `mock`) — should only exist in docs/upgrading.md as deprecated
+- [ ] Old service names (`interface-receiver`, `interface-sender`) — should only exist in docs/upgrading.md as deprecated
+- [ ] Old env var names (`COLLECTOR_LETSMESH_DECODER_*`, `SERIAL_BAUD`, etc.) — should only exist in docs/upgrading.md as deprecated
 
 ## Applying Fixes
 
@@ -256,5 +271,5 @@ When discrepancies are found:
 2. **Determine scope** — which files need updating
 3. **Make minimal edits** — only change what's wrong, preserve surrounding formatting
 4. **Match existing style** — tables use same column order, comments use same format, sections use same headers
-5. **Preserve historical content** — UPGRADING.md deprecated var lists are historical, do not remove them
+5. **Preserve historical content** — docs/upgrading.md deprecated var lists are historical, do not remove them
 6. **Verify after editing** — re-read the changed section to confirm accuracy

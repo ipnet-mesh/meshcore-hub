@@ -8,7 +8,7 @@
 Python 3.14+ platform for managing and orchestrating MeshCore mesh networks.
 
 > [!WARNING]
-> **BREAKING CHANGES** - The latest release replaces Mosquitto with a JWT-based MQTT broker, removes the proprietary receiver service in favor of [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture), and renames `receiver_node_id` to `observer_node_id` in the database. If upgrading from a previous version, see [UPGRADING.md](UPGRADING.md) for migration steps.
+> **BREAKING CHANGES** - The latest release replaces Mosquitto with a JWT-based MQTT broker, removes the proprietary receiver service in favor of [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture), and renames `receiver_node_id` to `observer_node_id` in the database. If upgrading from a previous version, see [docs/upgrading.md](docs/upgrading.md) for migration steps.
 
 ![MeshCore Hub Web Dashboard](docs/images/web.png)
 
@@ -354,31 +354,7 @@ All components are configured via environment variables. Create a `.env` file or
 
 #### LetsMesh Packet Decoding
 
-The collector subscribes to packets published by [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture):
-
-- `<prefix>/+/+/packets`
-- `<prefix>/+/+/status`
-- `<prefix>/+/+/internal`
-
-Normalization behavior:
-
-- `status` packets are stored as informational `letsmesh_status` events and are not mapped to `advertisement` rows.
-- Decoder payload type `4` is mapped to `advertisement` when node identity metadata is present.
-- Decoder payload type `11` (control discover response) is mapped to `contact`.
-- Decoder payload type `9` is mapped to `trace_data`.
-- Decoder payload type `8` is mapped to informational `path_updated` events.
-- Decoder payload type `1` can map to native response events (`telemetry_response`, `battery`, `path_updated`, `status_response`) when decrypted structured content is available.
-- `packet_type=5` packets are mapped to `channel_msg_recv`.
-- `packet_type=1`, `2`, and `7` packets are mapped to `contact_msg_recv` when decryptable text is available.
-- For channel packets, if a channel key is available, a channel label is attached (for example `Public` or `#test`) for UI display.
-- In the messages feed and dashboard channel sections, known channel indexes are preferred for labels (`17 -> Public`, `217 -> #test`) to avoid stale channel-name mismatches.
-- Additional channel names are loaded from `COLLECTOR_CHANNEL_KEYS` when entries are provided as `label=hex` (for example `bot=<key>`).
-- Decoder-advertisement packets with location metadata update node GPS (`lat/lon`) for map display.
-- This keeps advertisement listings focused on node advert traffic only, not observer status telemetry.
-- Packets without decryptable message text are kept as informational `letsmesh_packet` events and are not shown in the messages feed; when decode succeeds the decoded JSON is attached to those packet log events.
-- When decoder output includes a human sender (`payload.decoded.decrypted.sender`), message text is normalized to `Name: Message` before storage; receiver/observer names are never used as sender fallback.
-- The collector keeps built-in keys for `Public` and `#test`, and merges any additional keys from `COLLECTOR_CHANNEL_KEYS`.
-- Docker runtime uses the native Python `meshcoredecoder` library (no external Node.js dependency).
+For details on how the collector normalizes and decodes LetsMesh packets, see [docs/letsmesh.md](docs/letsmesh.md).
 
 ### Webhooks
 
@@ -822,15 +798,19 @@ meshcore-hub/
 ├── docker-compose.dev.yml  # Development overrides (port mappings)
 ├── docker-compose.prod.yml # Production overrides (proxy network)
 ├── docker-compose.traefik.yml # Optional Traefik labels
-├── SCHEMAS.md              # Event schema documentation
-├── UPGRADING.md            # Upgrade guide for breaking changes
-└── AGENTS.md               # AI assistant guidelines
+├── docs/                    # Documentation
+│   ├── images/              # Screenshots and images
+│   ├── letsmesh.md          # LetsMesh packet decoding details
+│   └── upgrading.md         # Upgrade guide for breaking changes
+├── SCHEMAS.md               # Event schema documentation
+└── AGENTS.md                # AI assistant guidelines
 ```
 
 ## Documentation
 
 - [SCHEMAS.md](SCHEMAS.md) - MeshCore event schemas
-- [UPGRADING.md](UPGRADING.md) - Upgrade guide for breaking changes
+- [docs/upgrading.md](docs/upgrading.md) - Upgrade guide for breaking changes
+- [docs/letsmesh.md](docs/letsmesh.md) - LetsMesh packet decoding details
 - [AGENTS.md](AGENTS.md) - Guidelines for AI coding assistants
 
 ## Contributing

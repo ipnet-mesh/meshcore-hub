@@ -1,13 +1,13 @@
 ---
 name: docs-sync
-description: "Audits and fixes discrepancies between project source code (Python config, Docker Compose files) and primary documentation files (README.md, AGENTS.md, UPGRADING.md, .env.example, SCHEMAS.md). Extracts environment variables from Pydantic Settings, Click CLI options, and os.getenv calls; parses Docker Compose services, profiles, volumes, and env passthroughs; verifies feature flags, CLI commands, and file paths referenced in documentation. Produces a structured audit report and applies fixes to keep documentation accurate and up-to-date. Invoke after any config change, env var addition/removal, Docker service modification, feature flag change, or when documentation drift is suspected."
+description: "Audits and fixes discrepancies between project source code (Python config, Docker Compose files) and primary documentation files (README.md, AGENTS.md, docs/upgrading.md, .env.example, SCHEMAS.md). Extracts environment variables from Pydantic Settings, Click CLI options, and os.getenv calls; parses Docker Compose services, profiles, volumes, and env passthroughs; verifies feature flags, CLI commands, and file paths referenced in documentation. Produces a structured audit report and applies fixes to keep documentation accurate and up-to-date. Invoke after any config change, env var addition/removal, Docker service modification, feature flag change, or when documentation drift is suspected."
 license: MIT
 compatibility: opencode
 metadata:
   author: https://github.com/agessaman
   version: "0.1.0"
   domain: quality
-  triggers: documentation sync, docs audit, env vars, config drift, .env.example, README, AGENTS.md, UPGRADING.md, SCHEMAS.md, docker compose docs, feature flags, documentation update, keep docs in sync, documentation accuracy
+  triggers: documentation sync, docs audit, env vars, config drift, .env.example, README, AGENTS.md, docs/upgrading.md, SCHEMAS.md, docker compose docs, feature flags, documentation update, keep docs in sync, documentation accuracy
   role: specialist
   scope: review
   output-format: report
@@ -37,7 +37,8 @@ The following files are the documentation targets. All must be kept in sync:
 |------|------|
 | `README.md` | User-facing reference: env var tables, Docker instructions, feature list |
 | `AGENTS.md` | AI agent instructions: env var list, project structure, conventions |
-| `UPGRADING.md` | Upgrade guide: deprecated vars, new vars, migration steps |
+| `docs/upgrading.md` | Upgrade guide: deprecated vars, new vars, migration steps |
+| `docs/letsmesh.md` | LetsMesh packet decoding: normalization, channel keys, message handling |
 | `.env.example` | Example environment file with comments and defaults |
 | `SCHEMAS.md` | Event JSON schemas and database column mappings |
 
@@ -144,7 +145,7 @@ Load detailed guidance based on context:
 
 - Treat Python source code (`common/config.py`, CLI modules, `os.getenv` calls) as the single source of truth for environment variables
 - Treat `docker-compose*.yml` files as the source of truth for Docker configuration
-- Check ALL five documentation files on every audit
+- Check ALL primary documentation files on every audit
 - Include `.env.example` comment verification
 - Include `docker-compose*.yml` inline comment verification
 - Verify default values match exactly (type-aware: `true` vs `"true"`, port numbers as strings vs ints)
@@ -159,8 +160,8 @@ Load detailed guidance based on context:
 - Add documentation for variables that don't exist in source
 - Remove content from documentation without confirming it's stale in source
 - Change the formatting style of existing documentation (match surrounding content)
-- Modify UPGRADING.md historical content (deprecated var lists, old instructions)
-- Skip any of the 5 documentation files
+- Modify docs/upgrading.md historical content (deprecated var lists, old instructions)
+- Skip any of the primary documentation files
 - Guess at defaults — always verify against actual source code
 - Treat test compose files (`tests/e2e/`) as documentation targets (they are test fixtures)
 
