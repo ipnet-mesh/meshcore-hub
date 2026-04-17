@@ -55,7 +55,7 @@ For each variable in each table:
 ### File Paths
 
 - [ ] `src/meshcore_hub/` structure matches actual layout
-- [ ] Seed data directory structure (`node_tags.yaml`, `members.yaml`) documented
+- [ ] Seed data directory structure (`node_tags.yaml`, `members.yaml`) documented in `docs/seeding.md`
 - [ ] Custom content directory structure (`pages/`, `media/`) documented
 - [ ] Translation files location (`src/meshcore_hub/web/static/locales/`) documented
 - [ ] No references to removed files (PLAN.md, TASKS.md)
@@ -159,6 +159,21 @@ docs/hosting/nginx-proxy-manager.md documents the Nginx Proxy Manager reverse pr
 - [ ] Nginx `Advanced` config block headers match those checked by `web/auth.py`
 - [ ] Verification curl command uses correct endpoint (`/config.js`)
 - [ ] Troubleshooting steps reference correct config variables
+
+## 3d. docs/seeding.md
+
+### Seed Data Documentation
+
+docs/seeding.md documents the seed data format and import process for node tags and network members. Verify:
+
+- [ ] Running the Seed Process section references correct Docker Compose command (`--profile seed`)
+- [ ] Seed files listed match `tag_import.py` and `member_import.py` expected filenames
+- [ ] Directory structure shows `SEED_HOME` and `DATA_HOME` correctly
+- [ ] Node Tags YAML format matches `tag_import.py` parsing logic
+- [ ] Tag value types documented match supported types in `tag_import.py`
+- [ ] Members YAML format matches `member_import.py` parsing logic
+- [ ] Member field table fields match `MemberCreate` Pydantic schema
+- [ ] Example seed files referenced in `example/seed/` exist
 
 ## 4. .env.example
 

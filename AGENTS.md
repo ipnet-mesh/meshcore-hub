@@ -40,6 +40,7 @@ MeshCore Hub is a Python 3.14+ monorepo for managing and orchestrating MeshCore 
 - [docs/upgrading.md](docs/upgrading.md) - Upgrade guide for breaking changes
 - [docs/letsmesh.md](docs/letsmesh.md) - LetsMesh packet decoding details
 - [docs/hosting/nginx-proxy-manager.md](docs/hosting/nginx-proxy-manager.md) - Nginx Proxy Manager admin setup
+- [docs/seeding.md](docs/seeding.md) - Seed data format and import guide
 
 ## Technology Stack
 
@@ -342,6 +343,7 @@ meshcore-hub/
 │   ├── hosting/             # Reverse proxy hosting guides
 │   │   └── nginx-proxy-manager.md
 │   ├── letsmesh.md          # LetsMesh packet decoding details
+│   ├── seeding.md           # Seed data format and import guide
 │   └── upgrading.md         # Upgrade guide for breaking changes
 └── SCHEMAS.md
 ```

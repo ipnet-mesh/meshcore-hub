@@ -310,25 +310,6 @@ docker run --rm -v $vol:/data -v $(pwd)/backup:/backup \
 
 > **Note:** Replace `hub` with your `COMPOSE_PROJECT_NAME` if using a different instance name. Monitoring infrastructure (Prometheus, Alertmanager) manages its own data — consult your monitoring stack's documentation for backup procedures.
 
-### Manual Installation
-
-```bash
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate
-
-# Install the package
-pip install -e ".[dev]"
-
-# Run database migrations
-meshcore-hub db upgrade
-
-# Start components (in separate terminals)
-meshcore-hub collector
-meshcore-hub api
-meshcore-hub web
-```
-
 ## Configuration
 
 All components are configured via environment variables. Create a `.env` file or export variables:
@@ -523,98 +504,7 @@ environment:
 
 ## Seed Data
 
-The database can be seeded with node tags and network members from YAML files in the `SEED_HOME` directory (default: `./seed`).
-
-#### Running the Seed Process
-
-Seeding is a separate process and must be run explicitly:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile seed up
-```
-
-This imports data from the following files (if they exist):
-
-- `{SEED_HOME}/node_tags.yaml` - Node tag definitions
-- `{SEED_HOME}/members.yaml` - Network member definitions
-
-#### Directory Structure
-
-```
-seed/                          # SEED_HOME (seed data files)
-├── node_tags.yaml            # Node tags for import
-└── members.yaml              # Network members for import
-
-data/                          # DATA_HOME (runtime data)
-└── collector/
-    └── meshcore.db           # SQLite database
-```
-
-Example seed files are provided in `example/seed/`.
-
-### Node Tags
-
-Node tags allow you to attach custom metadata to nodes (e.g., location, role, owner). Tags are stored in the database and returned with node data via the API.
-
-#### Node Tags YAML Format
-
-Tags are keyed by public key in YAML format:
-
-```yaml
-# Each key is a 64-character hex public key
-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef:
-  name: Gateway Node
-  description: Main network gateway
-  role: gateway
-  lat: 37.7749
-  lon: -122.4194
-  member_id: alice
-
-fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210:
-  name: Oakland Repeater
-  elevation: 150
-```
-
-Tag values can be:
-
-- **YAML primitives** (auto-detected type): strings, numbers, booleans
-- **Explicit type** (when you need to force a specific type):
-  ```yaml
-  altitude:
-    value: "150"
-    type: number
-  ```
-
-Supported types: `string`, `number`, `boolean`
-
-### Network Members
-
-Network members represent the people operating nodes in your network. Members can optionally be linked to nodes via their public key.
-
-#### Members YAML Format
-
-```yaml
-- member_id: walshie86
-  name: Walshie
-  callsign: Walshie86
-  role: member
-  description: IPNet Member
-- member_id: craig
-  name: Craig
-  callsign: M7XCN
-  role: member
-  description: IPNet Member
-```
-
-| Field         | Required | Description                              |
-| ------------- | -------- | ---------------------------------------- |
-| `member_id`   | Yes      | Unique identifier for the member         |
-| `name`        | Yes      | Member's display name                    |
-| `callsign`    | No       | Amateur radio callsign                   |
-| `role`        | No       | Member's role in the network             |
-| `description` | No       | Additional description                   |
-| `contact`     | No       | Contact information                      |
-| `public_key`  | No       | Associated node public key (64-char hex) |
+The database can be seeded with node tags and network members from YAML files. See [docs/seeding.md](docs/seeding.md) for format details, directory structure, and running the seed process.
 
 ## API Documentation
 
@@ -675,6 +565,25 @@ pip install -e ".[dev]"
 
 # Install pre-commit hooks
 pre-commit install
+```
+
+### Manual Installation
+
+```bash
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate
+
+# Install the package
+pip install -e ".[dev]"
+
+# Run database migrations
+meshcore-hub db upgrade
+
+# Start components (in separate terminals)
+meshcore-hub collector
+meshcore-hub api
+meshcore-hub web
 ```
 
 ### Running Tests
@@ -754,6 +663,7 @@ meshcore-hub/
 │   ├── hosting/             # Reverse proxy hosting guides
 │   │   └── nginx-proxy-manager.md
 │   ├── letsmesh.md          # LetsMesh packet decoding details
+│   ├── seeding.md           # Seed data format and import guide
 │   └── upgrading.md         # Upgrade guide for breaking changes
 ├── SCHEMAS.md               # Event schema documentation
 └── AGENTS.md                # AI assistant guidelines
@@ -764,6 +674,7 @@ meshcore-hub/
 - [SCHEMAS.md](SCHEMAS.md) - MeshCore event schemas
 - [docs/upgrading.md](docs/upgrading.md) - Upgrade guide for breaking changes
 - [docs/letsmesh.md](docs/letsmesh.md) - LetsMesh packet decoding details
+- [docs/seeding.md](docs/seeding.md) - Seed data format and import guide
 - [docs/hosting/nginx-proxy-manager.md](docs/hosting/nginx-proxy-manager.md) - Nginx Proxy Manager admin setup
 - [AGENTS.md](AGENTS.md) - Guidelines for AI coding assistants
 
@@ -785,4 +696,4 @@ This project is licensed under the GNU General Public License v3.0 or later (GPL
 
 - [MeshCore](https://meshcore.dev/) - The mesh networking protocol
 - [meshcore](https://github.com/fdlamotte/meshcore) - Python library for MeshCore devices
-- [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) - RF packet capture and MQTT publisher for data ingestion
+- [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) - RF packet capture and MQTT publisher for data ingestion. The Docker image used in this project is built and published by this repository, as the upstream project does not provide a public Docker image.

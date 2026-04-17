@@ -40,6 +40,7 @@ The following files are the documentation targets. All must be kept in sync:
 | `docs/upgrading.md` | Upgrade guide: deprecated vars, new vars, migration steps |
 | `docs/letsmesh.md` | LetsMesh packet decoding: normalization, channel keys, message handling |
 | `docs/hosting/nginx-proxy-manager.md` | Nginx Proxy Manager admin authentication setup guide |
+| `docs/seeding.md` | Seed data: node tags and members YAML format, directory structure, import process |
 | `.env.example` | Example environment file with comments and defaults |
 | `SCHEMAS.md` | Event JSON schemas and database column mappings |
 
