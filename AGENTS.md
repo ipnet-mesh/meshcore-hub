@@ -15,6 +15,7 @@ This document provides context and guidelines for AI coding assistants working o
   - `source .venv/bin/activate`
 * You MUST install all project dependencies using `pip install -e ".[dev]"` command`
 * You MUST install `pre-commit` for quality checks
+* **Never `git push` without explicit confirmation** — staging and committing after discrete changes is fine, but pushing to remote requires the user to explicitly request it
 * You MUST keep project documentation in sync with behavior/config/schema changes made in code (at minimum update relevant sections in `README.md`, `SCHEMAS.md`, `docs/upgrading.md`, `docs/letsmesh.md` when applicable)
 * Before commiting:
   - Run **targeted tests** for the components you changed, not the full suite:
