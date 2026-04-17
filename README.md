@@ -212,6 +212,27 @@ Configure your reverse proxy to forward to the containers:
 
 > **Important:** Do not host under a subpath (e.g., `/meshcore`). Proxy at `/`.
 
+#### Reverse Proxy
+
+MeshCore Hub is designed to run behind a reverse proxy in production. Guides for specific reverse proxies:
+
+- [Nginx Proxy Manager](docs/hosting/nginx-proxy-manager.md) — Admin authentication setup with dual hostnames
+
+A Traefik override file is also provided with pre-configured labels:
+
+```bash
+# Download the Traefik override
+wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/docker-compose.traefik.yml
+
+# Set your domain in .env
+echo "TRAEFIK_DOMAIN=meshcore.example.com" >> .env
+
+# Start with Traefik labels
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml --profile core up -d
+```
+
+This routes the web dashboard and API to `TRAEFIK_DOMAIN` with automatic TLS.
+
 ### Adding Remote Observers
 
 Other operators can run their own [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) instance and publish decoded packets to your MeshCore Hub. They can also optionally contribute to the LetsMesh network.
@@ -421,26 +442,7 @@ Timezone handling note:
 
 - API timestamps that omit an explicit timezone suffix are treated as UTC before rendering in the configured `TZ`.
 
-#### Reverse Proxy
-
-MeshCore Hub is designed to run behind a reverse proxy in production. Guides for specific reverse proxies:
-
-- [Nginx Proxy Manager](docs/hosting/nginx-proxy-manager.md) — Admin authentication setup with dual hostnames
-
-A Traefik override file is also provided with pre-configured labels:
-
-```bash
-# Download the Traefik override
-wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/docker-compose.traefik.yml
-
-# Set your domain in .env
-echo "TRAEFIK_DOMAIN=meshcore.example.com" >> .env
-
-# Start with Traefik labels
-docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml --profile core up -d
-```
-
-This routes the web dashboard and API to `TRAEFIK_DOMAIN` with automatic TLS.
+#### Feature Flags
 
 Control which pages are visible in the web dashboard. Disabled features are fully hidden: removed from navigation, return 404 on their routes, and excluded from sitemap/robots.txt.
 
