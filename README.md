@@ -687,4 +687,5 @@ This project is licensed under the GNU General Public License v3.0 or later (GPL
 
 - [MeshCore](https://meshcore.dev/) - The mesh networking protocol
 - [meshcore](https://github.com/fdlamotte/meshcore) - Python library for MeshCore devices
-- [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) - RF packet capture and MQTT publisher for data ingestion. The Docker image used in this project is built and published by this repository, as the upstream project does not provide a public Docker image.
+- [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) - RF packet capture and MQTT publisher for data ingestion
+- [meshcore-mqtt-broker](https://github.com/michaelhart/meshcore-mqtt-broker) - WebSocket MQTT broker with MeshCore public key authentication. The Docker image (`ghcr.io/ipnet-mesh/meshcore-mqtt-broker`) is built and published by a GitHub Action in this repository that clones the upstream source, as the upstream project does not currently provide a public Docker image (although a [PR has been submitted](https://github.com/michaelhart/meshcore-mqtt-broker/pull/1) to add this).
