@@ -641,31 +641,7 @@ ${SEED_HOME}/
 └── members.yaml      # Network members list
 ```
 
-**Custom Content (`CONTENT_HOME`)** - Contains custom pages and media for the web dashboard:
-```
-${CONTENT_HOME}/
-├── pages/            # Custom markdown pages
-│   ├── about.md      # Example: About page (/pages/about)
-│   ├── faq.md        # Example: FAQ page (/pages/faq)
-│   └── getting-started.md # Example: Getting Started (/pages/getting-started)
-└── media/            # Custom media files
-    └── images/
-        ├── logo.svg          # Full-color custom logo (default)
-        └── logo-invert.svg   # Monochrome custom logo (darkened in light mode)
-```
-
-Pages use YAML frontmatter for metadata:
-```markdown
----
-title: About Us        # Browser tab title and nav link (not rendered on page)
-slug: about            # URL path (default: filename without .md)
-menu_order: 10         # Nav sort order (default: 100, lower = earlier)
----
-
-# About Our Network
-
-Markdown content here (include your own heading)...
-```
+**Custom Content (`CONTENT_HOME`)** - Custom pages and media for the web dashboard. See [docs/content.md](docs/content.md) for directory structure, frontmatter fields, and setup guide.
 
 **Runtime Data (`DATA_HOME`)** - Contains runtime data (gitignored):
 ```
@@ -696,21 +672,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile seed up
 
 ### Webhook Configuration
 
-The collector supports forwarding events to external HTTP endpoints:
-
-| Variable | Description |
-|----------|-------------|
-| `WEBHOOK_ADVERTISEMENT_URL` | Webhook for node advertisement events |
-| `WEBHOOK_ADVERTISEMENT_SECRET` | Secret sent as `X-Webhook-Secret` header |
-| `WEBHOOK_MESSAGE_URL` | Webhook for all message events (channel + direct) |
-| `WEBHOOK_MESSAGE_SECRET` | Secret for message webhook |
-| `WEBHOOK_CHANNEL_MESSAGE_URL` | Override for channel messages only |
-| `WEBHOOK_CHANNEL_MESSAGE_SECRET` | Secret for channel message webhook |
-| `WEBHOOK_DIRECT_MESSAGE_URL` | Override for direct messages only |
-| `WEBHOOK_DIRECT_MESSAGE_SECRET` | Secret for direct message webhook |
-| `WEBHOOK_TIMEOUT` | Request timeout (default: 10.0s) |
-| `WEBHOOK_MAX_RETRIES` | Max retries on failure (default: 3) |
-| `WEBHOOK_RETRY_BACKOFF` | Exponential backoff multiplier (default: 2.0) |
+The collector supports forwarding events to external HTTP endpoints with configurable URLs, secrets, retries, and timeouts. See [docs/webhooks.md](docs/webhooks.md) for the full configuration reference, URL routing logic, and payload format.
 
 ### Data Retention / Cleanup Configuration
 
@@ -752,15 +714,6 @@ meshcore-hub collector cleanup --retention-days 30 --dry-run
 
 # Live cleanup
 meshcore-hub collector cleanup --retention-days 30
-```
-
-Webhook payload structure:
-```json
-{
-  "event_type": "advertisement",
-  "public_key": "abc123...",
-  "payload": { ... }
-}
 ```
 
 ## Troubleshooting

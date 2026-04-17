@@ -41,6 +41,8 @@ The following files are the documentation targets. All must be kept in sync:
 | `docs/letsmesh.md` | LetsMesh packet decoding: normalization, channel keys, message handling |
 | `docs/hosting/nginx-proxy-manager.md` | Nginx Proxy Manager admin authentication setup guide |
 | `docs/seeding.md` | Seed data: node tags and members YAML format, directory structure, import process |
+| `docs/webhooks.md` | Webhook configuration: URLs, secrets, retries, payload format |
+| `docs/content.md` | Custom content: markdown pages, media files, logos, frontmatter fields |
 | `docs/i18n.md` | Translation reference: all i18n keys, variable interpolation, translation tips |
 | `.env.example` | Example environment file with comments and defaults |
 | `SCHEMAS.md` | Event JSON schemas and database column mappings |

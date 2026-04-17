@@ -322,31 +322,7 @@ For details on how the collector normalizes and decodes LetsMesh packets, see [d
 
 ### Webhooks
 
-The collector can forward certain events to external HTTP endpoints:
-
-| Variable                         | Default  | Description                              |
-| -------------------------------- | -------- | ---------------------------------------- |
-| `WEBHOOK_ADVERTISEMENT_URL`      | _(none)_ | Webhook URL for advertisement events     |
-| `WEBHOOK_ADVERTISEMENT_SECRET`   | _(none)_ | Secret sent as `X-Webhook-Secret` header |
-| `WEBHOOK_MESSAGE_URL`            | _(none)_ | Webhook URL for all message events       |
-| `WEBHOOK_MESSAGE_SECRET`         | _(none)_ | Secret for message webhook               |
-| `WEBHOOK_CHANNEL_MESSAGE_URL`    | _(none)_ | Override URL for channel messages only   |
-| `WEBHOOK_CHANNEL_MESSAGE_SECRET` | _(none)_ | Secret for channel message webhook       |
-| `WEBHOOK_DIRECT_MESSAGE_URL`     | _(none)_ | Override URL for direct messages only    |
-| `WEBHOOK_DIRECT_MESSAGE_SECRET`  | _(none)_ | Secret for direct message webhook        |
-| `WEBHOOK_TIMEOUT`                | `10.0`   | Request timeout in seconds               |
-| `WEBHOOK_MAX_RETRIES`            | `3`      | Max retry attempts on failure            |
-| `WEBHOOK_RETRY_BACKOFF`          | `2.0`    | Exponential backoff multiplier           |
-
-Webhook payload format:
-
-```json
-{
-  "event_type": "advertisement",
-  "public_key": "abc123...",
-  "payload": { ... event data ... }
-}
-```
+The collector can forward events (advertisements, messages) to external HTTP endpoints via webhooks with configurable URLs, secrets, retries, and timeouts. See [docs/webhooks.md](docs/webhooks.md) for the full configuration reference and payload format.
 
 ### Data Retention
 
@@ -420,66 +396,7 @@ Control which pages are visible in the web dashboard. Disabled features are full
 
 ### Custom Content
 
-The web dashboard supports custom content including markdown pages and media files. Content is organized in subdirectories:
-
-Custom logo options:
-
-- `logo.svg` — full-color logo, displayed as-is in both themes (no automatic darkening)
-- `logo-invert.svg` — monochrome/two-tone logo, automatically darkened in light mode for visibility
-
-```
-content/
-├── pages/     # Custom markdown pages
-│   └── about.md
-└── media/     # Custom media files
-    └── images/
-        ├── logo.svg          # Full-color custom logo (default)
-        └── logo-invert.svg   # Monochrome custom logo (darkened in light mode)
-```
-
-**Setup:**
-
-```bash
-# Create content directory structure
-mkdir -p content/pages content/media
-
-# Create a custom page
-cat > content/pages/about.md << 'EOF'
----
-title: About Us
-slug: about
-menu_order: 10
----
-
-# About Our Network
-
-Welcome to our MeshCore mesh network!
-
-## Getting Started
-
-1. Get a compatible LoRa device
-2. Flash MeshCore firmware
-3. Configure your radio settings
-EOF
-```
-
-**Frontmatter fields:**
-| Field | Default | Description |
-|-------|---------|-------------|
-| `title` | Filename titlecased | Browser tab title and navigation link text (not rendered on page) |
-| `slug` | Filename without `.md` | URL path (e.g., `about` → `/pages/about`) |
-| `menu_order` | `100` | Sort order in navigation (lower = earlier) |
-
-The markdown content is rendered as-is, so include your own `# Heading` if desired.
-
-Pages automatically appear in the navigation menu and sitemap. With Docker, mount the content directory:
-
-```yaml
-# docker-compose.yml (already configured)volumes:
-  - ${CONTENT_HOME:-./content}:/content:ro
-environment:
-  - CONTENT_HOME=/content
-```
+The web dashboard supports custom markdown pages and media files (including custom logos) served from a configurable content directory. See [docs/content.md](docs/content.md) for the full setup guide including directory structure, frontmatter fields, and Docker volume mounting.
 
 ## Seed Data
 

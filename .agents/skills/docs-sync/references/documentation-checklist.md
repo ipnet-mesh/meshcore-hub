@@ -10,7 +10,7 @@ README.md contains env var tables grouped by component. For each table:
 
 - [ ] **Common Settings table** — every var from `CommonSettings` is listed with correct default
 - [ ] **Collector Settings table** — every collector-specific var from `CollectorSettings` is listed
-- [ ] **Webhook table** — all 11 webhook vars listed (6 URL/secret pairs + timeout + retries + backoff)
+- [ ] **Webhook reference** — webhook config links to `docs/webhooks.md`
 - [ ] **Data Retention table** — all retention and node cleanup vars listed
 - [ ] **API Settings table** — all API-specific vars from `APISettings` listed
 - [ ] **Web Dashboard Settings table** — all web-specific vars from `WebSettings` listed
@@ -56,7 +56,8 @@ For each variable in each table:
 
 - [ ] `src/meshcore_hub/` structure matches actual layout
 - [ ] Seed data directory structure (`node_tags.yaml`, `members.yaml`) documented in `docs/seeding.md`
-- [ ] Custom content directory structure (`pages/`, `media/`) documented
+- [ ] Custom content directory structure (`pages/`, `media/`) documented in `docs/content.md`
+- [ ] Webhook configuration documented in `docs/webhooks.md`
 - [ ] Translation files location (`src/meshcore_hub/web/static/locales/`) documented
 - [ ] Translation reference guide (`docs/i18n.md`) linked from README and AGENTS.md
 - [ ] No references to removed files (PLAN.md, TASKS.md)
@@ -100,6 +101,8 @@ AGENTS.md has a "Key variables" subsection under "Environment Variables". Verify
 - [ ] References to `SCHEMAS.md` — should remain (file exists)
 - [ ] References to `docs/upgrading.md` — should remain (file exists)
 - [ ] References to `docs/letsmesh.md` — should remain (file exists)
+- [ ] References to `docs/webhooks.md` — should remain (file exists)
+- [ ] References to `docs/content.md` — should remain (file exists)
 
 ## 3. docs/upgrading.md
 
@@ -191,6 +194,34 @@ docs/i18n.md is a comprehensive reference for translators. Verify:
 - [ ] Admin section keys match current admin page translations
 - [ ] No stale translation keys documented (removed from `en.json`)
 - [ ] Translation tips are accurate for current i18n system
+
+## 3f. docs/webhooks.md
+
+### Webhook Configuration Documentation
+
+docs/webhooks.md documents the webhook configuration, URL routing logic, and payload format. Verify:
+
+- [ ] All 11 webhook environment variables listed with correct defaults and descriptions
+- [ ] URL routing rules documented correctly (MESSAGE_URL as default, CHANNEL/DIRECT overrides)
+- [ ] Secret header mechanism documented (`X-Webhook-Secret`)
+- [ ] Retry behavior documented (max retries, exponential backoff)
+- [ ] Payload format JSON example matches `webhook.py` dispatcher output
+- [ ] Event types listed match actual webhook event types
+- [ ] Configuration examples use correct env var names
+
+## 3g. docs/content.md
+
+### Custom Content Documentation
+
+docs/content.md documents the custom content system for the web dashboard. Verify:
+
+- [ ] Directory structure shows `pages/` and `media/` subdirectories correctly
+- [ ] Custom logo options (`logo.svg`, `logo-invert.svg`) documented with behavior per theme
+- [ ] Frontmatter field table matches `pages.py` parser expectations
+- [ ] Default values for frontmatter fields are correct (title, slug, menu_order)
+- [ ] Setup examples create valid markdown pages
+- [ ] Docker volume mounting instructions match `docker-compose.yml` bind mount config
+- [ ] `CONTENT_HOME` default value documented correctly
 
 ## 4. .env.example
 
