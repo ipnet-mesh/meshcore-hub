@@ -110,6 +110,8 @@ Service profiles:
 
 **Note:** Most deployments connect to an external MQTT broker. Add `--profile mqtt` only if you need a local broker. The `observer` profile runs [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) to observe MeshCore RF traffic and publish decoded packets to MQTT.
 
+> **ARM / Raspberry Pi:** The `observer` service Docker image (`ghcr.io/agessaman/meshcore-packet-capture`) does not currently support ARM architectures. A [PR is open](https://github.com/agessaman/meshcore-packet-capture/pull/13) on the upstream project to add ARM support but has not yet been merged. To run the observer on a Raspberry Pi, do not use the `--profile observer` Docker profile — instead, install [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) natively on the Pi and configure it to publish to your MQTT broker.
+
 ```bash
 # Create database schema
 docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile migrate run --rm migrate
