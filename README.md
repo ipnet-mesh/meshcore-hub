@@ -15,7 +15,7 @@ Python 3.14+ platform for managing and orchestrating MeshCore mesh networks.
 > [!IMPORTANT]
 > **Help Translate MeshCore Hub** 🌍
 >
-> We need volunteers to translate the web dashboard! Currently only English is available. Check out the [Translation Guide](src/meshcore_hub/web/static/locales/languages.md) to contribute a language pack. Partial translations welcome!
+> We need volunteers to translate the web dashboard! Currently only English is available. Check out the [Translation Guide](docs/i18n.md) to contribute a language pack. Partial translations welcome!
 
 ## Overview
 
@@ -623,7 +623,7 @@ meshcore-hub/
 │       ├── templates/      # Jinja2 templates (SPA shell)
 │       └── static/
 │           ├── js/spa/     # SPA frontend (ES modules, lit-html)
-│           └── locales/    # Translation files (en.json, languages.md)
+│           └── locales/    # Translation files (en.json)
 ├── tests/                  # Test suite
 ├── alembic/                # Database migrations
 ├── etc/                    # Configuration files (MQTT, Prometheus, Alertmanager)
@@ -651,6 +651,7 @@ meshcore-hub/
 │   ├── images/              # Screenshots and images
 │   ├── hosting/             # Reverse proxy hosting guides
 │   │   └── nginx-proxy-manager.md
+│   ├── i18n.md              # Translation reference guide
 │   ├── letsmesh.md          # LetsMesh packet decoding details
 │   ├── seeding.md           # Seed data format and import guide
 │   └── upgrading.md         # Upgrade guide for breaking changes
@@ -665,6 +666,7 @@ meshcore-hub/
 - [docs/letsmesh.md](docs/letsmesh.md) - LetsMesh packet decoding details
 - [docs/seeding.md](docs/seeding.md) - Seed data format and import guide
 - [docs/hosting/nginx-proxy-manager.md](docs/hosting/nginx-proxy-manager.md) - Nginx Proxy Manager admin setup
+- [docs/i18n.md](docs/i18n.md) - Translation reference guide
 - [AGENTS.md](AGENTS.md) - Guidelines for AI coding assistants
 
 ## Contributing

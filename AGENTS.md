@@ -41,6 +41,7 @@ MeshCore Hub is a Python 3.14+ monorepo for managing and orchestrating MeshCore 
 - [docs/letsmesh.md](docs/letsmesh.md) - LetsMesh packet decoding details
 - [docs/hosting/nginx-proxy-manager.md](docs/hosting/nginx-proxy-manager.md) - Nginx Proxy Manager admin setup
 - [docs/seeding.md](docs/seeding.md) - Seed data format and import guide
+- [docs/i18n.md](docs/i18n.md) - Translation reference guide
 
 ## Technology Stack
 
@@ -342,6 +343,7 @@ meshcore-hub/
 │   ├── images/              # Screenshots and images
 │   ├── hosting/             # Reverse proxy hosting guides
 │   │   └── nginx-proxy-manager.md
+│   ├── i18n.md              # Translation reference guide
 │   ├── letsmesh.md          # LetsMesh packet decoding details
 │   ├── seeding.md           # Seed data format and import guide
 │   └── upgrading.md         # Upgrade guide for breaking changes
@@ -489,7 +491,7 @@ The web dashboard supports internationalization via JSON translation files. The 
 
 **Key files:**
 - `en.json` - English translations (reference implementation)
-- `languages.md` - Comprehensive translation reference guide for translators
+- [docs/i18n.md](docs/i18n.md) - Comprehensive translation reference guide for translators
 
 **Using translations in JavaScript:**
 
@@ -523,7 +525,7 @@ const emptyMsg = t('common.no_entity_found', { entity: t('entities.nodes').toLow
    - Group related keys by section (e.g., `admin_members.*`, `admin_node_tags.*`)
    - Use `{{variable}}` syntax for dynamic content
 
-2. **Update `languages.md`** with:
+2. **Update `docs/i18n.md`** with:
    - Key name, English value, and usage context
    - Variable descriptions if using interpolation
    - Notes about HTML content or special formatting
@@ -544,7 +546,7 @@ const emptyMsg = t('common.no_entity_found', { entity: t('entities.nodes').toLow
 - **Compose with entities:** Reference `entities.*` keys in patterns rather than hardcoding entity names
 - **Preserve variables:** Keep `{{variable}}` placeholders unchanged when translating
 - **Test composition:** Verify patterns work with all entity types (singular/plural, lowercase/uppercase)
-- **Document context:** Always update `languages.md` so translators understand usage
+- **Document context:** Always update `docs/i18n.md` so translators understand usage
 
 **Example - adding a new entity and patterns:**
 
@@ -558,7 +560,7 @@ const emptyMsg = t('common.no_entity_found', { entity: t('entities.nodes').toLow
 t('common.add_entity', { entity: t('entities.sensor') })  // "Add Sensor"
 t('common.no_entity_found', { entity: t('entities.sensors').toLowerCase() })  // "No sensors found"
 
-// 3. Update languages.md with context
+// 3. Update docs/i18n.md with context
 // 4. Add test to test_i18n.py
 ```
 
@@ -569,7 +571,7 @@ The i18n system (`src/meshcore_hub/common/i18n.py`) loads translations on startu
 - Falls back to English for missing keys
 - Returns the key itself if translation not found
 
-For full translation guidelines, see `src/meshcore_hub/web/static/locales/languages.md`.
+For full translation guidelines, see [docs/i18n.md](docs/i18n.md).
 
 ### Adding a New Database Model
 

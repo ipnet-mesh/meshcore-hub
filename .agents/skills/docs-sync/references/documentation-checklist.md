@@ -58,6 +58,7 @@ For each variable in each table:
 - [ ] Seed data directory structure (`node_tags.yaml`, `members.yaml`) documented in `docs/seeding.md`
 - [ ] Custom content directory structure (`pages/`, `media/`) documented
 - [ ] Translation files location (`src/meshcore_hub/web/static/locales/`) documented
+- [ ] Translation reference guide (`docs/i18n.md`) linked from README and AGENTS.md
 - [ ] No references to removed files (PLAN.md, TASKS.md)
 
 ## 2. AGENTS.md
@@ -174,6 +175,22 @@ docs/seeding.md documents the seed data format and import process for node tags 
 - [ ] Members YAML format matches `member_import.py` parsing logic
 - [ ] Member field table fields match `MemberCreate` Pydantic schema
 - [ ] Example seed files referenced in `example/seed/` exist
+
+## 3e. docs/i18n.md
+
+### Translation Reference Guide
+
+docs/i18n.md is a comprehensive reference for translators. Verify:
+
+- [ ] Translation file location path (`src/meshcore_hub/web/static/locales/`) is correct
+- [ ] Each translation section key matches a top-level key in `en.json`
+- [ ] Entity keys (`entities.*`) match current `en.json` values
+- [ ] Common pattern keys (`common.*`) match current `en.json` values
+- [ ] Composite pattern examples produce correct output with current entity names
+- [ ] Variable interpolation syntax (`{{variable}}`) matches actual usage in `en.json`
+- [ ] Admin section keys match current admin page translations
+- [ ] No stale translation keys documented (removed from `en.json`)
+- [ ] Translation tips are accurate for current i18n system
 
 ## 4. .env.example
 
