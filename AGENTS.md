@@ -39,6 +39,7 @@ MeshCore Hub is a Python 3.14+ monorepo for managing and orchestrating MeshCore 
 - [SCHEMAS.md](SCHEMAS.md) - MeshCore event JSON schemas and database mappings
 - [docs/upgrading.md](docs/upgrading.md) - Upgrade guide for breaking changes
 - [docs/letsmesh.md](docs/letsmesh.md) - LetsMesh packet decoding details
+- [docs/hosting/nginx-proxy-manager.md](docs/hosting/nginx-proxy-manager.md) - Nginx Proxy Manager admin setup
 
 ## Technology Stack
 
@@ -338,6 +339,8 @@ meshcore-hub/
 ├── docker-compose.traefik.yml # Optional Traefik labels
 ├── docs/                    # Documentation
 │   ├── images/              # Screenshots and images
+│   ├── hosting/             # Reverse proxy hosting guides
+│   │   └── nginx-proxy-manager.md
 │   ├── letsmesh.md          # LetsMesh packet decoding details
 │   └── upgrading.md         # Upgrade guide for breaking changes
 └── SCHEMAS.md

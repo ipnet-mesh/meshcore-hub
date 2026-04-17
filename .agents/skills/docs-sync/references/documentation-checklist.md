@@ -33,6 +33,7 @@ For each variable in each table:
 - [ ] Volume names documented with `COMPOSE_PROJECT_NAME` prefix convention
 - [ ] Bind mounts documented (SEED_HOME, CONTENT_HOME)
 - [ ] Traefik integration instructions reference `TRAEFIK_DOMAIN`
+- [ ] Reverse Proxy section links to `docs/hosting/nginx-proxy-manager.md`
 - [ ] Production network setup (`proxy-net`) documented
 - [ ] Quick start examples use correct current commands
 
@@ -145,6 +146,19 @@ docs/letsmesh.md documents the LetsMesh packet normalization and decoding behavi
 - [ ] Message normalization rules match collector handler implementations
 - [ ] GPS/location update behavior documented matches advertisement handler logic
 - [ ] No stale decoder behavior documented (e.g., references to Node.js decoder)
+
+## 3c. docs/hosting/nginx-proxy-manager.md
+
+### NPM Admin Setup Guide
+
+docs/hosting/nginx-proxy-manager.md documents the Nginx Proxy Manager reverse proxy setup for admin authentication. Verify:
+
+- [ ] Dual-hostname setup (public + admin) documented
+- [ ] Proxy host settings (scheme, port, websockets) match `docker-compose.dev.yml` port mappings
+- [ ] `WEB_ADMIN_ENABLED` requirement documented
+- [ ] Nginx `Advanced` config block headers match those checked by `web/auth.py`
+- [ ] Verification curl command uses correct endpoint (`/config.js`)
+- [ ] Troubleshooting steps reference correct config variables
 
 ## 4. .env.example
 

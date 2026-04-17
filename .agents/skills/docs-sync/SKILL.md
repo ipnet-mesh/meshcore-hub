@@ -39,6 +39,7 @@ The following files are the documentation targets. All must be kept in sync:
 | `AGENTS.md` | AI agent instructions: env var list, project structure, conventions |
 | `docs/upgrading.md` | Upgrade guide: deprecated vars, new vars, migration steps |
 | `docs/letsmesh.md` | LetsMesh packet decoding: normalization, channel keys, message handling |
+| `docs/hosting/nginx-proxy-manager.md` | Nginx Proxy Manager admin authentication setup guide |
 | `.env.example` | Example environment file with comments and defaults |
 | `SCHEMAS.md` | Event JSON schemas and database column mappings |
 

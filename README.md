@@ -212,23 +212,6 @@ Configure your reverse proxy to forward to the containers:
 
 > **Important:** Do not host under a subpath (e.g., `/meshcore`). Proxy at `/`.
 
-#### Traefik
-
-A Traefik override file is provided with pre-configured labels:
-
-```bash
-# Download the Traefik override
-wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/docker-compose.traefik.yml
-
-# Set your domain in .env
-echo "TRAEFIK_DOMAIN=meshcore.example.com" >> .env
-
-# Start with Traefik labels
-docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml --profile core up -d
-```
-
-This routes the web dashboard and API to `TRAEFIK_DOMAIN` with automatic TLS.
-
 ### Adding Remote Observers
 
 Other operators can run their own [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) instance and publish decoded packets to your MeshCore Hub. They can also optionally contribute to the LetsMesh network.
@@ -438,60 +421,26 @@ Timezone handling note:
 
 - API timestamps that omit an explicit timezone suffix are treated as UTC before rendering in the configured `TZ`.
 
-#### Nginx Proxy Manager (NPM) Admin Setup
+#### Reverse Proxy
 
-Use two hostnames so the public map/site stays open while admin stays protected:
+MeshCore Hub is designed to run behind a reverse proxy in production. Guides for specific reverse proxies:
 
-1. Public host: no Access List (normal users).
-2. Admin host: Access List enabled (operators only).
+- [Nginx Proxy Manager](docs/hosting/nginx-proxy-manager.md) — Admin authentication setup with dual hostnames
 
-Both proxy hosts should forward to the same web container:
-
-- Scheme: `http`
-- Forward Hostname/IP: your MeshCore Hub host
-- Forward Port: `18080` (or your mapped web port)
-- Websockets Support: `ON`
-- Block Common Exploits: `ON`
-
-Important:
-
-- Do not host this app under a subpath (for example `/meshcore`); proxy it at `/`.
-- `WEB_ADMIN_ENABLED` must be `true`.
-
-In NPM, for the **admin host**, paste this in the `Advanced` field:
-
-```nginx
-# Forward authenticated identity for MeshCore Hub admin checks
-proxy_set_header Authorization $http_authorization;
-proxy_set_header X-Forwarded-User $remote_user;
-proxy_set_header X-Auth-Request-User $remote_user;
-proxy_set_header X-Forwarded-Email "";
-proxy_set_header X-Forwarded-Groups "";
-```
-
-Then attach your NPM Access List (Basic auth users) to that admin host.
-
-Verify auth forwarding:
+A Traefik override file is also provided with pre-configured labels:
 
 ```bash
-curl -s -u 'admin:password' "https://admin.example.com/config.js?t=$(date +%s)" \
-  | grep -o '"is_authenticated":[^,]*'
+# Download the Traefik override
+wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/docker-compose.traefik.yml
+
+# Set your domain in .env
+echo "TRAEFIK_DOMAIN=meshcore.example.com" >> .env
+
+# Start with Traefik labels
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml --profile core up -d
 ```
 
-Expected:
-
-```text
-"is_authenticated": true
-```
-
-If it still shows `false`, check:
-
-1. You are using the admin hostname, not the public hostname.
-2. The Access List is attached to that admin host.
-3. The `Advanced` block above is present exactly.
-4. `WEB_ADMIN_ENABLED=true` is loaded in the running web container.
-
-#### Feature Flags
+This routes the web dashboard and API to `TRAEFIK_DOMAIN` with automatic TLS.
 
 Control which pages are visible in the web dashboard. Disabled features are fully hidden: removed from navigation, return 404 on their routes, and excluded from sitemap/robots.txt.
 
@@ -800,6 +749,8 @@ meshcore-hub/
 ├── docker-compose.traefik.yml # Optional Traefik labels
 ├── docs/                    # Documentation
 │   ├── images/              # Screenshots and images
+│   ├── hosting/             # Reverse proxy hosting guides
+│   │   └── nginx-proxy-manager.md
 │   ├── letsmesh.md          # LetsMesh packet decoding details
 │   └── upgrading.md         # Upgrade guide for breaking changes
 ├── SCHEMAS.md               # Event schema documentation
@@ -811,6 +762,7 @@ meshcore-hub/
 - [SCHEMAS.md](SCHEMAS.md) - MeshCore event schemas
 - [docs/upgrading.md](docs/upgrading.md) - Upgrade guide for breaking changes
 - [docs/letsmesh.md](docs/letsmesh.md) - LetsMesh packet decoding details
+- [docs/hosting/nginx-proxy-manager.md](docs/hosting/nginx-proxy-manager.md) - Nginx Proxy Manager admin setup
 - [AGENTS.md](AGENTS.md) - Guidelines for AI coding assistants
 
 ## Contributing
