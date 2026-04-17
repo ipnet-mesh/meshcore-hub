@@ -96,7 +96,7 @@ Direct/private messages between two nodes.
 ```
 
 **Field Descriptions**:
-- `pubkey_prefix`: First 12 characters of sender's public key (or source hash prefix in compatibility ingest modes)
+- `pubkey_prefix`: First 12 characters of the source public key prefix, used for message identification (or source hash prefix in compatibility ingest modes)
 - `path_len`: Number of hops message traveled
 - `txt_type`: Message type indicator (0=plain, 2=signed, etc.)
 - `signature`: Message signature (8 hex chars) when `txt_type=2`
@@ -149,7 +149,7 @@ Group/broadcast messages on specific channels.
 **Field Descriptions**:
 - `channel_idx`: Channel number (0-255) when available
 - `channel_name`: Channel display label (e.g., `"Public"`, `"#test"`) when available
-- `pubkey_prefix`: First 12 characters of sender's public key when available
+- `pubkey_prefix`: First 12 characters of the source public key prefix, used for message identification when available
 - `path_len`: Number of hops message traveled
 - `txt_type`: Message type indicator (0=plain, 2=signed, etc.)
 - `signature`: Message signature (8 hex chars) when `txt_type=2`
@@ -180,14 +180,14 @@ Group/broadcast messages on specific channels.
 - In LetsMesh upload compatibility mode, packet type `5` is normalized to `CHANNEL_MSG_RECV` and packet types `1`, `2`, and `7` are normalized to `CONTACT_MSG_RECV` when decryptable text is available.
 - LetsMesh packets without decryptable message text are treated as informational `letsmesh_packet` events instead of message events.
 - For UI labels, known channel indexes are mapped (`17 -> Public`, `217 -> #test`) and preferred over ambiguous/stale channel-name hints.
-- Additional channel labels can be provided through `COLLECTOR_LETSMESH_DECODER_KEYS` using `label=hex` entries.
+- Additional channel labels can be provided through `COLLECTOR_CHANNEL_KEYS` using `label=hex` entries.
 - When decoder output includes a human sender (`payload.decoded.decrypted.sender`), message text is normalized to `Name: Message`; sender identity remains unknown when only hash/prefix metadata is available.
 
 **Compatibility ingest note (advertisements)**:
 - In LetsMesh upload compatibility mode, `status` feed payloads are persisted as informational `letsmesh_status` events and are not normalized to `ADVERTISEMENT`.
 - In LetsMesh upload compatibility mode, decoded payload type `4` is normalized to `ADVERTISEMENT` when node identity metadata is present.
 - Payload type `4` location metadata (`appData.location.latitude/longitude`) is mapped to node `lat/lon` for map rendering.
-- This keeps advertisement persistence aligned with native mode expectations (advertisement traffic only).
+- This keeps advertisement persistence aligned with meshcore-packet-capture expectations (advertisement traffic only).
 
 **Compatibility ingest note (non-message structured events)**:
 - Decoded payload type `9` is normalized to `TRACE_DATA` (`traceTag`, flags, auth, path hashes, and SNR values).

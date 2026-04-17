@@ -320,6 +320,7 @@ def web_app(mock_http_client: MockHttpClient, monkeypatch: pytest.MonkeyPatch) -
     """Create a web app with mocked HTTP client."""
     # Ensure tests use a consistent locale regardless of local .env
     monkeypatch.setenv("WEB_DATETIME_LOCALE", "en-US")
+    monkeypatch.setenv("COLLECTOR_INCLUDE_TEST_CHANNEL", "true")
     app = create_app(
         api_url="http://localhost:8000",
         api_key="test-api-key",

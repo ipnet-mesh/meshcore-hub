@@ -9,7 +9,7 @@ from meshcore_hub.common.models.trace_path import TracePath
 from meshcore_hub.common.models.telemetry import Telemetry
 from meshcore_hub.common.models.event_log import EventLog
 from meshcore_hub.common.models.member import Member
-from meshcore_hub.common.models.event_receiver import EventReceiver, add_event_receiver
+from meshcore_hub.common.models.event_observer import EventObserver, add_event_observer
 
 __all__ = [
     "Base",
@@ -22,6 +22,6 @@ __all__ = [
     "Telemetry",
     "EventLog",
     "Member",
-    "EventReceiver",
-    "add_event_receiver",
+    "EventObserver",
+    "add_event_observer",
 ]

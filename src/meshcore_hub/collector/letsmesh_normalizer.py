@@ -18,6 +18,7 @@ class LetsMeshNormalizer:
     # Attributes are provided by Subscriber at runtime.
     mqtt: Any
     _letsmesh_decoder: LetsMeshPacketDecoder
+    _include_test_channel: bool
 
     def _normalize_letsmesh_event(
         self,
@@ -100,13 +101,35 @@ class LetsMeshNormalizer:
         if decoded_packet is None:
             decoded_packet = self._letsmesh_decoder.decode_payload(payload)
 
+        # Filter test channel messages when not explicitly included.
+        if packet_type == 5 and not self._include_test_channel:
+            channel_hash = self._extract_letsmesh_decoder_channel_hash(decoded_packet)
+            if (
+                channel_hash
+                and channel_hash.upper() == LetsMeshPacketDecoder.TEST_CHANNEL_HASH
+            ):
+                logger.debug(
+                    "Skipping LetsMesh packet %s (type=%s): test channel excluded",
+                    packet_hash_text or "unknown",
+                    packet_type,
+                )
+                return None
+
         # In LetsMesh compatibility mode, only show messages that decrypt.
         text = self._extract_letsmesh_decoder_text(decoded_packet)
         if not text:
+            channel_hash = self._extract_letsmesh_decoder_channel_hash(decoded_packet)
             logger.debug(
-                "Skipping LetsMesh packet %s (type=%s): no decryptable text payload",
+                "Skipping LetsMesh packet %s (type=%s): no decryptable text payload "
+                "(channel_hash=%s, decoded_keys=%s)",
                 packet_hash_text or "unknown",
                 packet_type,
+                channel_hash or "N/A",
+                (
+                    list(decoded_packet.keys())
+                    if isinstance(decoded_packet, dict)
+                    else "N/A"
+                ),
             )
             return None
 
@@ -914,10 +937,7 @@ class LetsMeshNormalizer:
     ) -> str | None:
         """Format a display label for channel messages."""
         if channel_name and channel_name.strip():
-            cleaned = channel_name.strip()
-            if cleaned.lower() == "public":
-                return "Public"
-            return cleaned if cleaned.startswith("#") else f"#{cleaned}"
+            return channel_name.strip()
         if channel_idx is not None:
             return f"Ch {channel_idx}"
         if channel_hash:

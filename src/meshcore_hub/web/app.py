@@ -33,7 +33,7 @@ STATIC_DIR = PACKAGE_DIR / "static"
 
 
 def _parse_decoder_key_entries(raw: str | None) -> list[str]:
-    """Parse COLLECTOR_LETSMESH_DECODER_KEYS into key entries."""
+    """Parse COLLECTOR_CHANNEL_KEYS into key entries."""
     if not raw:
         return []
     return [part.strip() for part in re.split(r"[,\s]+", raw) if part.strip()]
@@ -41,12 +41,18 @@ def _parse_decoder_key_entries(raw: str | None) -> list[str]:
 
 def _build_channel_labels() -> dict[str, str]:
     """Build UI channel labels from built-in + configured decoder keys."""
-    raw_keys = os.getenv("COLLECTOR_LETSMESH_DECODER_KEYS")
+    raw_keys = os.getenv("COLLECTOR_CHANNEL_KEYS")
+    include_test = os.getenv("COLLECTOR_INCLUDE_TEST_CHANNEL", "false").lower() in (
+        "true",
+        "1",
+        "yes",
+    )
     decoder = LetsMeshPacketDecoder(
-        enabled=False,
         channel_keys=_parse_decoder_key_entries(raw_keys),
     )
     labels = decoder.channel_labels_by_index()
+    if not include_test:
+        labels.pop(LetsMeshPacketDecoder.TEST_CHANNEL_IDX, None)
     return {str(idx): label for idx, label in sorted(labels.items())}
 
 
@@ -648,12 +654,7 @@ def create_app(
                     disallow_lines.append(line)
 
         disallow_block = "\n".join(disallow_lines)
-        return (
-            f"User-agent: *\n"
-            f"{disallow_block}\n"
-            f"\n"
-            f"Sitemap: {base_url}/sitemap.xml\n"
-        )
+        return f"User-agent: *\n{disallow_block}\n\nSitemap: {base_url}/sitemap.xml\n"
 
     @app.get("/sitemap.xml")
     async def sitemap_xml(request: Request) -> Response:
@@ -721,9 +722,9 @@ def create_app(
         config_json = _build_config_json(request.app, request)
 
         return templates_inst.TemplateResponse(
+            request,
             "spa.html",
             {
-                "request": request,
                 "network_name": request.app.state.network_name,
                 "network_city": request.app.state.network_city,
                 "network_country": request.app.state.network_country,

@@ -1,0 +1,27 @@
+# MeshCore Hub - Development Docker Compose Override
+#
+# Exposes service ports for local development and testing.
+# NOT intended for production use — use docker-compose.prod.yml instead.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+services:
+  collector:
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      mqtt:
+        condition: service_healthy
+
+  mqtt:
+    ports:
+      - "${MQTT_PORT:-1883}:${MQTT_PORT:-1883}"
+
+  api:
+    ports:
+      - "${API_PORT:-8000}:8000"
+
+  web:
+    ports:
+      - "${WEB_PORT:-8080}:8080"

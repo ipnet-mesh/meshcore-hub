@@ -60,8 +60,8 @@ def get_mqtt_client(request: Request) -> MQTTClient:
     mqtt_password = getattr(request.app.state, "mqtt_password", None)
     mqtt_prefix = getattr(request.app.state, "mqtt_prefix", "meshcore")
     mqtt_tls = getattr(request.app.state, "mqtt_tls", False)
-    mqtt_transport = getattr(request.app.state, "mqtt_transport", "tcp")
-    mqtt_ws_path = getattr(request.app.state, "mqtt_ws_path", "/mqtt")
+    mqtt_transport = getattr(request.app.state, "mqtt_transport", "websockets")
+    mqtt_ws_path = getattr(request.app.state, "mqtt_ws_path", "/")
 
     # Use unique client ID to allow multiple API instances
     unique_id = uuid.uuid4().hex[:8]

@@ -3,6 +3,7 @@
 !example/data/
 /seed/
 !example/seed/
+/backup/
 /content/
 
 # Byte-compiled / optimized / DLL files

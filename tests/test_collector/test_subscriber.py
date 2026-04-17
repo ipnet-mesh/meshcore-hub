@@ -14,7 +14,7 @@ class TestSubscriber:
         """Create a mock MQTT client."""
         client = MagicMock()
         client.topic_builder = MagicMock()
-        client.topic_builder.prefix = "meshcore/BOS"
+        client.topic_builder.prefix = "meshcore"
         client.topic_builder.all_events_topic.return_value = "meshcore/+/event/#"
         client.topic_builder.parse_event_topic.return_value = (
             "a" * 64,
@@ -45,7 +45,7 @@ class TestSubscriber:
 
         mock_mqtt_client.connect.assert_called_once()
         mock_mqtt_client.start_background.assert_called_once()
-        mock_mqtt_client.subscribe.assert_called_once()
+        assert mock_mqtt_client.subscribe.call_count == 3
 
     def test_stop_disconnects_mqtt(self, subscriber, mock_mqtt_client):
         """Test that stop disconnects MQTT."""
@@ -63,9 +63,21 @@ class TestSubscriber:
         subscriber.register_handler("advertisement", handler)
         subscriber.start()
 
+        mock_mqtt_client.topic_builder.parse_letsmesh_upload_topic.return_value = (
+            "a" * 64,
+            "status",
+        )
+        subscriber._normalize_letsmesh_event = MagicMock(
+            return_value=(
+                "a" * 64,
+                "advertisement",
+                {"public_key": "b" * 64, "name": "Test"},
+            )
+        )
+
         subscriber._handle_mqtt_message(
-            topic="meshcore/abc/event/advertisement",
-            pattern="meshcore/+/event/#",
+            topic="meshcore/STN/abc/status",
+            pattern="meshcore/+/+/status",
             payload={"public_key": "b" * 64, "name": "Test"},
         )
 
@@ -76,15 +88,14 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
 
         subscriber.start()
 
         expected_calls = [
-            call("meshcore/BOS/+/packets", subscriber._handle_mqtt_message),
-            call("meshcore/BOS/+/status", subscriber._handle_mqtt_message),
-            call("meshcore/BOS/+/internal", subscriber._handle_mqtt_message),
+            call("meshcore/+/+/packets", subscriber._handle_mqtt_message),
+            call("meshcore/+/+/status", subscriber._handle_mqtt_message),
+            call("meshcore/+/+/internal", subscriber._handle_mqtt_message),
         ]
         mock_mqtt_client.subscribe.assert_has_calls(expected_calls, any_order=False)
         assert mock_mqtt_client.subscribe.call_count == 3
@@ -96,7 +107,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         advert_handler = MagicMock()
         status_handler = MagicMock()
@@ -105,8 +115,8 @@ class TestSubscriber:
         subscriber.start()
 
         subscriber._handle_mqtt_message(
-            topic=f"meshcore/BOS/{'a' * 64}/status",
-            pattern="meshcore/BOS/+/status",
+            topic=f"meshcore/STN/{'a' * 64}/status",
+            pattern="meshcore/+/+/status",
             payload={
                 "origin": "Observer Node",
                 "origin_id": "b" * 64,
@@ -132,7 +142,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         advert_handler = MagicMock()
         status_handler = MagicMock()
@@ -141,8 +150,8 @@ class TestSubscriber:
         subscriber.start()
 
         subscriber._handle_mqtt_message(
-            topic=f"meshcore/BOS/{'a' * 64}/status",
-            pattern="meshcore/BOS/+/status",
+            topic=f"meshcore/STN/{'a' * 64}/status",
+            pattern="meshcore/+/+/status",
             payload={
                 "origin": "Observer Node",
                 "origin_id": "b" * 64,
@@ -163,7 +172,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         advert_handler = MagicMock()
         status_handler = MagicMock()
@@ -172,8 +180,8 @@ class TestSubscriber:
         subscriber.start()
 
         subscriber._handle_mqtt_message(
-            topic=f"meshcore/BOS/{'a' * 64}/status",
-            pattern="meshcore/BOS/+/status",
+            topic=f"meshcore/STN/{'a' * 64}/status",
+            pattern="meshcore/+/+/status",
             payload={
                 "origin_id": "b" * 64,
                 "stats": {"cpu": 27, "mem": 91, "debug_flags": 7},
@@ -182,11 +190,6 @@ class TestSubscriber:
 
         advert_handler.assert_not_called()
         status_handler.assert_called_once()
-
-    def test_invalid_ingest_mode_raises(self, mock_mqtt_client, db_manager) -> None:
-        """Invalid ingest mode values are rejected."""
-        with pytest.raises(ValueError):
-            Subscriber(mock_mqtt_client, db_manager, ingest_mode="invalid_mode")
 
     def test_letsmesh_packet_maps_to_channel_message(
         self, mock_mqtt_client, db_manager
@@ -199,7 +202,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         handler = MagicMock()
         subscriber.register_handler("channel_msg_recv", handler)
@@ -220,8 +222,8 @@ class TestSubscriber:
             },
         ):
             subscriber._handle_mqtt_message(
-                topic=f"meshcore/BOS/{'a' * 64}/packets",
-                pattern="meshcore/BOS/+/packets",
+                topic=f"meshcore/STN/{'a' * 64}/packets",
+                pattern="meshcore/+/+/packets",
                 payload={
                     "packet_type": "5",
                     "hash": "ABCDEF1234",
@@ -252,7 +254,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         letsmesh_packet_handler = MagicMock()
         channel_handler = MagicMock()
@@ -266,8 +267,8 @@ class TestSubscriber:
             return_value=None,
         ):
             subscriber._handle_mqtt_message(
-                topic=f"meshcore/BOS/{'a' * 64}/packets",
-                pattern="meshcore/BOS/+/packets",
+                topic=f"meshcore/STN/{'a' * 64}/packets",
+                pattern="meshcore/+/+/packets",
                 payload={
                     "packet_type": "5",
                     "hash": "ABCDEF1234",
@@ -289,7 +290,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         handler = MagicMock()
         subscriber.register_handler("channel_msg_recv", handler)
@@ -321,8 +321,8 @@ class TestSubscriber:
             ),
         ):
             subscriber._handle_mqtt_message(
-                topic=f"meshcore/BOS/{'a' * 64}/packets",
-                pattern="meshcore/BOS/+/packets",
+                topic=f"meshcore/STN/{'a' * 64}/packets",
+                pattern="meshcore/+/+/packets",
                 payload={
                     "packet_type": "5",
                     "hash": "ABCDEF1234",
@@ -336,7 +336,7 @@ class TestSubscriber:
         assert public_key == "a" * 64
         assert event_type == "channel_msg_recv"
         assert payload["text"] == "decoded hello"
-        assert payload["channel_name"] == "#test"
+        assert payload["channel_name"] == "test"
         assert payload["sender_timestamp"] == 1771695860
         assert payload["txt_type"] == 5
         assert payload["path_len"] == 4
@@ -354,7 +354,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         handler = MagicMock()
         subscriber.register_handler("contact_msg_recv", handler)
@@ -376,8 +375,8 @@ class TestSubscriber:
             },
         ):
             subscriber._handle_mqtt_message(
-                topic=f"meshcore/BOS/{'a' * 64}/packets",
-                pattern="meshcore/BOS/+/packets",
+                topic=f"meshcore/STN/{'a' * 64}/packets",
+                pattern="meshcore/+/+/packets",
                 payload={
                     "packet_type": "1",
                     "hash": "ABABAB1234",
@@ -403,7 +402,7 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
+            include_test_channel=True,
         )
         handler = MagicMock()
         subscriber.register_handler("channel_msg_recv", handler)
@@ -426,8 +425,8 @@ class TestSubscriber:
             },
         ):
             subscriber._handle_mqtt_message(
-                topic=f"meshcore/BOS/{'a' * 64}/packets",
-                pattern="meshcore/BOS/+/packets",
+                topic=f"meshcore/STN/{'a' * 64}/packets",
+                pattern="meshcore/+/+/packets",
                 payload={
                     "packet_type": "5",
                     "hash": "FEEDC0DE",
@@ -453,7 +452,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         handler = MagicMock()
         subscriber.register_handler("advertisement", handler)
@@ -482,8 +480,8 @@ class TestSubscriber:
             },
         ):
             subscriber._handle_mqtt_message(
-                topic=f"meshcore/BOS/{'a' * 64}/packets",
-                pattern="meshcore/BOS/+/packets",
+                topic=f"meshcore/STN/{'a' * 64}/packets",
+                pattern="meshcore/+/+/packets",
                 payload={
                     "packet_type": "4",
                     "hash": "A1B2C3D4",
@@ -513,7 +511,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         contact_handler = MagicMock()
         advert_handler = MagicMock()
@@ -538,8 +535,8 @@ class TestSubscriber:
             },
         ):
             subscriber._handle_mqtt_message(
-                topic=f"meshcore/BOS/{'a' * 64}/packets",
-                pattern="meshcore/BOS/+/packets",
+                topic=f"meshcore/STN/{'a' * 64}/packets",
+                pattern="meshcore/+/+/packets",
                 payload={
                     "packet_type": "11",
                     "hash": "E5F6A7B8",
@@ -566,7 +563,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         trace_handler = MagicMock()
         subscriber.register_handler("trace_data", trace_handler)
@@ -591,8 +587,8 @@ class TestSubscriber:
             },
         ):
             subscriber._handle_mqtt_message(
-                topic=f"meshcore/BOS/{'a' * 64}/packets",
-                pattern="meshcore/BOS/+/packets",
+                topic=f"meshcore/STN/{'a' * 64}/packets",
+                pattern="meshcore/+/+/packets",
                 payload={
                     "packet_type": "9",
                     "hash": "99887766",
@@ -619,7 +615,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         trace_handler = MagicMock()
         subscriber.register_handler("trace_data", trace_handler)
@@ -644,8 +639,8 @@ class TestSubscriber:
             },
         ):
             subscriber._handle_mqtt_message(
-                topic=f"meshcore/BOS/{'a' * 64}/packets",
-                pattern="meshcore/BOS/+/packets",
+                topic=f"meshcore/STN/{'a' * 64}/packets",
+                pattern="meshcore/+/+/packets",
                 payload={
                     "packet_type": "9",
                     "hash": "99887766",
@@ -670,7 +665,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         path_handler = MagicMock()
         subscriber.register_handler("path_updated", path_handler)
@@ -694,8 +688,8 @@ class TestSubscriber:
             },
         ):
             subscriber._handle_mqtt_message(
-                topic=f"meshcore/BOS/{'a' * 64}/packets",
-                pattern="meshcore/BOS/+/packets",
+                topic=f"meshcore/STN/{'a' * 64}/packets",
+                pattern="meshcore/+/+/packets",
                 payload={
                     "packet_type": "8",
                     "hash": "99887766",
@@ -720,7 +714,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         path_handler = MagicMock()
         packet_handler = MagicMock()
@@ -746,8 +739,8 @@ class TestSubscriber:
             },
         ):
             subscriber._handle_mqtt_message(
-                topic=f"meshcore/BOS/{'a' * 64}/packets",
-                pattern="meshcore/BOS/+/packets",
+                topic=f"meshcore/STN/{'a' * 64}/packets",
+                pattern="meshcore/+/+/packets",
                 payload={
                     "packet_type": "8",
                     "hash": "99887766",
@@ -775,7 +768,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         packet_handler = MagicMock()
         subscriber.register_handler("letsmesh_packet", packet_handler)
@@ -796,8 +788,8 @@ class TestSubscriber:
             return_value=decoded_packet,
         ):
             subscriber._handle_mqtt_message(
-                topic=f"meshcore/BOS/{'a' * 64}/packets",
-                pattern="meshcore/BOS/+/packets",
+                topic=f"meshcore/STN/{'a' * 64}/packets",
+                pattern="meshcore/+/+/packets",
                 payload={
                     "packet_type": "10",
                     "hash": "99887766",
@@ -822,7 +814,6 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            ingest_mode="letsmesh_upload",
         )
         handler = MagicMock()
         subscriber.register_handler("channel_msg_recv", handler)
@@ -843,8 +834,8 @@ class TestSubscriber:
             },
         ):
             subscriber._handle_mqtt_message(
-                topic=f"meshcore/BOS/{'a' * 64}/packets",
-                pattern="meshcore/BOS/+/packets",
+                topic=f"meshcore/STN/{'a' * 64}/packets",
+                pattern="meshcore/+/+/packets",
                 payload={
                     "packet_type": "5",
                     "hash": "ABABAB1234",
@@ -857,6 +848,126 @@ class TestSubscriber:
         _public_key, _event_type, payload, _db = handler.call_args.args
         assert payload["text"] == "hello from payload sender"
         assert payload["pubkey_prefix"] == "1A2B3C4D5E6F"
+
+
+class TestSubscriberDispatch:
+    """Tests for _dispatch_event and lifecycle methods."""
+
+    @pytest.fixture
+    def mock_mqtt_client(self):
+        """Create a mock MQTT client."""
+        client = MagicMock()
+        client.topic_builder = MagicMock()
+        client.topic_builder.prefix = "meshcore"
+        client.topic_builder.all_events_topic.return_value = "meshcore/+/event/#"
+        client.topic_builder.parse_letsmesh_upload_topic.return_value = (
+            "a" * 64,
+            "status",
+        )
+        return client
+
+    @pytest.fixture
+    def subscriber(self, mock_mqtt_client, db_manager):
+        """Create a subscriber instance."""
+        return Subscriber(mock_mqtt_client, db_manager)
+
+    def test_dispatch_event_with_no_handler_falls_back_to_event_log(self, subscriber):
+        """Unregistered event types fall back to event_log handler."""
+        with patch(
+            "meshcore_hub.collector.handlers.event_log.handle_event_log"
+        ) as mock_log:
+            subscriber._dispatch_event("a" * 64, "unknown_type", {"data": 1})
+            mock_log.assert_called_once()
+
+    def test_dispatch_event_handler_exception_logged(self, subscriber):
+        """Handler exceptions are caught and logged, not re-raised."""
+        handler = MagicMock(side_effect=RuntimeError("boom"))
+        subscriber.register_handler("test_event", handler)
+
+        subscriber._dispatch_event("a" * 64, "test_event", {"data": 1})
+
+        handler.assert_called_once()
+
+    def test_dispatch_event_event_log_exception_logged(self, subscriber):
+        """Event log handler exceptions are caught and logged."""
+        with patch(
+            "meshcore_hub.collector.handlers.event_log.handle_event_log",
+            side_effect=RuntimeError("log boom"),
+        ):
+            subscriber._dispatch_event("a" * 64, "unknown_type", {"data": 1})
+
+    def test_dispatch_event_queues_webhook(self, subscriber):
+        """Events are queued for webhook when dispatcher is configured."""
+        mock_dispatcher = MagicMock()
+        mock_dispatcher.webhooks = [MagicMock()]
+        subscriber._webhook_dispatcher = mock_dispatcher
+
+        handler = MagicMock()
+        subscriber.register_handler("test_event", handler)
+
+        subscriber._dispatch_event("a" * 64, "test_event", {"data": 1})
+
+        assert len(subscriber._webhook_queue) == 1
+        assert subscriber._webhook_queue[0][0] == "test_event"
+
+    def test_dispatch_event_no_webhook_without_dispatcher(self, subscriber):
+        """No webhook queued when dispatcher is not configured."""
+        handler = MagicMock()
+        subscriber.register_handler("test_event", handler)
+
+        subscriber._dispatch_event("a" * 64, "test_event", {"data": 1})
+
+        assert len(subscriber._webhook_queue) == 0
+
+    def test_start_with_mqtt_retry(self, mock_mqtt_client, db_manager):
+        """MQTT connection is retried on failure."""
+        mock_mqtt_client.connect.side_effect = [
+            ConnectionError("fail"),
+            None,
+        ]
+
+        subscriber = Subscriber(mock_mqtt_client, db_manager)
+        with patch("meshcore_hub.collector.subscriber.time.sleep"):
+            subscriber.start()
+
+        assert mock_mqtt_client.connect.call_count == 2
+        assert subscriber._mqtt_connected is True
+        subscriber.stop()
+
+    def test_start_mqtt_all_retries_exhausted(self, mock_mqtt_client, db_manager):
+        """Subscriber raises when all MQTT retries fail."""
+        mock_mqtt_client.connect.side_effect = ConnectionError("fail")
+
+        subscriber = Subscriber(mock_mqtt_client, db_manager)
+        with (
+            patch("meshcore_hub.collector.subscriber.time.sleep"),
+            pytest.raises(ConnectionError),
+        ):
+            subscriber.start()
+
+    def test_run_calls_start_when_not_running(self, mock_mqtt_client, db_manager):
+        """run() calls start() if subscriber is not running."""
+        subscriber = Subscriber(mock_mqtt_client, db_manager)
+
+        with patch.object(subscriber, "start") as mock_start:
+            mock_start.side_effect = lambda: setattr(subscriber, "_running", True)
+            subscriber._shutdown_event.set()
+            subscriber.run()
+
+        mock_start.assert_called_once()
+
+    def test_stop_when_not_running(self, subscriber):
+        """stop() is a no-op when not running."""
+        subscriber._running = False
+        subscriber.stop()
+
+    def test_health_status(self, subscriber):
+        """Health status reports correct state."""
+        status = subscriber.get_health_status()
+        assert status["running"] is False
+        assert status["mqtt_connected"] is False
+        assert status["database_connected"] is False
+        assert status["healthy"] is False
 
 
 class TestCreateSubscriber:

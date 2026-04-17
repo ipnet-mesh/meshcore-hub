@@ -1,0 +1,33 @@
+# MeshCore Hub - Traefik Docker Compose Override
+#
+# Adds Traefik auto-discovery labels to core services.
+# Requires docker-compose.prod.yml (for the proxy-net network).
+#
+# Set TRAEFIK_DOMAIN in your .env file to the hostname for this instance.
+#
+# Prerequisites:
+#   - Traefik configured with Docker provider and attached to proxy-net
+#   - TRAEFIK_DOMAIN set in .env (e.g., TRAEFIK_DOMAIN=meshcore.example.com)
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml up -d
+
+services:
+  api:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.${COMPOSE_PROJECT_NAME:-hub}-api.loadbalancer.server.port=8000"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-api.rule=Host(`${TRAEFIK_DOMAIN}`) && (PathPrefix(`/api`) || PathPrefix(`/metrics`) || PathPrefix(`/health`))"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-api.entrypoints=websecure"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-api.tls=true"
+      - "traefik.docker.network=proxy-net"
+
+  web:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.${COMPOSE_PROJECT_NAME:-hub}-web.loadbalancer.server.port=8080"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.rule=Host(`${TRAEFIK_DOMAIN}`)"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.entrypoints=websecure"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.tls=true"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.priority=1"
+      - "traefik.docker.network=proxy-net"

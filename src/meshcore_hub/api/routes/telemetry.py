@@ -20,7 +20,7 @@ async def list_telemetry(
     _: RequireRead,
     session: DbSession,
     node_public_key: Optional[str] = Query(None, description="Filter by node"),
-    received_by: Optional[str] = Query(
+    observed_by: Optional[str] = Query(
         None, description="Filter by receiver node public key"
     ),
     since: Optional[datetime] = Query(None, description="Start timestamp"),
@@ -30,18 +30,18 @@ async def list_telemetry(
 ) -> TelemetryList:
     """List telemetry records with filtering and pagination."""
     # Alias for receiver node join
-    ReceiverNode = aliased(Node)
+    ObserverNode = aliased(Node)
 
     # Build query with receiver node join
-    query = select(Telemetry, ReceiverNode.public_key.label("receiver_pk")).outerjoin(
-        ReceiverNode, Telemetry.receiver_node_id == ReceiverNode.id
+    query = select(Telemetry, ObserverNode.public_key.label("observer_pk")).outerjoin(
+        ObserverNode, Telemetry.observer_node_id == ObserverNode.id
     )
 
     if node_public_key:
         query = query.where(Telemetry.node_public_key == node_public_key)
 
-    if received_by:
-        query = query.where(ReceiverNode.public_key == received_by)
+    if observed_by:
+        query = query.where(ObserverNode.public_key == observed_by)
 
     if since:
         query = query.where(Telemetry.received_at >= since)
@@ -59,13 +59,13 @@ async def list_telemetry(
     # Execute
     results = session.execute(query).all()
 
-    # Build response with received_by
+    # Build response with observed_by
     items = []
-    for tel, receiver_pk in results:
+    for tel, observer_pk in results:
         data = {
             "id": tel.id,
-            "receiver_node_id": tel.receiver_node_id,
-            "received_by": receiver_pk,
+            "observer_node_id": tel.observer_node_id,
+            "observed_by": observer_pk,
             "node_id": tel.node_id,
             "node_public_key": tel.node_public_key,
             "parsed_data": tel.parsed_data,
@@ -89,10 +89,10 @@ async def get_telemetry(
     telemetry_id: str,
 ) -> TelemetryRead:
     """Get a single telemetry record by ID."""
-    ReceiverNode = aliased(Node)
+    ObserverNode = aliased(Node)
     query = (
-        select(Telemetry, ReceiverNode.public_key.label("receiver_pk"))
-        .outerjoin(ReceiverNode, Telemetry.receiver_node_id == ReceiverNode.id)
+        select(Telemetry, ObserverNode.public_key.label("observer_pk"))
+        .outerjoin(ObserverNode, Telemetry.observer_node_id == ObserverNode.id)
         .where(Telemetry.id == telemetry_id)
     )
     result = session.execute(query).one_or_none()
@@ -100,11 +100,11 @@ async def get_telemetry(
     if not result:
         raise HTTPException(status_code=404, detail="Telemetry record not found")
 
-    tel, receiver_pk = result
+    tel, observer_pk = result
     data = {
         "id": tel.id,
-        "receiver_node_id": tel.receiver_node_id,
-        "received_by": receiver_pk,
+        "observer_node_id": tel.observer_node_id,
+        "observed_by": observer_pk,
         "node_id": tel.node_id,
         "node_public_key": tel.node_public_key,
         "parsed_data": tel.parsed_data,

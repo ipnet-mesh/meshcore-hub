@@ -91,7 +91,7 @@ class TestGetTracePath:
 class TestListTracePathsFilters:
     """Tests for trace path list query filters."""
 
-    def test_filter_by_received_by(
+    def test_filter_by_observed_by(
         self,
         client_no_auth,
         sample_trace_path,
@@ -100,7 +100,7 @@ class TestListTracePathsFilters:
     ):
         """Test filtering trace paths by receiver node."""
         response = client_no_auth.get(
-            f"/api/v1/trace-paths?received_by={receiver_node.public_key}"
+            f"/api/v1/trace-paths?observed_by={receiver_node.public_key}"
         )
         assert response.status_code == 200
         data = response.json()

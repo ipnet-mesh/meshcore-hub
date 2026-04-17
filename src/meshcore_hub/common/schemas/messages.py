@@ -6,17 +6,19 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 
-class ReceiverInfo(BaseModel):
-    """Information about a receiver that observed an event."""
+class ObserverInfo(BaseModel):
+    """Information about an observer that captured an event."""
 
-    node_id: str = Field(..., description="Receiver node UUID")
-    public_key: str = Field(..., description="Receiver node public key")
-    name: Optional[str] = Field(default=None, description="Receiver node name")
-    tag_name: Optional[str] = Field(default=None, description="Receiver name from tags")
+    node_id: str = Field(..., description="Observer node UUID")
+    public_key: str = Field(..., description="Observer node public key")
+    name: Optional[str] = Field(default=None, description="Observer node name")
+    tag_name: Optional[str] = Field(default=None, description="Observer name from tags")
     snr: Optional[float] = Field(
-        default=None, description="Signal-to-noise ratio at this receiver"
+        default=None, description="Signal-to-noise ratio at this observer"
     )
-    received_at: datetime = Field(..., description="When this receiver saw the event")
+    observed_at: datetime = Field(
+        ..., description="When this observer captured the event"
+    )
 
     class Config:
         from_attributes = True
@@ -25,12 +27,12 @@ class ReceiverInfo(BaseModel):
 class MessageRead(BaseModel):
     """Schema for reading a message."""
 
-    received_by: Optional[str] = Field(
-        default=None, description="Receiving interface node public key"
+    observed_by: Optional[str] = Field(
+        default=None, description="Observing interface node public key"
     )
-    receiver_name: Optional[str] = Field(default=None, description="Receiver node name")
-    receiver_tag_name: Optional[str] = Field(
-        default=None, description="Receiver name from tags"
+    observer_name: Optional[str] = Field(default=None, description="Observer node name")
+    observer_tag_name: Optional[str] = Field(
+        default=None, description="Observer name from tags"
     )
     message_type: str = Field(..., description="Message type (contact, channel)")
     pubkey_prefix: Optional[str] = Field(
@@ -53,8 +55,8 @@ class MessageRead(BaseModel):
     )
     received_at: datetime = Field(..., description="When received by interface")
     created_at: datetime = Field(..., description="Record creation timestamp")
-    receivers: list[ReceiverInfo] = Field(
-        default_factory=list, description="All receivers that observed this message"
+    observers: list[ObserverInfo] = Field(
+        default_factory=list, description="All observers that captured this message"
     )
 
     class Config:
@@ -104,12 +106,12 @@ class MessageFilters(BaseModel):
 class AdvertisementRead(BaseModel):
     """Schema for reading an advertisement."""
 
-    received_by: Optional[str] = Field(
+    observed_by: Optional[str] = Field(
         default=None, description="Receiving interface node public key"
     )
-    receiver_name: Optional[str] = Field(default=None, description="Receiver node name")
-    receiver_tag_name: Optional[str] = Field(
-        default=None, description="Receiver name from tags"
+    observer_name: Optional[str] = Field(default=None, description="Observer node name")
+    observer_tag_name: Optional[str] = Field(
+        default=None, description="Observer name from tags"
     )
     public_key: str = Field(..., description="Advertised public key")
     name: Optional[str] = Field(default=None, description="Advertised name")
@@ -126,9 +128,9 @@ class AdvertisementRead(BaseModel):
     flags: Optional[int] = Field(default=None, description="Capability flags")
     received_at: datetime = Field(..., description="When received")
     created_at: datetime = Field(..., description="Record creation timestamp")
-    receivers: list[ReceiverInfo] = Field(
+    observers: list[ObserverInfo] = Field(
         default_factory=list,
-        description="All receivers that observed this advertisement",
+        description="All observers that captured this advertisement",
     )
 
     class Config:
@@ -147,7 +149,7 @@ class AdvertisementList(BaseModel):
 class TracePathRead(BaseModel):
     """Schema for reading a trace path."""
 
-    received_by: Optional[str] = Field(
+    observed_by: Optional[str] = Field(
         default=None, description="Receiving interface node public key"
     )
     initiator_tag: int = Field(..., description="Trace identifier")
@@ -164,9 +166,9 @@ class TracePathRead(BaseModel):
     hop_count: Optional[int] = Field(default=None, description="Total hops")
     received_at: datetime = Field(..., description="When received")
     created_at: datetime = Field(..., description="Record creation timestamp")
-    receivers: list[ReceiverInfo] = Field(
+    observers: list[ObserverInfo] = Field(
         default_factory=list,
-        description="All receivers that observed this trace",
+        description="All observers that captured this trace",
     )
 
     class Config:
@@ -185,7 +187,7 @@ class TracePathList(BaseModel):
 class TelemetryRead(BaseModel):
     """Schema for reading a telemetry record."""
 
-    received_by: Optional[str] = Field(
+    observed_by: Optional[str] = Field(
         default=None, description="Receiving interface node public key"
     )
     node_public_key: str = Field(..., description="Reporting node public key")
@@ -194,9 +196,9 @@ class TelemetryRead(BaseModel):
     )
     received_at: datetime = Field(..., description="When received")
     created_at: datetime = Field(..., description="Record creation timestamp")
-    receivers: list[ReceiverInfo] = Field(
+    observers: list[ObserverInfo] = Field(
         default_factory=list,
-        description="All receivers that observed this telemetry",
+        description="All observers that captured this telemetry",
     )
 
     class Config:

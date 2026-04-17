@@ -33,15 +33,6 @@ class TestReadAuthentication:
         response = client_no_auth.get("/api/v1/messages")
         assert response.status_code == 200
 
-        response = client_no_auth.post(
-            "/api/v1/commands/send-message",
-            json={
-                "destination": "abc123def456abc123def456abc123de",
-                "text": "Test",
-            },
-        )
-        assert response.status_code == 200
-
     def test_read_endpoints_accept_read_key(self, client_with_auth):
         """Test that read endpoints accept read key."""
         response = client_with_auth.get(
@@ -114,22 +105,22 @@ class TestAdminAuthentication:
     def test_admin_endpoints_accept_admin_key(self, client_with_auth):
         """Test that admin endpoints accept admin key."""
         response = client_with_auth.post(
-            "/api/v1/commands/send-message",
+            "/api/v1/nodes/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/tags",
             json={
-                "destination": "abc123def456abc123def456abc123de",
-                "text": "Test",
+                "tag_key": "name",
+                "tag_value": "test-node",
             },
             headers={"Authorization": "Bearer test-admin-key"},
         )
-        assert response.status_code == 200
+        assert response.status_code in (200, 201, 404, 422)
 
     def test_admin_endpoints_reject_read_key(self, client_with_auth):
         """Test that admin endpoints reject read key with 403."""
         response = client_with_auth.post(
-            "/api/v1/commands/send-message",
+            "/api/v1/nodes/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/tags",
             json={
-                "destination": "abc123def456abc123def456abc123de",
-                "text": "Test",
+                "tag_key": "name",
+                "tag_value": "test-node",
             },
             headers={"Authorization": "Bearer test-read-key"},
         )
@@ -138,10 +129,10 @@ class TestAdminAuthentication:
     def test_admin_endpoints_reject_invalid_key(self, client_with_auth):
         """Test that admin endpoints reject invalid keys with 403."""
         response = client_with_auth.post(
-            "/api/v1/commands/send-message",
+            "/api/v1/nodes/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/tags",
             json={
-                "destination": "abc123def456abc123def456abc123de",
-                "text": "Test",
+                "tag_key": "name",
+                "tag_value": "test-node",
             },
             headers={"Authorization": "Bearer completely-wrong-key"},
         )
@@ -150,10 +141,10 @@ class TestAdminAuthentication:
     def test_admin_endpoints_reject_no_auth_header(self, client_with_auth):
         """Test that admin endpoints reject missing auth header with 401."""
         response = client_with_auth.post(
-            "/api/v1/commands/send-message",
+            "/api/v1/nodes/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/tags",
             json={
-                "destination": "abc123def456abc123def456abc123de",
-                "text": "Test",
+                "tag_key": "name",
+                "tag_value": "test-node",
             },
         )
         assert response.status_code == 401

@@ -1,25 +1,26 @@
 """LetsMesh packet decoder integration.
 
-Provides an optional bridge to the external `meshcore-decoder` CLI so the
-collector can turn LetsMesh upload `raw` packet hex into decoded message data.
+Provides native Python packet decoding via the ``meshcoredecoder`` library
+so the collector can turn LetsMesh upload ``raw`` packet hex into decoded
+message data.
 """
 
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
-import shlex
-import shutil
 import string
-import subprocess
 from typing import Any, NamedTuple
+
+from meshcoredecoder import MeshCoreDecoder
+from meshcoredecoder.crypto import MeshCoreKeyStore
+from meshcoredecoder.types import DecryptionOptions
 
 logger = logging.getLogger(__name__)
 
 
 class LetsMeshPacketDecoder:
-    """Decode LetsMesh packet payloads with `meshcore-decoder` CLI."""
+    """Decode LetsMesh packet payloads with the native Python meshcore-decoder."""
 
     class ChannelKey(NamedTuple):
         """Channel key metadata for decryption and channel labeling."""
@@ -28,23 +29,18 @@ class LetsMeshPacketDecoder:
         key_hex: str
         channel_hash: str
 
-    # Built-in keys required by your deployment.
-    # - Public channel
-    # - #test channel
     BUILTIN_CHANNEL_KEYS: tuple[tuple[str, str], ...] = (
         ("Public", "8B3387E9C5CDEA6AC9E5EDBAA115CD72"),
         ("test", "9CD8FCF22A47333B591D96A2B848B73F"),
     )
 
+    TEST_CHANNEL_HASH: str = "D9"
+    TEST_CHANNEL_IDX: int = 217
+
     def __init__(
         self,
-        enabled: bool = True,
-        command: str = "meshcore-decoder",
         channel_keys: list[str] | None = None,
-        timeout_seconds: float = 2.0,
     ) -> None:
-        self._enabled = enabled
-        self._command_tokens = shlex.split(command.strip()) if command.strip() else []
         self._channel_key_infos = self._normalize_channel_keys(channel_keys or [])
         self._channel_keys = [info.key_hex for info in self._channel_key_infos]
         self._channel_names_by_hash = {
@@ -54,10 +50,22 @@ class LetsMeshPacketDecoder:
         }
         self._decode_cache: dict[str, dict[str, Any] | None] = {}
         self._decode_cache_maxsize = 2048
-        self._timeout_seconds = timeout_seconds
-        self._checked_command = False
-        self._command_available = False
-        self._warned_unavailable = False
+        self._key_store = self._build_key_store()
+        logger.debug(
+            "LetsMesh decoder initialized: %d channel keys loaded (%s)",
+            len(self._channel_key_infos),
+            ", ".join(
+                f"{info.label or 'unlabeled'}=0x{info.channel_hash}"
+                for info in self._channel_key_infos
+            ),
+        )
+
+    def _build_key_store(self) -> MeshCoreKeyStore:
+        """Build a MeshCoreKeyStore from configured channel keys."""
+        key_store = MeshCoreKeyStore()
+        if self._channel_keys:
+            key_store.add_channel_secrets(self._channel_keys)
+        return key_store
 
     @classmethod
     def _normalize_channel_keys(cls, values: list[str]) -> list[ChannelKey]:
@@ -91,7 +99,7 @@ class LetsMeshPacketDecoder:
         if value is None:
             return None
 
-        candidate = value.strip()
+        candidate = value.strip().strip('"').strip("'")
         if not candidate:
             return None
 
@@ -161,17 +169,12 @@ class LetsMeshPacketDecoder:
             if not info.label:
                 continue
 
-            label = info.label.strip()
+            label = info.label.strip().strip('"').strip("'")
             if not label:
                 continue
 
-            if label.lower() == "public":
-                normalized_label = "Public"
-            else:
-                normalized_label = label if label.startswith("#") else f"#{label}"
-
             channel_idx = int(info.channel_hash, 16)
-            labels.setdefault(channel_idx, normalized_label)
+            labels.setdefault(channel_idx, label)
 
         return labels
 
@@ -193,83 +196,100 @@ class LetsMeshPacketDecoder:
         decoded = self._decode_raw(clean_hex)
         self._decode_cache[clean_hex] = decoded
         if len(self._decode_cache) > self._decode_cache_maxsize:
-            # Drop oldest cached payload (insertion-order dict).
             self._decode_cache.pop(next(iter(self._decode_cache)))
         return decoded
 
     def _decode_raw(self, raw_hex: str) -> dict[str, Any] | None:
-        """Decode raw packet hex with decoder CLI (cached per packet hex)."""
-        if not self._enabled:
-            return None
-        if not self._is_command_available():
-            return None
-
-        command = [*self._command_tokens, "decode", raw_hex, "--json"]
-        if self._channel_keys:
-            command.append("--key")
-            command.extend(self._channel_keys)
-
+        """Decode raw packet hex with native Python decoder (cached per packet hex)."""
         try:
-            result = subprocess.run(
-                command,
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=self._timeout_seconds,
+            options = DecryptionOptions(
+                key_store=self._key_store,
+                attempt_decryption=True,
             )
-        except subprocess.TimeoutExpired:
-            logger.debug(
-                "LetsMesh decoder timed out after %.2fs",
-                self._timeout_seconds,
-            )
-            return None
-        except OSError as exc:
-            logger.debug("LetsMesh decoder failed to execute: %s", exc)
+            result = MeshCoreDecoder.decode(raw_hex, options)
+        except Exception as exc:
+            logger.debug("LetsMesh decoder failed: %s", exc)
             return None
 
-        if result.returncode != 0:
-            stderr = result.stderr.strip() if result.stderr else ""
-            logger.debug(
-                "LetsMesh decoder exited with code %s%s",
-                result.returncode,
-                f": {stderr}" if stderr else "",
-            )
+        if not result.is_valid:
+            errors = getattr(result, "errors", None)
+            if errors:
+                logger.debug("LetsMesh decoder errors: %s", errors)
             return None
 
-        output = result.stdout.strip()
-        if not output:
-            return None
-
+        raw_payload_obj = None
         try:
-            decoded = json.loads(output)
-        except json.JSONDecodeError:
-            logger.debug("LetsMesh decoder returned non-JSON output")
-            return None
+            raw_payload_obj = result.payload.get("decoded")
+        except (AttributeError, TypeError):
+            pass
 
-        return decoded if isinstance(decoded, dict) else None
+        decoded_dict = result.to_dict()
 
-    def _is_command_available(self) -> bool:
-        """Check decoder command availability once."""
-        if self._checked_command:
-            return self._command_available
+        if raw_payload_obj is not None:
+            self._enrich_payload_decoded(decoded_dict, raw_payload_obj)
 
-        self._checked_command = True
-        if not self._command_tokens:
-            self._command_available = False
-        else:
-            command = self._command_tokens[0]
-            if "/" in command:
-                self._command_available = shutil.which(command) is not None
-            else:
-                self._command_available = shutil.which(command) is not None
+        self._flatten_control_parsed(decoded_dict)
 
-        if not self._command_available and not self._warned_unavailable:
-            self._warned_unavailable = True
-            command_text = " ".join(self._command_tokens) or "<empty>"
-            logger.warning(
-                "LetsMesh decoder command not found (%s). "
-                "Messages will remain encrypted placeholders until decoder is installed.",
-                command_text,
-            )
+        return decoded_dict if isinstance(decoded_dict, dict) else None
 
-        return self._command_available
+    _PAYLOAD_ATTR_MAP: tuple[tuple[str, str], ...] = (
+        ("channel_hash", "channelHash"),
+        ("cipher_mac", "cipherMac"),
+        ("ciphertext", "ciphertext"),
+        ("ciphertext_length", "ciphertextLength"),
+        ("decrypted", "decrypted"),
+        ("destination_hash", "destinationHash"),
+        ("source_hash", "sourceHash"),
+        ("sender_public_key", "senderPublicKey"),
+        ("path_length", "pathLength"),
+        ("path_hashes", "pathHashes"),
+        ("extra_type", "extraType"),
+        ("extra_data", "extraData"),
+        ("checksum", "checksum"),
+    )
+
+    @classmethod
+    def _enrich_payload_decoded(
+        cls,
+        decoded_dict: dict[str, Any],
+        payload_obj: Any,
+    ) -> None:
+        """Enrich payload.decoded dict with fields the library's to_dict() omits.
+
+        Several payload classes (GroupTextPayload, TextMessagePayload, etc.)
+        inherit BasePayload.to_dict() which only returns type/version/isValid.
+        This method reads the actual object attributes and merges them in so
+        the normalizer can find decrypted text, channel hashes, etc.
+        """
+        payload_section = decoded_dict.get("payload")
+        if not isinstance(payload_section, dict):
+            return
+        decoded_section = payload_section.get("decoded")
+        if not isinstance(decoded_section, dict):
+            return
+        for attr_name, dict_key in cls._PAYLOAD_ATTR_MAP:
+            value = getattr(payload_obj, attr_name, None)
+            if value is None:
+                continue
+            decoded_section.setdefault(dict_key, value)
+
+    @staticmethod
+    def _flatten_control_parsed(decoded_dict: dict[str, Any]) -> None:
+        """Flatten Control payload parsed sub-fields into decoded dict.
+
+        The Python library nests sub-type-specific fields (publicKey, subType,
+        nodeType, etc.) under ``payload.decoded.parsed`` while the TS CLI
+        returns them flat at ``payload.decoded.*``.  The normalizer expects
+        the flat layout.
+        """
+        payload = decoded_dict.get("payload")
+        if not isinstance(payload, dict):
+            return
+        decoded = payload.get("decoded")
+        if not isinstance(decoded, dict):
+            return
+        parsed = decoded.get("parsed")
+        if not isinstance(parsed, dict):
+            return
+        for key, value in parsed.items():
+            decoded.setdefault(key, value)

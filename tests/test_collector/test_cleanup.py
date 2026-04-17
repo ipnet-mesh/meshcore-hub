@@ -88,7 +88,7 @@ async def test_cleanup_old_data_live(async_db_session: AsyncSession) -> None:
     async_db_session.add(old_adv)
 
     old_msg = Message(
-        receiver_node_id=node.id,
+        observer_node_id=node.id,
         message_type="channel",
         text="old message",
         created_at=old_date,
@@ -97,7 +97,7 @@ async def test_cleanup_old_data_live(async_db_session: AsyncSession) -> None:
     async_db_session.add(old_msg)
 
     old_telemetry = Telemetry(
-        receiver_node_id=node.id,
+        observer_node_id=node.id,
         node_id=node.id,
         node_public_key=node.public_key,
         created_at=old_date,
@@ -106,7 +106,7 @@ async def test_cleanup_old_data_live(async_db_session: AsyncSession) -> None:
     async_db_session.add(old_telemetry)
 
     old_trace = TracePath(
-        receiver_node_id=node.id,
+        observer_node_id=node.id,
         initiator_tag="test",
         created_at=old_date,
         updated_at=old_date,
@@ -114,7 +114,7 @@ async def test_cleanup_old_data_live(async_db_session: AsyncSession) -> None:
     async_db_session.add(old_trace)
 
     old_event = EventLog(
-        receiver_node_id=node.id,
+        observer_node_id=node.id,
         event_type="test_event",
         created_at=old_date,
         updated_at=old_date,

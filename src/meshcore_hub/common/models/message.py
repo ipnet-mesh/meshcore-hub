@@ -14,7 +14,7 @@ class Message(Base, UUIDMixin, TimestampMixin):
 
     Attributes:
         id: UUID primary key
-        receiver_node_id: FK to nodes (receiving interface)
+        observer_node_id: FK to nodes (observing interface)
         message_type: Message type (contact, channel)
         pubkey_prefix: Sender's public key prefix (12 chars, contact msgs)
         channel_idx: Channel index (channel msgs)
@@ -30,7 +30,7 @@ class Message(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "messages"
 
-    receiver_node_id: Mapped[Optional[str]] = mapped_column(
+    observer_node_id: Mapped[Optional[str]] = mapped_column(
         ForeignKey("nodes.id", ondelete="SET NULL"),
         nullable=True,
         index=True,

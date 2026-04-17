@@ -1,135 +1,130 @@
 services:
   # ==========================================================================
-  # MQTT Broker - Eclipse Mosquitto (optional, use --profile mqtt)
+  # MQTT Broker - MeshCore MQTT Broker (optional, use --profile mqtt)
+  # WebSocket-only broker with MeshCore public key authentication
   # Most users will connect to an external MQTT broker instead
+  # See: https://github.com/michaelhart/meshcore-mqtt-broker
   # ==========================================================================
   mqtt:
-    image: eclipse-mosquitto:2
-    container_name: meshcore-mqtt
+    image: ghcr.io/ipnet-mesh/meshcore-mqtt-broker:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-hub}-mqtt
     profiles:
       - all
       - mqtt
     restart: unless-stopped
-    ports:
-      - "${MQTT_EXTERNAL_PORT:-1883}:1883"
-      - "${MQTT_WS_PORT:-9001}:9001"
     volumes:
-      # - ./etc/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-      - mosquitto_data:/mosquitto/data
-      - mosquitto_log:/mosquitto/log
+      - mqtt_data:/data
+    environment:
+      # Broker listener
+      - MQTT_WS_PORT=${MQTT_PORT:-1883}
+      - MQTT_HOST=0.0.0.0
+      # JWT audience validation
+      - AUTH_EXPECTED_AUDIENCE=${MQTT_TOKEN_AUDIENCE:-mqtt.localhost}
+      # Subscriber accounts (hub connects as role 1 = admin for /internal topics)
+      - SUBSCRIBER_MAX_CONNECTIONS_DEFAULT=5
+      - SUBSCRIBER_1=${MQTT_USERNAME:-admin}:${MQTT_PASSWORD:-admin}:1
+      # Abuse detection
+      - ABUSE_ENFORCEMENT_ENABLED=false
+      - ABUSE_DUPLICATE_WINDOW_SIZE=100
+      - ABUSE_DUPLICATE_WINDOW_MS=300000
+      - ABUSE_DUPLICATE_THRESHOLD=10
+      - ABUSE_MAX_DUPLICATES_PER_PACKET=5
+      - ABUSE_DUPLICATE_RATE_THRESHOLD=0.3
+      - ABUSE_DUPLICATE_RATE_WINDOW_MS=300000
+      - ABUSE_BUCKET_CAPACITY=20
+      - ABUSE_BUCKET_REFILL_RATE=3
+      - ABUSE_MAX_PACKET_SIZE=255
+      - ABUSE_MAX_TOPICS_PER_DAY=3
+      - ABUSE_ANOMALY_THRESHOLD=10
+      - ABUSE_MAX_IATA_CHANGES_24H=3
+      - ABUSE_TOPIC_HISTORY_SIZE=50
+      - ABUSE_TOPIC_HISTORY_WINDOW_MS=86400000
+      - ABUSE_PERSISTENCE_PATH=/data/abuse-detection.db
+      - ABUSE_PERSISTENCE_INTERVAL_MS=300000
     healthcheck:
-      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-i", "healthcheck", "-W", "3"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const net=require('net');const s=net.createConnection(process.env.MQTT_WS_PORT||1883,'127.0.0.1',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),3000)",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
 
   # ==========================================================================
-  # Interface Receiver - MeshCore device to MQTT bridge (events)
+  # Observer - MeshCore packet capture to MQTT (serial only)
+  # Uses ghcr.io/agessaman/meshcore-packet-capture (separate project)
+  # Publishes to local MQTT (broker 3) for the hub collector to ingest.
+  # Optionally publish to Let's Mesh (brokers 1 & 2) for cloud map integration.
   # ==========================================================================
-  interface-receiver:
-    image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: meshcore-interface-receiver
+  observer:
+    image: ghcr.io/agessaman/meshcore-packet-capture:${PACKETCAPTURE_IMAGE_VERSION:-latest}
+    container_name: ${COMPOSE_PROJECT_NAME:-hub}-observer
     profiles:
       - all
-      - receiver
+      - observer
+    depends_on:
+      mqtt:
+        condition: service_healthy
     restart: unless-stopped
     devices:
       - "${SERIAL_PORT:-/dev/ttyUSB0}:${SERIAL_PORT:-/dev/ttyUSB0}"
-    user: root  # Required for device access
+    user: root
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - MQTT_HOST=${MQTT_HOST:-mqtt}
-      - MQTT_PORT=${MQTT_PORT:-1883}
-      - MQTT_USERNAME=${MQTT_USERNAME:-}
-      - MQTT_PASSWORD=${MQTT_PASSWORD:-}
-      - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
-      - MQTT_TLS=${MQTT_TLS:-false}
-      - MQTT_TRANSPORT=${MQTT_TRANSPORT:-tcp}
-      - MQTT_WS_PATH=${MQTT_WS_PATH:-/mqtt}
-      - SERIAL_PORT=${SERIAL_PORT:-/dev/ttyUSB0}
-      - SERIAL_BAUD=${SERIAL_BAUD:-115200}
-      - NODE_ADDRESS=${NODE_ADDRESS:-}
-    command: ["interface", "receiver"]
-    healthcheck:
-      test: ["CMD", "meshcore-hub", "health", "interface"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
-  # ==========================================================================
-  # Interface Sender - MQTT to MeshCore device bridge (commands)
-  # ==========================================================================
-  interface-sender:
-    image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: meshcore-interface-sender
-    profiles:
-      - all
-      - sender
-    restart: unless-stopped
-    devices:
-      - "${SERIAL_PORT_SENDER:-/dev/ttyUSB1}:${SERIAL_PORT_SENDER:-/dev/ttyUSB1}"
-    user: root  # Required for device access
-    environment:
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - MQTT_HOST=${MQTT_HOST:-mqtt}
-      - MQTT_PORT=${MQTT_PORT:-1883}
-      - MQTT_USERNAME=${MQTT_USERNAME:-}
-      - MQTT_PASSWORD=${MQTT_PASSWORD:-}
-      - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
-      - MQTT_TLS=${MQTT_TLS:-false}
-      - MQTT_TRANSPORT=${MQTT_TRANSPORT:-tcp}
-      - MQTT_WS_PATH=${MQTT_WS_PATH:-/mqtt}
-      - SERIAL_PORT=${SERIAL_PORT_SENDER:-/dev/ttyUSB1}
-      - SERIAL_BAUD=${SERIAL_BAUD:-115200}
-      - NODE_ADDRESS=${NODE_ADDRESS_SENDER:-}
-    command: ["interface", "sender"]
-    healthcheck:
-      test: ["CMD", "meshcore-hub", "health", "interface"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
-  # ==========================================================================
-  # Interface Mock Receiver - For testing without real devices
-  # ==========================================================================
-  interface-mock-receiver:
-    image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: meshcore-interface-mock-receiver
-    profiles:
-      - all
-      - mock
-    restart: unless-stopped
-    environment:
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - MQTT_HOST=${MQTT_HOST:-mqtt}
-      - MQTT_PORT=${MQTT_PORT:-1883}
-      - MQTT_USERNAME=${MQTT_USERNAME:-}
-      - MQTT_PASSWORD=${MQTT_PASSWORD:-}
-      - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
-      - MQTT_TLS=${MQTT_TLS:-false}
-      - MQTT_TRANSPORT=${MQTT_TRANSPORT:-tcp}
-      - MQTT_WS_PATH=${MQTT_WS_PATH:-/mqtt}
-      - MOCK_DEVICE=true
-      - NODE_ADDRESS=${NODE_ADDRESS:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
-    command: ["interface", "receiver", "--mock"]
-    healthcheck:
-      test: ["CMD", "meshcore-hub", "health", "interface"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+      # Connection (serial only)
+      - PACKETCAPTURE_CONNECTION_TYPE=serial
+      - PACKETCAPTURE_SERIAL_PORTS=${SERIAL_PORT:-/dev/ttyUSB0}
+      - PACKETCAPTURE_TIMEOUT=${PACKETCAPTURE_TIMEOUT:-30}
+      - PACKETCAPTURE_MAX_CONNECTION_RETRIES=${PACKETCAPTURE_MAX_CONNECTION_RETRIES:-5}
+      - PACKETCAPTURE_CONNECTION_RETRY_DELAY=${PACKETCAPTURE_CONNECTION_RETRY_DELAY:-5}
+      - PACKETCAPTURE_HEALTH_CHECK_INTERVAL=${PACKETCAPTURE_HEALTH_CHECK_INTERVAL:-30}
+      # Device
+      - PACKETCAPTURE_IATA=${PACKETCAPTURE_IATA:-LOC}
+      - PACKETCAPTURE_ORIGIN=${PACKETCAPTURE_ORIGIN:-}
+      - PACKETCAPTURE_ADVERT_INTERVAL_HOURS=${PACKETCAPTURE_ADVERT_INTERVAL_HOURS:-11}
+      - PACKETCAPTURE_RF_DATA_TIMEOUT=${PACKETCAPTURE_RF_DATA_TIMEOUT:-15.0}
+      # MQTT Broker 1 - Let's Mesh US (opt-in)
+      - PACKETCAPTURE_MQTT1_ENABLED=${PACKETCAPTURE_MQTT1_ENABLED:-false}
+      - PACKETCAPTURE_MQTT1_SERVER=${PACKETCAPTURE_MQTT1_SERVER:-mqtt-us-v1.letsmesh.net}
+      - PACKETCAPTURE_MQTT1_PORT=${PACKETCAPTURE_MQTT1_PORT:-443}
+      - PACKETCAPTURE_MQTT1_TRANSPORT=websockets
+      - PACKETCAPTURE_MQTT1_USE_TLS=${PACKETCAPTURE_MQTT1_USE_TLS:-true}
+      - PACKETCAPTURE_MQTT1_USE_AUTH_TOKEN=${PACKETCAPTURE_MQTT1_USE_AUTH_TOKEN:-true}
+      - PACKETCAPTURE_MQTT1_TOKEN_AUDIENCE=${PACKETCAPTURE_MQTT1_TOKEN_AUDIENCE:-mqtt-us-v1.letsmesh.net}
+      - PACKETCAPTURE_MQTT1_KEEPALIVE=${PACKETCAPTURE_MQTT1_KEEPALIVE:-120}
+      # MQTT Broker 2 - Let's Mesh EU (opt-in)
+      - PACKETCAPTURE_MQTT2_ENABLED=${PACKETCAPTURE_MQTT2_ENABLED:-false}
+      - PACKETCAPTURE_MQTT2_SERVER=${PACKETCAPTURE_MQTT2_SERVER:-mqtt-eu-v1.letsmesh.net}
+      - PACKETCAPTURE_MQTT2_PORT=${PACKETCAPTURE_MQTT2_PORT:-443}
+      - PACKETCAPTURE_MQTT2_TRANSPORT=websockets
+      - PACKETCAPTURE_MQTT2_USE_TLS=${PACKETCAPTURE_MQTT2_USE_TLS:-true}
+      - PACKETCAPTURE_MQTT2_USE_AUTH_TOKEN=${PACKETCAPTURE_MQTT2_USE_AUTH_TOKEN:-true}
+      - PACKETCAPTURE_MQTT2_TOKEN_AUDIENCE=${PACKETCAPTURE_MQTT2_TOKEN_AUDIENCE:-mqtt-eu-v1.letsmesh.net}
+      - PACKETCAPTURE_MQTT2_KEEPALIVE=${PACKETCAPTURE_MQTT2_KEEPALIVE:-120}
+      # MQTT Broker 3 - Local MQTT (wired to hub's MQTT_* vars)
+      - PACKETCAPTURE_MQTT3_ENABLED=${PACKETCAPTURE_MQTT3_ENABLED:-true}
+      - PACKETCAPTURE_MQTT3_SERVER=${MQTT_HOST}
+      - PACKETCAPTURE_MQTT3_PORT=${MQTT_PORT}
+      - PACKETCAPTURE_MQTT3_USERNAME=${MQTT_USERNAME:-}
+      - PACKETCAPTURE_MQTT3_PASSWORD=${MQTT_PASSWORD:-}
+      - PACKETCAPTURE_MQTT3_TRANSPORT=websockets
+      - PACKETCAPTURE_MQTT3_USE_TLS=${MQTT_TLS:-false}
+      - PACKETCAPTURE_MQTT3_USE_AUTH_TOKEN=true
+      - PACKETCAPTURE_MQTT3_TOKEN_AUDIENCE=${MQTT_TOKEN_AUDIENCE:-mqtt.localhost}
+      - PACKETCAPTURE_MQTT3_KEEPALIVE=${PACKETCAPTURE_MQTT3_KEEPALIVE:-60}
+      # Topics match broker's <prefix>/<IATA>/<pubkey>/<feed> format
+      - PACKETCAPTURE_MQTT3_TOPIC_STATUS=meshcore/{IATA}/{PUBLIC_KEY}/status
+      - PACKETCAPTURE_MQTT3_TOPIC_PACKETS=meshcore/{IATA}/{PUBLIC_KEY}/packets
+      # MQTT reconnection
+      - PACKETCAPTURE_MAX_MQTT_RETRIES=${PACKETCAPTURE_MAX_MQTT_RETRIES:-5}
+      - PACKETCAPTURE_MQTT_RETRY_DELAY=${PACKETCAPTURE_MQTT_RETRY_DELAY:-5}
+      - PACKETCAPTURE_EXIT_ON_RECONNECT_FAIL=${PACKETCAPTURE_EXIT_ON_RECONNECT_FAIL:-true}
+    volumes:
+      - observer_data:/app/data
 
   # ==========================================================================
   # Collector - MQTT subscriber and database storage
@@ -139,16 +134,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: meshcore-collector
+    container_name: ${COMPOSE_PROJECT_NAME:-hub}-collector
     profiles:
       - all
       - core
-    restart: unless-stopped
     depends_on:
-      db-migrate:
+      migrate:
         condition: service_completed_successfully
+    restart: unless-stopped
     volumes:
-      - hub_data:/data
+      - data:/data
       - ${SEED_HOME:-./seed}:/seed
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
@@ -158,13 +153,10 @@ services:
       - MQTT_PASSWORD=${MQTT_PASSWORD:-}
       - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
       - MQTT_TLS=${MQTT_TLS:-false}
-      - MQTT_TRANSPORT=${MQTT_TRANSPORT:-tcp}
-      - MQTT_WS_PATH=${MQTT_WS_PATH:-/mqtt}
-      - COLLECTOR_INGEST_MODE=${COLLECTOR_INGEST_MODE:-native}
-      - COLLECTOR_LETSMESH_DECODER_ENABLED=${COLLECTOR_LETSMESH_DECODER_ENABLED:-true}
-      - COLLECTOR_LETSMESH_DECODER_COMMAND=${COLLECTOR_LETSMESH_DECODER_COMMAND:-meshcore-decoder}
-      - COLLECTOR_LETSMESH_DECODER_KEYS=${COLLECTOR_LETSMESH_DECODER_KEYS:-}
-      - COLLECTOR_LETSMESH_DECODER_TIMEOUT_SECONDS=${COLLECTOR_LETSMESH_DECODER_TIMEOUT_SECONDS:-2.0}
+      - MQTT_TRANSPORT=${MQTT_TRANSPORT:-websockets}
+      - MQTT_WS_PATH=${MQTT_WS_PATH:-/}
+      - COLLECTOR_CHANNEL_KEYS=${COLLECTOR_CHANNEL_KEYS:-}
+      - COLLECTOR_INCLUDE_TEST_CHANNEL=${COLLECTOR_INCLUDE_TEST_CHANNEL:-false}
       - DATA_HOME=/data
       - SEED_HOME=/seed
       # Webhook configuration
@@ -194,27 +186,25 @@ services:
       start_period: 10s
 
   # ==========================================================================
-  # API Server - REST API for querying data and sending commands
+  # API Server - REST API for querying data
   # ==========================================================================
   api:
     image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: meshcore-api
+    container_name: ${COMPOSE_PROJECT_NAME:-hub}-api
     profiles:
       - all
       - core
     restart: unless-stopped
     depends_on:
-      db-migrate:
+      migrate:
         condition: service_completed_successfully
       collector:
         condition: service_started
-    ports:
-      - "${API_PORT:-8000}:8000"
     volumes:
-      - hub_data:/data
+      - data:/data
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - MQTT_HOST=${MQTT_HOST:-mqtt}
@@ -223,8 +213,8 @@ services:
       - MQTT_PASSWORD=${MQTT_PASSWORD:-}
       - MQTT_PREFIX=${MQTT_PREFIX:-meshcore}
       - MQTT_TLS=${MQTT_TLS:-false}
-      - MQTT_TRANSPORT=${MQTT_TRANSPORT:-tcp}
-      - MQTT_WS_PATH=${MQTT_WS_PATH:-/mqtt}
+      - MQTT_TRANSPORT=${MQTT_TRANSPORT:-websockets}
+      - MQTT_WS_PATH=${MQTT_WS_PATH:-/}
       - DATA_HOME=/data
       - API_HOST=0.0.0.0
       - API_PORT=8000
@@ -234,7 +224,13 @@ services:
       - METRICS_CACHE_TTL=${METRICS_CACHE_TTL:-60}
     command: ["api"]
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -248,7 +244,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: meshcore-web
+    container_name: ${COMPOSE_PROJECT_NAME:-hub}-web
     profiles:
       - all
       - core
@@ -256,8 +252,6 @@ services:
     depends_on:
       api:
         condition: service_healthy
-    ports:
-      - "${WEB_PORT:-8080}:8080"
     volumes:
       - ${CONTENT_HOME:-./content}:/content:ro
     environment:
@@ -283,7 +277,8 @@ services:
       - NETWORK_WELCOME_TEXT=${NETWORK_WELCOME_TEXT:-}
       - CONTENT_HOME=/content
       - TZ=${TZ:-UTC}
-      - COLLECTOR_LETSMESH_DECODER_KEYS=${COLLECTOR_LETSMESH_DECODER_KEYS:-}
+      - COLLECTOR_CHANNEL_KEYS=${COLLECTOR_CHANNEL_KEYS:-}
+      - COLLECTOR_INCLUDE_TEST_CHANNEL=${COLLECTOR_INCLUDE_TEST_CHANNEL:-false}
       # Feature flags (set to false to disable specific pages)
       - FEATURE_DASHBOARD=${FEATURE_DASHBOARD:-true}
       - FEATURE_NODES=${FEATURE_NODES:-true}
@@ -294,7 +289,13 @@ services:
       - FEATURE_PAGES=${FEATURE_PAGES:-true}
     command: ["web"]
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -303,19 +304,19 @@ services:
   # ==========================================================================
   # Database Migrations - Run Alembic migrations
   # ==========================================================================
-  db-migrate:
+  migrate:
     image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: meshcore-db-migrate
+    container_name: ${COMPOSE_PROJECT_NAME:-hub}-migrate
     profiles:
       - all
       - core
       - migrate
     restart: "no"
     volumes:
-      - hub_data:/data
+      - data:/data
     environment:
       - DATA_HOME=/data
     command: ["db", "upgrade"]
@@ -331,12 +332,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: meshcore-seed
+    container_name: ${COMPOSE_PROJECT_NAME:-hub}-seed
     profiles:
       - seed
     restart: "no"
     volumes:
-      - hub_data:/data
+      - data:/data
       - ${SEED_HOME:-./seed}:/seed:ro
     environment:
       - DATA_HOME=/data
@@ -345,59 +346,13 @@ services:
     # Imports both node_tags.yaml and members.yaml if they exist
     command: ["collector", "seed"]
 
-  # ==========================================================================
-  # Prometheus - Metrics collection and monitoring (optional, use --profile metrics)
-  # ==========================================================================
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: meshcore-prometheus
-    profiles:
-      - all
-      - metrics
-    restart: unless-stopped
-    depends_on:
-      api:
-        condition: service_healthy
-    ports:
-      - "${PROMETHEUS_PORT:-9090}:9090"
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.retention.time=30d'
-    volumes:
-      - ./etc/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./etc/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
-      - prometheus_data:/prometheus
-
-  # ==========================================================================
-  # Alertmanager - Alert routing and notifications (optional, use --profile metrics)
-  # ==========================================================================
-  alertmanager:
-    image: prom/alertmanager:latest
-    container_name: meshcore-alertmanager
-    profiles:
-      - all
-      - metrics
-    restart: unless-stopped
-    ports:
-      - "${ALERTMANAGER_PORT:-9093}:9093"
-    volumes:
-      - ./etc/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-      - alertmanager_data:/alertmanager
-    command:
-      - '--config.file=/etc/alertmanager/alertmanager.yml'
-      - '--storage.path=/alertmanager'
-
 # ==========================================================================
 # Volumes
 # ==========================================================================
 volumes:
-  hub_data:
-    name: meshcore_hub_data
-  mosquitto_data:
-    name: meshcore_mosquitto_data
-  mosquitto_log:
-    name: meshcore_mosquitto_log
-  prometheus_data:
-    name: meshcore_prometheus_data
-  alertmanager_data:
-    name: meshcore_alertmanager_data
+  data:
+    name: ${COMPOSE_PROJECT_NAME:-hub}_data
+  mqtt_data:
+    name: ${COMPOSE_PROJECT_NAME:-hub}_mqtt_data
+  observer_data:
+    name: ${COMPOSE_PROJECT_NAME:-hub}_observer_data

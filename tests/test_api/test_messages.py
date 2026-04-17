@@ -1,6 +1,8 @@
 """Tests for message API routes."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+
+from meshcore_hub.common.models import EventObserver, Message, Node, NodeTag
 
 
 class TestListMessages:
@@ -44,6 +46,96 @@ class TestListMessages:
         assert data["limit"] == 25
         assert data["offset"] == 10
 
+    def test_list_messages_sender_name_resolution(self, client_no_auth, api_db_session):
+        """Messages resolve sender name from matching pubkey_prefix."""
+        sender_node = Node(
+            public_key="abc123def456abc123def456abc123de",
+            name="SenderNode",
+            first_seen=datetime.now(timezone.utc),
+        )
+        api_db_session.add(sender_node)
+        api_db_session.commit()
+
+        msg = Message(
+            message_type="contact",
+            pubkey_prefix="abc123def456",
+            text="Hello from sender",
+            received_at=datetime.now(timezone.utc),
+        )
+        api_db_session.add(msg)
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/messages")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["items"]) == 1
+        assert data["items"][0]["sender_name"] == "SenderNode"
+
+    def test_list_messages_sender_tag_name_resolution(
+        self, client_no_auth, api_db_session
+    ):
+        """Messages resolve sender tag name from name tags."""
+        sender_node = Node(
+            public_key="tag123tag123tag123tag123tag123ta",
+            name="OriginalName",
+            first_seen=datetime.now(timezone.utc),
+        )
+        api_db_session.add(sender_node)
+        api_db_session.commit()
+
+        tag = NodeTag(
+            node_id=sender_node.id,
+            key="name",
+            value="TagSenderName",
+        )
+        api_db_session.add(tag)
+        api_db_session.commit()
+
+        msg = Message(
+            message_type="contact",
+            pubkey_prefix="tag123tag123",
+            text="Hello with tag",
+            received_at=datetime.now(timezone.utc),
+        )
+        api_db_session.add(msg)
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/messages")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["items"]) == 1
+        assert data["items"][0]["sender_tag_name"] == "TagSenderName"
+
+    def test_list_messages_with_observers(
+        self, client_no_auth, api_db_session, receiver_node
+    ):
+        """Messages include observers list in response."""
+        msg = Message(
+            message_type="channel",
+            channel_idx=1,
+            text="Msg with observer",
+            received_at=datetime.now(timezone.utc),
+            observer_node_id=receiver_node.id,
+        )
+        api_db_session.add(msg)
+        api_db_session.commit()
+
+        if msg.event_hash:
+            observer = EventObserver(
+                event_type="message",
+                event_hash=msg.event_hash,
+                observer_node_id=receiver_node.id,
+                observed_at=datetime.now(timezone.utc),
+            )
+            api_db_session.add(observer)
+            api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/messages")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["items"]) == 1
+        assert "observers" in data["items"][0]
+
 
 class TestGetMessage:
     """Tests for GET /messages/{id} endpoint."""
@@ -59,6 +151,35 @@ class TestGetMessage:
         """Test getting a non-existent message."""
         response = client_no_auth.get("/api/v1/messages/nonexistent-id")
         assert response.status_code == 404
+
+    def test_get_message_with_observers(
+        self, client_no_auth, api_db_session, receiver_node
+    ):
+        """Get message includes observers list."""
+        msg = Message(
+            message_type="channel",
+            channel_idx=1,
+            text="Msg for get observer test",
+            received_at=datetime.now(timezone.utc),
+            observer_node_id=receiver_node.id,
+        )
+        api_db_session.add(msg)
+        api_db_session.commit()
+
+        if msg.event_hash:
+            observer = EventObserver(
+                event_type="message",
+                event_hash=msg.event_hash,
+                observer_node_id=receiver_node.id,
+                observed_at=datetime.now(timezone.utc),
+            )
+            api_db_session.add(observer)
+            api_db_session.commit()
+
+        response = client_no_auth.get(f"/api/v1/messages/{msg.id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert "observers" in data
 
 
 class TestListMessagesFilters:
@@ -95,7 +216,7 @@ class TestListMessagesFilters:
         data = response.json()
         assert len(data["items"]) == 0
 
-    def test_filter_by_received_by(
+    def test_filter_by_observed_by(
         self,
         client_no_auth,
         sample_message,
@@ -104,7 +225,7 @@ class TestListMessagesFilters:
     ):
         """Test filtering messages by receiver node."""
         response = client_no_auth.get(
-            f"/api/v1/messages?received_by={receiver_node.public_key}"
+            f"/api/v1/messages?observed_by={receiver_node.public_key}"
         )
         assert response.status_code == 200
         data = response.json()
@@ -113,10 +234,6 @@ class TestListMessagesFilters:
 
     def test_filter_by_since(self, client_no_auth, api_db_session):
         """Test filtering messages by since timestamp."""
-        from datetime import timedelta
-
-        from meshcore_hub.common.models import Message
-
         now = datetime.now(timezone.utc)
         old_time = now - timedelta(days=7)
 
@@ -139,10 +256,6 @@ class TestListMessagesFilters:
 
     def test_filter_by_until(self, client_no_auth, api_db_session):
         """Test filtering messages by until timestamp."""
-        from datetime import timedelta
-
-        from meshcore_hub.common.models import Message
-
         now = datetime.now(timezone.utc)
         old_time = now - timedelta(days=7)
 

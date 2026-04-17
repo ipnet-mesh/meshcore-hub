@@ -37,12 +37,10 @@ def cli(ctx: click.Context, log_level: str) -> None:
 
 
 # Import and register component CLIs
-from meshcore_hub.interface.cli import interface
 from meshcore_hub.collector.cli import collector
 from meshcore_hub.api.cli import api
 from meshcore_hub.web.cli import web
 
-cli.add_command(interface)
 cli.add_command(collector)
 cli.add_command(api)
 cli.add_command(web)
@@ -218,28 +216,6 @@ def health() -> None:
     status to a file, and these commands verify that status.
     """
     pass
-
-
-@health.command("interface")
-@click.option(
-    "--timeout",
-    type=int,
-    default=60,
-    help="Maximum age of health status in seconds",
-)
-def health_interface(timeout: int) -> None:
-    """Check interface component health status.
-
-    Returns exit code 0 if healthy, 1 if not.
-    """
-    is_healthy, message = check_health("interface", stale_threshold=timeout)
-
-    if is_healthy:
-        click.echo(f"Interface health: {message}")
-        sys.exit(0)
-    else:
-        click.echo(f"Interface unhealthy: {message}", err=True)
-        sys.exit(1)
 
 
 @health.command("collector")

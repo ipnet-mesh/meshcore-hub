@@ -19,7 +19,7 @@ router = APIRouter()
 async def list_trace_paths(
     _: RequireRead,
     session: DbSession,
-    received_by: Optional[str] = Query(
+    observed_by: Optional[str] = Query(
         None, description="Filter by receiver node public key"
     ),
     since: Optional[datetime] = Query(None, description="Start timestamp"),
@@ -29,15 +29,15 @@ async def list_trace_paths(
 ) -> TracePathList:
     """List trace paths with filtering and pagination."""
     # Alias for receiver node join
-    ReceiverNode = aliased(Node)
+    ObserverNode = aliased(Node)
 
     # Build query with receiver node join
-    query = select(TracePath, ReceiverNode.public_key.label("receiver_pk")).outerjoin(
-        ReceiverNode, TracePath.receiver_node_id == ReceiverNode.id
+    query = select(TracePath, ObserverNode.public_key.label("observer_pk")).outerjoin(
+        ObserverNode, TracePath.observer_node_id == ObserverNode.id
     )
 
-    if received_by:
-        query = query.where(ReceiverNode.public_key == received_by)
+    if observed_by:
+        query = query.where(ObserverNode.public_key == observed_by)
 
     if since:
         query = query.where(TracePath.received_at >= since)
@@ -55,13 +55,13 @@ async def list_trace_paths(
     # Execute
     results = session.execute(query).all()
 
-    # Build response with received_by
+    # Build response with observed_by
     items = []
-    for tp, receiver_pk in results:
+    for tp, observer_pk in results:
         data = {
             "id": tp.id,
-            "receiver_node_id": tp.receiver_node_id,
-            "received_by": receiver_pk,
+            "observer_node_id": tp.observer_node_id,
+            "observed_by": observer_pk,
             "initiator_tag": tp.initiator_tag,
             "path_len": tp.path_len,
             "flags": tp.flags,
@@ -89,10 +89,10 @@ async def get_trace_path(
     trace_path_id: str,
 ) -> TracePathRead:
     """Get a single trace path by ID."""
-    ReceiverNode = aliased(Node)
+    ObserverNode = aliased(Node)
     query = (
-        select(TracePath, ReceiverNode.public_key.label("receiver_pk"))
-        .outerjoin(ReceiverNode, TracePath.receiver_node_id == ReceiverNode.id)
+        select(TracePath, ObserverNode.public_key.label("observer_pk"))
+        .outerjoin(ObserverNode, TracePath.observer_node_id == ObserverNode.id)
         .where(TracePath.id == trace_path_id)
     )
     result = session.execute(query).one_or_none()
@@ -100,11 +100,11 @@ async def get_trace_path(
     if not result:
         raise HTTPException(status_code=404, detail="Trace path not found")
 
-    tp, receiver_pk = result
+    tp, observer_pk = result
     data = {
         "id": tp.id,
-        "receiver_node_id": tp.receiver_node_id,
-        "received_by": receiver_pk,
+        "observer_node_id": tp.observer_node_id,
+        "observed_by": observer_pk,
         "initiator_tag": tp.initiator_tag,
         "path_len": tp.path_len,
         "flags": tp.flags,

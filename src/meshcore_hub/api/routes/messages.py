@@ -9,8 +9,8 @@ from sqlalchemy.orm import aliased, selectinload
 
 from meshcore_hub.api.auth import RequireRead
 from meshcore_hub.api.dependencies import DbSession
-from meshcore_hub.common.models import EventReceiver, Message, Node, NodeTag
-from meshcore_hub.common.schemas.messages import MessageList, MessageRead, ReceiverInfo
+from meshcore_hub.common.models import EventObserver, Message, Node, NodeTag
+from meshcore_hub.common.schemas.messages import MessageList, MessageRead, ObserverInfo
 
 router = APIRouter()
 
@@ -25,44 +25,44 @@ def _get_tag_name(node: Optional[Node]) -> Optional[str]:
     return None
 
 
-def _fetch_receivers_for_events(
+def _fetch_observers_for_events(
     session: DbSession,
     event_type: str,
     event_hashes: list[str],
-) -> dict[str, list[ReceiverInfo]]:
+) -> dict[str, list[ObserverInfo]]:
     """Fetch receiver info for a list of events by their hashes.
 
     Args:
         session: Database session
         event_type: Type of event ('message', 'advertisement', etc.)
-        event_hashes: List of event hashes to fetch receivers for
+        event_hashes: List of event hashes to fetch observers for
 
     Returns:
-        Dict mapping event_hash to list of ReceiverInfo objects
+        Dict mapping event_hash to list of ObserverInfo objects
     """
     if not event_hashes:
         return {}
 
-    # Query event_receivers with receiver node info
+    # Query event_observers with receiver node info
     query = (
         select(
-            EventReceiver.event_hash,
-            EventReceiver.snr,
-            EventReceiver.received_at,
+            EventObserver.event_hash,
+            EventObserver.snr,
+            EventObserver.observed_at,
             Node.id.label("node_id"),
             Node.public_key,
             Node.name,
         )
-        .join(Node, EventReceiver.receiver_node_id == Node.id)
-        .where(EventReceiver.event_type == event_type)
-        .where(EventReceiver.event_hash.in_(event_hashes))
-        .order_by(EventReceiver.received_at)
+        .join(Node, EventObserver.observer_node_id == Node.id)
+        .where(EventObserver.event_type == event_type)
+        .where(EventObserver.event_hash.in_(event_hashes))
+        .order_by(EventObserver.observed_at)
     )
 
     results = session.execute(query).all()
 
     # Group by event_hash
-    receivers_by_hash: dict[str, list[ReceiverInfo]] = {}
+    observers_by_hash: dict[str, list[ObserverInfo]] = {}
 
     # Get tag names for receiver nodes
     node_ids = [r.node_id for r in results]
@@ -77,21 +77,21 @@ def _fetch_receivers_for_events(
             tag_names[node_id] = value
 
     for row in results:
-        if row.event_hash not in receivers_by_hash:
-            receivers_by_hash[row.event_hash] = []
+        if row.event_hash not in observers_by_hash:
+            observers_by_hash[row.event_hash] = []
 
-        receivers_by_hash[row.event_hash].append(
-            ReceiverInfo(
+        observers_by_hash[row.event_hash].append(
+            ObserverInfo(
                 node_id=row.node_id,
                 public_key=row.public_key,
                 name=row.name,
                 tag_name=tag_names.get(row.node_id),
                 snr=row.snr,
-                received_at=row.received_at,
+                observed_at=row.observed_at,
             )
         )
 
-    return receivers_by_hash
+    return observers_by_hash
 
 
 @router.get("", response_model=MessageList)
@@ -101,7 +101,7 @@ async def list_messages(
     message_type: Optional[str] = Query(None, description="Filter by message type"),
     pubkey_prefix: Optional[str] = Query(None, description="Filter by sender prefix"),
     channel_idx: Optional[int] = Query(None, description="Filter by channel"),
-    received_by: Optional[str] = Query(
+    observed_by: Optional[str] = Query(
         None, description="Filter by receiver node public key"
     ),
     since: Optional[datetime] = Query(None, description="Start timestamp"),
@@ -112,15 +112,15 @@ async def list_messages(
 ) -> MessageList:
     """List messages with filtering and pagination."""
     # Alias for receiver node join
-    ReceiverNode = aliased(Node)
+    ObserverNode = aliased(Node)
 
     # Build query with receiver node join
     query = select(
         Message,
-        ReceiverNode.public_key.label("receiver_pk"),
-        ReceiverNode.name.label("receiver_name"),
-        ReceiverNode.id.label("receiver_id"),
-    ).outerjoin(ReceiverNode, Message.receiver_node_id == ReceiverNode.id)
+        ObserverNode.public_key.label("observer_pk"),
+        ObserverNode.name.label("observer_name"),
+        ObserverNode.id.label("receiver_id"),
+    ).outerjoin(ObserverNode, Message.observer_node_id == ObserverNode.id)
 
     if message_type:
         query = query.where(Message.message_type == message_type)
@@ -131,8 +131,8 @@ async def list_messages(
     if channel_idx is not None:
         query = query.where(Message.channel_idx == channel_idx)
 
-    if received_by:
-        query = query.where(ReceiverNode.public_key == received_by)
+    if observed_by:
+        query = query.where(ObserverNode.public_key == observed_by)
 
     if since:
         query = query.where(Message.received_at >= since)
@@ -179,42 +179,42 @@ async def list_messages(
                 sender_tag_names[public_key[:12]] = value
 
     # Collect receiver node IDs to fetch tags
-    receiver_ids = set()
+    observer_ids = set()
     for row in results:
         if row.receiver_id:
-            receiver_ids.add(row.receiver_id)
+            observer_ids.add(row.receiver_id)
 
     # Fetch receiver nodes with tags
-    receivers_by_id: dict[str, Node] = {}
-    if receiver_ids:
-        receivers_query = (
+    observers_by_id: dict[str, Node] = {}
+    if observer_ids:
+        observers_query = (
             select(Node)
-            .where(Node.id.in_(receiver_ids))
+            .where(Node.id.in_(observer_ids))
             .options(selectinload(Node.tags))
         )
-        receivers = session.execute(receivers_query).scalars().all()
-        receivers_by_id = {n.id: n for n in receivers}
+        observers = session.execute(observers_query).scalars().all()
+        observers_by_id = {n.id: n for n in observers}
 
-    # Fetch all receivers for these messages
+    # Fetch all observers for these messages
     event_hashes = [r[0].event_hash for r in results if r[0].event_hash]
-    receivers_by_hash = _fetch_receivers_for_events(session, "message", event_hashes)
+    observers_by_hash = _fetch_observers_for_events(session, "message", event_hashes)
 
-    # Build response with sender info and received_by
+    # Build response with sender info and observed_by
     items = []
     for row in results:
         m = row[0]
-        receiver_pk = row.receiver_pk
-        receiver_name = row.receiver_name
-        receiver_node = (
-            receivers_by_id.get(row.receiver_id) if row.receiver_id else None
+        observer_pk = row.observer_pk
+        observer_name = row.observer_name
+        observer_node = (
+            observers_by_id.get(row.receiver_id) if row.receiver_id else None
         )
 
         msg_dict = {
             "id": m.id,
-            "receiver_node_id": m.receiver_node_id,
-            "received_by": receiver_pk,
-            "receiver_name": receiver_name,
-            "receiver_tag_name": _get_tag_name(receiver_node),
+            "observer_node_id": m.observer_node_id,
+            "observed_by": observer_pk,
+            "observer_name": observer_name,
+            "observer_tag_name": _get_tag_name(observer_node),
             "message_type": m.message_type,
             "pubkey_prefix": m.pubkey_prefix,
             "sender_name": (
@@ -232,8 +232,8 @@ async def list_messages(
             "sender_timestamp": m.sender_timestamp,
             "received_at": m.received_at,
             "created_at": m.created_at,
-            "receivers": (
-                receivers_by_hash.get(m.event_hash, []) if m.event_hash else []
+            "observers": (
+                observers_by_hash.get(m.event_hash, []) if m.event_hash else []
             ),
         }
         items.append(MessageRead(**msg_dict))
@@ -253,10 +253,10 @@ async def get_message(
     message_id: str,
 ) -> MessageRead:
     """Get a single message by ID."""
-    ReceiverNode = aliased(Node)
+    ObserverNode = aliased(Node)
     query = (
-        select(Message, ReceiverNode.public_key.label("receiver_pk"))
-        .outerjoin(ReceiverNode, Message.receiver_node_id == ReceiverNode.id)
+        select(Message, ObserverNode.public_key.label("observer_pk"))
+        .outerjoin(ObserverNode, Message.observer_node_id == ObserverNode.id)
         .where(Message.id == message_id)
     )
     result = session.execute(query).one_or_none()
@@ -264,20 +264,20 @@ async def get_message(
     if not result:
         raise HTTPException(status_code=404, detail="Message not found")
 
-    message, receiver_pk = result
+    message, observer_pk = result
 
-    # Fetch receivers for this message
-    receivers = []
+    # Fetch observers for this message
+    observers = []
     if message.event_hash:
-        receivers_by_hash = _fetch_receivers_for_events(
+        observers_by_hash = _fetch_observers_for_events(
             session, "message", [message.event_hash]
         )
-        receivers = receivers_by_hash.get(message.event_hash, [])
+        observers = observers_by_hash.get(message.event_hash, [])
 
     data = {
         "id": message.id,
-        "receiver_node_id": message.receiver_node_id,
-        "received_by": receiver_pk,
+        "observer_node_id": message.observer_node_id,
+        "observed_by": observer_pk,
         "message_type": message.message_type,
         "pubkey_prefix": message.pubkey_prefix,
         "channel_idx": message.channel_idx,
@@ -289,6 +289,6 @@ async def get_message(
         "sender_timestamp": message.sender_timestamp,
         "received_at": message.received_at,
         "created_at": message.created_at,
-        "receivers": receivers,
+        "observers": observers,
     }
     return MessageRead(**data)

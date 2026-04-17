@@ -12,6 +12,7 @@ import { createAutoRefresh } from '../auto-refresh.js';
 export async function render(container, params, router) {
     const query = params.query || {};
     const message_type = query.message_type || '';
+    const channel_idx = query.channel_idx || '';
     const page = parseInt(query.page, 10) || 1;
     const limit = parseInt(query.limit, 10) || 50;
     const offset = (page - 1) * limit;
@@ -120,25 +121,25 @@ export async function render(container, params, router) {
             if (!existing) {
                 const clone = {
                     ...msg,
-                    receivers: [...(msg.receivers || [])],
+                    observers: [...(msg.observers || [])],
                 };
                 bySignature.set(signature, clone);
                 deduped.push(clone);
                 continue;
             }
 
-            const combined = [...(existing.receivers || []), ...(msg.receivers || [])];
+            const combined = [...(existing.observers || []), ...(msg.observers || [])];
             const seenReceivers = new Set();
-            existing.receivers = combined.filter((recv) => {
-                const key = recv?.public_key || recv?.node_id || `${recv?.received_at || ''}:${recv?.snr || ''}`;
+            existing.observers = combined.filter((recv) => {
+                const key = recv?.public_key || recv?.node_id || `${recv?.observed_at || ''}:${recv?.snr || ''}`;
                 if (seenReceivers.has(key)) return false;
                 seenReceivers.add(key);
                 return true;
             });
 
-            if (!existing.received_by && msg.received_by) existing.received_by = msg.received_by;
-            if (!existing.receiver_name && msg.receiver_name) existing.receiver_name = msg.receiver_name;
-            if (!existing.receiver_tag_name && msg.receiver_tag_name) existing.receiver_tag_name = msg.receiver_tag_name;
+            if (!existing.observed_by && msg.observed_by) existing.observed_by = msg.observed_by;
+            if (!existing.observer_name && msg.observer_name) existing.observer_name = msg.observer_name;
+            if (!existing.observer_tag_name && msg.observer_tag_name) existing.observer_tag_name = msg.observer_tag_name;
             if (!existing.pubkey_prefix && msg.pubkey_prefix) existing.pubkey_prefix = msg.pubkey_prefix;
             if (!existing.sender_name && msg.sender_name) existing.sender_name = msg.sender_name;
             if (!existing.sender_tag_name && msg.sender_tag_name) existing.sender_tag_name = msg.sender_tag_name;
@@ -185,7 +186,7 @@ ${content}`, container);
 
     async function fetchAndRenderData() {
         try {
-            const data = await apiGet('/api/v1/messages', { limit, offset, message_type });
+            const data = await apiGet('/api/v1/messages', { limit, offset, message_type, channel_idx });
             const messages = dedupeBySignature(data.items || []);
             const total = data.total || 0;
             const totalPages = Math.ceil(total / limit);
@@ -203,16 +204,16 @@ ${content}`, container);
                         ? html`<span class="font-medium">${chInfo.label || t('messages.type_channel')}</span>`
                         : sender;
                     let receiversBlock = nothing;
-                    if (msg.receivers && msg.receivers.length >= 1) {
+                    if (msg.observers && msg.observers.length >= 1) {
                         receiversBlock = html`<div class="flex gap-0.5">
-                            ${msg.receivers.map(recv => {
+                            ${msg.observers.map(recv => {
                                 const recvName = recv.tag_name || recv.name || truncateKey(recv.public_key, 12);
                                 return html`<a href="/nodes/${recv.public_key}" class="text-sm hover:opacity-70" title=${recvName}>\u{1F4E1}</a>`;
                             })}
                         </div>`;
-                    } else if (msg.received_by) {
-                        const recvTitle = msg.receiver_tag_name || msg.receiver_name || truncateKey(msg.received_by, 12);
-                        receiversBlock = html`<a href="/nodes/${msg.received_by}" class="text-sm hover:opacity-70" title=${recvTitle}>\u{1F4E1}</a>`;
+                    } else if (msg.observed_by) {
+                        const recvTitle = msg.observer_tag_name || msg.observer_name || truncateKey(msg.observed_by, 12);
+                        receiversBlock = html`<a href="/nodes/${msg.observed_by}" class="text-sm hover:opacity-70" title=${recvTitle}>\u{1F4E1}</a>`;
                     }
                     return html`<div class="card bg-base-100 shadow-sm">
             <div class="card-body p-3">
@@ -252,16 +253,16 @@ ${content}`, container);
                         ? html`<span class="font-medium">${chInfo.label || t('messages.type_channel')}</span>`
                         : sender;
                     let receiversBlock;
-                    if (msg.receivers && msg.receivers.length >= 1) {
+                    if (msg.observers && msg.observers.length >= 1) {
                         receiversBlock = html`<div class="flex gap-1">
-                            ${msg.receivers.map(recv => {
+                            ${msg.observers.map(recv => {
                                 const recvName = recv.tag_name || recv.name || truncateKey(recv.public_key, 12);
                                 return html`<a href="/nodes/${recv.public_key}" class="text-lg hover:opacity-70" title=${recvName}>\u{1F4E1}</a>`;
                             })}
                         </div>`;
-                    } else if (msg.received_by) {
-                        const recvTitle = msg.receiver_tag_name || msg.receiver_name || truncateKey(msg.received_by, 12);
-                        receiversBlock = html`<a href="/nodes/${msg.received_by}" class="text-lg hover:opacity-70" title=${recvTitle}>\u{1F4E1}</a>`;
+                    } else if (msg.observed_by) {
+                        const recvTitle = msg.observer_tag_name || msg.observer_name || truncateKey(msg.observed_by, 12);
+                        receiversBlock = html`<a href="/nodes/${msg.observed_by}" class="text-lg hover:opacity-70" title=${recvTitle}>\u{1F4E1}</a>`;
                     } else {
                         receiversBlock = html`<span class="opacity-50">-</span>`;
                     }
@@ -277,7 +278,7 @@ ${content}`, container);
                 });
 
             const paginationBlock = pagination(page, totalPages, '/messages', {
-                message_type, limit,
+                message_type, channel_idx, limit,
             });
 
             renderPage(html`
@@ -292,6 +293,17 @@ ${content}`, container);
                     <option value="">${t('common.all_types')}</option>
                     <option value="contact" ?selected=${message_type === 'contact'}>${t('messages.type_direct')}</option>
                     <option value="channel" ?selected=${message_type === 'channel'}>${t('messages.type_channel')}</option>
+                </select>
+            </div>
+            <div class="form-control">
+                <label class="label py-1">
+                    <span class="label-text">${t('entities.channel')}</span>
+                </label>
+                <select name="channel_idx" class="select select-bordered select-sm" @change=${autoSubmit}>
+                    <option value="">${t('common.all_channels')}</option>
+                    ${[...channelLabels.entries()].map(([idx, label]) =>
+                        html`<option value=${idx} ?selected=${channel_idx === String(idx)}>${label}</option>`
+                    )}
                 </select>
             </div>
             <div class="flex gap-2 w-full sm:w-auto">

@@ -15,7 +15,7 @@ class EventLog(Base, UUIDMixin, TimestampMixin):
 
     Attributes:
         id: UUID primary key
-        receiver_node_id: FK to nodes (receiving interface)
+        observer_node_id: FK to nodes (observing interface)
         event_type: Event type name
         payload: Full event payload as JSON
         received_at: When received by interface
@@ -24,7 +24,7 @@ class EventLog(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "events_log"
 
-    receiver_node_id: Mapped[Optional[str]] = mapped_column(
+    observer_node_id: Mapped[Optional[str]] = mapped_column(
         ForeignKey("nodes.id", ondelete="SET NULL"),
         nullable=True,
         index=True,

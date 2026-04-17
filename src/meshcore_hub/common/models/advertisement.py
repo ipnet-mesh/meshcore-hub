@@ -14,7 +14,7 @@ class Advertisement(Base, UUIDMixin, TimestampMixin):
 
     Attributes:
         id: UUID primary key
-        receiver_node_id: FK to nodes (receiving interface)
+        observer_node_id: FK to nodes (observing interface)
         node_id: FK to nodes (advertised node)
         public_key: Advertised public key
         name: Advertised name
@@ -26,7 +26,7 @@ class Advertisement(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "advertisements"
 
-    receiver_node_id: Mapped[Optional[str]] = mapped_column(
+    observer_node_id: Mapped[Optional[str]] = mapped_column(
         ForeignKey("nodes.id", ondelete="SET NULL"),
         nullable=True,
         index=True,

@@ -4,6 +4,9 @@ This document provides context and guidelines for AI coding assistants working o
 
 ## Agent Rules
 
+### Critical Rules (MUST follow)
+
+* **Always use parenthesized exception tuples** — `except (ValueError, TypeError):` not `except ValueError, TypeError:`. The comma form is Python 2 syntax and will fail at import time in Python 3. This is the most common error that passes visual review but breaks the application.
 * You MUST use Python (version in `.python-version` file)
 * You MUST activate a Python virtual environment in the `.venv` directory or create one if it does not exist:
   - `ls ./.venv` to check if it exists
@@ -12,39 +15,40 @@ This document provides context and guidelines for AI coding assistants working o
   - `source .venv/bin/activate`
 * You MUST install all project dependencies using `pip install -e ".[dev]"` command`
 * You MUST install `pre-commit` for quality checks
-* You MUST keep project documentation in sync with behavior/config/schema changes made in code (at minimum update relevant sections in `README.md`, `SCHEMAS.md`, `PLAN.md`, and/or `TASKS.md` when applicable)
+* **Never `git push` without explicit confirmation** — staging and committing after discrete changes is fine, but pushing to remote requires the user to explicitly request it
+* You MUST keep project documentation in sync with behavior/config/schema changes made in code (at minimum update relevant sections in `README.md`, `SCHEMAS.md`, `docs/upgrading.md`, `docs/letsmesh.md` when applicable)
 * Before commiting:
   - Run **targeted tests** for the components you changed, not the full suite:
     - `pytest tests/test_web/` for web-only changes (templates, static JS, web routes)
     - `pytest tests/test_api/` for API changes
     - `pytest tests/test_collector/` for collector changes
-    - `pytest tests/test_interface/` for interface/sender/receiver changes
     - `pytest tests/test_common/` for common models/schemas/config changes
     - Only run the full `pytest` if changes span multiple components
   - Run `pre-commit run --all-files` to perform all quality checks
 
 ## Project Overview
 
-MeshCore Hub is a Python 3.13+ monorepo for managing and orchestrating MeshCore mesh networks. It consists of five main components:
+MeshCore Hub is a Python 3.14+ monorepo for managing and orchestrating MeshCore mesh networks. Data ingestion is done via [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture), which captures MeshCore mesh traffic and publishes events to MQTT. MeshCore Hub then collects, stores, and presents this data. It consists of four main components:
 
-- **meshcore_interface**: Serial/USB interface to MeshCore companion nodes, publishes/subscribes to MQTT
 - **meshcore_collector**: Collects MeshCore events from MQTT and stores them in a database
-- **meshcore_api**: REST API for querying data and sending commands via MQTT
+- **meshcore_api**: REST API for querying data
 - **meshcore_web**: Web dashboard for visualizing network status
 - **meshcore_common**: Shared utilities, models, and configurations
 
 ## Key Documentation
 
-- [PROMPT.md](PROMPT.md) - Original project specification and requirements
 - [SCHEMAS.md](SCHEMAS.md) - MeshCore event JSON schemas and database mappings
-- [PLAN.md](PLAN.md) - Implementation plan and architecture decisions
-- [TASKS.md](TASKS.md) - Detailed task breakdown with checkboxes for progress tracking
+- [docs/upgrading.md](docs/upgrading.md) - Upgrade guide for breaking changes
+- [docs/letsmesh.md](docs/letsmesh.md) - LetsMesh packet decoding details
+- [docs/hosting/nginx-proxy-manager.md](docs/hosting/nginx-proxy-manager.md) - Nginx Proxy Manager admin setup
+- [docs/seeding.md](docs/seeding.md) - Seed data format and import guide
+- [docs/i18n.md](docs/i18n.md) - Translation reference guide
 
 ## Technology Stack
 
 | Category | Technology |
 |----------|------------|
-| Language | Python 3.13+ |
+| Language | Python 3.14+ |
 | Package Management | pip with pyproject.toml |
 | CLI Framework | Click |
 | Configuration | Pydantic Settings |
@@ -52,7 +56,7 @@ MeshCore Hub is a Python 3.13+ monorepo for managing and orchestrating MeshCore 
 | Migrations | Alembic |
 | REST API | FastAPI |
 | MQTT Client | paho-mqtt |
-| MeshCore Interface | meshcore |
+| MQTT Broker | [meshcore-mqtt-broker](https://github.com/michaelhart/meshcore-mqtt-broker) (WebSocket + JWT auth) |
 | Templates | Jinja2 (server), lit-html (SPA) |
 | Frontend | ES Modules SPA with client-side routing |
 | CSS Framework | Tailwind CSS + DaisyUI |
@@ -256,6 +260,9 @@ meshcore-hub/
 │   │   ├── database.py       # DB session management
 │   │   ├── mqtt.py           # MQTT utilities
 │   │   ├── logging.py        # Logging config
+│   │   ├── i18n.py           # Translation loading
+│   │   ├── health.py         # Health check utilities
+│   │   ├── hash_utils.py     # Hash utility functions
 │   │   ├── models/           # SQLAlchemy models
 │   │   │   ├── node.py       # Node model
 │   │   │   ├── member.py     # Network member model
@@ -263,16 +270,12 @@ meshcore-hub/
 │   │   └── schemas/          # Pydantic schemas
 │   │       ├── members.py    # Member API schemas
 │   │       └── ...
-│   ├── interface/
-│   │   ├── cli.py
-│   │   ├── device.py         # MeshCore device wrapper
-│   │   ├── mock_device.py    # Mock for testing
-│   │   ├── receiver.py       # RECEIVER mode
-│   │   └── sender.py         # SENDER mode
 │   ├── collector/
 │   │   ├── cli.py            # Collector CLI with seed commands
 │   │   ├── subscriber.py     # MQTT subscriber
 │   │   ├── cleanup.py        # Data retention/cleanup service
+│   │   ├── letsmesh_decoder.py     # Native Python packet decoder
+│   │   ├── letsmesh_normalizer.py  # LetsMesh upload topic normalizer
 │   │   ├── tag_import.py     # Tag import from YAML
 │   │   ├── member_import.py  # Member import from YAML
 │   │   ├── handlers/         # Event handlers
@@ -290,6 +293,7 @@ meshcore-hub/
 │       ├── cli.py
 │       ├── app.py            # FastAPI app
 │       ├── pages.py          # Custom markdown page loader
+│       ├── middleware.py     # Cache-Control middleware
 │       ├── templates/        # Jinja2 templates (spa.html shell)
 │       └── static/
 │           ├── css/app.css   # Custom styles
@@ -305,7 +309,6 @@ meshcore-hub/
 ├── tests/
 │   ├── conftest.py
 │   ├── test_common/
-│   ├── test_interface/
 │   ├── test_collector/
 │   ├── test_api/
 │   └── test_web/
@@ -313,12 +316,16 @@ meshcore-hub/
 │   ├── env.py
 │   └── versions/
 ├── etc/
-│   ├── mosquitto.conf        # MQTT broker configuration
+│   ├── docker/                # Docker configuration examples
+│   │   └── meshcore-mqtt-broker/
 │   ├── prometheus/            # Prometheus configuration
 │   │   ├── prometheus.yml    # Scrape and alerting config
 │   │   └── alerts.yml        # Alert rules
-│   └── alertmanager/          # Alertmanager configuration
-│       └── alertmanager.yml  # Routing and receiver config
+│   ├── alertmanager/          # Alertmanager configuration
+│   │   └── alertmanager.yml  # Routing and receiver config
+│   └── systemd/               # Systemd service templates
+│       ├── meshcore-hub-update@.service  # Auto-update service
+│       └── meshcore-hub-update@.timer    # Auto-update timer
 ├── example/
 │   ├── seed/                 # Example seed data files
 │   │   ├── node_tags.yaml    # Example node tags
@@ -333,30 +340,44 @@ meshcore-hub/
 │   └── collector/            # Collector data
 │       └── meshcore.db       # SQLite database
 ├── Dockerfile                # Docker build configuration
-└── docker-compose.yml        # Docker Compose services
+├── docker-compose.yml        # Docker Compose base config
+├── docker-compose.dev.yml    # Development overrides (port mappings)
+├── docker-compose.prod.yml   # Production overrides (proxy network)
+├── docker-compose.traefik.yml # Optional Traefik labels
+├── docs/                    # Documentation
+│   ├── images/              # Screenshots and images
+│   ├── hosting/             # Reverse proxy hosting guides
+│   │   └── nginx-proxy-manager.md
+│   ├── content.md           # Custom content setup guide
+│   ├── i18n.md              # Translation reference guide
+│   ├── letsmesh.md          # LetsMesh packet decoding details
+│   ├── seeding.md           # Seed data format and import guide
+│   ├── upgrading.md         # Upgrade guide for breaking changes
+│   └── webhooks.md          # Webhook configuration reference
+└── SCHEMAS.md
 ```
 
 ## MQTT Topic Structure
 
-### Events (Published by Interface RECEIVER)
+The MQTT broker ([meshcore-mqtt-broker](https://github.com/michaelhart/meshcore-mqtt-broker)) uses WebSocket transport with MeshCore public key authentication for publishers and subscriber accounts for consumers.
+
+### Upload Topics (published by packet capture)
 ```
-<prefix>/<public_key>/event/<event_name>
+<prefix>/<IATA>/<public_key>/<feed_type>
 ```
 
 Examples:
-- `meshcore/abc123.../event/advertisement`
-- `meshcore/abc123.../event/contact_msg_recv`
-- `meshcore/abc123.../event/channel_msg_recv`
+- `meshcore/STN/abc123.../packets`
+- `meshcore/STN/abc123.../status`
+- `meshcore/STN/abc123.../internal`
 
-### Commands (Subscribed by Interface SENDER)
-```
-<prefix>/+/command/<command_name>
-```
+The `<IATA>` segment is a 3-letter airport code (e.g., `STN`, `SEA`) or `test`, validated by the MQTT broker. The hub ignores this segment during parsing.
 
-Examples:
-- `meshcore/+/command/send_msg`
-- `meshcore/+/command/send_channel_msg`
-- `meshcore/+/command/send_advert`
+### Subscriber Subscriptions
+The collector subscribes to:
+- `{prefix}/+/+/packets`
+- `{prefix}/+/+/status`
+- `{prefix}/+/+/internal`
 
 ## Database Conventions
 
@@ -393,26 +414,16 @@ Node tags are flexible key-value pairs that allow custom metadata to be attached
 import pytest
 from unittest.mock import AsyncMock, patch
 
-@pytest.fixture
-def mock_mqtt_client():
-    client = AsyncMock()
-    client.publish = AsyncMock()
-    return client
-
 @pytest.mark.asyncio
-async def test_receiver_publishes_event(mock_mqtt_client):
-    """Test that receiver publishes events to correct MQTT topic."""
-    # Arrange
-    receiver = Receiver(mqtt_client=mock_mqtt_client, prefix="test")
+async def test_collector_handles_advertisement():
+    """Test that collector handler processes advertisement events."""
+    handler = AdvertisementHandler(db_session=AsyncMock())
 
-    # Act
-    await receiver.handle_advertisement(event_data)
+    await handler.handle(event_data)
 
-    # Assert
-    mock_mqtt_client.publish.assert_called_once()
-    call_args = mock_mqtt_client.publish.call_args
-    assert "test/" in call_args[0][0]
-    assert "/event/advertisement" in call_args[0][0]
+    handler.db_session.add.assert_called_once()
+    node = handler.db_session.add.call_args[0][0]
+    assert node.public_key == event_data["public_key"]
 ```
 
 ### Integration Tests
@@ -487,7 +498,7 @@ The web dashboard supports internationalization via JSON translation files. The 
 
 **Key files:**
 - `en.json` - English translations (reference implementation)
-- `languages.md` - Comprehensive translation reference guide for translators
+- [docs/i18n.md](docs/i18n.md) - Comprehensive translation reference guide for translators
 
 **Using translations in JavaScript:**
 
@@ -521,7 +532,7 @@ const emptyMsg = t('common.no_entity_found', { entity: t('entities.nodes').toLow
    - Group related keys by section (e.g., `admin_members.*`, `admin_node_tags.*`)
    - Use `{{variable}}` syntax for dynamic content
 
-2. **Update `languages.md`** with:
+2. **Update `docs/i18n.md`** with:
    - Key name, English value, and usage context
    - Variable descriptions if using interpolation
    - Notes about HTML content or special formatting
@@ -542,7 +553,7 @@ const emptyMsg = t('common.no_entity_found', { entity: t('entities.nodes').toLow
 - **Compose with entities:** Reference `entities.*` keys in patterns rather than hardcoding entity names
 - **Preserve variables:** Keep `{{variable}}` placeholders unchanged when translating
 - **Test composition:** Verify patterns work with all entity types (singular/plural, lowercase/uppercase)
-- **Document context:** Always update `languages.md` so translators understand usage
+- **Document context:** Always update `docs/i18n.md` so translators understand usage
 
 **Example - adding a new entity and patterns:**
 
@@ -556,7 +567,7 @@ const emptyMsg = t('common.no_entity_found', { entity: t('entities.nodes').toLow
 t('common.add_entity', { entity: t('entities.sensor') })  // "Add Sensor"
 t('common.no_entity_found', { entity: t('entities.sensors').toLowerCase() })  // "No sensors found"
 
-// 3. Update languages.md with context
+// 3. Update docs/i18n.md with context
 // 4. Add test to test_i18n.py
 ```
 
@@ -567,7 +578,7 @@ The i18n system (`src/meshcore_hub/common/i18n.py`) loads translations on startu
 - Falls back to English for missing keys
 - Returns the key itself if translation not found
 
-For full translation guidelines, see `src/meshcore_hub/web/static/locales/languages.md`.
+For full translation guidelines, see [docs/i18n.md](docs/i18n.md).
 
 ### Adding a New Database Model
 
@@ -597,19 +608,21 @@ pytest
 # Run specific component
 meshcore-hub api --reload
 meshcore-hub collector
-meshcore-hub interface receiver --mock
 ```
 
 ## Environment Variables
-
-See [PLAN.md](PLAN.md#configuration-environment-variables) for complete list.
 
 Key variables:
 - `DATA_HOME` - Base directory for runtime data (default: `./data`)
 - `SEED_HOME` - Directory containing seed data files (default: `./seed`)
 - `CONTENT_HOME` - Directory containing custom content (pages, media) (default: `./content`)
 - `MQTT_HOST`, `MQTT_PORT`, `MQTT_PREFIX` - MQTT broker connection
-- `MQTT_TLS` - Enable TLS/SSL for MQTT (default: `false`)
+- `MQTT_USERNAME`, `MQTT_PASSWORD` - MQTT subscriber authentication credentials
+- `MQTT_TRANSPORT` - MQTT transport protocol (default: `websockets`)
+- `MQTT_WS_PATH` - WebSocket path (default: `/`)
+- `MQTT_TLS` - Enable TLS/SSL for MQTT (default: `false`, set `true` for `wss://`)
+- `COLLECTOR_CHANNEL_KEYS` - Additional decoder channel keys for decrypting GroupText packets
+- `COLLECTOR_INCLUDE_TEST_CHANNEL` - Include built-in 'test' channel messages (default: `false`)
 - `API_READ_KEY`, `API_ADMIN_KEY` - API authentication keys
 - `WEB_ADMIN_ENABLED` - Enable admin interface at /a/ (default: `false`, requires auth proxy)
 - `WEB_TRUSTED_PROXY_HOSTS` - Comma-separated list of trusted proxy hosts for admin authentication headers. Default: `*` (all hosts). Recommended: set to your reverse proxy IP in production. A startup warning is emitted when using the default `*` with admin enabled.
@@ -617,9 +630,15 @@ Key variables:
 - `WEB_AUTO_REFRESH_SECONDS` - Auto-refresh interval in seconds for list pages (default: `30`, `0` to disable)
 - `TZ` - Timezone for web dashboard date/time display (default: `UTC`, e.g., `America/New_York`, `Europe/London`)
 - `FEATURE_DASHBOARD`, `FEATURE_NODES`, `FEATURE_ADVERTISEMENTS`, `FEATURE_MESSAGES`, `FEATURE_MAP`, `FEATURE_MEMBERS`, `FEATURE_PAGES` - Feature flags to enable/disable specific web dashboard pages (default: all `true`). Dependencies: Dashboard auto-disables when all of Nodes/Advertisements/Messages are disabled. Map auto-disables when Nodes is disabled.
+- `NETWORK_DOMAIN` - Network domain name (default: none)
+- `NETWORK_NAME` - Network display name (default: `MeshCore Network`)
 - `METRICS_ENABLED` - Enable Prometheus metrics endpoint at /metrics (default: `true`)
 - `METRICS_CACHE_TTL` - Seconds to cache metrics output (default: `60`)
 - `LOG_LEVEL` - Logging verbosity
+
+Infrastructure passthrough variables (consumed by Docker Compose or MQTT broker, not Hub Python):
+- `COMPOSE_PROJECT_NAME` - Docker Compose project prefix for containers and volumes (default: `hub`)
+- `MQTT_TOKEN_AUDIENCE` - JWT audience claim for packet capture auth tokens (default: `mqtt.localhost`)
 
 The database defaults to `sqlite:///{DATA_HOME}/collector/meshcore.db` and does not typically need to be configured.
 
@@ -632,31 +651,7 @@ ${SEED_HOME}/
 └── members.yaml      # Network members list
 ```
 
-**Custom Content (`CONTENT_HOME`)** - Contains custom pages and media for the web dashboard:
-```
-${CONTENT_HOME}/
-├── pages/            # Custom markdown pages
-│   ├── about.md      # Example: About page (/pages/about)
-│   ├── faq.md        # Example: FAQ page (/pages/faq)
-│   └── getting-started.md # Example: Getting Started (/pages/getting-started)
-└── media/            # Custom media files
-    └── images/
-        ├── logo.svg          # Full-color custom logo (default)
-        └── logo-invert.svg   # Monochrome custom logo (darkened in light mode)
-```
-
-Pages use YAML frontmatter for metadata:
-```markdown
----
-title: About Us        # Browser tab title and nav link (not rendered on page)
-slug: about            # URL path (default: filename without .md)
-menu_order: 10         # Nav sort order (default: 100, lower = earlier)
----
-
-# About Our Network
-
-Markdown content here (include your own heading)...
-```
+**Custom Content (`CONTENT_HOME`)** - Custom pages and media for the web dashboard. See [docs/content.md](docs/content.md) for directory structure, frontmatter fields, and setup guide.
 
 **Runtime Data (`DATA_HOME`)** - Contains runtime data (gitignored):
 ```
@@ -680,26 +675,14 @@ The database can be seeded with node tags and network members from YAML files in
 meshcore-hub collector seed
 
 # With Docker Compose
-docker compose --profile seed up
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile seed up
 ```
 
 **Note:** Once the admin UI is enabled (`WEB_ADMIN_ENABLED=true`), tags should be managed through the web interface rather than seed files.
 
 ### Webhook Configuration
 
-The collector supports forwarding events to external HTTP endpoints:
-
-| Variable | Description |
-|----------|-------------|
-| `WEBHOOK_ADVERTISEMENT_URL` | Webhook for node advertisement events |
-| `WEBHOOK_ADVERTISEMENT_SECRET` | Secret sent as `X-Webhook-Secret` header |
-| `WEBHOOK_MESSAGE_URL` | Webhook for all message events (channel + direct) |
-| `WEBHOOK_MESSAGE_SECRET` | Secret for message webhook |
-| `WEBHOOK_CHANNEL_MESSAGE_URL` | Override for channel messages only |
-| `WEBHOOK_DIRECT_MESSAGE_URL` | Override for direct messages only |
-| `WEBHOOK_TIMEOUT` | Request timeout (default: 10.0s) |
-| `WEBHOOK_MAX_RETRIES` | Max retries on failure (default: 3) |
-| `WEBHOOK_RETRY_BACKOFF` | Exponential backoff multiplier (default: 2.0) |
+The collector supports forwarding events to external HTTP endpoints with configurable URLs, secrets, retries, and timeouts. See [docs/webhooks.md](docs/webhooks.md) for the full configuration reference, URL routing logic, and payload format.
 
 ### Data Retention / Cleanup Configuration
 
@@ -734,22 +717,6 @@ When enabled, the collector automatically removes nodes where:
 
 **Note:** Both event data and node cleanup run on the same schedule (DATA_RETENTION_INTERVAL_HOURS).
 
-**Contact Cleanup (Interface RECEIVER):**
-
-The interface RECEIVER mode can automatically remove stale contacts from the MeshCore companion node's contact database. This prevents the companion node from resyncing old/dead contacts back to the collector, freeing up memory on the device (typically limited to ~100 contacts).
-
-| Variable | Description |
-|----------|-------------|
-| `CONTACT_CLEANUP_ENABLED` | Enable automatic removal of stale contacts (default: true) |
-| `CONTACT_CLEANUP_DAYS` | Remove contacts not advertised for this many days (default: 7) |
-
-When enabled, during each contact sync the receiver checks each contact's `last_advert` timestamp:
-- Contacts with `last_advert` older than `CONTACT_CLEANUP_DAYS` are removed from the device
-- Stale contacts are not published to MQTT (preventing collector database pollution)
-- Contacts without a `last_advert` timestamp are preserved (no removal without data)
-
-This cleanup runs automatically whenever the receiver syncs contacts (on startup and after each advertisement event).
-
 Manual cleanup can be triggered at any time with:
 ```bash
 # Dry run to see what would be deleted
@@ -757,15 +724,6 @@ meshcore-hub collector cleanup --retention-days 30 --dry-run
 
 # Live cleanup
 meshcore-hub collector cleanup --retention-days 30
-```
-
-Webhook payload structure:
-```json
-{
-  "event_type": "advertisement",
-  "public_key": "abc123...",
-  "payload": { ... }
-}
 ```
 
 ## Troubleshooting
@@ -792,75 +750,9 @@ logging.basicConfig(level=logging.DEBUG)
 export LOG_LEVEL=DEBUG
 ```
 
-## MeshCore Library Integration
-
-The interface component uses the `meshcore` Python library to communicate with MeshCore devices. Key patterns:
-
-### Device Commands
-
-Commands are accessed via `mc.commands.*` on the MeshCore instance:
-
-```python
-# Set device time
-await mc.commands.set_time(unix_timestamp)
-
-# Send advertisement
-await mc.commands.send_advert(flood=False)
-
-# Send messages
-await mc.commands.send_msg(destination, text)
-await mc.commands.send_chan_msg(channel_idx, text)
-
-# Request data
-await mc.commands.send_statusreq(target)
-await mc.commands.send_telemetry_req(target)
-```
-
-### Event Subscription
-
-Events are received via the subscription system. The `Event` object has:
-- `event.type` - The event type enum
-- `event.payload` - Full event data (dict with all fields like `text`, `pubkey_prefix`, etc.)
-- `event.attributes` - Subset of fields for filtering
-
-**Important**: Use `event.payload` (not `event.attributes`) to get full message data.
-
-### Auto Message Fetching
-
-The library requires explicit message fetching. Call `start_auto_message_fetching()` to:
-1. Subscribe to `MESSAGES_WAITING` events
-2. Automatically call `get_msg()` to fetch pending messages
-3. Immediately fetch any queued messages on startup
-
-```python
-await mc.start_auto_message_fetching()
-```
-
-### Receiver Initialization
-
-On startup, the receiver performs these initialization steps:
-1. Set device clock to current Unix timestamp
-2. Optionally set the device name (if `MESHCORE_DEVICE_NAME` is configured)
-3. Send a flood advertisement (broadcasts device name to the mesh)
-4. Start automatic message fetching
-5. Sync the device's contact database
-
-### Contact Sync Behavior
-
-The receiver syncs the device's contact database in two scenarios:
-
-1. **Startup**: Initial sync when receiver starts
-2. **Advertisement Events**: Automatic sync triggered whenever an advertisement is received from the mesh
-
-Since advertisements are typically received every ~20 minutes, contact sync happens automatically without manual intervention. Each contact from the device is published individually to MQTT:
-- Topic: `{prefix}/{device_public_key}/event/contact`
-- Payload: `{public_key, adv_name, type}`
-
-This ensures the collector's database stays current with all nodes discovered on the mesh network.
-
 ## References
 
-- [meshcore Documentation](https://github.com/fdlamotte/meshcore)
+- [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture)
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
 - [SQLAlchemy 2.0 Documentation](https://docs.sqlalchemy.org/en/20/)
 - [Pydantic Documentation](https://docs.pydantic.dev/)

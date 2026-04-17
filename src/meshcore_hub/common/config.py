@@ -18,25 +18,11 @@ class LogLevel(str, Enum):
     CRITICAL = "CRITICAL"
 
 
-class InterfaceMode(str, Enum):
-    """Interface component mode."""
-
-    RECEIVER = "RECEIVER"
-    SENDER = "SENDER"
-
-
 class MQTTTransport(str, Enum):
     """MQTT transport type."""
 
     TCP = "tcp"
     WEBSOCKETS = "websockets"
-
-
-class CollectorIngestMode(str, Enum):
-    """Collector MQTT ingest mode."""
-
-    NATIVE = "native"
-    LETSMESH_UPLOAD = "letsmesh_upload"
 
 
 class CommonSettings(BaseSettings):
@@ -71,45 +57,12 @@ class CommonSettings(BaseSettings):
         default=False, description="Enable TLS/SSL for MQTT connection"
     )
     mqtt_transport: MQTTTransport = Field(
-        default=MQTTTransport.TCP,
+        default=MQTTTransport.WEBSOCKETS,
         description="MQTT transport protocol (tcp or websockets)",
     )
     mqtt_ws_path: str = Field(
-        default="/mqtt",
+        default="/",
         description="WebSocket path for MQTT transport (used when MQTT_TRANSPORT=websockets)",
-    )
-
-
-class InterfaceSettings(CommonSettings):
-    """Settings for the Interface component."""
-
-    # Mode
-    interface_mode: InterfaceMode = Field(
-        default=InterfaceMode.RECEIVER,
-        description="Interface mode: RECEIVER or SENDER",
-    )
-
-    # Serial connection
-    serial_port: str = Field(default="/dev/ttyUSB0", description="Serial port path")
-    serial_baud: int = Field(default=115200, description="Serial baud rate")
-
-    # Mock device
-    mock_device: bool = Field(default=False, description="Use mock device for testing")
-
-    # Device name
-    meshcore_device_name: Optional[str] = Field(
-        default=None, description="Device/node name (optional)"
-    )
-
-    # Contact cleanup settings
-    contact_cleanup_enabled: bool = Field(
-        default=True,
-        description="Enable automatic removal of stale contacts from companion node",
-    )
-    contact_cleanup_days: int = Field(
-        default=7,
-        description="Remove contacts not advertised for this many days",
-        ge=1,
     )
 
 
@@ -185,41 +138,16 @@ class CollectorSettings(CommonSettings):
         description="Remove nodes not seen for this many days (last_seen)",
         ge=1,
     )
-    collector_ingest_mode: CollectorIngestMode = Field(
-        default=CollectorIngestMode.NATIVE,
-        description=(
-            "Collector MQTT ingest mode. "
-            "'native' expects <prefix>/<pubkey>/event/<event_name>. "
-            "'letsmesh_upload' expects LetsMesh observer uploads on "
-            "<prefix>/<pubkey>/(packets|status|internal)."
-        ),
-    )
-    collector_letsmesh_decoder_enabled: bool = Field(
-        default=True,
-        description=(
-            "Enable external LetsMesh packet decoding via meshcore-decoder. "
-            "Only applies when COLLECTOR_INGEST_MODE=letsmesh_upload."
-        ),
-    )
-    collector_letsmesh_decoder_command: str = Field(
-        default="meshcore-decoder",
-        description=(
-            "Command used to run LetsMesh packet decoder CLI "
-            "(for example: meshcore-decoder, /usr/local/bin/meshcore-decoder, "
-            "or 'npx meshcore-decoder')."
-        ),
-    )
-    collector_letsmesh_decoder_keys: Optional[str] = Field(
+    collector_channel_keys: Optional[str] = Field(
         default=None,
         description=(
-            "Optional channel secret keys for LetsMesh message decryption. "
+            "Optional channel secret keys for message decryption. "
             "Provide as comma/space separated hex values."
         ),
     )
-    collector_letsmesh_decoder_timeout_seconds: float = Field(
-        default=2.0,
-        description="Timeout in seconds for each decoder invocation.",
-        ge=0.1,
+    collector_include_test_channel: bool = Field(
+        default=False,
+        description="Include built-in 'test' channel messages (channel_idx 217).",
     )
 
     @property
@@ -261,13 +189,13 @@ class CollectorSettings(CommonSettings):
         return str(Path(self.effective_seed_home) / "members.yaml")
 
     @property
-    def collector_letsmesh_decoder_keys_list(self) -> list[str]:
-        """Parse configured LetsMesh decoder keys into a normalized list."""
-        if not self.collector_letsmesh_decoder_keys:
+    def collector_channel_keys_list(self) -> list[str]:
+        """Parse configured channel keys into a normalized list."""
+        if not self.collector_channel_keys:
             return []
         return [
             part.strip()
-            for part in re.split(r"[,\s]+", self.collector_letsmesh_decoder_keys)
+            for part in re.split(r"[,\s]+", self.collector_channel_keys)
             if part.strip()
         ]
 
@@ -481,11 +409,6 @@ class WebSettings(CommonSettings):
 def get_common_settings() -> CommonSettings:
     """Get common settings instance."""
     return CommonSettings()
-
-
-def get_interface_settings() -> InterfaceSettings:
-    """Get interface settings instance."""
-    return InterfaceSettings()
 
 
 def get_collector_settings() -> CollectorSettings:

@@ -15,7 +15,7 @@ class TracePath(Base, UUIDMixin, TimestampMixin):
 
     Attributes:
         id: UUID primary key
-        receiver_node_id: FK to nodes (receiving interface)
+        observer_node_id: FK to nodes (observing interface)
         initiator_tag: Unique trace identifier
         path_len: Path length
         flags: Trace flags
@@ -29,7 +29,7 @@ class TracePath(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "trace_paths"
 
-    receiver_node_id: Mapped[Optional[str]] = mapped_column(
+    observer_node_id: Mapped[Optional[str]] = mapped_column(
         ForeignKey("nodes.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
