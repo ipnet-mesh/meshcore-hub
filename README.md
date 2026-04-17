@@ -565,17 +565,6 @@ pip install -e ".[dev]"
 
 # Install pre-commit hooks
 pre-commit install
-```
-
-### Manual Installation
-
-```bash
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate
-
-# Install the package
-pip install -e ".[dev]"
 
 # Run database migrations
 meshcore-hub db upgrade
