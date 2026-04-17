@@ -57,14 +57,14 @@ if TYPE_CHECKING:
 @click.option(
     "--mqtt-transport",
     type=click.Choice(["tcp", "websockets"], case_sensitive=False),
-    default="tcp",
+    default="websockets",
     envvar="MQTT_TRANSPORT",
     help="MQTT transport protocol",
 )
 @click.option(
     "--mqtt-ws-path",
     type=str,
-    default="/mqtt",
+    default="/",
     envvar="MQTT_WS_PATH",
     help="MQTT WebSocket path (used when transport=websockets)",
 )

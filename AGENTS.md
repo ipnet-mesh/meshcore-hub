@@ -15,7 +15,7 @@ This document provides context and guidelines for AI coding assistants working o
   - `source .venv/bin/activate`
 * You MUST install all project dependencies using `pip install -e ".[dev]"` command`
 * You MUST install `pre-commit` for quality checks
-* You MUST keep project documentation in sync with behavior/config/schema changes made in code (at minimum update relevant sections in `README.md`, `SCHEMAS.md`, `PLAN.md`, and/or `TASKS.md` when applicable)
+* You MUST keep project documentation in sync with behavior/config/schema changes made in code (at minimum update relevant sections in `README.md`, `SCHEMAS.md`, and/or `UPGRADING.md` when applicable)
 * Before commiting:
   - Run **targeted tests** for the components you changed, not the full suite:
     - `pytest tests/test_web/` for web-only changes (templates, static JS, web routes)
@@ -593,8 +593,6 @@ meshcore-hub collector
 
 ## Environment Variables
 
-See [PLAN.md](PLAN.md#configuration-environment-variables) for complete list.
-
 Key variables:
 - `COMPOSE_PROJECT_NAME` - Docker Compose project prefix for containers and volumes (default: `hub`)
 - `DATA_HOME` - Base directory for runtime data (default: `./data`)
@@ -613,6 +611,8 @@ Key variables:
 - `WEB_AUTO_REFRESH_SECONDS` - Auto-refresh interval in seconds for list pages (default: `30`, `0` to disable)
 - `TZ` - Timezone for web dashboard date/time display (default: `UTC`, e.g., `America/New_York`, `Europe/London`)
 - `FEATURE_DASHBOARD`, `FEATURE_NODES`, `FEATURE_ADVERTISEMENTS`, `FEATURE_MESSAGES`, `FEATURE_MAP`, `FEATURE_MEMBERS`, `FEATURE_PAGES` - Feature flags to enable/disable specific web dashboard pages (default: all `true`). Dependencies: Dashboard auto-disables when all of Nodes/Advertisements/Messages are disabled. Map auto-disables when Nodes is disabled.
+- `NETWORK_DOMAIN` - Network domain name (default: none)
+- `NETWORK_NAME` - Network display name (default: `MeshCore Network`)
 - `METRICS_ENABLED` - Enable Prometheus metrics endpoint at /metrics (default: `true`)
 - `METRICS_CACHE_TTL` - Seconds to cache metrics output (default: `60`)
 - `LOG_LEVEL` - Logging verbosity
@@ -692,7 +692,9 @@ The collector supports forwarding events to external HTTP endpoints:
 | `WEBHOOK_MESSAGE_URL` | Webhook for all message events (channel + direct) |
 | `WEBHOOK_MESSAGE_SECRET` | Secret for message webhook |
 | `WEBHOOK_CHANNEL_MESSAGE_URL` | Override for channel messages only |
+| `WEBHOOK_CHANNEL_MESSAGE_SECRET` | Secret for channel message webhook |
 | `WEBHOOK_DIRECT_MESSAGE_URL` | Override for direct messages only |
+| `WEBHOOK_DIRECT_MESSAGE_SECRET` | Secret for direct message webhook |
 | `WEBHOOK_TIMEOUT` | Request timeout (default: 10.0s) |
 | `WEBHOOK_MAX_RETRIES` | Max retries on failure (default: 3) |
 | `WEBHOOK_RETRY_BACKOFF` | Exponential backoff multiplier (default: 2.0) |

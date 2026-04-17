@@ -157,7 +157,7 @@ MQTT_WS_PORT=9001
 | `MQTT_USERNAME` | (empty/optional) | Subscriber username | Now **required** for collector subscriber auth. Set to match your broker's `SUBSCRIBER_1` config. |
 | `MQTT_PASSWORD` | (empty/optional) | Subscriber password | Now **required** for collector subscriber auth. Generate a secure password: `openssl rand -base64 32` |
 
-> **Note:** The Python-level defaults for `MQTT_TRANSPORT` and `MQTT_WS_PATH` remain `tcp` and `/mqtt` respectively. The new values above are set in `.env.example` and `docker-compose.yml`, which override the Python defaults for Docker deployments. Non-Docker users must set these environment variables explicitly.
+> **Note:** The Python-level defaults for `MQTT_TRANSPORT` and `MQTT_WS_PATH` are now `websockets` and `/`, matching the Docker Compose and `.env.example` values. No additional configuration is needed for non-Docker users.
 
 ### Variables to Add
 

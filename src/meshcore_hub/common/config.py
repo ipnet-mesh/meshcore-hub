@@ -57,11 +57,11 @@ class CommonSettings(BaseSettings):
         default=False, description="Enable TLS/SSL for MQTT connection"
     )
     mqtt_transport: MQTTTransport = Field(
-        default=MQTTTransport.TCP,
+        default=MQTTTransport.WEBSOCKETS,
         description="MQTT transport protocol (tcp or websockets)",
     )
     mqtt_ws_path: str = Field(
-        default="/mqtt",
+        default="/",
         description="WebSocket path for MQTT transport (used when MQTT_TRANSPORT=websockets)",
     )
 
