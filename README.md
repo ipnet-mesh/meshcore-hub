@@ -547,10 +547,12 @@ meshcore-hub/
 │   ├── images/              # Screenshots and images
 │   ├── hosting/             # Reverse proxy hosting guides
 │   │   └── nginx-proxy-manager.md
+│   ├── content.md           # Custom content setup guide
 │   ├── i18n.md              # Translation reference guide
 │   ├── letsmesh.md          # LetsMesh packet decoding details
 │   ├── seeding.md           # Seed data format and import guide
-│   └── upgrading.md         # Upgrade guide for breaking changes
+│   ├── upgrading.md         # Upgrade guide for breaking changes
+│   └── webhooks.md          # Webhook configuration reference
 ├── SCHEMAS.md               # Event schema documentation
 └── AGENTS.md                # AI assistant guidelines
 ```

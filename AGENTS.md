@@ -260,6 +260,9 @@ meshcore-hub/
 │   │   ├── database.py       # DB session management
 │   │   ├── mqtt.py           # MQTT utilities
 │   │   ├── logging.py        # Logging config
+│   │   ├── i18n.py           # Translation loading
+│   │   ├── health.py         # Health check utilities
+│   │   ├── hash_utils.py     # Hash utility functions
 │   │   ├── models/           # SQLAlchemy models
 │   │   │   ├── node.py       # Node model
 │   │   │   ├── member.py     # Network member model
@@ -290,6 +293,7 @@ meshcore-hub/
 │       ├── cli.py
 │       ├── app.py            # FastAPI app
 │       ├── pages.py          # Custom markdown page loader
+│       ├── middleware.py     # Cache-Control middleware
 │       ├── templates/        # Jinja2 templates (spa.html shell)
 │       └── static/
 │           ├── css/app.css   # Custom styles
@@ -344,10 +348,12 @@ meshcore-hub/
 │   ├── images/              # Screenshots and images
 │   ├── hosting/             # Reverse proxy hosting guides
 │   │   └── nginx-proxy-manager.md
+│   ├── content.md           # Custom content setup guide
 │   ├── i18n.md              # Translation reference guide
 │   ├── letsmesh.md          # LetsMesh packet decoding details
 │   ├── seeding.md           # Seed data format and import guide
-│   └── upgrading.md         # Upgrade guide for breaking changes
+│   ├── upgrading.md         # Upgrade guide for breaking changes
+│   └── webhooks.md          # Webhook configuration reference
 └── SCHEMAS.md
 ```
 
@@ -607,15 +613,15 @@ meshcore-hub collector
 ## Environment Variables
 
 Key variables:
-- `COMPOSE_PROJECT_NAME` - Docker Compose project prefix for containers and volumes (default: `hub`)
 - `DATA_HOME` - Base directory for runtime data (default: `./data`)
 - `SEED_HOME` - Directory containing seed data files (default: `./seed`)
 - `CONTENT_HOME` - Directory containing custom content (pages, media) (default: `./content`)
 - `MQTT_HOST`, `MQTT_PORT`, `MQTT_PREFIX` - MQTT broker connection
+- `MQTT_USERNAME`, `MQTT_PASSWORD` - MQTT subscriber authentication credentials
 - `MQTT_TRANSPORT` - MQTT transport protocol (default: `websockets`)
 - `MQTT_WS_PATH` - WebSocket path (default: `/`)
 - `MQTT_TLS` - Enable TLS/SSL for MQTT (default: `false`, set `true` for `wss://`)
-- `MQTT_TOKEN_AUDIENCE` - JWT audience claim for packet capture auth tokens (default: `mqtt.localhost`)
+- `COLLECTOR_CHANNEL_KEYS` - Additional decoder channel keys for decrypting GroupText packets
 - `COLLECTOR_INCLUDE_TEST_CHANNEL` - Include built-in 'test' channel messages (default: `false`)
 - `API_READ_KEY`, `API_ADMIN_KEY` - API authentication keys
 - `WEB_ADMIN_ENABLED` - Enable admin interface at /a/ (default: `false`, requires auth proxy)
@@ -629,6 +635,10 @@ Key variables:
 - `METRICS_ENABLED` - Enable Prometheus metrics endpoint at /metrics (default: `true`)
 - `METRICS_CACHE_TTL` - Seconds to cache metrics output (default: `60`)
 - `LOG_LEVEL` - Logging verbosity
+
+Infrastructure passthrough variables (consumed by Docker Compose or MQTT broker, not Hub Python):
+- `COMPOSE_PROJECT_NAME` - Docker Compose project prefix for containers and volumes (default: `hub`)
+- `MQTT_TOKEN_AUDIENCE` - JWT audience claim for packet capture auth tokens (default: `mqtt.localhost`)
 
 The database defaults to `sqlite:///{DATA_HOME}/collector/meshcore.db` and does not typically need to be configured.
 
