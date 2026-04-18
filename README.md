@@ -128,6 +128,7 @@ mkdir meshcore-hub
 cd meshcore-hub
 wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/docker-compose.yml
 wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/docker-compose.dev.yml
+wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/Makefile
 wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/.env.example
 
 # Copy and configure environment
@@ -136,7 +137,7 @@ cp .env.example .env
 #            set SERIAL_PORT if not /dev/ttyUSB0
 
 # Start the entire stack with local MQTT broker and packet capture
-docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile mqtt --profile core --profile observer up -d
+make up PROFILES="mqtt core observer"
 
 # View the web dashboard
 open http://localhost:8080
@@ -167,18 +168,19 @@ docker network create proxy-net
 mkdir meshcore-hub && cd meshcore-hub
 wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/docker-compose.yml
 wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/docker-compose.prod.yml
+wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/Makefile
 wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/.env.example
 cp .env.example .env
 # Edit .env: set COMPOSE_PROJECT_NAME, MQTT credentials, API keys, etc.
 
 # Start core services
-docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile core up -d
+make up PROFILES=core COMPOSE_FILES="-f docker-compose.yml -f docker-compose.prod.yml"
 
 # Or include local MQTT broker
-docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile mqtt --profile core up -d
+make up PROFILES="mqtt core" COMPOSE_FILES="-f docker-compose.yml -f docker-compose.prod.yml"
 
 # Or include packet capture on the same host
-docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile mqtt --profile core --profile observer up -d
+make up PROFILES="mqtt core observer" COMPOSE_FILES="-f docker-compose.yml -f docker-compose.prod.yml"
 ```
 
 Configure your reverse proxy to forward to the containers:
@@ -563,6 +565,8 @@ meshcore-hub/
 - [docs/upgrading.md](docs/upgrading.md) - Upgrade guide for breaking changes
 - [docs/letsmesh.md](docs/letsmesh.md) - LetsMesh packet decoding details
 - [docs/seeding.md](docs/seeding.md) - Seed data format and import guide
+- [docs/content.md](docs/content.md) - Custom content setup guide
+- [docs/webhooks.md](docs/webhooks.md) - Webhook configuration reference
 - [docs/hosting/nginx-proxy-manager.md](docs/hosting/nginx-proxy-manager.md) - Nginx Proxy Manager admin setup
 - [docs/i18n.md](docs/i18n.md) - Translation reference guide
 - [AGENTS.md](AGENTS.md) - Guidelines for AI coding assistants

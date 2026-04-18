@@ -5,7 +5,7 @@ endif
 
 COMPOSE_PROJECT_NAME ?= hub
 PROFILES ?= mqtt core
-COMPOSE_FILES = -f docker-compose.yml -f docker-compose.dev.yml
+COMPOSE_FILES ?= -f docker-compose.yml -f docker-compose.dev.yml
 VOLUMES = $(COMPOSE_PROJECT_NAME)_data $(COMPOSE_PROJECT_NAME)_mqtt_data \
           $(COMPOSE_PROJECT_NAME)_observer_data
 
