@@ -1,4 +1,4 @@
-name: Build MQTT Broker Image
+name: Docker MQTT Broker
 
 on:
   schedule:

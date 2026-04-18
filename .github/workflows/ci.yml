@@ -3,6 +3,13 @@ name: CI
 on:
   push:
     branches: [main]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "alembic/**"
+      - ".python-version"
+      - "pyproject.toml"
+      - ".pre-commit-config.yaml"
   pull_request:
     branches: [main]
     paths:
@@ -12,7 +19,6 @@ on:
       - ".python-version"
       - "pyproject.toml"
       - ".pre-commit-config.yaml"
-      - ".github/workflows/**"
 
 jobs:
   lint:

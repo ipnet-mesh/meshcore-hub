@@ -121,13 +121,14 @@ The quickest way to get started is running the entire stack on a single machine 
 **Steps:**
 
 ```bash
-# Create a directory, download the Docker Compose files and
+# Create a directory, download the Docker Compose files, Makefile and
 # example environment configuration file
 
 mkdir meshcore-hub
 cd meshcore-hub
 wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/docker-compose.yml
 wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/docker-compose.dev.yml
+wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/Makefile
 wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/.env.example
 
 # Copy and configure environment
@@ -163,10 +164,11 @@ For production deployments, use `docker-compose.prod.yml` which connects service
 # Create proxy network (once)
 docker network create proxy-net
 
-# Download compose files and config
+# Download compose files, Makefile and config
 mkdir meshcore-hub && cd meshcore-hub
 wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/docker-compose.yml
 wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/docker-compose.prod.yml
+wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/Makefile
 wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/.env.example
 cp .env.example .env
 # Edit .env: set COMPOSE_PROJECT_NAME, MQTT credentials, API keys, etc.
@@ -394,7 +396,7 @@ Control which pages are visible in the web dashboard. Disabled features are full
 
 **Dependencies:** Dashboard auto-disables when all of Nodes/Advertisements/Messages are disabled. Map auto-disables when Nodes is disabled.
 
-### Custom Content
+## Custom Content
 
 The web dashboard supports custom markdown pages and media files (including custom logos) served from a configurable content directory. See [docs/content.md](docs/content.md) for the full setup guide including directory structure, frontmatter fields, and Docker volume mounting.
 
@@ -563,6 +565,7 @@ meshcore-hub/
 - [docs/upgrading.md](docs/upgrading.md) - Upgrade guide for breaking changes
 - [docs/letsmesh.md](docs/letsmesh.md) - LetsMesh packet decoding details
 - [docs/seeding.md](docs/seeding.md) - Seed data format and import guide
+- [docs/content.md](docs/content.md) - Custom content setup guide
 - [docs/hosting/nginx-proxy-manager.md](docs/hosting/nginx-proxy-manager.md) - Nginx Proxy Manager admin setup
 - [docs/i18n.md](docs/i18n.md) - Translation reference guide
 - [AGENTS.md](AGENTS.md) - Guidelines for AI coding assistants
