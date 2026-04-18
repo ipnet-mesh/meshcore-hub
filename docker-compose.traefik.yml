@@ -17,9 +17,10 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.services.${COMPOSE_PROJECT_NAME:-hub}-api.loadbalancer.server.port=8000"
-      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-api.rule=Host(`${TRAEFIK_DOMAIN}`) && (PathPrefix(`/api`) || PathPrefix(`/metrics`) || PathPrefix(`/health`))"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-api.rule=Host(`${TRAEFIK_DOMAIN}`) && (PathPrefix(`/metrics`) || PathPrefix(`/health`))"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-api.entrypoints=websecure"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-api.tls=true"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-api.tls.certresolver=default"
       - "traefik.docker.network=proxy-net"
 
   web:
@@ -29,5 +30,5 @@ services:
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.rule=Host(`${TRAEFIK_DOMAIN}`)"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.entrypoints=websecure"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.tls=true"
-      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.priority=1"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.tls.certresolver=default"
       - "traefik.docker.network=proxy-net"
