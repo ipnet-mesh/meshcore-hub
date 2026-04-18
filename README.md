@@ -565,6 +565,8 @@ meshcore-hub/
 - [docs/seeding.md](docs/seeding.md) - Seed data format and import guide
 - [docs/hosting/nginx-proxy-manager.md](docs/hosting/nginx-proxy-manager.md) - Nginx Proxy Manager admin setup
 - [docs/i18n.md](docs/i18n.md) - Translation reference guide
+- [docs/content.md](docs/content.md) - Custom content setup guide
+- [docs/webhooks.md](docs/webhooks.md) - Webhook configuration reference
 - [AGENTS.md](AGENTS.md) - Guidelines for AI coding assistants
 
 ## Contributing
