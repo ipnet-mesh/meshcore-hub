@@ -32,4 +32,6 @@ services:
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.entrypoints=websecure"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.tls=true"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.tls.certresolver=default"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.tls.domains[0].main=${TRAEFIK_DOMAIN}"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.tls.domains[0].sans=*.${TRAEFIK_DOMAIN}"
       - "traefik.docker.network=proxy-net"
