@@ -3,15 +3,6 @@ name: Build Project Image
 on:
   push:
     branches: [main]
-    paths:
-      - "src/**"
-      - "alembic/**"
-      - "alembic.ini"
-      - ".python-version"
-      - "pyproject.toml"
-      - "Dockerfile"
-      - "docker-compose.yml"
-      - ".github/workflows/**"
     tags:
       - "v*"
 
