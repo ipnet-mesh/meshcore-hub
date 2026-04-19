@@ -220,42 +220,38 @@ Other operators can run their own [meshcore-packet-capture](https://github.com/a
 
 #### Example: Observer contributing to LetsMesh and your community Hub
 
-```bash
-# In the observer's .env or docker-compose environment:
-
-# Server 1 - Let's Mesh US (opt-in)
-PACKETCAPTURE_MQTT1_ENABLED=true
-PACKETCAPTURE_MQTT1_SERVER=mqtt-us-v1.letsmesh.net
-PACKETCAPTURE_MQTT1_PORT=443
-PACKETCAPTURE_MQTT1_TRANSPORT=websockets
-PACKETCAPTURE_MQTT1_USE_TLS=true
-PACKETCAPTURE_MQTT1_USE_AUTH_TOKEN=true
-PACKETCAPTURE_MQTT1_TOKEN_AUDIENCE=mqtt-us-v1.letsmesh.net
-
-# Server 2 - Let's Mesh EU (opt-in)
-PACKETCAPTURE_MQTT2_ENABLED=false
-
-# Server 3 - Your MeshCore Hub
-PACKETCAPTURE_MQTT3_ENABLED=true
-PACKETCAPTURE_MQTT3_SERVER=mqtt.example.com
-PACKETCAPTURE_MQTT3_PORT=443
-PACKETCAPTURE_MQTT3_TRANSPORT=websockets
-PACKETCAPTURE_MQTT3_USE_TLS=true
-PACKETCAPTURE_MQTT3_USE_AUTH_TOKEN=true
-PACKETCAPTURE_MQTT3_TOKEN_AUDIENCE=mqtt.example.com
-```
-
-Replace `mqtt.example.com` with your public MQTT domain. The `TOKEN_AUDIENCE` must match the `MQTT_TOKEN_AUDIENCE` or `AUTH_EXPECTED_AUDIENCE` configured on your broker.
-
-For local network observers (no TLS):
+A ready-made Docker Compose setup is provided in `contrib/packetcapture/`. Download it and configure:
 
 ```bash
-PACKETCAPTURE_MQTT3_SERVER=192.168.1.100
-PACKETCAPTURE_MQTT3_PORT=1883
-PACKETCAPTURE_MQTT3_TRANSPORT=websockets
-PACKETCAPTURE_MQTT3_USE_TLS=false
-PACKETCAPTURE_MQTT3_TOKEN_AUDIENCE=mqtt.localhost
+mkdir meshcore-observer && cd meshcore-observer
+
+wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/main/contrib/packetcapture/docker-compose.yml
+wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/main/contrib/packetcapture/.env.example
+
+cp .env.example .env
 ```
+
+Edit `.env` and update the following variables:
+
+| Variable | Description |
+|----------|-------------|
+| `SERIAL_PORT` | Device path for your Meshtastic device (e.g. `/dev/ttyUSB0`, or `/dev/serial/by-id/...` for a stable path) |
+| `IATA` | 3-letter area code for your location (e.g. `STN`, `SEA`) |
+| `ORIGIN` | Observer identifier (default: `observer`) |
+| `ENABLE_LETSMESH_US` | Set `true` to contribute to LetsMesh US |
+| `ENABLE_LETSMESH_EU` | Set `true` to contribute to LetsMesh EU |
+| `CUSTOM_MQTT_HOST` | Your community Hub's public MQTT domain (e.g. `mqtt.example.com`) |
+| `CUSTOM_MQTT_PORT` | MQTT port — `443` for TLS/WSS, `1883` for local/plain |
+| `CUSTOM_MQTT_TLS` | `true` for TLS, `false` for plain connections |
+| `CUSTOM_MQTT_AUDIENCE` | Must match `MQTT_TOKEN_AUDIENCE` on your broker (e.g. `mqtt.example.com` for TLS, `mqtt.localhost` for local) |
+
+Then start the observer:
+
+```bash
+docker compose up -d
+```
+
+> **Local network (no TLS):** Set `CUSTOM_MQTT_HOST` to the Hub's LAN IP (e.g. `192.168.1.100`), `CUSTOM_MQTT_PORT=1883`, `CUSTOM_MQTT_TLS=false`, and `CUSTOM_MQTT_AUDIENCE=mqtt.localhost`.
 
 ### Backup & Restore
 
