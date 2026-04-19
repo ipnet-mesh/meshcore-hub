@@ -1,0 +1,49 @@
+services:
+  meshcore-packet-capture:
+    image: ghcr.io/agessaman/meshcore-packet-capture:latest
+    container_name: meshcore-packet-capture
+    devices:
+      - ${SERIAL_PORT:-/dev/ttyUSB0}
+    group_add:
+      - dialout
+    volumes:
+      - data:/app/data
+    environment:
+      - PACKETCAPTURE_CONNECTION_TYPE=${CONNECTION_TYPE:-serial}
+      - PACKETCAPTURE_SERIAL_PORTS=${SERIAL_PORT:-/dev/ttyUSB0}
+      # MQTT Broker 1 - Let'sMesh Analyzer (US)
+      - PACKETCAPTURE_MQTT1_ENABLED=${ENABLE_LETSMESH_US:-false}
+      - PACKETCAPTURE_MQTT1_SERVER=mqtt-us-v1.letsmesh.net
+      - PACKETCAPTURE_MQTT1_PORT=443
+      - PACKETCAPTURE_MQTT1_TRANSPORT=websockets
+      - PACKETCAPTURE_MQTT1_USE_TLS=true
+      - PACKETCAPTURE_MQTT1_USE_AUTH_TOKEN=true
+      - PACKETCAPTURE_MQTT1_TOKEN_AUDIENCE=mqtt-us-v1.letsmesh.net
+      - PACKETCAPTURE_MQTT1_KEEPALIVE=120
+      # MQTT Broker 2 - Let'sMesh Analyzer (EU)
+      - PACKETCAPTURE_MQTT2_ENABLED=${ENABLE_LETSMESH_EU:-false}
+      - PACKETCAPTURE_MQTT2_SERVER=mqtt-eu-v1.letsmesh.net
+      - PACKETCAPTURE_MQTT2_PORT=443
+      - PACKETCAPTURE_MQTT2_TRANSPORT=websockets
+      - PACKETCAPTURE_MQTT2_USE_TLS=true
+      - PACKETCAPTURE_MQTT2_USE_AUTH_TOKEN=true
+      - PACKETCAPTURE_MQTT2_TOKEN_AUDIENCE=mqtt-eu-v1.letsmesh.net
+      - PACKETCAPTURE_MQTT2_KEEPALIVE=120
+      # IPNet MQTT Broker
+      - PACKETCAPTURE_MQTT3_ENABLED=true
+      - PACKETCAPTURE_MQTT3_SERVER=${CUSTOM_MQTT_HOST}
+      - PACKETCAPTURE_MQTT3_PORT=${CUSTOM_MQTT_PORT:-443}
+      - PACKETCAPTURE_MQTT3_TRANSPORT=websockets
+      - PACKETCAPTURE_MQTT3_USE_TLS=${CUSTOM_MQTT_TLS:-true}
+      - PACKETCAPTURE_MQTT3_USE_AUTH_TOKEN=true
+      - PACKETCAPTURE_MQTT3_TOKEN_AUDIENCE=${CUSTOM_MQTT_AUDIENCE}
+      - PACKETCAPTURE_MQTT3_KEEPALIVE=120
+      # Area/Origin
+      - PACKETCAPTURE_IATA=${IATA}
+      - PACKETCAPTURE_ORIGIN=${ORIGIN:observer}
+      # Schedule/Timeouts
+      - PACKETCAPTURE_ADVERT_INTERVAL_HOURS=${ADVERT_INTERVAL_HOURS:-11}
+    restart: unless-stopped
+
+volumes:
+  data:
