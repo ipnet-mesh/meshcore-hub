@@ -4,6 +4,7 @@
 # Requires docker-compose.prod.yml (for the proxy-net network).
 #
 # Set TRAEFIK_DOMAIN in your .env file to the hostname for this instance.
+# The web service matches the apex domain and all subdomains (e.g. www.meshcore.example.com).
 #
 # Prerequisites:
 #   - Traefik configured with Docker provider and attached to proxy-net
@@ -27,7 +28,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.services.${COMPOSE_PROJECT_NAME:-hub}-web.loadbalancer.server.port=8080"
-      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.rule=Host(`${TRAEFIK_DOMAIN}`)"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.rule=Host(`${TRAEFIK_DOMAIN}`) || HostRegexp(`^.+\\.${TRAEFIK_DOMAIN}$`)"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.entrypoints=websecure"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.tls=true"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.tls.certresolver=default"
