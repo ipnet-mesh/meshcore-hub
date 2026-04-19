@@ -11,7 +11,7 @@ services:
     environment:
       - PACKETCAPTURE_CONNECTION_TYPE=${CONNECTION_TYPE:-serial}
       - PACKETCAPTURE_SERIAL_PORTS=${SERIAL_PORT:-/dev/ttyUSB0}
-      # MQTT Broker 1 - Let'sMesh Analyzer (US)
+      # MQTT Broker 1 - LetsMesh Analyzer (US)
       - PACKETCAPTURE_MQTT1_ENABLED=${ENABLE_LETSMESH_US:-false}
       - PACKETCAPTURE_MQTT1_SERVER=mqtt-us-v1.letsmesh.net
       - PACKETCAPTURE_MQTT1_PORT=443
@@ -20,7 +20,7 @@ services:
       - PACKETCAPTURE_MQTT1_USE_AUTH_TOKEN=true
       - PACKETCAPTURE_MQTT1_TOKEN_AUDIENCE=mqtt-us-v1.letsmesh.net
       - PACKETCAPTURE_MQTT1_KEEPALIVE=120
-      # MQTT Broker 2 - Let'sMesh Analyzer (EU)
+      # MQTT Broker 2 - LetsMesh Analyzer (EU)
       - PACKETCAPTURE_MQTT2_ENABLED=${ENABLE_LETSMESH_EU:-false}
       - PACKETCAPTURE_MQTT2_SERVER=mqtt-eu-v1.letsmesh.net
       - PACKETCAPTURE_MQTT2_PORT=443
