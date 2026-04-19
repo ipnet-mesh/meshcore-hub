@@ -12,7 +12,10 @@ on:
       - ".python-version"
       - "pyproject.toml"
       - ".pre-commit-config.yaml"
-      - ".github/workflows/**"
+      - "AGENTS.md"
+      - "README.md"
+      - ".agents/**"
+      - ".github/**"
 
 jobs:
   lint:
