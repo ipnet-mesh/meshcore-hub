@@ -10,8 +10,11 @@ on:
       - ".python-version"
       - "pyproject.toml"
       - "Dockerfile"
-      - "docker-compose.yml"
-      - ".github/workflows/**"
+      - "docker-compose.*.yml"
+      - "AGENTS.md"
+      - "README.md"
+      - ".agents/**"
+      - ".github/**"
     tags:
       - "v*"
 
