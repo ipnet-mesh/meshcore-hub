@@ -37,12 +37,11 @@
     </style>
     {% endif %}
 
-    <!-- Tailwind CSS with DaisyUI -->
-    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.19/dist/full.min.css" rel="stylesheet" type="text/css" />
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind CSS with DaisyUI (built from source) -->
+    <link rel="stylesheet" href="/static/css/tailwind.css?v={{ version }}" />
 
     <!-- Leaflet CSS for maps -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css" />
 
     <!-- Custom application styles -->
     <link rel="stylesheet" href="/static/css/app.css?v={{ version }}">
@@ -51,8 +50,8 @@
     <script type="importmap">
     {
         "imports": {
-            "lit-html": "https://esm.sh/lit-html@3",
-            "lit-html/": "https://esm.sh/lit-html@3/"
+            "lit-html": "/static/vendor/lit-html/lit-html.js",
+            "lit-html/": "/static/vendor/lit-html/"
         }
     }
     </script>
@@ -172,13 +171,13 @@
     </footer>
 
     <!-- Leaflet JS for maps -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="/static/vendor/leaflet/leaflet.js"></script>
 
     <!-- Chart.js for charts -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/static/vendor/chart.js/chart.umd.min.js"></script>
 
     <!-- QR Code library -->
-    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script src="/static/vendor/qrcodejs/qrcode.min.js"></script>
 
     <!-- Chart helper functions -->
     <script src="/static/js/charts.js?v={{ version }}"></script>

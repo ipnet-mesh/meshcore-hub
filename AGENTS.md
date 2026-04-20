@@ -59,7 +59,8 @@ MeshCore Hub is a Python 3.14+ monorepo for managing and orchestrating MeshCore 
 | MQTT Broker | [meshcore-mqtt-broker](https://github.com/michaelhart/meshcore-mqtt-broker) (WebSocket + JWT auth) |
 | Templates | Jinja2 (server), lit-html (SPA) |
 | Frontend | ES Modules SPA with client-side routing |
-| CSS Framework | Tailwind CSS + DaisyUI |
+| CSS Framework | Tailwind CSS v4 (CLI) + DaisyUI v5 |
+| Frontend Build | Node.js 22 LTS (`npm run build`) |
 | Testing | pytest, pytest-asyncio |
 | Formatting | black |
 | Linting | flake8 |
@@ -296,7 +297,15 @@ meshcore-hub/
 │       ├── middleware.py     # Cache-Control middleware
 │       ├── templates/        # Jinja2 templates (spa.html shell)
 │       └── static/
-│           ├── css/app.css   # Custom styles
+│           ├── css/
+│           │   ├── app.css        # Custom styles
+│           │   ├── input.css      # Tailwind v4 input (source)
+│           │   └── tailwind.css   # Built Tailwind+DaisyUI CSS (generated)
+│           ├── vendor/            # Vendored JS/CSS libraries (built by npm run build)
+│           │   ├── lit-html/      # lit-html ES module
+│           │   ├── leaflet/       # Leaflet map library
+│           │   ├── chart.js/      # Chart.js library
+│           │   └── qrcodejs/      # QR code library
 │           └── js/spa/       # SPA frontend (ES modules)
 │               ├── app.js        # Entry point, route registration
 │               ├── router.js     # Client-side History API router
@@ -339,7 +348,9 @@ meshcore-hub/
 ├── data/                     # Runtime data (gitignored, DATA_HOME default)
 │   └── collector/            # Collector data
 │       └── meshcore.db       # SQLite database
-├── Dockerfile                # Docker build configuration
+├── Dockerfile                # Docker build configuration (multi-stage: Node.js frontend + Python)
+├── package.json              # Frontend build dependencies (Tailwind, DaisyUI, lit-html, etc.)
+├── build.js                  # Frontend build script (Tailwind CLI + vendor copy)
 ├── docker-compose.yml        # Docker Compose base config
 ├── docker-compose.dev.yml    # Development overrides (port mappings)
 ├── docker-compose.prod.yml   # Production overrides (proxy network)
@@ -591,6 +602,10 @@ For full translation guidelines, see [docs/i18n.md](docs/i18n.md).
 ### Running the Development Environment
 
 ```bash
+# Build frontend assets (requires Node.js 22+ LTS)
+npm install
+npm run build
+
 # Create virtual environment
 python -m venv .venv
 source .venv/bin/activate

@@ -2,7 +2,23 @@
 # Build and run MeshCore Hub components
 
 # =============================================================================
-# Stage 1: Builder - Install dependencies and build package
+# Stage 1: Frontend - Build Tailwind CSS and vendor static assets
+# =============================================================================
+FROM node:22-slim AS frontend
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY build.js ./
+COPY src/meshcore_hub/web/static/css/input.css ./src/meshcore_hub/web/static/css/input.css
+COPY src/meshcore_hub/web/templates/ ./src/meshcore_hub/web/templates/
+COPY src/meshcore_hub/web/static/js/ ./src/meshcore_hub/web/static/js/
+RUN npm run build
+
+# =============================================================================
+# Stage 2: Builder - Install dependencies and build package
 # =============================================================================
 FROM python:3.14-slim AS builder
 
@@ -28,6 +44,10 @@ COPY src/ ./src/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
 
+# Overlay built frontend assets onto source tree
+COPY --from=frontend /app/src/meshcore_hub/web/static/vendor ./src/meshcore_hub/web/static/vendor
+COPY --from=frontend /app/src/meshcore_hub/web/static/css/tailwind.css ./src/meshcore_hub/web/static/css/tailwind.css
+
 # Build argument for version (set via CI or manually)
 ARG BUILD_VERSION=dev
 
@@ -37,7 +57,7 @@ RUN sed -i "s|__version__ = \"dev\"|__version__ = \"${BUILD_VERSION}\"|" src/mes
     pip install .
 
 # =============================================================================
-# Stage 2: Runtime - Final production image
+# Stage 3: Runtime - Final production image
 # =============================================================================
 FROM python:3.14-slim AS runtime
 

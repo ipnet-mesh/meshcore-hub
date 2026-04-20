@@ -451,6 +451,12 @@ curl -H "Authorization: Bearer <API_ADMIN_KEY>" http://localhost:8000/api/v1/mem
 # Clone and setup
 git clone https://github.com/ipnet-mesh/meshcore-hub.git
 cd meshcore-hub
+
+# Install frontend dependencies and build static assets (requires Node.js 22+ LTS)
+npm install
+npm run build
+
+# Setup Python environment
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
@@ -466,6 +472,8 @@ meshcore-hub collector
 meshcore-hub api
 meshcore-hub web
 ```
+
+> **Note:** `npm run build` compiles Tailwind CSS and copies vendor libraries (lit-html, Leaflet, Chart.js, QRCode.js) into `src/meshcore_hub/web/static/vendor/`. This step is required before the web dashboard will render correctly. In Docker, this happens automatically during the build.
 
 ### Running Tests
 
@@ -514,8 +522,10 @@ meshcore-hub/
 │   └── web/                # Web dashboard
 │       ├── templates/      # Jinja2 templates (SPA shell)
 │       └── static/
-│           ├── js/spa/     # SPA frontend (ES modules, lit-html)
-│           └── locales/    # Translation files (en.json)
+│           ├── css/         # Stylesheets (app.css, input.css, built tailwind.css)
+│           ├── vendor/      # Vendored JS/CSS libraries (built by npm run build)
+│           ├── js/spa/      # SPA frontend (ES modules, lit-html)
+│           └── locales/     # Translation files (en.json)
 ├── tests/                  # Test suite
 ├── alembic/                # Database migrations
 ├── etc/                    # Configuration files (MQTT, Prometheus, Alertmanager)
@@ -534,7 +544,9 @@ meshcore-hub/
 │   └── media/              # Custom media files
 │       └── images/         # Custom images (logo.svg/png/jpg/jpeg/webp replace default logo)
 ├── data/                   # Runtime data directory (DATA_HOME, created at runtime)
-├── Dockerfile              # Docker build configuration
+├── Dockerfile              # Docker build configuration (multi-stage: Node.js frontend + Python)
+├── package.json            # Frontend build dependencies (Tailwind, DaisyUI, lit-html, etc.)
+├── build.js                # Frontend build script (Tailwind CLI + vendor copy)
 ├── docker-compose.yml      # Docker Compose base config
 ├── docker-compose.dev.yml  # Development overrides (port mappings)
 ├── docker-compose.prod.yml # Production overrides (proxy network)
