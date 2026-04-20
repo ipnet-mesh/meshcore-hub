@@ -1,0 +1,16 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.js"
+  },
+  "dependencies": {
+    "@tailwindcss/cli": "^4",
+    "chart.js": "^4",
+    "daisyui": "^5",
+    "leaflet": "^1.9.4",
+    "lit-html": "^3",
+    "qrcodejs": "^1.0.0",
+    "tailwindcss": "^4"
+  }
+}

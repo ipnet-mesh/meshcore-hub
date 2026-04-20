@@ -68,7 +68,7 @@ export async function render(container, params, router) {
 
         const adsTableHtml = advertisements.length > 0
             ? html`<div class="overflow-x-auto">
-                <table class="table table-compact w-full">
+                <table class="table table-sm w-full">
                     <thead>
                         <tr>
                             <th>${t('common.time')}</th>
@@ -107,7 +107,7 @@ export async function render(container, params, router) {
         const tags = node.tags || [];
         const tagsTableHtml = tags.length > 0
             ? html`<div class="overflow-x-auto">
-                <table class="table table-compact w-full">
+                <table class="table table-sm w-full">
                     <thead>
                         <tr>
                             <th>${t('common.key')}</th>

@@ -55,7 +55,7 @@ export async function render(container, params, router) {
 
         const customPageButtons = features.pages !== false
             ? customPages.slice(0, 3).map(page => html`
-                <a href="${page.url}" class="btn btn-outline btn-neutral">
+                <a href="${page.url}" class="btn btn-outline">
                     ${iconPage('h-5 w-5 mr-2')}
                     ${page.title}
                 </a>`)

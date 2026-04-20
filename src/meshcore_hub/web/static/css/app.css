@@ -75,12 +75,12 @@
 .navbar .menu li:has(.nav-icon-map) { --nav-color: var(--color-map); }
 .navbar .menu li:has(.nav-icon-members) { --nav-color: var(--color-members); }
 
-/* Section-tinted hover and active backgrounds (!important to override DaisyUI CDN) */
+/* Section-tinted hover and active backgrounds (!important to override DaisyUI) */
 .navbar .menu li > a:hover {
-    background-color: color-mix(in oklch, var(--nav-color, oklch(var(--bc))) 12%, transparent) !important;
+    background-color: color-mix(in oklch, var(--nav-color, var(--color-base-content)) 12%, transparent) !important;
 }
 .navbar .menu li > a.active {
-    background-color: color-mix(in oklch, var(--nav-color, oklch(var(--bc))) 20%, transparent) !important;
+    background-color: color-mix(in oklch, var(--nav-color, var(--color-base-content)) 20%, transparent) !important;
     color: inherit !important;
 }
 
@@ -117,7 +117,7 @@
 }
 
 .panel-solid {
-    background-color: color-mix(in oklch, var(--panel-color, transparent) 10%, oklch(var(--b1)));
+    background-color: color-mix(in oklch, var(--panel-color, transparent) 10%, var(--color-base-100));
 }
 
 /* ==========================================================================
@@ -129,24 +129,24 @@
 }
 
 ::-webkit-scrollbar-track {
-    background: oklch(var(--b2));
+    background: var(--color-base-200);
 }
 
 ::-webkit-scrollbar-thumb {
-    background: oklch(var(--bc) / 0.3);
+    background: color-mix(in oklch, var(--color-base-content) 30%, transparent);
     border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: oklch(var(--bc) / 0.5);
+    background: color-mix(in oklch, var(--color-base-content) 50%, transparent);
 }
 
 /* ==========================================================================
    Table Styling
    ========================================================================== */
 
-.table-compact td,
-.table-compact th {
+.table-sm td,
+.table-sm th {
     padding: 0.5rem 0.75rem;
 }
 
@@ -217,23 +217,23 @@
 }
 
 .prose a {
-    color: oklch(var(--p));
+    color: var(--color-primary);
     text-decoration: underline;
 }
 
 .prose a:hover {
-    color: oklch(var(--pf));
+    color: var(--color-primary-content);
 }
 
 .prose code {
-    background: oklch(var(--b2));
+    background: var(--color-base-200);
     padding: 0.125rem 0.25rem;
     border-radius: 0.25rem;
     font-size: 0.875em;
 }
 
 .prose pre {
-    background: oklch(var(--b2));
+    background: var(--color-base-200);
     padding: 1rem;
     border-radius: 0.5rem;
     overflow-x: auto;
@@ -246,7 +246,7 @@
 }
 
 .prose blockquote {
-    border-left: 4px solid oklch(var(--bc) / 0.3);
+    border-left: 4px solid color-mix(in oklch, var(--color-base-content) 30%, transparent);
     padding-left: 1rem;
     margin: 1rem 0;
     font-style: italic;
@@ -260,19 +260,19 @@
 
 .prose th,
 .prose td {
-    border: 1px solid oklch(var(--bc) / 0.2);
+    border: 1px solid color-mix(in oklch, var(--color-base-content) 20%, transparent);
     padding: 0.5rem;
     text-align: left;
 }
 
 .prose th {
-    background: oklch(var(--b2));
+    background: var(--color-base-200);
     font-weight: 600;
 }
 
 .prose hr {
     border: none;
-    border-top: 1px solid oklch(var(--bc) / 0.2);
+    border-top: 1px solid color-mix(in oklch, var(--color-base-content) 20%, transparent);
     margin: 2rem 0;
 }
 
@@ -290,18 +290,18 @@
 
 /* Popup styling */
 .leaflet-popup-content-wrapper {
-    background: oklch(var(--b1));
-    color: oklch(var(--bc));
+    background: var(--color-base-100);
+    color: var(--color-base-content);
 }
 
 .leaflet-popup-tip {
-    background: oklch(var(--b1));
+    background: var(--color-base-100);
 }
 
 /* Map container defaults */
 #map,
 #node-map {
-    border-radius: var(--rounded-box);
+    border-radius: var(--radius-box);
 }
 
 #map {

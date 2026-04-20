@@ -53,7 +53,7 @@ function renderRecentAds(ads) {
     });
 
     return html`<div class="overflow-x-auto">
-        <table class="table table-compact w-full">
+        <table class="table table-sm w-full">
             <thead>
                 <tr>
                     <th>${t('entities.node')}</th>
@@ -102,8 +102,9 @@ function renderChannelMessages(channelMessages, channelLabels) {
 
 /** Return a Tailwind grid-cols class for the given visible column count. */
 function gridCols(count) {
-    if (count <= 1) return '';
-    return `md:grid-cols-${count}`;
+    if (count === 2) return 'md:grid-cols-2';
+    if (count === 3) return 'md:grid-cols-3';
+    return '';
 }
 
 export async function render(container, params, router) {
