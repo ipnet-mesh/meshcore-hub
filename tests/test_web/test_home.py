@@ -100,8 +100,8 @@ class TestHomePage:
 
         assert config["is_authenticated"] is False
 
-    def test_home_authenticated(self, client: TestClient) -> None:
-        """Test that home page config shows authenticated with auth header."""
+    def test_home_not_authenticated_by_headers(self, client: TestClient) -> None:
+        """Test that home page config ignores legacy auth proxy headers."""
         response = client.get("/", headers={"X-Forwarded-User": "test-user"})
         text = response.text
         config_start = text.find("window.__APP_CONFIG__ = ") + len(
@@ -110,4 +110,4 @@ class TestHomePage:
         config_end = text.find(";", config_start)
         config = json.loads(text[config_start:config_end])
 
-        assert config["is_authenticated"] is True
+        assert config["is_authenticated"] is False

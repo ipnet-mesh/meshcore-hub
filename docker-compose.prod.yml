@@ -29,6 +29,11 @@ services:
       - default
       - proxy-net
 
+  logto:
+    networks:
+      - default
+      - proxy-net
+
 networks:
   proxy-net:
     external: true

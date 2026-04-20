@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -12,9 +13,15 @@ from zoneinfo import ZoneInfo
 
 import httpx
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import (
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from meshcore_hub import __version__
@@ -22,6 +29,7 @@ from meshcore_hub.collector.letsmesh_decoder import LetsMeshPacketDecoder
 from meshcore_hub.common.i18n import load_locale, t
 from meshcore_hub.common.schemas import RadioConfig
 from meshcore_hub.web.middleware import CacheControlMiddleware
+from meshcore_hub.web.oidc import LogtoOidcClient, OidcUser
 from meshcore_hub.web.pages import PageLoader
 
 logger = logging.getLogger(__name__)
@@ -76,20 +84,20 @@ def _resolve_logo(media_home: Path) -> tuple[str, bool, Path | None]:
     return "/static/img/logo.svg", True, None
 
 
-def _is_authenticated_proxy_request(request: Request) -> bool:
-    """Check whether request is authenticated by an upstream auth proxy.
+def _is_authenticated(request: Request) -> bool:
+    """Check whether request is authenticated via Logto OIDC session.
 
-    Supported patterns:
-    - OAuth2/OIDC proxy headers: X-Forwarded-User, X-Auth-Request-User
-    - Forwarded Basic auth header: Authorization: Basic ...
+    Validates that the session contains a valid 'user' claim with a 'sub'
+    field, which is set during the OIDC callback.
+
+    Returns False if SessionMiddleware is not installed (admin disabled).
     """
-    if request.headers.get("x-forwarded-user"):
-        return True
-    if request.headers.get("x-auth-request-user"):
-        return True
-
-    auth_header = request.headers.get("authorization", "")
-    return auth_header.lower().startswith("basic ")
+    try:
+        session = request.session
+    except (AssertionError, AttributeError):
+        return False
+    user = session.get("user")
+    return isinstance(user, dict) and bool(user.get("sub"))
 
 
 @asynccontextmanager
@@ -109,7 +117,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         timeout=30.0,
     )
 
-    logger.info(f"Web dashboard started, API URL: {api_url}")
+    # Initialize OIDC client if Logto is configured
+    oidc_client: LogtoOidcClient | None = None
+    if getattr(app.state, "admin_enabled", False):
+        oidc_client = LogtoOidcClient(
+            client_id=app.state.logto_app_id,
+            client_secret=app.state.logto_app_secret,
+            discovery_url=app.state.logto_discovery_url,
+            external_url=app.state.logto_external_url,
+        )
+        await oidc_client.discover()
+    app.state.oidc_client = oidc_client
+
+    logger.info("Web dashboard started, API URL: %s", api_url)
 
     yield
 
@@ -177,7 +197,7 @@ def _build_config_json(app: FastAPI, request: Request) -> str:
         "version": __version__,
         "timezone": app.state.timezone_abbr,
         "timezone_iana": app.state.timezone,
-        "is_authenticated": _is_authenticated_proxy_request(request),
+        "is_authenticated": _is_authenticated(request),
         "default_theme": app.state.web_theme,
         "locale": app.state.web_locale,
         "datetime_locale": app.state.web_datetime_locale,
@@ -196,7 +216,6 @@ def _build_config_json(app: FastAPI, request: Request) -> str:
 def create_app(
     api_url: str | None = None,
     api_key: str | None = None,
-    admin_enabled: bool | None = None,
     network_name: str | None = None,
     network_city: str | None = None,
     network_country: str | None = None,
@@ -216,7 +235,6 @@ def create_app(
     Args:
         api_url: Base URL of the MeshCore Hub API
         api_key: API key for authentication
-        admin_enabled: Enable admin interface at /a/
         network_name: Display name for the network
         network_city: City where the network is located
         network_country: Country where the network is located
@@ -253,20 +271,28 @@ def create_app(
         trusted_hosts = [h.strip() for h in trusted_hosts_raw.split(",") if h.strip()]
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=trusted_hosts)
 
-    # Compute effective admin flag (parameter overrides setting)
-    effective_admin = (
-        admin_enabled if admin_enabled is not None else settings.web_admin_enabled
-    )
-
-    # Warn when admin is enabled but proxy trust is wide open
-    if effective_admin and settings.web_trusted_proxy_hosts == "*":
-        logger.warning(
-            "WEB_ADMIN_ENABLED is true but WEB_TRUSTED_PROXY_HOSTS is '*' (trust all). "
-            "Consider restricting to your reverse proxy IP for production deployments."
-        )
+    # Compute effective admin flag (enabled when Logto OIDC is configured)
+    effective_admin = settings.admin_enabled
 
     # Add cache control headers based on resource type
     app.add_middleware(CacheControlMiddleware)
+
+    # Add session middleware when admin is enabled (needed for OIDC flow)
+    if effective_admin:
+        session_secret = settings.session_secret
+        if not session_secret:
+            session_secret = secrets.token_urlsafe(48)
+            logger.warning(
+                "SESSION_SECRET not set; generated ephemeral key. "
+                "Sessions will not survive restarts."
+            )
+        app.add_middleware(
+            SessionMiddleware,
+            secret_key=session_secret,
+            session_cookie="meshcore_session",
+            same_site="lax",
+            https_only=False,
+        )
 
     # Load i18n translations
     app.state.web_locale = settings.web_locale or "en"
@@ -284,6 +310,13 @@ def create_app(
     app.state.api_url = api_url or settings.api_base_url
     app.state.api_key = api_key or settings.api_key
     app.state.admin_enabled = effective_admin
+    app.state.logto_app_id = settings.logto_app_id or ""
+    app.state.logto_app_secret = settings.logto_app_secret or ""
+    app.state.logto_discovery_url = settings.logto_discovery_url
+    app.state.logto_external_url = settings.logto_external_url
+    app.state.logto_redirect_uri = settings.logto_redirect_uri
+    app.state.logto_post_logout_redirect_uri = settings.logto_post_logout_redirect_uri
+    app.state.oidc_client = None
     app.state.network_name = network_name or settings.network_name
     app.state.network_city = network_city or settings.network_city
     app.state.network_country = network_country or settings.network_country
@@ -360,6 +393,100 @@ def create_app(
     if media_home.exists() and media_home.is_dir():
         app.mount("/media", StaticFiles(directory=str(media_home)), name="media")
 
+    # --- OIDC Auth Routes ---
+    @app.get("/auth/login", tags=["Auth"])
+    async def auth_login(request: Request) -> RedirectResponse:
+        """Redirect to Logto OIDC authorization endpoint."""
+        oidc: LogtoOidcClient | None = request.app.state.oidc_client
+        if not oidc or not oidc.config.ready:
+            return RedirectResponse(url="/", status_code=302)
+
+        redirect_uri = request.app.state.logto_redirect_uri
+        if not redirect_uri:
+            redirect_uri = oidc.build_redirect_uri(str(request.base_url))
+
+        url, state = oidc.get_authorization_url(redirect_uri)
+        request.session["oauth_state"] = state
+        return RedirectResponse(url=url, status_code=302)
+
+    @app.get("/auth/callback", tags=["Auth"])
+    async def auth_callback(request: Request) -> RedirectResponse:
+        """Handle OIDC callback — exchange code for tokens."""
+        oidc: LogtoOidcClient | None = request.app.state.oidc_client
+        if not oidc or not oidc.config.ready:
+            return RedirectResponse(url="/", status_code=302)
+
+        state = request.query_params.get("state")
+        code = request.query_params.get("code")
+        stored_state = request.session.get("oauth_state")
+
+        if not state or not code or state != stored_state:
+            logger.warning("OIDC callback: invalid state mismatch")
+            return RedirectResponse(url="/", status_code=302)
+
+        request.session.pop("oauth_state", None)
+
+        redirect_uri = request.app.state.logto_redirect_uri
+        if not redirect_uri:
+            redirect_uri = oidc.build_redirect_uri(str(request.base_url))
+
+        try:
+            token_data = await oidc.exchange_code(code, redirect_uri)
+        except Exception:
+            logger.exception("OIDC code exchange failed")
+            return RedirectResponse(url="/", status_code=302)
+
+        id_token_raw = token_data.get("id_token")
+        access_token = token_data.get("access_token", "")
+
+        user_claims: dict[str, Any] = {}
+        if id_token_raw:
+            decoded = oidc.validate_id_token(id_token_raw)
+            if decoded:
+                user_claims = decoded
+
+        if not user_claims.get("sub") and access_token:
+            userinfo = await oidc.fetch_userinfo(access_token)
+            if userinfo:
+                user_claims = userinfo
+
+        if not user_claims.get("sub"):
+            logger.error("OIDC callback: no user identity found in tokens")
+            return RedirectResponse(url="/", status_code=302)
+
+        user = OidcUser(
+            sub=user_claims["sub"],
+            name=user_claims.get("name"),
+            email=user_claims.get("email"),
+            picture=user_claims.get("picture"),
+            username=user_claims.get("username"),
+        )
+        request.session["user"] = user.to_dict()
+        if id_token_raw:
+            request.session["id_token"] = id_token_raw
+
+        return RedirectResponse(url="/a/", status_code=302)
+
+    @app.get("/auth/logout", tags=["Auth"])
+    async def auth_logout(request: Request) -> RedirectResponse:
+        """Clear session and redirect to Logto end-session endpoint."""
+        oidc: LogtoOidcClient | None = request.app.state.oidc_client
+        id_token = request.session.pop("id_token", None)
+        request.session.clear()
+
+        if not oidc or not oidc.config.ready:
+            return RedirectResponse(url="/", status_code=302)
+
+        post_logout_uri = request.app.state.logto_post_logout_redirect_uri
+        if not post_logout_uri:
+            post_logout_uri = "/"
+
+        logout_url = oidc.get_logout_url(
+            id_token_hint=id_token,
+            post_logout_redirect_uri=post_logout_uri,
+        )
+        return RedirectResponse(url=logout_url, status_code=302)
+
     # --- API Proxy ---
     @app.api_route(
         "/api/{path:path}",
@@ -384,19 +511,12 @@ def create_app(
         if "content-type" in request.headers:
             headers["content-type"] = request.headers["content-type"]
 
-        # Forward auth proxy headers for admin operations
-        for h in ("x-forwarded-user", "x-forwarded-email", "x-forwarded-groups"):
-            if h in request.headers:
-                headers[h] = request.headers[h]
-
         # Block mutating requests from unauthenticated users when admin is
-        # enabled.  OAuth2Proxy is expected to set X-Forwarded-User for
-        # authenticated sessions; without it, write operations must be
-        # rejected server-side to prevent auth bypass.
+        # enabled (Logto OIDC session required for write operations).
         if (
             request.method in ("POST", "PUT", "DELETE", "PATCH")
             and request.app.state.admin_enabled
-            and not _is_authenticated_proxy_request(request)
+            and not _is_authenticated(request)
         ):
             return JSONResponse(
                 {"detail": "Authentication required"},

@@ -193,7 +193,9 @@ Complete list from `docker-compose.yml` collector `environment:` block:
 | `WEB_THEME` | `dark` | Theme |
 | `WEB_LOCALE` | `en` | Locale |
 | `WEB_DATETIME_LOCALE` | `en-US` | Locale |
-| `WEB_ADMIN_ENABLED` | `false` | Admin |
+| `WEB_ADMIN_ENABLED` | removed — admin auto-enabled when `LOGTO_APP_ID` is set | Auth |
+| `LOGTO_APP_ID` | (empty) | Auth |
+| `LOGTO_APP_SECRET` | (empty) | Auth |
 | `NETWORK_NAME` | `MeshCore Network` | Network |
 | `NETWORK_CITY` | (empty) | Network |
 | `NETWORK_COUNTRY` | (empty) | Network |

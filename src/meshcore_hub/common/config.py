@@ -286,10 +286,37 @@ class WebSettings(CommonSettings):
         description="Comma-separated list of trusted proxy hosts or '*' for all",
     )
 
-    # Admin interface (disabled by default for security)
-    web_admin_enabled: bool = Field(
-        default=False,
-        description="Enable admin interface at /a/ (requires OAuth2Proxy in front)",
+    # Logto OIDC authentication (empty app_id = auth disabled)
+    logto_app_id: Optional[str] = Field(
+        default=None,
+        description="Logto OIDC application ID (when set, admin interface is enabled)",
+    )
+    logto_app_secret: Optional[str] = Field(
+        default=None, description="Logto OIDC application secret"
+    )
+    logto_discovery_url: str = Field(
+        default="http://logto:3001/oidc",
+        description="Internal OIDC discovery URL (container-to-container)",
+    )
+    logto_external_url: str = Field(
+        default="http://localhost:3001",
+        description="Browser-facing Logto URL for redirects",
+    )
+    logto_redirect_uri: Optional[str] = Field(
+        default=None, description="OAuth callback URL after login"
+    )
+    logto_post_logout_redirect_uri: Optional[str] = Field(
+        default=None, description="URL to redirect to after logout"
+    )
+
+    # Session secret for signing OIDC session cookies
+    session_secret: Optional[str] = Field(
+        default=None,
+        description=(
+            "Secret key for signing session cookies. "
+            "If not set when Logto is configured, an ephemeral key is generated "
+            "(sessions will not survive restarts)."
+        ),
     )
 
     # API connection
@@ -355,6 +382,11 @@ class WebSettings(CommonSettings):
         default=None,
         description="Directory containing custom content (pages/, media/) (default: ./content)",
     )
+
+    @property
+    def admin_enabled(self) -> bool:
+        """Check if admin interface is enabled (requires Logto OIDC credentials)."""
+        return bool(self.logto_app_id)
 
     @property
     def features(self) -> dict[str, bool]:

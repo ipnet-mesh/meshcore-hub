@@ -38,6 +38,7 @@ MeshCore Hub is a Python 3.14+ monorepo for managing and orchestrating MeshCore 
 ## Key Documentation
 
 - [SCHEMAS.md](SCHEMAS.md) - MeshCore event JSON schemas and database mappings
+- [docs/auth.md](docs/auth.md) - Authorization setup guide (Logto OIDC)
 - [docs/upgrading.md](docs/upgrading.md) - Upgrade guide for breaking changes
 - [docs/letsmesh.md](docs/letsmesh.md) - LetsMesh packet decoding details
 - [docs/hosting/nginx-proxy-manager.md](docs/hosting/nginx-proxy-manager.md) - Nginx Proxy Manager admin setup
@@ -65,6 +66,7 @@ MeshCore Hub is a Python 3.14+ monorepo for managing and orchestrating MeshCore 
 | Formatting | black |
 | Linting | flake8 |
 | Type Checking | mypy |
+| Authentication | Logto (OIDC, optional via `--profile auth`) |
 
 ## Code Style Guidelines
 
@@ -295,6 +297,7 @@ meshcore-hub/
 │       ├── app.py            # FastAPI app
 │       ├── pages.py          # Custom markdown page loader
 │       ├── middleware.py     # Cache-Control middleware
+│       ├── oidc.py           # Logto OIDC client (auth code flow)
 │       ├── templates/        # Jinja2 templates (spa.html shell)
 │       └── static/
 │           ├── css/
@@ -359,6 +362,7 @@ meshcore-hub/
 │   ├── images/              # Screenshots and images
 │   ├── hosting/             # Reverse proxy hosting guides
 │   │   └── nginx-proxy-manager.md
+│   ├── auth.md              # Authorization setup guide (Logto OIDC)
 │   ├── content.md           # Custom content setup guide
 │   ├── i18n.md              # Translation reference guide
 │   ├── letsmesh.md          # LetsMesh packet decoding details
@@ -639,9 +643,6 @@ Key variables:
 - `COLLECTOR_CHANNEL_KEYS` - Additional decoder channel keys for decrypting GroupText packets
 - `COLLECTOR_INCLUDE_TEST_CHANNEL` - Include built-in 'test' channel messages (default: `false`)
 - `API_READ_KEY`, `API_ADMIN_KEY` - API authentication keys
-- `WEB_ADMIN_ENABLED` - Enable admin interface at /a/ (default: `false`, requires auth proxy)
-- `WEB_TRUSTED_PROXY_HOSTS` - Comma-separated list of trusted proxy hosts for admin authentication headers. Default: `*` (all hosts). Recommended: set to your reverse proxy IP in production. A startup warning is emitted when using the default `*` with admin enabled.
-- `WEB_THEME` - Default theme for the web dashboard (default: `dark`, options: `dark`, `light`). Users can override via the theme toggle in the navbar, which persists their preference in browser localStorage.
 - `WEB_AUTO_REFRESH_SECONDS` - Auto-refresh interval in seconds for list pages (default: `30`, `0` to disable)
 - `TZ` - Timezone for web dashboard date/time display (default: `UTC`, e.g., `America/New_York`, `Europe/London`)
 - `FEATURE_DASHBOARD`, `FEATURE_NODES`, `FEATURE_ADVERTISEMENTS`, `FEATURE_MESSAGES`, `FEATURE_MAP`, `FEATURE_MEMBERS`, `FEATURE_PAGES` - Feature flags to enable/disable specific web dashboard pages (default: all `true`). Dependencies: Dashboard auto-disables when all of Nodes/Advertisements/Messages are disabled. Map auto-disables when Nodes is disabled.
@@ -650,6 +651,11 @@ Key variables:
 - `METRICS_ENABLED` - Enable Prometheus metrics endpoint at /metrics (default: `true`)
 - `METRICS_CACHE_TTL` - Seconds to cache metrics output (default: `60`)
 - `LOG_LEVEL` - Logging verbosity
+- `LOGTO_APP_ID`, `LOGTO_APP_SECRET` - Logto OIDC application credentials (empty = auth disabled)
+- `LOGTO_DISCOVERY_URL` - Internal OIDC discovery endpoint (default: `http://logto:3001/oidc`)
+- `LOGTO_EXTERNAL_URL` - Browser-facing Logto URL (default: `http://localhost:3001`)
+- `LOGTO_REDIRECT_URI`, `LOGTO_POST_LOGOUT_REDIRECT_URI` - OAuth callback URLs
+- `SESSION_SECRET` - Secret key for signing session cookies (auto-generated if not set)
 
 Infrastructure passthrough variables (consumed by Docker Compose or MQTT broker, not Hub Python):
 - `COMPOSE_PROJECT_NAME` - Docker Compose project prefix for containers and volumes (default: `hub`)

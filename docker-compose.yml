@@ -287,6 +287,13 @@ services:
       - FEATURE_MAP=${FEATURE_MAP:-true}
       - FEATURE_MEMBERS=${FEATURE_MEMBERS:-true}
       - FEATURE_PAGES=${FEATURE_PAGES:-true}
+      # Logto OIDC authentication (empty = auth disabled)
+      - LOGTO_DISCOVERY_URL=${LOGTO_DISCOVERY_URL:-http://logto:3001/oidc}
+      - LOGTO_EXTERNAL_URL=${LOGTO_ENDPOINT:-http://localhost:3001}
+      - LOGTO_APP_ID=${LOGTO_APP_ID:-}
+      - LOGTO_APP_SECRET=${LOGTO_APP_SECRET:-}
+      - LOGTO_REDIRECT_URI=${LOGTO_REDIRECT_URI:-}
+      - LOGTO_POST_LOGOUT_REDIRECT_URI=${LOGTO_POST_LOGOUT_REDIRECT_URI:-}
     command: ["web"]
     healthcheck:
       test:
@@ -320,6 +327,56 @@ services:
     environment:
       - DATA_HOME=/data
     command: ["db", "upgrade"]
+
+  # ==========================================================================
+  # Logto Database - PostgreSQL for Logto OIDC provider (optional, --profile auth)
+  # See: https://github.com/logto-io/logto
+  # ==========================================================================
+  logto-database:
+    image: postgres:17-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-hub}-logto-database
+    profiles:
+      - all
+      - auth
+    restart: unless-stopped
+    volumes:
+      - logto_database_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: ${LOGTO_DB_USER:-logto}
+      POSTGRES_PASSWORD: ${LOGTO_DB_PASSWORD:-logto}
+      POSTGRES_DB: ${LOGTO_DB_NAME:-logto}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${LOGTO_DB_USER:-logto}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================================================
+  # Logto - Self-hosted OIDC provider (optional, --profile auth)
+  # Provides authentication for the web dashboard.
+  # Admin console: http://localhost:3002
+  # Setup: see .env.example LOGTO section
+  # ==========================================================================
+  logto:
+    image: ghcr.io/logto-io/logto:${LOGTO_IMAGE_VERSION:-latest}
+    container_name: ${COMPOSE_PROJECT_NAME:-hub}-logto
+    profiles:
+      - all
+      - auth
+    depends_on:
+      logto-database:
+        condition: service_healthy
+    restart: unless-stopped
+    environment:
+      - TRUST_PROXY_HEADER=1
+      - DB_URL=postgres://${LOGTO_DB_USER:-logto}:${LOGTO_DB_PASSWORD:-logto}@logto-database:5432/${LOGTO_DB_NAME:-logto}
+      - ENDPOINT=${LOGTO_ENDPOINT:-http://localhost:3001}
+      - ADMIN_ENDPOINT=${LOGTO_ADMIN_ENDPOINT:-http://localhost:3002}
+    entrypoint: ["sh", "-c", "npm run cli db seed -- --swe && npm start"]
 
   # ==========================================================================
   # Seed Data - Import node_tags.yaml and members.yaml from SEED_HOME
@@ -356,3 +413,5 @@ volumes:
     name: ${COMPOSE_PROJECT_NAME:-hub}_mqtt_data
   observer_data:
     name: ${COMPOSE_PROJECT_NAME:-hub}_observer_data
+  logto_database_data:
+    name: ${COMPOSE_PROJECT_NAME:-hub}_logto_database_data
