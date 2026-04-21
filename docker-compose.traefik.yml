@@ -6,12 +6,22 @@
 # Set TRAEFIK_DOMAIN in your .env file to the hostname for this instance.
 # The web service matches the apex domain and all subdomains (e.g. www.meshcore.example.com).
 #
+# When using --profile auth, Logto OIDC endpoints are exposed on:
+#   - auth.${TRAEFIK_DOMAIN}      (OIDC endpoint, port 3001 — public)
+#   - auth-admin.${TRAEFIK_DOMAIN} (Admin Console, port 3002 — add middleware to restrict)
+#
+# The wildcard TLS cert (*.${TRAEFIK_DOMAIN}) from the web service covers these subdomains.
+#
 # Prerequisites:
 #   - Traefik configured with Docker provider and attached to proxy-net
 #   - TRAEFIK_DOMAIN set in .env (e.g., TRAEFIK_DOMAIN=meshcore.example.com)
+#   - DNS records for auth.${TRAEFIK_DOMAIN} and auth-admin.${TRAEFIK_DOMAIN}
 #
 # Usage:
-#   docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml up -d
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml --profile core up -d
+#
+# With Logto authentication:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml --profile core --profile auth up -d
 
 services:
   api:
@@ -34,4 +44,21 @@ services:
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.tls.certresolver=default"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.tls.domains[0].main=${TRAEFIK_DOMAIN}"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.tls.domains[0].sans=*.${TRAEFIK_DOMAIN}"
+      - "traefik.docker.network=proxy-net"
+
+  logto:
+    labels:
+      # OIDC endpoint (port 3001) — public, needed for browser sign-in redirects
+      - "traefik.enable=true"
+      - "traefik.http.services.${COMPOSE_PROJECT_NAME:-hub}-logto-oidc.loadbalancer.server.port=3001"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-logto-oidc.rule=Host(`auth.${TRAEFIK_DOMAIN}`)"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-logto-oidc.entrypoints=websecure"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-logto-oidc.tls=true"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-logto-oidc.tls.certresolver=default"
+      # Admin Console (port 3002) — unrestricted by default, add middleware to restrict access
+      - "traefik.http.services.${COMPOSE_PROJECT_NAME:-hub}-logto-admin.loadbalancer.server.port=3002"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-logto-admin.rule=Host(`auth-admin.${TRAEFIK_DOMAIN}`)"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-logto-admin.entrypoints=websecure"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-logto-admin.tls=true"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-logto-admin.tls.certresolver=default"
       - "traefik.docker.network=proxy-net"

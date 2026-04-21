@@ -101,14 +101,15 @@ Service profiles:
 
 | Profile    | Services                        | Use Case                                  |
 | ---------- | ------------------------------- | ----------------------------------------- |
-| `all`      | mqtt, observer, migrate, collector, api, web | Everything on one host        |
+| `all`      | mqtt, observer, migrate, collector, api, web, logto-database, logto | Everything on one host |
 | `core`     | migrate, collector, api, web                 | Central server infrastructure |
+| `auth`     | logto-database, logto           | Self-hosted Logto OIDC authentication    |
 | `mqtt`     | meshcore-mqtt-broker            | Local MQTT broker (optional)              |
 | `observer` | packet capture observer         | Observes RF traffic and publishes to MQTT |
 | `seed`     | seed                            | One-time seed data import                 |
 | `migrate`  | migrate                         | One-time database migration               |
 
-**Note:** Most deployments connect to an external MQTT broker. Add `--profile mqtt` only if you need a local broker. The `observer` profile runs [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) to observe MeshCore RF traffic and publish decoded packets to MQTT.
+**Note:** Most deployments connect to an external MQTT broker. Add `--profile mqtt` only if you need a local broker. The `observer` profile runs [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) to observe MeshCore RF traffic and publish decoded packets to MQTT. Add `--profile auth` to enable self-hosted Logto OIDC authentication for the admin interface.
 
 ### Simple Self-Hosted Setup
 
@@ -188,6 +189,8 @@ Configure your reverse proxy to forward to the containers:
 | Web Dashboard  | `{COMPOSE_PROJECT_NAME}-web`  | 8080 | `/`                              |
 | API            | `{COMPOSE_PROJECT_NAME}-api`  | 8000 | `/api`, `/metrics`, `/health`    |
 | MQTT WebSocket | `{COMPOSE_PROJECT_NAME}-mqtt` | 1883 | `/` (only if using local broker) |
+| Logto OIDC     | `{COMPOSE_PROJECT_NAME}-logto` | 3001 | `/` (only if `--profile auth`)  |
+| Logto Admin    | `{COMPOSE_PROJECT_NAME}-logto` | 3002 | `/` (only if `--profile auth`)  |
 
 > **Important:** Do not host under a subpath (e.g., `/meshcore`). Proxy at `/`.
 
@@ -355,8 +358,6 @@ The collector automatically cleans up old event data and inactive nodes:
 | `WEB_LOCALE`               | `en`                    | Locale/language for the web dashboard (e.g., `en`, `es`, `fr`)                                                                                                                                                                               |
 | `WEB_DATETIME_LOCALE`      | `en-US`                 | Locale used for date formatting in the web dashboard (e.g., `en-US` for MM/DD/YYYY, `en-GB` for DD/MM/YYYY).                                                                                                                                 |
 | `WEB_AUTO_REFRESH_SECONDS` | `30`                    | Auto-refresh interval in seconds for list pages (0 to disable)                                                                                                                                                                               |
-| `WEB_ADMIN_ENABLED`        | `false`                 | Enable admin interface at /a/ (requires auth proxy: `X-Forwarded-User`/`X-Auth-Request-User` or forwarded `Authorization: Basic ...`)                                                                                                        |
-| `WEB_TRUSTED_PROXY_HOSTS`  | `*`                     | Comma-separated list of trusted proxy hosts for admin authentication headers. Default: `*` (all hosts). Recommended: set to your reverse proxy IP in production. A startup warning is emitted when using the default `*` with admin enabled. |
 | `TZ`                       | `UTC`                   | Timezone for displaying dates/times (e.g., `America/New_York`, `Europe/London`)                                                                                                                                                              |
 | `NETWORK_DOMAIN`           | _(none)_                | Network domain name (optional)                                                                                                                                                                                                               |
 | `NETWORK_NAME`             | `MeshCore Network`      | Display name for the network                                                                                                                                                                                                                 |
@@ -393,6 +394,10 @@ Control which pages are visible in the web dashboard. Disabled features are full
 ### Custom Content
 
 The web dashboard supports custom markdown pages and media files (including custom logos) served from a configurable content directory. See [docs/content.md](docs/content.md) for the full setup guide including directory structure, frontmatter fields, and Docker volume mounting.
+
+## Authorization
+
+MeshCore Hub supports optional OIDC authentication via a self-hosted [Logto](https://logto.io/) instance to protect the admin interface. When enabled with `--profile auth`, users must log in to access admin pages (`/a/*`). Public pages remain accessible without authentication. The API continues to use bearer token authentication (`API_READ_KEY` / `API_ADMIN_KEY`) independently. See [docs/auth.md](docs/auth.md) for the full setup guide including environment variables, production configuration, and reverse proxy integration.
 
 ## Seed Data
 
@@ -555,6 +560,7 @@ meshcore-hub/
 │   ├── images/              # Screenshots and images
 │   ├── hosting/             # Reverse proxy hosting guides
 │   │   └── nginx-proxy-manager.md
+│   ├── auth.md              # Authorization setup guide (Logto OIDC)
 │   ├── content.md           # Custom content setup guide
 │   ├── i18n.md              # Translation reference guide
 │   ├── letsmesh.md          # LetsMesh packet decoding details
@@ -568,6 +574,7 @@ meshcore-hub/
 ## Documentation
 
 - [SCHEMAS.md](SCHEMAS.md) - MeshCore event schemas
+- [docs/auth.md](docs/auth.md) - Authorization setup guide (Logto OIDC)
 - [docs/upgrading.md](docs/upgrading.md) - Upgrade guide for breaking changes
 - [docs/letsmesh.md](docs/letsmesh.md) - LetsMesh packet decoding details
 - [docs/seeding.md](docs/seeding.md) - Seed data format and import guide

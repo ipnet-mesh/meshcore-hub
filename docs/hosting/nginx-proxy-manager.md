@@ -1,60 +1,62 @@
-# Nginx Proxy Manager (NPM) Admin Setup
+# Nginx Proxy Manager (NPM) Setup
 
-This guide covers setting up MeshCore Hub behind Nginx Proxy Manager with admin authentication.
+This guide covers setting up MeshCore Hub behind Nginx Proxy Manager, including optional Logto authentication.
 
 ## Overview
 
-Use two hostnames so the public map/site stays open while admin stays protected:
+When using Logto authentication (`--profile auth`), you need three proxy hosts:
 
-1. **Public host**: no Access List (normal users).
-2. **Admin host**: Access List enabled (operators only).
+1. **Web Dashboard**: the main site (public or with access list)
+2. **Logto OIDC**: authentication endpoint (must be public for browser OIDC redirects)
+3. **Logto Admin Console**: management interface (restrict with access list)
 
-Both proxy hosts should forward to the same web container:
+When not using Logto, only the web dashboard proxy host is needed.
+
+## Proxy Host Configuration
+
+All proxy hosts should forward to the web container:
 
 | Setting                | Value                                        |
 | ---------------------- | -------------------------------------------- |
 | Scheme                 | `http`                                       |
 | Forward Hostname/IP    | Your MeshCore Hub host                       |
-| Forward Port           | `18080` (or your mapped web port)            |
+| Forward Port           | `8080` (or your mapped web port)             |
 | Websockets Support     | `ON`                                         |
 | Block Common Exploits  | `ON`                                         |
 
 **Important:**
 
 - Do not host this app under a subpath (for example `/meshcore`); proxy it at `/`.
-- `WEB_ADMIN_ENABLED` must be `true`.
 
-## Advanced Configuration
+### Web Dashboard
 
-In NPM, for the **admin host**, paste this in the `Advanced` field:
+| Hostname | Forward Port | Access List |
+|----------|-------------|-------------|
+| `meshcore.example.com` | 8080 | None (public) |
 
-```nginx
-# Forward authenticated identity for MeshCore Hub admin checks
-proxy_set_header Authorization $http_authorization;
-proxy_set_header X-Forwarded-User $remote_user;
-proxy_set_header X-Auth-Request-User $remote_user;
-proxy_set_header X-Forwarded-Email "";
-proxy_set_header X-Forwarded-Groups "";
-```
+### Logto OIDC (required for authentication)
 
-Then attach your NPM Access List (Basic auth users) to that admin host.
+| Hostname | Forward Port | Access List |
+|----------|-------------|-------------|
+| `auth.meshcore.example.com` | 3001 | None (public — needed for OIDC redirects) |
 
-## Verifying Auth Forwarding
+### Logto Admin Console (required for authentication)
+
+| Hostname | Forward Port | Access List |
+|----------|-------------|-------------|
+| `auth-admin.meshcore.example.com` | 3002 | Admin only (restrict with Access List) |
+
+## Logto Environment Variables
+
+Set these in your `.env` file to match your NPM hostnames:
 
 ```bash
-curl -s -u 'admin:password' "https://admin.example.com/config.js?t=$(date +%s)" \
-  | grep -o '"is_authenticated":[^,]*'
+LOGTO_ENDPOINT=https://auth.meshcore.example.com
+LOGTO_ADMIN_ENDPOINT=https://auth-admin.meshcore.example.com
+LOGTO_REDIRECT_URI=https://meshcore.example.com/auth/callback
+LOGTO_POST_LOGOUT_REDIRECT_URI=https://meshcore.example.com/
+LOGTO_APP_ID=your_app_id_here
+LOGTO_APP_SECRET=your_app_secret_here
 ```
 
-Expected:
-
-```text
-"is_authenticated": true
-```
-
-If it still shows `false`, check:
-
-1. You are using the admin hostname, not the public hostname.
-2. The Access List is attached to that admin host.
-3. The `Advanced` block above is present exactly.
-4. `WEB_ADMIN_ENABLED=true` is loaded in the running web container.
+See [docs/auth.md](../auth.md) for the full setup guide.

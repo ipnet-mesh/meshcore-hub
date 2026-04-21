@@ -23,7 +23,7 @@ export async function render(container, params, router) {
     ${iconLock('h-16 w-16 opacity-30 mb-4')}
     <h1 class="text-3xl font-bold mb-2">${t('admin.auth_required')}</h1>
     <p class="opacity-70">${t('admin.auth_required_description')}</p>
-    <a href="/oauth2/start?rd=${encodeURIComponent(window.location.pathname)}" class="btn btn-primary mt-6">${t('common.sign_in')}</a>
+    <a href="/auth/login" class="btn btn-primary mt-6">${t('common.sign_in')}</a>
 </div>`, container);
             return;
         }
@@ -39,7 +39,7 @@ export async function render(container, params, router) {
             </ul>
         </div>
     </div>
-    <a href="/oauth2/sign_out" target="_blank" class="btn btn-outline btn-sm">${t('common.sign_out')}</a>
+    <a href="/auth/logout" class="btn btn-outline btn-sm">${t('common.sign_out')}</a>
 </div>
 
 <div class="flex flex-wrap items-center gap-4 text-sm opacity-70 mb-6">

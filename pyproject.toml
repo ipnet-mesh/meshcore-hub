@@ -43,6 +43,8 @@ dependencies = [
     "markdown>=3.5.0",
     "prometheus-client>=0.20.0",
     "meshcoredecoder>=0.3.2",
+    "authlib>=1.3.0",
+    "itsdangerous>=2.1.0",
 ]
 
 [project.optional-dependencies]
@@ -119,6 +121,8 @@ module = [
     "markdown.*",
     "prometheus_client.*",
     "meshcoredecoder.*",
+    "authlib.*",
+    "joserfc.*",
 ]
 ignore_missing_imports = true
 

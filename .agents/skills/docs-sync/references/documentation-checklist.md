@@ -153,15 +153,14 @@ docs/letsmesh.md documents the LetsMesh packet normalization and decoding behavi
 
 ## 3c. docs/hosting/nginx-proxy-manager.md
 
-### NPM Admin Setup Guide
+### NPM Setup Guide
 
-docs/hosting/nginx-proxy-manager.md documents the Nginx Proxy Manager reverse proxy setup for admin authentication. Verify:
+docs/hosting/nginx-proxy-manager.md documents the Nginx Proxy Manager reverse proxy setup including optional Logto authentication. Verify:
 
-- [ ] Dual-hostname setup (public + admin) documented
 - [ ] Proxy host settings (scheme, port, websockets) match `docker-compose.dev.yml` port mappings
-- [ ] `WEB_ADMIN_ENABLED` requirement documented
-- [ ] Nginx `Advanced` config block headers match those checked by `web/auth.py`
-- [ ] Verification curl command uses correct endpoint (`/config.js`)
+- [ ] Logto OIDC endpoint proxy host documented (public, port 3001)
+- [ ] Logto Admin Console proxy host documented (restricted, port 3002)
+- [ ] Environment variables reference `LOGTO_*` instead of `WEB_ADMIN_ENABLED`
 - [ ] Troubleshooting steps reference correct config variables
 
 ## 3d. docs/seeding.md

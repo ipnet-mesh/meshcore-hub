@@ -144,9 +144,9 @@ export class Router {
             if (!href || !href.startsWith('/') || href.startsWith('//')) return;
             if (link.hasAttribute('download') || link.target === '_blank') return;
 
-            // Skip non-SPA paths (static files, API, media, OAuth, SEO)
+            // Skip non-SPA paths (static files, API, media, auth, SEO)
             if (href.startsWith('/static/') || href.startsWith('/media/') ||
-                href.startsWith('/api/') || href.startsWith('/oauth2/') ||
+                href.startsWith('/api/') || href.startsWith('/auth/') ||
                 href.startsWith('/health') || href === '/robots.txt' ||
                 href === '/sitemap.xml') return;
 

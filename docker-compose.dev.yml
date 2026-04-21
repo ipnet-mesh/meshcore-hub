@@ -25,3 +25,8 @@ services:
   web:
     ports:
       - "${WEB_PORT:-8080}:8080"
+
+  logto:
+    ports:
+      - "${LOGTO_PORT:-3001}:3001"
+      - "${LOGTO_ADMIN_PORT:-3002}:3002"

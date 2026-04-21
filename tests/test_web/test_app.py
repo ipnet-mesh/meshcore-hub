@@ -1,7 +1,6 @@
-"""Tests for web app: config JSON escaping and trusted proxy hosts warnings."""
+"""Tests for web app: config JSON escaping and proxy hosts middleware."""
 
 import json
-import logging
 from typing import Any
 from unittest.mock import patch
 
@@ -146,83 +145,8 @@ class TestConfigJsonXssEscaping:
         assert parsed["network_city"] == "Test City"
 
 
-class TestTrustedProxyHostsWarning:
-    """Tests for trusted proxy hosts startup warning in create_app."""
-
-    def test_warning_logged_when_admin_enabled_and_wildcard_hosts(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
-        """A warning is logged when WEB_ADMIN_ENABLED=true and WEB_TRUSTED_PROXY_HOSTS is '*'."""
-        with patch("meshcore_hub.common.config.get_web_settings") as mock_get_settings:
-            from meshcore_hub.common.config import WebSettings
-
-            settings = WebSettings(
-                _env_file=None,
-                web_admin_enabled=True,
-                web_trusted_proxy_hosts="*",
-            )
-            mock_get_settings.return_value = settings
-
-            with caplog.at_level(logging.WARNING, logger="meshcore_hub.web.app"):
-                create_app(
-                    api_url="http://localhost:8000",
-                    admin_enabled=True,
-                    features=ALL_FEATURES_ENABLED,
-                )
-
-            assert any(
-                "WEB_ADMIN_ENABLED is true but WEB_TRUSTED_PROXY_HOSTS is '*'" in msg
-                for msg in caplog.messages
-            ), f"Expected warning not found in log messages: {caplog.messages}"
-
-    def test_no_warning_when_trusted_proxy_hosts_is_specific(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
-        """No warning is logged when WEB_TRUSTED_PROXY_HOSTS is set to a specific value."""
-        with patch("meshcore_hub.common.config.get_web_settings") as mock_get_settings:
-            from meshcore_hub.common.config import WebSettings
-
-            settings = WebSettings(
-                _env_file=None,
-                web_admin_enabled=True,
-                web_trusted_proxy_hosts="10.0.0.1",
-            )
-            mock_get_settings.return_value = settings
-
-            with caplog.at_level(logging.WARNING, logger="meshcore_hub.web.app"):
-                create_app(
-                    api_url="http://localhost:8000",
-                    admin_enabled=True,
-                    features=ALL_FEATURES_ENABLED,
-                )
-
-            assert not any(
-                "WEB_TRUSTED_PROXY_HOSTS" in msg for msg in caplog.messages
-            ), f"Unexpected warning found in log messages: {caplog.messages}"
-
-    def test_no_warning_when_admin_disabled(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
-        """No warning is logged when WEB_ADMIN_ENABLED is false even with wildcard hosts."""
-        with patch("meshcore_hub.common.config.get_web_settings") as mock_get_settings:
-            from meshcore_hub.common.config import WebSettings
-
-            settings = WebSettings(
-                _env_file=None,
-                web_admin_enabled=False,
-                web_trusted_proxy_hosts="*",
-            )
-            mock_get_settings.return_value = settings
-
-            with caplog.at_level(logging.WARNING, logger="meshcore_hub.web.app"):
-                create_app(
-                    api_url="http://localhost:8000",
-                    features=ALL_FEATURES_ENABLED,
-                )
-
-            assert not any(
-                "WEB_TRUSTED_PROXY_HOSTS" in msg for msg in caplog.messages
-            ), f"Unexpected warning found in log messages: {caplog.messages}"
+class TestProxyHostsMiddleware:
+    """Tests for trusted proxy hosts middleware configuration."""
 
     def test_proxy_hosts_comma_list_parsed_correctly(self) -> None:
         """A comma-separated WEB_TRUSTED_PROXY_HOSTS is split into a list for middleware."""
@@ -242,7 +166,6 @@ class TestTrustedProxyHostsWarning:
                 features=ALL_FEATURES_ENABLED,
             )
 
-        # Find the ProxyHeadersMiddleware entry in app.user_middleware
         proxy_entries = [
             m for m in app.user_middleware if m.cls is ProxyHeadersMiddleware
         ]
@@ -271,7 +194,6 @@ class TestTrustedProxyHostsWarning:
                 features=ALL_FEATURES_ENABLED,
             )
 
-        # Find the ProxyHeadersMiddleware entry in app.user_middleware
         proxy_entries = [
             m for m in app.user_middleware if m.cls is ProxyHeadersMiddleware
         ]
