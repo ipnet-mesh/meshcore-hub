@@ -6,6 +6,13 @@
 # Set TRAEFIK_DOMAIN in your .env file to the hostname for this instance.
 # The web service matches the apex domain and all subdomains (e.g. www.meshcore.example.com).
 #
+# For multi-instance deployments (e.g. production + staging on the same host),
+# set TRAEFIK_PRIORITY to control which router wins when domains overlap.
+# Higher priority = matched first. Recommended values:
+#   Production:  10 (default)
+#   Staging:     20
+#   MQTT broker: 30 (in separate repo, same proxy-net)
+#
 # Prerequisites:
 #   - Traefik configured with Docker provider and attached to proxy-net
 #   - TRAEFIK_DOMAIN set in .env (e.g., TRAEFIK_DOMAIN=meshcore.example.com)
@@ -19,6 +26,7 @@ services:
       - "traefik.enable=true"
       - "traefik.http.services.${COMPOSE_PROJECT_NAME:-hub}-api.loadbalancer.server.port=8000"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-api.rule=Host(`${TRAEFIK_DOMAIN}`) && (PathPrefix(`/metrics`) || PathPrefix(`/health`))"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-api.priority=${TRAEFIK_PRIORITY:-10}"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-api.entrypoints=websecure"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-api.tls=true"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-api.tls.certresolver=default"
@@ -29,6 +37,7 @@ services:
       - "traefik.enable=true"
       - "traefik.http.services.${COMPOSE_PROJECT_NAME:-hub}-web.loadbalancer.server.port=8080"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.rule=Host(`${TRAEFIK_DOMAIN}`) || HostRegexp(`^.+\\.${TRAEFIK_DOMAIN}$`)"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.priority=${TRAEFIK_PRIORITY:-10}"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.entrypoints=websecure"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.tls=true"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-hub}-web.tls.certresolver=default"
