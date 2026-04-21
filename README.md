@@ -212,6 +212,24 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compos
 
 This routes the web dashboard and API to `TRAEFIK_DOMAIN` with automatic TLS.
 
+#### Multi-Instance Deployments
+
+To run multiple Hub instances (e.g., production + staging) on the same Docker host, set `TRAEFIK_PRIORITY` to control which router wins when domains overlap. Higher values are matched first:
+
+```bash
+# Production (.env)
+COMPOSE_PROJECT_NAME=hub
+TRAEFIK_DOMAIN=example.com
+TRAEFIK_PRIORITY=10
+
+# Staging (.env) — separate directory with its own config
+COMPOSE_PROJECT_NAME=hub-beta
+TRAEFIK_DOMAIN=beta.example.com
+TRAEFIK_PRIORITY=20
+```
+
+This ensures `beta.example.com` (priority 20) is matched before the production wildcard `*.example.com` (priority 10). For other services on the same network (e.g., an MQTT broker at `mqtt.example.com`), use an even higher priority (e.g., 30).
+
 ### Adding Remote Observers
 
 Other operators can run their own [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) instance and publish decoded packets to your MeshCore Hub. They can also optionally contribute to the LetsMesh network.
