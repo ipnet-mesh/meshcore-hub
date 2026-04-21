@@ -102,7 +102,7 @@ class TopicBuilder:
         ):
             public_key = parts[prefix_len]
             event_name = "/".join(parts[prefix_len + 2 :])
-            return (public_key, event_name)
+            return (public_key.lower(), event_name)
         return None
 
     def parse_command_topic(self, topic: str) -> tuple[str, str] | None:
@@ -124,7 +124,7 @@ class TopicBuilder:
         ):
             public_key = parts[prefix_len]
             command_name = "/".join(parts[prefix_len + 2 :])
-            return (public_key, command_name)
+            return (public_key.lower(), command_name)
         return None
 
     def parse_letsmesh_upload_topic(self, topic: str) -> tuple[str, str] | None:
@@ -145,7 +145,7 @@ class TopicBuilder:
         if feed_type not in {"packets", "status", "internal"}:
             return None
 
-        return (public_key, feed_type)
+        return (public_key.lower(), feed_type)
 
 
 MessageHandler = Callable[[str, str, dict[str, Any]], None]
