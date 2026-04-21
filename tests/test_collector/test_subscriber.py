@@ -493,7 +493,7 @@ class TestSubscriber:
         public_key, event_type, payload, _db = handler.call_args.args
         assert public_key == "a" * 64
         assert event_type == "advertisement"
-        assert payload["public_key"] == "B" * 64
+        assert payload["public_key"] == "b" * 64
         assert payload["name"] == "Concord Attic G2"
         assert payload["adv_type"] == "repeater"
         assert payload["flags"] == 146
@@ -548,7 +548,7 @@ class TestSubscriber:
         contact_handler.assert_called_once()
         _public_key, event_type, payload, _db = contact_handler.call_args.args
         assert event_type == "contact"
-        assert payload["public_key"] == "C" * 64
+        assert payload["public_key"] == "c" * 64
         assert payload["type"] == 2
         assert payload["flags"] == 146
 
@@ -755,7 +755,7 @@ class TestSubscriber:
         assert payload["hop_count"] == 2
         assert payload["path_hashes"] == ["AA", "BB"]
         assert payload["extra_type"] == 244
-        assert payload["node_public_key"] == "D" * 64
+        assert payload["node_public_key"] == "d" * 64
 
     def test_letsmesh_packet_fallback_logs_decoded_payload(
         self, mock_mqtt_client, db_manager
