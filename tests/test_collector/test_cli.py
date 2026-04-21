@@ -52,7 +52,10 @@ class TestCollectorGroup:
             patch("meshcore_hub.collector.cli._run_collector_service"),
         ):
             result = runner.invoke(
-                collector, ["--data-home", "/custom/data"], catch_exceptions=False
+                collector,
+                ["--data-home", "/custom/data"],
+                catch_exceptions=False,
+                env={"SEED_HOME": None},
             )
 
         assert result.exit_code == 0
