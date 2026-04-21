@@ -43,10 +43,8 @@ def _make_decoder(
     return decoder
 
 
-PUB_KEY_UPPER = "AA" * 32
-PUB_KEY = PUB_KEY_UPPER.lower()
-OBSERVER_KEY_UPPER = "BB" * 32
-OBSERVER_KEY = OBSERVER_KEY_UPPER.lower()
+PUB_KEY = "AA" * 32
+OBSERVER_KEY = "BB" * 32
 
 
 class TestStatusFeed:
@@ -92,7 +90,7 @@ class TestAdvertPacket:
             "payload": {
                 "decoded": {
                     "type": 4,
-                    "publicKey": PUB_KEY_UPPER,
+                    "publicKey": PUB_KEY,
                     "timestamp": 1700000000,
                     "signature": "CC" * 64,
                     "appData": {
@@ -132,7 +130,7 @@ class TestAdvertPacket:
             "payload": {
                 "decoded": {
                     "type": 4,
-                    "publicKey": PUB_KEY_UPPER,
+                    "publicKey": PUB_KEY,
                     "timestamp": 1700000000,
                     "signature": "CC" * 64,
                 }
@@ -348,10 +346,10 @@ class TestControlPacket:
                     "flags": 1,
                     "subType": 144,
                     "dataHex": "",
-                    "publicKey": PUB_KEY_UPPER,
+                    "publicKey": PUB_KEY,
                     "nodeType": 2,
                     "parsed": {
-                        "publicKey": PUB_KEY_UPPER,
+                        "publicKey": PUB_KEY,
                         "nodeType": 2,
                         "snr": 10,
                     },
@@ -413,7 +411,7 @@ class TestPathPacket:
                     "pathLength": 4,
                     "pathHashes": ["AA", "BB", "CC", "DD"],
                     "extraType": 1,
-                    "extraData": PUB_KEY_UPPER,
+                    "extraData": PUB_KEY,
                 }
             },
         }
@@ -449,7 +447,7 @@ class TestResponsePacket:
                     "tag": 0,
                     "decrypted": {
                         "content": {
-                            "node_public_key": PUB_KEY_UPPER,
+                            "node_public_key": PUB_KEY,
                             "battery_voltage": 3.7,
                             "battery_percentage": 85,
                         }
@@ -486,7 +484,7 @@ class TestResponsePacket:
                     "tag": 0,
                     "decrypted": {
                         "content": {
-                            "node_public_key": PUB_KEY_UPPER,
+                            "node_public_key": PUB_KEY,
                             "parsed_data": {"temperature": 22.5, "humidity": 60},
                         }
                     },

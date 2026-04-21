@@ -37,12 +37,6 @@ class Node(Base, UUIDMixin, TimestampMixin):
         nullable=False,
         index=True,
     )
-
-    def __init__(self, **kwargs: object) -> None:
-        super().__init__(**kwargs)
-        if self.public_key and isinstance(self.public_key, str):
-            self.public_key = self.public_key.lower()
-
     name: Mapped[Optional[str]] = mapped_column(
         String(255),
         nullable=True,

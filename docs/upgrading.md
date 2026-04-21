@@ -4,7 +4,7 @@ This guide covers upgrading from a previous MeshCore Hub release to the current 
 
 ## v0.9.0
 
-This release includes **breaking changes** to the MQTT broker, packet capture service, data ingestion pipeline, and public key handling.
+This release includes **breaking changes** to the MQTT broker, packet capture service, and data ingestion pipeline.
 
 ### Overview of Changes
 
@@ -23,20 +23,6 @@ This release includes **breaking changes** to the MQTT broker, packet capture se
 | Compose files | Single `docker-compose.yml` | Base + environment overrides (`.dev.yml`, `.prod.yml`) |
 | Container names | `meshcore-*` | Parameterized via `COMPOSE_PROJECT_NAME` (default: `hub-*`) |
 | Volume names | `meshcore_*` | Parameterized via `COMPOSE_PROJECT_NAME` (default: `hub_*`) |
-| Public key case | Mixed (uppercase/lowercase) | Normalized to **lowercase** |
-
-### Public Key Case Normalization
-
-Previously, the tag importer stored `public_key` as lowercase while the LetsMesh packet normalizer stored it as UPPERCASE. This could create duplicate nodes for the same physical device — with tags linked to one node and mesh events linked to another.
-
-An Alembic migration (`b1c2d3e4f5a6`) automatically:
-
-1. Merges duplicate nodes (keeping the one with the earliest `first_seen`)
-2. Re-points all foreign key references to the surviving node
-3. Deletes the duplicate node
-4. Normalizes all remaining `public_key` values to lowercase
-
-**No manual action is required** — the migration runs as part of `meshcore-hub db upgrade` (or the `migrate` Docker Compose service).
 
 ### Step 1: Backup
 

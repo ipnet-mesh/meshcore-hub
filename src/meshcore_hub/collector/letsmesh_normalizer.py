@@ -784,7 +784,7 @@ class LetsMeshNormalizer:
         match = re.search(r"([0-9A-Fa-f]{64})", value)
         if not match:
             return None
-        return match.group(1).lower()
+        return match.group(1).upper()
 
     @classmethod
     def _parse_hex_or_int(cls, value: Any) -> int | None:
@@ -903,7 +903,7 @@ class LetsMeshNormalizer:
             return None
         if any(ch not in "0123456789ABCDEF" for ch in normalized):
             return None
-        return normalized.lower()
+        return normalized
 
     @staticmethod
     def _normalize_pubkey_prefix(value: Any) -> str | None:
