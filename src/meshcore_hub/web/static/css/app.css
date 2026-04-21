@@ -246,7 +246,7 @@
 }
 
 .prose blockquote {
-    border-left: 4px solid color-mix(in oklch, var(--color-base-content) 30%, transparent);
+    border-left: 4px solid var(--tw-prose-quote-borders);
     padding-left: 1rem;
     margin: 1rem 0;
     font-style: italic;
@@ -260,19 +260,20 @@
 
 .prose th,
 .prose td {
-    border: 1px solid color-mix(in oklch, var(--color-base-content) 20%, transparent);
+    border: 1px solid var(--tw-prose-td-borders);
     padding: 0.5rem;
     text-align: left;
 }
 
 .prose th {
+    border-color: var(--tw-prose-th-borders);
     background: var(--color-base-200);
     font-weight: 600;
 }
 
 .prose hr {
     border: none;
-    border-top: 1px solid color-mix(in oklch, var(--color-base-content) 20%, transparent);
+    border-top: 1px solid var(--tw-prose-hr);
     margin: 2rem 0;
 }
 
