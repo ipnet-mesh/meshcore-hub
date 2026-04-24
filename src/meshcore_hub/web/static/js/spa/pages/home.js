@@ -158,12 +158,12 @@ export async function render(container, params, router) {
     <div class="card bg-base-100 shadow-xl">
         <div class="card-body flex flex-col items-center justify-center">
             <p class="text-sm opacity-70 mb-4 text-center">${t('home.meshcore_attribution')}</p>
-            <a href="https://meshcore.co.uk/" target="_blank" rel="noopener noreferrer" class="hover:opacity-80 transition-opacity">
+            <a href="https://meshcore.io/" target="_blank" rel="noopener noreferrer" class="hover:opacity-80 transition-opacity">
                 <img src="/static/img/meshcore.svg" alt="MeshCore" class="theme-logo theme-logo--invert-light h-8" />
             </a>
-            <p class="text-xs opacity-50 mt-4 text-center">Connecting people and things, without using the internet</p>
+            <p class="text-xs opacity-50 mt-4 text-center">Off-Grid, Open-Source Encrypted Messaging</p>
             <div class="flex gap-2 mt-4">
-                <a href="https://meshcore.co.uk/" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">
+                <a href="https://meshcore.io/" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">
                     ${iconGlobe('h-4 w-4 mr-1')}
                     ${t('links.website')}
                 </a>

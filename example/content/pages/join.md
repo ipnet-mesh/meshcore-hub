@@ -70,7 +70,7 @@ The app connects via Bluetooth to your Companion node, allowing you to send mess
 
 ## Flashing Firmware
 
-1. Use the [MeshCore Web Flasher](https://flasher.meshcore.co.uk/) for easy browser-based flashing
+1. Use the [MeshCore Web Flasher](https://flasher.meshcore.io/) for easy browser-based flashing
 2. Select your device type and region (frequency)
 3. Connect via USB and flash
 
