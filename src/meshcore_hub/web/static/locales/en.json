@@ -95,6 +95,8 @@
         "received": "Received",
         "received_by": "Received By",
         "observers": "Observers",
+        "snr_db": "SNR (dB)",
+        "hops": "Hops",
         "from": "From",
         "close": "close",
         "unnamed": "Unnamed",

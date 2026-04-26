@@ -478,16 +478,16 @@ export function observerDetailRow(observers, eventProperties, options = {}) {
                         <thead>
                             <tr>
                                 <th>Observer</th>
-                                <th>SNR</th>
-                                ${showPath ? html`<th>Path</th>` : nothing}
+                                <th>${t('common.snr_db')}</th>
+                                ${showPath ? html`<th>${t('common.hops')}</th>` : nothing}
                                 <th>Received</th>
                             </tr>
                         </thead>
                         <tbody>
                             ${observers.map(o => {
                                 const displayName = o.tag_name || o.name || truncateKey(o.public_key, 12);
-                                const snrDisplay = o.snr != null ? `${Number(o.snr).toFixed(1)} dB` : '\u2014';
-                                const pathDisplay = o.path_len != null ? `${o.path_len} hop${o.path_len !== 1 ? 's' : ''}` : '\u2014';
+                                const snrDisplay = o.snr != null ? `${Number(o.snr).toFixed(1)}` : '\u2014';
+                                const pathDisplay = o.path_len != null ? `${o.path_len}` : '\u2014';
                                 const timeDisplay = formatRelativeTime(o.observed_at);
                                 return html`
                                     <tr>
