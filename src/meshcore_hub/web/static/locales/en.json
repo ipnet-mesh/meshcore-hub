@@ -94,7 +94,7 @@
         "public_key": "Public Key",
         "received": "Received",
         "received_by": "Received By",
-        "receivers": "Receivers",
+        "observers": "Observers",
         "from": "From",
         "close": "close",
         "unnamed": "Unnamed",

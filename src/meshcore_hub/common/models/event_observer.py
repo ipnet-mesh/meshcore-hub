@@ -4,7 +4,15 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 from uuid import uuid4
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy import (
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    Index,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
 
@@ -27,6 +35,7 @@ class EventObserver(Base, UUIDMixin, TimestampMixin):
         event_hash: Hash identifying the unique event (links to event tables)
         observer_node_id: FK to the node that observed this event
         snr: Signal-to-noise ratio at this observer (if available)
+        path_len: Hop count at this observer (if available)
         observed_at: When this specific observer captured the event
         created_at: Record creation timestamp
         updated_at: Record update timestamp
@@ -51,6 +60,10 @@ class EventObserver(Base, UUIDMixin, TimestampMixin):
     )
     snr: Mapped[Optional[float]] = mapped_column(
         Float,
+        nullable=True,
+    )
+    path_len: Mapped[Optional[int]] = mapped_column(
+        Integer,
         nullable=True,
     )
     observed_at: Mapped[datetime] = mapped_column(
@@ -85,6 +98,7 @@ def add_event_observer(
     event_hash: str,
     observer_node_id: str,
     snr: Optional[float] = None,
+    path_len: Optional[int] = None,
     observed_at: Optional[datetime] = None,
 ) -> bool:
     """Add an observer to an event, handling duplicates gracefully.
@@ -97,6 +111,7 @@ def add_event_observer(
         event_hash: Hash identifying the unique event
         observer_node_id: UUID of the observer node
         snr: Signal-to-noise ratio at this observer (optional)
+        path_len: Hop count at this observer (optional)
         observed_at: When this observer captured the event (defaults to now)
 
     Returns:
@@ -114,6 +129,7 @@ def add_event_observer(
             event_hash=event_hash,
             observer_node_id=observer_node_id,
             snr=snr,
+            path_len=path_len,
             observed_at=now,
             created_at=now,
             updated_at=now,

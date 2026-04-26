@@ -1,4 +1,6 @@
-"""Tests for LetsMesh normalizer _normalize_hash_list method."""
+"""Tests for LetsMesh normalizer."""
+
+from unittest.mock import MagicMock
 
 from meshcore_hub.collector.letsmesh_normalizer import LetsMeshNormalizer
 
@@ -66,3 +68,102 @@ class TestNormalizeHashList:
         """Single-character strings are rejected (minimum is 2)."""
         result = LetsMeshNormalizer._normalize_hash_list(["a", "4a"])
         assert result == ["4A"]
+
+
+class TestAdvertisementSnrAndPath:
+    """Tests for SNR and path_len extraction in advertisement payloads."""
+
+    def _make_normalizer(self) -> LetsMeshNormalizer:
+        norm = LetsMeshNormalizer()
+        norm._letsmesh_decoder = MagicMock()
+        norm._include_test_channel = False
+        return norm
+
+    def _make_decoded_type4(self) -> dict:
+        return {
+            "payloadType": 4,
+            "payload": {
+                "decoded": {
+                    "publicKey": "b" * 64,
+                },
+            },
+        }
+
+    def test_advertisement_extracts_snr_from_uppercase_key(self) -> None:
+        """Advertisement payload with uppercase SNR normalizes to lowercase snr."""
+        norm = self._make_normalizer()
+        result = norm._build_letsmesh_advertisement_payload(
+            {"SNR": 12.5, "path": "91CBC3"},
+            decoded_packet=self._make_decoded_type4(),
+        )
+        assert result is not None
+        assert result["snr"] == 12.5
+
+    def test_advertisement_extracts_snr_from_lowercase_key(self) -> None:
+        """Advertisement payload with lowercase snr extracts it."""
+        norm = self._make_normalizer()
+        result = norm._build_letsmesh_advertisement_payload(
+            {"snr": 9.0},
+            decoded_packet=self._make_decoded_type4(),
+        )
+        assert result is not None
+        assert result["snr"] == 9.0
+
+    def test_advertisement_extracts_path_len(self) -> None:
+        """Advertisement payload with path extracts path_len."""
+        norm = self._make_normalizer()
+        result = norm._build_letsmesh_advertisement_payload(
+            {"path": "91CBC3"},
+            decoded_packet=self._make_decoded_type4(),
+        )
+        assert result is not None
+        assert result.get("path_len") is not None
+
+    def test_output_has_lowercase_snr_key_only(self) -> None:
+        """Output contains lowercase snr key, never uppercase SNR."""
+        norm = self._make_normalizer()
+        result = norm._build_letsmesh_advertisement_payload(
+            {"SNR": 8.0},
+            decoded_packet=self._make_decoded_type4(),
+        )
+        assert result is not None
+        assert "snr" in result
+        assert "SNR" not in result
+
+
+class TestMessageSnrCasing:
+    """Tests for message payload SNR casing (lowercase output)."""
+
+    def _make_normalizer(self) -> LetsMeshNormalizer:
+        norm = LetsMeshNormalizer()
+        norm._letsmesh_decoder = MagicMock()
+        norm._include_test_channel = True
+        return norm
+
+    def _make_decoded_type5(self) -> dict:
+        return {
+            "payloadType": 5,
+            "payload": {
+                "decoded": {
+                    "text": "hello channel",
+                    "channel": {"hash": "A" * 24},
+                },
+            },
+        }
+
+    def test_message_outputs_lowercase_snr(self) -> None:
+        """Message payload outputs lowercase snr key, not uppercase SNR."""
+        norm = self._make_normalizer()
+        result = norm._build_letsmesh_message_payload(
+            {
+                "packet_type": "5",
+                "hash": "ABCDEF1234",
+                "SNR": "12.5",
+                "path": "91CBC3",
+            },
+            decoded_packet=self._make_decoded_type5(),
+        )
+        assert result is not None
+        _, payload = result
+        assert "snr" in payload
+        assert "SNR" not in payload

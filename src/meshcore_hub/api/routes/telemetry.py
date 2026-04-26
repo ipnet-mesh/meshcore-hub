@@ -9,6 +9,7 @@ from sqlalchemy.orm import aliased
 
 from meshcore_hub.api.auth import RequireRead
 from meshcore_hub.api.dependencies import DbSession
+from meshcore_hub.api.observer_utils import fetch_observers_for_events
 from meshcore_hub.common.models import Node, Telemetry
 from meshcore_hub.common.schemas.messages import TelemetryList, TelemetryRead
 
@@ -59,6 +60,10 @@ async def list_telemetry(
     # Execute
     results = session.execute(query).all()
 
+    # Fetch observers for these telemetry records
+    event_hashes = [tel.event_hash for tel, _ in results if tel.event_hash]
+    observers_by_hash = fetch_observers_for_events(session, "telemetry", event_hashes)
+
     # Build response with observed_by
     items = []
     for tel, observer_pk in results:
@@ -71,6 +76,9 @@ async def list_telemetry(
             "parsed_data": tel.parsed_data,
             "received_at": tel.received_at,
             "created_at": tel.created_at,
+            "observers": (
+                observers_by_hash.get(tel.event_hash, []) if tel.event_hash else []
+            ),
         }
         items.append(TelemetryRead(**data))
 
@@ -101,6 +109,14 @@ async def get_telemetry(
         raise HTTPException(status_code=404, detail="Telemetry record not found")
 
     tel, observer_pk = result
+
+    observers = []
+    if tel.event_hash:
+        observers_by_hash = fetch_observers_for_events(
+            session, "telemetry", [tel.event_hash]
+        )
+        observers = observers_by_hash.get(tel.event_hash, [])
+
     data = {
         "id": tel.id,
         "observer_node_id": tel.observer_node_id,
@@ -110,5 +126,6 @@ async def get_telemetry(
         "parsed_data": tel.parsed_data,
         "received_at": tel.received_at,
         "created_at": tel.created_at,
+        "observers": observers,
     }
     return TelemetryRead(**data)

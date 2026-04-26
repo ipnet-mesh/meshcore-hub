@@ -126,3 +126,18 @@ class TestHandleTelemetry:
 
         telemetry = db_session.execute(select(Telemetry)).scalar_one()
         assert telemetry.node_public_key == "b" * 64
+
+    def test_telemetry_stores_snr_and_path_len(self, db_manager, db_session):
+        """Telemetry handler stores snr and path_len in event_observers."""
+        payload = {
+            "node_public_key": "b" * 64,
+            "parsed_data": {"temperature": 20.0},
+            "snr": 7.5,
+            "path_len": 2,
+        }
+
+        handle_telemetry("a" * 64, "telemetry_response", payload, db_manager)
+
+        observer = db_session.execute(select(EventObserver)).scalar_one()
+        assert observer.snr == 7.5
+        assert observer.path_len == 2

@@ -9,11 +9,11 @@ from sqlalchemy.orm import aliased, selectinload
 
 from meshcore_hub.api.auth import RequireRead
 from meshcore_hub.api.dependencies import DbSession
-from meshcore_hub.common.models import Advertisement, EventObserver, Node, NodeTag
+from meshcore_hub.api.observer_utils import fetch_observers_for_events
+from meshcore_hub.common.models import Advertisement, Node, NodeTag
 from meshcore_hub.common.schemas.messages import (
     AdvertisementList,
     AdvertisementRead,
-    ObserverInfo,
 )
 
 router = APIRouter()
@@ -37,62 +37,6 @@ def _get_tag_description(node: Optional[Node]) -> Optional[str]:
         if tag.key == "description":
             return tag.value
     return None
-
-
-def _fetch_observers_for_events(
-    session: DbSession,
-    event_type: str,
-    event_hashes: list[str],
-) -> dict[str, list[ObserverInfo]]:
-    """Fetch receiver info for a list of events by their hashes."""
-    if not event_hashes:
-        return {}
-
-    query = (
-        select(
-            EventObserver.event_hash,
-            EventObserver.snr,
-            EventObserver.observed_at,
-            Node.id.label("node_id"),
-            Node.public_key,
-            Node.name,
-        )
-        .join(Node, EventObserver.observer_node_id == Node.id)
-        .where(EventObserver.event_type == event_type)
-        .where(EventObserver.event_hash.in_(event_hashes))
-        .order_by(EventObserver.observed_at)
-    )
-
-    results = session.execute(query).all()
-    observers_by_hash: dict[str, list[ObserverInfo]] = {}
-
-    node_ids = [r.node_id for r in results]
-    tag_names: dict[str, str] = {}
-    if node_ids:
-        tag_query = (
-            select(NodeTag.node_id, NodeTag.value)
-            .where(NodeTag.node_id.in_(node_ids))
-            .where(NodeTag.key == "name")
-        )
-        for node_id, value in session.execute(tag_query).all():
-            tag_names[node_id] = value
-
-    for row in results:
-        if row.event_hash not in observers_by_hash:
-            observers_by_hash[row.event_hash] = []
-
-        observers_by_hash[row.event_hash].append(
-            ObserverInfo(
-                node_id=row.node_id,
-                public_key=row.public_key,
-                name=row.name,
-                tag_name=tag_names.get(row.node_id),
-                snr=row.snr,
-                observed_at=row.observed_at,
-            )
-        )
-
-    return observers_by_hash
 
 
 @router.get("", response_model=AdvertisementList)
@@ -201,7 +145,7 @@ async def list_advertisements(
 
     # Fetch all observers for these advertisements
     event_hashes = [r[0].event_hash for r in results if r[0].event_hash]
-    observers_by_hash = _fetch_observers_for_events(
+    observers_by_hash = fetch_observers_for_events(
         session, "advertisement", event_hashes
     )
 
@@ -290,7 +234,7 @@ async def get_advertisement(
     # Fetch observers for this advertisement
     observers = []
     if adv.event_hash:
-        observers_by_hash = _fetch_observers_for_events(
+        observers_by_hash = fetch_observers_for_events(
             session, "advertisement", [adv.event_hash]
         )
         observers = observers_by_hash.get(adv.event_hash, [])

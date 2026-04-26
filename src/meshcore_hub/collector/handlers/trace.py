@@ -41,6 +41,7 @@ def handle_trace_data(
     path_hashes = payload.get("path_hashes")
     snr_values = payload.get("snr_values")
     hop_count = payload.get("hop_count")
+    snr = payload.get("snr")
 
     # Compute event hash for deduplication (initiator_tag is unique per trace)
     event_hash = compute_trace_hash(initiator_tag=initiator_tag)
@@ -76,7 +77,8 @@ def handle_trace_data(
                     event_type="trace",
                     event_hash=event_hash,
                     observer_node_id=receiver_node.id,
-                    snr=None,  # Trace events don't have a single SNR value
+                    snr=snr,
+                    path_len=path_len,
                     observed_at=now,
                 )
                 if added:
@@ -108,7 +110,8 @@ def handle_trace_data(
                 event_type="trace",
                 event_hash=event_hash,
                 observer_node_id=receiver_node.id,
-                snr=None,
+                snr=snr,
+                path_len=path_len,
                 observed_at=now,
             )
 
@@ -128,7 +131,8 @@ def handle_trace_data(
                     event_type="trace",
                     event_hash=event_hash,
                     observer_node_id=receiver_node.id,
-                    snr=None,
+                    snr=snr,
+                    path_len=path_len,
                     observed_at=now,
                 )
             return

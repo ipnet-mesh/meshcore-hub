@@ -189,6 +189,11 @@ Group/broadcast messages on specific channels.
 - Payload type `4` location metadata (`appData.location.latitude/longitude`) is mapped to node `lat/lon` for map rendering.
 - This keeps advertisement persistence aligned with meshcore-packet-capture expectations (advertisement traffic only).
 
+**Compatibility ingest note (envelope fields)**:
+- The LetsMesh upload envelope carries `SNR` and `path` fields alongside the decoded packet payload. These are available on all packet types (messages, advertisements, traces, telemetry).
+- The normalizer extracts `SNR` (normalized to lowercase `snr`) and `path` (converted to `path_len` via hop count) from the envelope and includes them in the normalized payload.
+- Per-observer `snr` and `path_len` are stored in the `event_observers` junction table, allowing each observer to record its own signal strength and hop count.
+
 **Compatibility ingest note (non-message structured events)**:
 - Decoded payload type `9` is normalized to `TRACE_DATA` (`traceTag`, flags, auth, path hashes, and SNR values).
 - Decoded payload type `11` (`Control/NodeDiscoverResp`) is normalized to `contact` events for node upsert parity.
@@ -511,6 +516,22 @@ You can filter webhook payloads using JSONPath expressions:
 | `$.timestamp` | Timestamp string |
 
 See [AGENTS.md](AGENTS.md) for webhook configuration details.
+
+---
+
+## API Response: Observer Info
+
+Events that support multi-observer tracking (messages, advertisements, trace paths, telemetry) include an `observers` array in API responses. Each observer entry contains:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `node_id` | string (UUID) | Observer node UUID |
+| `public_key` | string (64 hex chars) | Observer node public key |
+| `name` | string or null | Observer node advertised name |
+| `tag_name` | string or null | Observer name from node tags |
+| `snr` | number or null | Signal-to-noise ratio at this observer (dB) |
+| `path_len` | integer or null | Hop count at this observer |
+| `observed_at` | string (ISO 8601) | When this observer captured the event |
 
 ---
 

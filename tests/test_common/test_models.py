@@ -1,7 +1,7 @@
 """Tests for database models."""
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from meshcore_hub.common.models import (
@@ -13,6 +13,8 @@ from meshcore_hub.common.models import (
     TracePath,
     Telemetry,
     EventLog,
+    EventObserver,
+    add_event_observer,
 )
 
 
@@ -216,3 +218,45 @@ class TestEventLogModel:
         assert event.event_type == "BATTERY"
         assert event.payload is not None
         assert event.payload["battery_percentage"] == 75
+
+
+class TestEventObserverModel:
+    """Tests for EventObserver model and add_event_observer helper."""
+
+    def test_add_event_observer_stores_path_len(self, db_session) -> None:
+        """add_event_observer accepts and stores path_len."""
+        node = Node(public_key="a" * 64, name="Observer")
+        db_session.add(node)
+        db_session.commit()
+
+        result = add_event_observer(
+            session=db_session,
+            event_type="message",
+            event_hash="abcdef12",
+            observer_node_id=node.id,
+            snr=10.5,
+            path_len=3,
+        )
+        assert result is True
+
+        observer = db_session.execute(select(EventObserver)).scalar_one()
+        assert observer.snr == 10.5
+        assert observer.path_len == 3
+
+    def test_add_event_observer_path_len_defaults_none(self, db_session) -> None:
+        """add_event_observer defaults path_len to None when not provided."""
+        node = Node(public_key="b" * 64, name="Observer2")
+        db_session.add(node)
+        db_session.commit()
+
+        result = add_event_observer(
+            session=db_session,
+            event_type="trace",
+            event_hash="12345678",
+            observer_node_id=node.id,
+        )
+        assert result is True
+
+        observer = db_session.execute(select(EventObserver)).scalar_one()
+        assert observer.path_len is None
+        assert observer.snr is None

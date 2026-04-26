@@ -348,3 +348,41 @@
 #header-map .leaflet-control {
     z-index: auto !important;
 }
+
+/* ==========================================================================
+   Observer Detail Rows
+   Expandable sub-table showing per-observer signal/path data.
+   ========================================================================== */
+
+.observer-detail .observer-detail-content {
+    padding: 0.5rem 1rem 0.5rem 2rem;
+}
+
+.observer-detail table {
+    margin: 0;
+}
+
+.observer-badge {
+    transition: background-color 0.15s ease;
+}
+
+.observer-badge:hover {
+    background-color: color-mix(in oklch, var(--color-base-content) 15%, transparent);
+}
+
+.observer-badge-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+/* Mobile card observer details */
+.observer-detail-card {
+    padding: 0.5rem 0.75rem;
+    margin-top: 0.25rem;
+}
+
+.observer-detail-card table {
+    margin: 0;
+    font-size: 0.8rem;
+}

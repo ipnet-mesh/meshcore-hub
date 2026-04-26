@@ -153,3 +153,53 @@ class TestListTracePathsFilters:
         assert response.status_code == 200
         data = response.json()
         assert len(data["items"]) == 1
+
+
+class TestTracePathObservers:
+    """Tests for observer data in trace path API responses."""
+
+    def test_trace_path_observers_populated(self, client_no_auth, api_db_session):
+        """Test that trace path list returns observers with data."""
+        from meshcore_hub.common.hash_utils import compute_trace_hash
+        from meshcore_hub.common.models import EventObserver, Node, TracePath
+
+        observer_node = Node(
+            public_key="z" * 64,
+            name="TraceObserver",
+            first_seen=datetime.now(timezone.utc),
+        )
+        api_db_session.add(observer_node)
+        api_db_session.flush()
+
+        event_hash = compute_trace_hash(initiator_tag=44444)
+        trace = TracePath(
+            initiator_tag=44444,
+            path_hashes=["aa", "bb"],
+            hop_count=2,
+            received_at=datetime.now(timezone.utc),
+            observer_node_id=observer_node.id,
+            event_hash=event_hash,
+        )
+        api_db_session.add(trace)
+        api_db_session.flush()
+
+        ev_obs = EventObserver(
+            event_type="trace",
+            event_hash=event_hash,
+            observer_node_id=observer_node.id,
+            snr=12.0,
+            path_len=3,
+            observed_at=datetime.now(timezone.utc),
+        )
+        api_db_session.add(ev_obs)
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/trace-paths")
+        assert response.status_code == 200
+        data = response.json()
+        items = data["items"]
+        assert len(items) >= 1
+        trace_item = next(i for i in items if i["initiator_tag"] == 44444)
+        assert len(trace_item["observers"]) == 1
+        assert trace_item["observers"][0]["snr"] == 12.0
+        assert trace_item["observers"][0]["path_len"] == 3

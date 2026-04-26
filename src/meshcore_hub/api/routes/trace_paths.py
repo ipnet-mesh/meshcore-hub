@@ -9,6 +9,7 @@ from sqlalchemy.orm import aliased
 
 from meshcore_hub.api.auth import RequireRead
 from meshcore_hub.api.dependencies import DbSession
+from meshcore_hub.api.observer_utils import fetch_observers_for_events
 from meshcore_hub.common.models import Node, TracePath
 from meshcore_hub.common.schemas.messages import TracePathList, TracePathRead
 
@@ -55,6 +56,10 @@ async def list_trace_paths(
     # Execute
     results = session.execute(query).all()
 
+    # Fetch observers for these trace paths
+    event_hashes = [tp.event_hash for tp, _ in results if tp.event_hash]
+    observers_by_hash = fetch_observers_for_events(session, "trace", event_hashes)
+
     # Build response with observed_by
     items = []
     for tp, observer_pk in results:
@@ -71,6 +76,9 @@ async def list_trace_paths(
             "hop_count": tp.hop_count,
             "received_at": tp.received_at,
             "created_at": tp.created_at,
+            "observers": (
+                observers_by_hash.get(tp.event_hash, []) if tp.event_hash else []
+            ),
         }
         items.append(TracePathRead(**data))
 
@@ -101,6 +109,14 @@ async def get_trace_path(
         raise HTTPException(status_code=404, detail="Trace path not found")
 
     tp, observer_pk = result
+
+    observers = []
+    if tp.event_hash:
+        observers_by_hash = fetch_observers_for_events(
+            session, "trace", [tp.event_hash]
+        )
+        observers = observers_by_hash.get(tp.event_hash, [])
+
     data = {
         "id": tp.id,
         "observer_node_id": tp.observer_node_id,
@@ -114,5 +130,6 @@ async def get_trace_path(
         "hop_count": tp.hop_count,
         "received_at": tp.received_at,
         "created_at": tp.created_at,
+        "observers": observers,
     }
     return TracePathRead(**data)

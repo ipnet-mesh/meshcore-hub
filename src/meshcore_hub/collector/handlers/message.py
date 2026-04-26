@@ -75,7 +75,7 @@ def _handle_message(
     path_len = payload.get("path_len")
     txt_type = payload.get("txt_type")
     signature = payload.get("signature")
-    snr = payload.get("SNR") or payload.get("snr")
+    snr = payload.get("snr")
 
     # Parse sender timestamp
     sender_ts = payload.get("sender_timestamp")
@@ -127,6 +127,7 @@ def _handle_message(
                     event_hash=event_hash,
                     observer_node_id=receiver_node.id,
                     snr=snr,
+                    path_len=path_len,
                     observed_at=now,
                 )
                 if added:
@@ -161,6 +162,7 @@ def _handle_message(
                 event_hash=event_hash,
                 observer_node_id=receiver_node.id,
                 snr=snr,
+                path_len=path_len,
                 observed_at=now,
             )
 
@@ -181,6 +183,7 @@ def _handle_message(
                     event_hash=event_hash,
                     observer_node_id=receiver_node.id,
                     snr=snr,
+                    path_len=path_len,
                     observed_at=now,
                 )
             return
