@@ -133,11 +133,11 @@ ${displayContent}`, container);
                 ${ad.observers && ad.observers.length > 0 ? html`
                     <div class="observer-detail-card hidden mt-2">
                         <table class="table table-xs w-full">
-                            <thead><tr><th>Observer</th><th>SNR</th><th>Received</th></tr></thead>
+                            <thead><tr><th>Observer</th><th>${t('common.snr_db')}</th><th>Received</th></tr></thead>
                             <tbody>
                                 ${ad.observers.map(o => {
                                     const dn = o.tag_name || o.name || truncateKey(o.public_key, 12);
-                                    const snrD = o.snr != null ? `${Number(o.snr).toFixed(1)} dB` : '\u2014';
+                                    const snrD = o.snr != null ? `${Number(o.snr).toFixed(1)}` : '\u2014';
                                     const timeD = formatRelativeTime(o.observed_at);
                                     return html`<tr>
                                         <td>\u{1F4E1} <a href="/nodes/${o.public_key}" class="link link-hover">${dn}</a></td>

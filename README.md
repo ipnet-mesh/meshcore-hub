@@ -144,7 +144,7 @@ open http://localhost:8080
 
 This starts all services: MQTT broker, collector, API, web dashboard, and packet capture. The `observer` profile runs [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) to observe MeshCore RF traffic and publish decoded packets to MQTT.
 
-> **ARM / Raspberry Pi:** The `observer` service Docker image (`ghcr.io/agessaman/meshcore-packet-capture`) does not currently support ARM architectures. A [PR is open](https://github.com/agessaman/meshcore-packet-capture/pull/13) on the upstream project to add ARM support but has not yet been merged. To run the observer on a Raspberry Pi, do not use the `--profile observer` Docker profile — instead, install [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) natively on the Pi and configure it to publish to your MQTT broker.
+> **ARM / Raspberry Pi:** The `observer` service Docker image (`ghcr.io/agessaman/meshcore-packet-capture`) does not support 32-bit ARM (`armv7l`) architectures. Modern Raspberry Pi models (3, 4, 5) using a 64-bit OS are fully supported. If you are running a 32-bit ARM system, install [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) natively and configure it to publish to your MQTT broker instead of using the `--profile observer` Docker profile.
 
 ## Deployment
 
