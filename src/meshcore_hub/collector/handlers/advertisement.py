@@ -72,6 +72,9 @@ def handle_advertisement(
     lon = _coerce_float(lon)
     now = datetime.now(timezone.utc)
 
+    snr = payload.get("snr")
+    path_len = payload.get("path_len")
+
     # Compute event hash for deduplication (30-second time bucket)
     event_hash = compute_advertisement_hash(
         public_key=adv_public_key,
@@ -122,7 +125,8 @@ def handle_advertisement(
                     event_type="advertisement",
                     event_hash=event_hash,
                     observer_node_id=receiver_node.id,
-                    snr=None,  # Advertisements don't have SNR
+                    snr=snr,
+                    path_len=path_len,
                     observed_at=now,
                 )
                 if added:
@@ -184,7 +188,8 @@ def handle_advertisement(
                 event_type="advertisement",
                 event_hash=event_hash,
                 observer_node_id=receiver_node.id,
-                snr=None,
+                snr=snr,
+                path_len=path_len,
                 observed_at=now,
             )
 
@@ -205,7 +210,8 @@ def handle_advertisement(
                     event_type="advertisement",
                     event_hash=event_hash,
                     observer_node_id=receiver_node.id,
-                    snr=None,
+                    snr=snr,
+                    path_len=path_len,
                     observed_at=now,
                 )
             return

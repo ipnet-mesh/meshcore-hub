@@ -199,3 +199,20 @@ class TestHandleAdvertisement:
             select(Node).where(Node.public_key == receiver_pk)
         ).scalar_one_or_none()
         assert receiver is not None
+
+    def test_advertisement_stores_snr_and_path_len(self, db_manager, db_session):
+        """Advertisement handler stores snr and path_len in event_observers."""
+        payload = {
+            "public_key": "a" * 64,
+            "name": "TestNode",
+            "adv_type": "chat",
+            "snr": 12.5,
+            "path_len": 3,
+        }
+
+        handle_advertisement("b" * 64, "advertisement", payload, db_manager)
+
+        observer = db_session.execute(select(EventObserver)).scalar_one_or_none()
+        assert observer is not None
+        assert observer.snr == 12.5
+        assert observer.path_len == 3

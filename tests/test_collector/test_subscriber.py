@@ -240,7 +240,7 @@ class TestSubscriber:
         assert payload["text"] == "hello channel"
         assert payload["txt_type"] == 5
         assert "sender_timestamp" not in payload
-        assert payload["SNR"] == 12.5
+        assert payload["snr"] == 12.5
         assert payload["path_len"] == 3
 
     def test_letsmesh_packet_without_decrypted_text_is_not_shown_as_message(

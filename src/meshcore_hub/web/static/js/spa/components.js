@@ -437,18 +437,83 @@ export function timezoneIndicator() {
 }
 
 /**
- * Render receiver node icons with tooltips.
- * @param {Array} receivers
+ * Render an observer count badge with tooltip listing observer names.
+ * @param {Array} observers - Array of observer objects
  * @returns {TemplateResult|nothing}
  */
-export function receiverIcons(receivers) {
-    if (!receivers || receivers.length === 0) return nothing;
-    return html`${receivers.map(r => {
-        const name = r.receiver_node_name || truncateKey(r.receiver_node_public_key || '', 8);
-        const time = formatRelativeTime(r.received_at);
-        const tooltip = time ? `${name} (${time})` : name;
-        return html`<span class="cursor-help" title=${tooltip}>\u{1F4E1}</span>`;
-    })}`;
+export function observerIcons(observers) {
+    if (!observers || observers.length === 0) return nothing;
+    const names = observers.map(o => o.tag_name || o.name || truncateKey(o.public_key, 8));
+    const tooltip = names.join(', ');
+    return html`<span class="observer-badge-group">\u{1F4E1}<span class="badge badge-sm badge-ghost cursor-help observer-badge" title=${tooltip}>${observers.length}</span></span>`;
+}
+
+/**
+ * Render an expandable observer detail row.
+ * Shows per-observer: name, SNR, path_len, observed_at.
+ * @param {Array} observers - Array of observer objects
+ * @param {Object} [eventProperties] - Event-level context (unused, for future use)
+ * @returns {TemplateResult|nothing}
+ */
+export function observerDetailRow(observers, eventProperties, options = {}) {
+    if (!observers || observers.length === 0) return nothing;
+    const showPath = !options.hidePath;
+    return html`
+        <tr class="observer-detail hidden">
+            <td colspan="100" class="p-0">
+                <div class="observer-detail-content">
+                    <table class="table table-xs w-full">
+                        <thead>
+                            <tr>
+                                <th>Observer</th>
+                                <th>SNR</th>
+                                ${showPath ? html`<th>Path</th>` : nothing}
+                                <th>Received</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${observers.map(o => {
+                                const displayName = o.tag_name || o.name || truncateKey(o.public_key, 12);
+                                const snrDisplay = o.snr != null ? `${Number(o.snr).toFixed(1)} dB` : '\u2014';
+                                const pathDisplay = o.path_len != null ? `${o.path_len} hop${o.path_len !== 1 ? 's' : ''}` : '\u2014';
+                                const timeDisplay = formatRelativeTime(o.observed_at);
+                                return html`
+                                    <tr>
+                                        <td>\u{1F4E1} <a href="/nodes/${o.public_key}" class="link link-hover">${displayName}</a></td>
+                                        <td>${snrDisplay}</td>
+                                        ${showPath ? html`<td>${pathDisplay}</td>` : nothing}
+                                        <td><span title=${formatDateTime(o.observed_at)}>${timeDisplay}</span></td>
+                                    </tr>
+                                `;
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            </td>
+        </tr>
+    `;
+}
+
+/**
+ * Toggle observer detail row visibility when clicking an event row.
+ * @param {Event} event - Click event
+ */
+export function toggleObserverDetail(event) {
+    const row = event.currentTarget;
+    const detailRow = row.nextElementSibling;
+    if (detailRow && detailRow.classList.contains('observer-detail')) {
+        detailRow.classList.toggle('hidden');
+    }
+}
+
+export function toggleCardObserverDetail(event) {
+    event.stopPropagation();
+    event.preventDefault();
+    const card = event.currentTarget.closest('.card');
+    if (card) {
+        const detail = card.querySelector('.observer-detail-card');
+        if (detail) detail.classList.toggle('hidden');
+    }
 }
 
 // --- Form Helpers ---

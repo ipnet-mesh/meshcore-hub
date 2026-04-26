@@ -157,7 +157,8 @@ class LetsMeshNormalizer:
         if snr is None:
             snr = self._parse_float(payload.get("snr"))
         if snr is not None:
-            normalized_payload["SNR"] = snr
+            normalized_payload["snr"] = snr
+        normalized_payload.pop("SNR", None)
 
         decoded_sender = self._extract_letsmesh_decoder_sender(
             decoded_packet,
@@ -574,6 +575,16 @@ class LetsMeshNormalizer:
         normalized_payload: dict[str, Any] = {
             "public_key": public_key,
         }
+
+        snr = self._parse_float(payload.get("SNR"))
+        if snr is None:
+            snr = self._parse_float(payload.get("snr"))
+        if snr is not None:
+            normalized_payload["snr"] = snr
+
+        path_len = self._parse_path_length(payload.get("path"))
+        if path_len is not None:
+            normalized_payload["path_len"] = path_len
 
         app_data = decoded_payload.get("appData")
         if isinstance(app_data, dict):

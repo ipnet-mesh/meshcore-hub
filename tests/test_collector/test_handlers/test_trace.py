@@ -88,3 +88,18 @@ class TestHandleTraceData:
         observers = db_session.execute(select(EventObserver)).scalars().all()
         assert len(observers) == 1
         assert observers[0].event_type == "trace"
+
+    def test_trace_stores_snr_and_path_len(self, db_manager, db_session):
+        """Trace handler stores snr and path_len in event_observers."""
+        payload = {
+            "initiator_tag": 88888,
+            "path_len": 4,
+            "snr": 11.5,
+            "hop_count": 2,
+        }
+
+        handle_trace_data("a" * 64, "trace_data", payload, db_manager)
+
+        observer = db_session.execute(select(EventObserver)).scalar_one()
+        assert observer.snr == 11.5
+        assert observer.path_len == 4

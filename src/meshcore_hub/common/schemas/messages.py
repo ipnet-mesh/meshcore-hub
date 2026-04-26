@@ -16,6 +16,9 @@ class ObserverInfo(BaseModel):
     snr: Optional[float] = Field(
         default=None, description="Signal-to-noise ratio at this observer"
     )
+    path_len: Optional[int] = Field(
+        default=None, description="Hop count at this observer"
+    )
     observed_at: datetime = Field(
         ..., description="When this observer captured the event"
     )

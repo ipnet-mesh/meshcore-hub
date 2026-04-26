@@ -118,3 +118,61 @@ class TestListTelemetryFilters:
         assert response.status_code == 200
         data = response.json()
         assert len(data["items"]) == 1
+
+
+class TestTelemetryObservers:
+    """Tests for observer data in telemetry API responses."""
+
+    def test_telemetry_observers_populated(self, client_no_auth, api_db_session):
+        """Test that telemetry list returns observers with data."""
+        from meshcore_hub.common.hash_utils import compute_telemetry_hash
+        from meshcore_hub.common.models import EventObserver, Node, Telemetry
+
+        observer_node = Node(
+            public_key="z" * 64,
+            name="TelObserver",
+            first_seen=datetime.now(timezone.utc),
+        )
+        api_db_session.add(observer_node)
+        api_db_session.flush()
+
+        now = datetime.now(timezone.utc)
+        event_hash = compute_telemetry_hash(
+            node_public_key="tel123tel123tel123tel123tel123tel",
+            parsed_data={"temperature": 22.0},
+            received_at=now,
+        )
+        telemetry = Telemetry(
+            node_public_key="tel123tel123tel123tel123tel123tel",
+            parsed_data={"temperature": 22.0},
+            received_at=now,
+            observer_node_id=observer_node.id,
+            event_hash=event_hash,
+        )
+        api_db_session.add(telemetry)
+        api_db_session.flush()
+
+        ev_obs = EventObserver(
+            event_type="telemetry",
+            event_hash=event_hash,
+            observer_node_id=observer_node.id,
+            snr=8.5,
+            path_len=2,
+            observed_at=now,
+        )
+        api_db_session.add(ev_obs)
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/telemetry")
+        assert response.status_code == 200
+        data = response.json()
+        items = data["items"]
+        assert len(items) >= 1
+        tel_item = next(
+            i
+            for i in items
+            if i["node_public_key"] == "tel123tel123tel123tel123tel123tel"
+        )
+        assert len(tel_item["observers"]) == 1
+        assert tel_item["observers"][0]["snr"] == 8.5
+        assert tel_item["observers"][0]["path_len"] == 2

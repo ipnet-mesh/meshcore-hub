@@ -18,7 +18,7 @@ class TestHandleContactMessage:
             "pubkey_prefix": "01ab2186c4d5",
             "text": "Hello World!",
             "path_len": 3,
-            "SNR": 15.5,
+            "snr": 15.5,
         }
 
         handle_contact_message("a" * 64, "contact_msg_recv", payload, db_manager)
@@ -99,7 +99,7 @@ class TestHandleChannelMessage:
             "channel_idx": 4,
             "text": "Channel broadcast",
             "path_len": 10,
-            "SNR": 8.5,
+            "snr": 8.5,
         }
 
         handle_channel_message("a" * 64, "channel_msg_recv", payload, db_manager)
@@ -158,3 +158,19 @@ class TestHandleChannelMessage:
 
         msg = db_session.execute(select(Message)).scalar_one()
         assert msg.signature == "abcdef1234567890"
+
+    def test_message_handler_passes_path_len_to_observer(self, db_manager, db_session):
+        """Message handler passes path_len to add_event_observer."""
+        payload = {
+            "pubkey_prefix": "01ab2186c4d5",
+            "text": "Path test",
+            "path_len": 5,
+            "snr": 10.0,
+        }
+
+        handle_contact_message("a" * 64, "contact_msg_recv", payload, db_manager)
+
+        observer = db_session.execute(select(EventObserver)).scalar_one_or_none()
+        assert observer is not None
+        assert observer.path_len == 5
+        assert observer.snr == 10.0

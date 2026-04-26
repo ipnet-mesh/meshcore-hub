@@ -1,11 +1,12 @@
 import { apiGet } from '../api.js';
 import {
     html, litRender, nothing, t,
-    getConfig, formatDateTime, formatDateTimeShort,
+    getConfig, formatDateTime, formatDateTimeShort, formatRelativeTime,
     getChannelLabelsMap, resolveChannelLabel,
     truncateKey, errorAlert,
     pagination, timezoneIndicator,
-    createFilterHandler, autoSubmit, submitOnEnter
+    createFilterHandler, autoSubmit, submitOnEnter,
+    observerIcons, observerDetailRow, toggleObserverDetail, toggleCardObserverDetail
 } from '../components.js';
 import { createAutoRefresh } from '../auto-refresh.js';
 
@@ -205,15 +206,9 @@ ${content}`, container);
                         : sender;
                     let receiversBlock = nothing;
                     if (msg.observers && msg.observers.length >= 1) {
-                        receiversBlock = html`<div class="flex gap-0.5">
-                            ${msg.observers.map(recv => {
-                                const recvName = recv.tag_name || recv.name || truncateKey(recv.public_key, 12);
-                                return html`<a href="/nodes/${recv.public_key}" class="text-sm hover:opacity-70" title=${recvName}>\u{1F4E1}</a>`;
-                            })}
-                        </div>`;
+                        receiversBlock = html`<span @click=${toggleCardObserverDetail} class="cursor-pointer">${observerIcons(msg.observers)}</span>`;
                     } else if (msg.observed_by) {
-                        const recvTitle = msg.observer_tag_name || msg.observer_name || truncateKey(msg.observed_by, 12);
-                        receiversBlock = html`<a href="/nodes/${msg.observed_by}" class="text-sm hover:opacity-70" title=${recvTitle}>\u{1F4E1}</a>`;
+                        receiversBlock = html`<span class="opacity-50 text-xs">\u{1F4E1}</span>`;
                     }
                     return html`<div class="card bg-base-100 shadow-sm">
             <div class="card-body p-3">
@@ -236,6 +231,27 @@ ${content}`, container);
                     </div>
                 </div>
                 <p class="text-sm mt-2 break-words whitespace-pre-wrap">${displayMessage}</p>
+                ${msg.observers && msg.observers.length > 0 ? html`
+                    <div class="observer-detail-card hidden mt-2">
+                        <table class="table table-xs w-full">
+                            <thead><tr><th>Observer</th><th>SNR</th><th>Path</th><th>Received</th></tr></thead>
+                            <tbody>
+                                ${msg.observers.map(o => {
+                                    const dn = o.tag_name || o.name || truncateKey(o.public_key, 12);
+                                    const snrD = o.snr != null ? `${Number(o.snr).toFixed(1)} dB` : '\u2014';
+                                    const pathD = o.path_len != null ? `${o.path_len} hop${o.path_len !== 1 ? 's' : ''}` : '\u2014';
+                                    const timeD = formatRelativeTime(o.observed_at);
+                                    return html`<tr>
+                                        <td>\u{1F4E1} <a href="/nodes/${o.public_key}" class="link link-hover">${dn}</a></td>
+                                        <td>${snrD}</td>
+                                        <td>${pathD}</td>
+                                        <td><span title=${formatDateTime(o.observed_at)}>${timeD}</span></td>
+                                    </tr>`;
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                ` : nothing}
             </div>
         </div>`;
                 });
@@ -254,19 +270,13 @@ ${content}`, container);
                         : sender;
                     let receiversBlock;
                     if (msg.observers && msg.observers.length >= 1) {
-                        receiversBlock = html`<div class="flex gap-1">
-                            ${msg.observers.map(recv => {
-                                const recvName = recv.tag_name || recv.name || truncateKey(recv.public_key, 12);
-                                return html`<a href="/nodes/${recv.public_key}" class="text-lg hover:opacity-70" title=${recvName}>\u{1F4E1}</a>`;
-                            })}
-                        </div>`;
+                        receiversBlock = html`${observerIcons(msg.observers)}`;
                     } else if (msg.observed_by) {
-                        const recvTitle = msg.observer_tag_name || msg.observer_name || truncateKey(msg.observed_by, 12);
-                        receiversBlock = html`<a href="/nodes/${msg.observed_by}" class="text-lg hover:opacity-70" title=${recvTitle}>\u{1F4E1}</a>`;
+                        receiversBlock = html`<span class="opacity-50">\u{1F4E1}</span>`;
                     } else {
                         receiversBlock = html`<span class="opacity-50">-</span>`;
                     }
-                    return html`<tr class="hover align-top">
+                    return html`<tr class="hover cursor-pointer" @click=${toggleObserverDetail}>
                     <td class="text-lg" title=${typeTitle}>${typeIcon}</td>
                     <td class="text-sm whitespace-nowrap">${formatDateTime(msg.received_at)}</td>
                     <td class="text-sm whitespace-nowrap">
@@ -274,7 +284,7 @@ ${content}`, container);
                     </td>
                     <td class="break-words max-w-md" style="white-space: pre-wrap;">${displayMessage}</td>
                     <td>${receiversBlock}</td>
-                </tr>`;
+                </tr>${observerDetailRow(msg.observers || [])}`;
                 });
 
             const paginationBlock = pagination(page, totalPages, '/messages', {
@@ -326,7 +336,7 @@ ${content}`, container);
                 <th>${t('common.time')}</th>
                 <th>${t('common.from')}</th>
                 <th>${t('entities.message')}</th>
-                <th>${t('common.receivers')}</th>
+                <th>${t('common.observers')}</th>
             </tr>
         </thead>
         <tbody>

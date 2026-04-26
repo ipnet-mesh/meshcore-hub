@@ -1,9 +1,10 @@
 import { apiGet } from '../api.js';
 import {
     html, litRender, nothing, t,
-    getConfig, formatDateTime, formatDateTimeShort,
+    getConfig, formatDateTime, formatDateTimeShort, formatRelativeTime,
     truncateKey, errorAlert,
-    pagination, createFilterHandler, autoSubmit, submitOnEnter, copyToClipboard, renderNodeDisplay
+    pagination, createFilterHandler, autoSubmit, submitOnEnter, copyToClipboard, renderNodeDisplay,
+    observerIcons, observerDetailRow, toggleObserverDetail, toggleCardObserverDetail
 } from '../components.js';
 import { createAutoRefresh } from '../auto-refresh.js';
 
@@ -98,15 +99,9 @@ ${content}`, container);
                     const adDescription = ad.node_tag_description;
                     let receiversBlock = nothing;
                     if (ad.observers && ad.observers.length >= 1) {
-                        receiversBlock = html`<div class="flex gap-0.5 justify-end mt-1">
-                            ${ad.observers.map(recv => {
-                                const recvName = recv.tag_name || recv.name || truncateKey(recv.public_key, 12);
-                                return html`<span class="text-sm" title=${recvName}>\u{1F4E1}</span>`;
-                            })}
-                        </div>`;
+                        receiversBlock = html`<span @click=${toggleCardObserverDetail} class="cursor-pointer">${observerIcons(ad.observers)}</span>`;
                     } else if (ad.observed_by) {
-                        const recvTitle = ad.observer_tag_name || ad.observer_name || truncateKey(ad.observed_by, 12);
-                        receiversBlock = html`<span class="text-sm" title=${recvTitle}>\u{1F4E1}</span>`;
+                        receiversBlock = html`<span class="opacity-50 text-xs">\u{1F4E1}</span>`;
                     }
                     return html`<a href="/nodes/${ad.public_key}" class="card bg-base-100 shadow-sm block">
             <div class="card-body p-3">
@@ -123,6 +118,25 @@ ${content}`, container);
                         ${receiversBlock}
                     </div>
                 </div>
+                ${ad.observers && ad.observers.length > 0 ? html`
+                    <div class="observer-detail-card hidden mt-2">
+                        <table class="table table-xs w-full">
+                            <thead><tr><th>Observer</th><th>SNR</th><th>Received</th></tr></thead>
+                            <tbody>
+                                ${ad.observers.map(o => {
+                                    const dn = o.tag_name || o.name || truncateKey(o.public_key, 12);
+                                    const snrD = o.snr != null ? `${Number(o.snr).toFixed(1)} dB` : '\u2014';
+                                    const timeD = formatRelativeTime(o.observed_at);
+                                    return html`<tr>
+                                        <td>\u{1F4E1} <a href="/nodes/${o.public_key}" class="link link-hover">${dn}</a></td>
+                                        <td>${snrD}</td>
+                                        <td><span title=${formatDateTime(o.observed_at)}>${timeD}</span></td>
+                                    </tr>`;
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                ` : nothing}
             </div>
         </a>`;
                 });
@@ -134,19 +148,13 @@ ${content}`, container);
                     const adDescription = ad.node_tag_description;
                     let receiversBlock;
                     if (ad.observers && ad.observers.length >= 1) {
-                        receiversBlock = html`<div class="flex gap-1">
-                            ${ad.observers.map(recv => {
-                                const recvName = recv.tag_name || recv.name || truncateKey(recv.public_key, 12);
-                                return html`<a href="/nodes/${recv.public_key}" class="text-lg hover:opacity-70" title=${recvName}>\u{1F4E1}</a>`;
-                            })}
-                        </div>`;
+                        receiversBlock = html`${observerIcons(ad.observers)}`;
                     } else if (ad.observed_by) {
-                        const recvTitle = ad.observer_tag_name || ad.observer_name || truncateKey(ad.observed_by, 12);
-                        receiversBlock = html`<a href="/nodes/${ad.observed_by}" class="text-lg hover:opacity-70" title=${recvTitle}>\u{1F4E1}</a>`;
+                        receiversBlock = html`<span class="opacity-50">\u{1F4E1}</span>`;
                     } else {
                         receiversBlock = html`<span class="opacity-50">-</span>`;
                     }
-                    return html`<tr class="hover">
+                    return html`<tr class="hover cursor-pointer" @click=${toggleObserverDetail}>
                     <td>
                         <a href="/nodes/${ad.public_key}" class="link link-hover">
                             ${renderNodeDisplay({
@@ -165,7 +173,7 @@ ${content}`, container);
                     </td>
                     <td class="text-sm whitespace-nowrap">${formatDateTime(ad.received_at)}</td>
                     <td>${receiversBlock}</td>
-                </tr>`;
+                </tr>${observerDetailRow(ad.observers || [], null, { hidePath: true })}`;
                 });
 
             const paginationBlock = pagination(page, totalPages, '/advertisements', {
@@ -203,7 +211,7 @@ ${content}`, container);
                 <th>${t('entities.node')}</th>
                 <th>${t('common.public_key')}</th>
                 <th>${t('common.time')}</th>
-                <th>${t('common.receivers')}</th>
+                <th>${t('common.observers')}</th>
             </tr>
         </thead>
         <tbody>

@@ -37,6 +37,8 @@ def handle_telemetry(
 
     lpp_data = payload.get("lpp_data")
     parsed_data = payload.get("parsed_data")
+    snr = payload.get("snr")
+    path_len = payload.get("path_len")
 
     # Convert lpp_data to bytes if it's a string or list
     lpp_bytes = None
@@ -89,7 +91,8 @@ def handle_telemetry(
                     event_type="telemetry",
                     event_hash=event_hash,
                     observer_node_id=receiver_node.id,
-                    snr=None,
+                    snr=snr,
+                    path_len=path_len,
                     observed_at=now,
                 )
                 if added:
@@ -135,7 +138,8 @@ def handle_telemetry(
                 event_type="telemetry",
                 event_hash=event_hash,
                 observer_node_id=receiver_node.id,
-                snr=None,
+                snr=snr,
+                path_len=path_len,
                 observed_at=now,
             )
 
@@ -156,7 +160,8 @@ def handle_telemetry(
                     event_type="telemetry",
                     event_hash=event_hash,
                     observer_node_id=receiver_node.id,
-                    snr=None,
+                    snr=snr,
+                    path_len=path_len,
                     observed_at=now,
                 )
             return
