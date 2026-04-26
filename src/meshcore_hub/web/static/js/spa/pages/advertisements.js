@@ -2,7 +2,7 @@ import { apiGet } from '../api.js';
 import {
     html, litRender, nothing, t,
     getConfig, formatDateTime, formatDateTimeShort, formatRelativeTime,
-    truncateKey, errorAlert,
+    truncateKey, warningBadge,
     pagination, createFilterHandler, autoSubmit, submitOnEnter, copyToClipboard, renderNodeDisplay,
     observerIcons, observerDetailRow, toggleObserverDetail, toggleCardObserverDetail
 } from '../components.js';
@@ -24,17 +24,29 @@ export async function render(container, params, router) {
     const tzBadge = tz && tz !== 'UTC' ? html`<span class="text-sm opacity-60">${tz}</span>` : nothing;
     const navigate = (url) => router.navigate(url);
 
-    function renderPage(content, { total = null } = {}) {
+    let lastContent = nothing;
+    let lastTotal = null;
+
+    function renderPage(content, { total = null, error = null } = {}) {
+        if (!error) {
+            lastContent = content;
+            lastTotal = total;
+        }
+        const displayContent = error ? lastContent : content;
+        const displayTotal = error ? lastTotal : total;
         litRender(html`
-<div class="flex items-center justify-between mb-6">
+<div class="flex items-center justify-between mb-4">
     <h1 class="text-3xl font-bold">${t('entities.advertisements')}</h1>
-    <div class="flex items-center gap-2">
-        <span id="auto-refresh-toggle"></span>
-        ${tzBadge}
-        ${total !== null ? html`<span class="badge badge-lg">${t('common.total', { count: total })}</span>` : nothing}
-    </div>
+    ${tzBadge}
 </div>
-${content}`, container);
+<div class="flex items-center gap-2 mb-4">
+    ${displayTotal !== null
+        ? html`<span class="badge badge-lg">${t('common.total', { count: displayTotal })}</span>`
+        : nothing}
+    <span id="auto-refresh-toggle"></span>
+    ${error ? warningBadge(error) : nothing}
+</div>
+${displayContent}`, container);
     }
 
     // Render page header immediately (old content stays visible until data loads)
@@ -223,7 +235,7 @@ ${content}`, container);
 ${paginationBlock}`, { total });
 
         } catch (e) {
-            renderPage(errorAlert(e.message));
+            renderPage(nothing, { error: e.message });
         }
     }
 
