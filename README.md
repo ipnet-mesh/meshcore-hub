@@ -193,11 +193,7 @@ Configure your reverse proxy to forward to the containers:
 
 #### Reverse Proxy
 
-MeshCore Hub is designed to run behind a reverse proxy in production. Guides for specific reverse proxies:
-
-- [Nginx Proxy Manager](docs/hosting/nginx-proxy-manager.md) — Admin authentication setup with dual hostnames
-
-A Traefik override file is also provided with pre-configured labels:
+MeshCore Hub is designed to run behind a reverse proxy in production. A Traefik override file is provided with pre-configured labels:
 
 ```bash
 # Download the Traefik override
@@ -373,8 +369,7 @@ The collector automatically cleans up old event data and inactive nodes:
 | `WEB_LOCALE`               | `en`                    | Locale/language for the web dashboard (e.g., `en`, `es`, `fr`)                                                                                                                                                                               |
 | `WEB_DATETIME_LOCALE`      | `en-US`                 | Locale used for date formatting in the web dashboard (e.g., `en-US` for MM/DD/YYYY, `en-GB` for DD/MM/YYYY).                                                                                                                                 |
 | `WEB_AUTO_REFRESH_SECONDS` | `30`                    | Auto-refresh interval in seconds for list pages (0 to disable)                                                                                                                                                                               |
-| `WEB_ADMIN_ENABLED`        | `false`                 | Enable admin interface at /a/ (requires auth proxy: `X-Forwarded-User`/`X-Auth-Request-User` or forwarded `Authorization: Basic ...`)                                                                                                        |
-| `WEB_TRUSTED_PROXY_HOSTS`  | `*`                     | Comma-separated list of trusted proxy hosts for admin authentication headers. Default: `*` (all hosts). Recommended: set to your reverse proxy IP in production. A startup warning is emitted when using the default `*` with admin enabled. |
+| `WEB_ADMIN_ENABLED`        | `false`                 | Enable admin interface at /a/                                                                                                       |
 | `TZ`                       | `UTC`                   | Timezone for displaying dates/times (e.g., `America/New_York`, `Europe/London`)                                                                                                                                                              |
 | `NETWORK_DOMAIN`           | _(none)_                | Network domain name (optional)                                                                                                                                                                                                               |
 | `NETWORK_NAME`             | `MeshCore Network`      | Display name for the network                                                                                                                                                                                                                 |
@@ -572,7 +567,6 @@ meshcore-hub/
 ├── docs/                    # Documentation
 │   ├── images/              # Screenshots and images
 │   ├── hosting/             # Reverse proxy hosting guides
-│   │   └── nginx-proxy-manager.md
 │   ├── content.md           # Custom content setup guide
 │   ├── i18n.md              # Translation reference guide
 │   ├── letsmesh.md          # LetsMesh packet decoding details
@@ -589,7 +583,6 @@ meshcore-hub/
 - [docs/upgrading.md](docs/upgrading.md) - Upgrade guide for breaking changes
 - [docs/letsmesh.md](docs/letsmesh.md) - LetsMesh packet decoding details
 - [docs/seeding.md](docs/seeding.md) - Seed data format and import guide
-- [docs/hosting/nginx-proxy-manager.md](docs/hosting/nginx-proxy-manager.md) - Nginx Proxy Manager admin setup
 - [docs/i18n.md](docs/i18n.md) - Translation reference guide
 - [docs/content.md](docs/content.md) - Custom content setup guide
 - [docs/webhooks.md](docs/webhooks.md) - Webhook configuration reference

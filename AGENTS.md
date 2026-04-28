@@ -40,7 +40,6 @@ MeshCore Hub is a Python 3.14+ monorepo for managing and orchestrating MeshCore 
 - [SCHEMAS.md](SCHEMAS.md) - MeshCore event JSON schemas and database mappings
 - [docs/upgrading.md](docs/upgrading.md) - Upgrade guide for breaking changes
 - [docs/letsmesh.md](docs/letsmesh.md) - LetsMesh packet decoding details
-- [docs/hosting/nginx-proxy-manager.md](docs/hosting/nginx-proxy-manager.md) - Nginx Proxy Manager admin setup
 - [docs/seeding.md](docs/seeding.md) - Seed data format and import guide
 - [docs/i18n.md](docs/i18n.md) - Translation reference guide
 
@@ -358,7 +357,6 @@ meshcore-hub/
 ├── docs/                    # Documentation
 │   ├── images/              # Screenshots and images
 │   ├── hosting/             # Reverse proxy hosting guides
-│   │   └── nginx-proxy-manager.md
 │   ├── content.md           # Custom content setup guide
 │   ├── i18n.md              # Translation reference guide
 │   ├── letsmesh.md          # LetsMesh packet decoding details
@@ -639,8 +637,7 @@ Key variables:
 - `COLLECTOR_CHANNEL_KEYS` - Additional decoder channel keys for decrypting GroupText packets
 - `COLLECTOR_INCLUDE_TEST_CHANNEL` - Include built-in 'test' channel messages (default: `false`)
 - `API_READ_KEY`, `API_ADMIN_KEY` - API authentication keys
-- `WEB_ADMIN_ENABLED` - Enable admin interface at /a/ (default: `false`, requires auth proxy)
-- `WEB_TRUSTED_PROXY_HOSTS` - Comma-separated list of trusted proxy hosts for admin authentication headers. Default: `*` (all hosts). Recommended: set to your reverse proxy IP in production. A startup warning is emitted when using the default `*` with admin enabled.
+- `WEB_ADMIN_ENABLED` - Enable admin interface at /a/ (default: `false`)
 - `WEB_THEME` - Default theme for the web dashboard (default: `dark`, options: `dark`, `light`). Users can override via the theme toggle in the navbar, which persists their preference in browser localStorage.
 - `WEB_AUTO_REFRESH_SECONDS` - Auto-refresh interval in seconds for list pages (default: `30`, `0` to disable)
 - `TZ` - Timezone for web dashboard date/time display (default: `UTC`, e.g., `America/New_York`, `Europe/London`)

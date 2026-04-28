@@ -186,8 +186,6 @@
         "access_denied": "Access Denied",
         "admin_not_enabled": "The admin interface is not enabled.",
         "admin_enable_hint": "Set <code>WEB_ADMIN_ENABLED=true</code> to enable admin features.",
-        "auth_required": "Authentication Required",
-        "auth_required_description": "You must sign in to access the admin interface.",
         "welcome": "Welcome to the admin panel.",
         "members_description": "Manage network members and operators.",
         "tags_description": "Manage custom tags and metadata for network nodes."

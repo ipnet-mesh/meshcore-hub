@@ -87,27 +87,3 @@ class TestHomePage:
         """Test that home page includes the SPA application script."""
         response = client.get("/")
         assert "/static/js/spa/app.js" in response.text
-
-    def test_home_unauthenticated(self, client: TestClient) -> None:
-        """Test that home page config shows unauthenticated by default."""
-        response = client.get("/")
-        text = response.text
-        config_start = text.find("window.__APP_CONFIG__ = ") + len(
-            "window.__APP_CONFIG__ = "
-        )
-        config_end = text.find(";", config_start)
-        config = json.loads(text[config_start:config_end])
-
-        assert config["is_authenticated"] is False
-
-    def test_home_authenticated(self, client: TestClient) -> None:
-        """Test that home page config shows authenticated with auth header."""
-        response = client.get("/", headers={"X-Forwarded-User": "test-user"})
-        text = response.text
-        config_start = text.find("window.__APP_CONFIG__ = ") + len(
-            "window.__APP_CONFIG__ = "
-        )
-        config_end = text.find(";", config_start)
-        config = json.loads(text[config_start:config_end])
-
-        assert config["is_authenticated"] is True

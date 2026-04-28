@@ -280,16 +280,10 @@ class WebSettings(CommonSettings):
         ge=0,
     )
 
-    # Trusted proxy hosts for X-Forwarded-For header processing
-    web_trusted_proxy_hosts: str = Field(
-        default="*",
-        description="Comma-separated list of trusted proxy hosts or '*' for all",
-    )
-
     # Admin interface (disabled by default for security)
     web_admin_enabled: bool = Field(
         default=False,
-        description="Enable admin interface at /a/ (requires OAuth2Proxy in front)",
+        description="Enable admin interface at /a/",
     )
 
     # API connection

@@ -90,15 +90,3 @@ class TestAdvertisementsConfig:
         config = json.loads(text[config_start:config_end])
 
         assert config["network_name"] == "Test Network"
-
-    def test_advertisements_config_unauthenticated(self, client: TestClient) -> None:
-        """Test that SPA config shows unauthenticated without auth header."""
-        response = client.get("/advertisements")
-        text = response.text
-        config_start = text.find("window.__APP_CONFIG__ = ") + len(
-            "window.__APP_CONFIG__ = "
-        )
-        config_end = text.find(";", config_start)
-        config = json.loads(text[config_start:config_end])
-
-        assert config["is_authenticated"] is False

@@ -181,8 +181,6 @@
         "access_denied": "Toegang geweigerd",
         "admin_not_enabled": "De beheerinterface is niet ingeschakeld.",
         "admin_enable_hint": "Stel <code>WEB_ADMIN_ENABLED=true</code> in om beheerfuncties in te schakelen.",
-        "auth_required": "Authenticatie vereist",
-        "auth_required_description": "U moet inloggen om toegang te krijgen tot de beheerinterface.",
         "welcome": "Welkom bij het beheerpaneel.",
         "members_description": "Beheer netwerkleden en operators.",
         "tags_description": "Beheer aangepaste labels en metadata voor netwerkknooppunten."
