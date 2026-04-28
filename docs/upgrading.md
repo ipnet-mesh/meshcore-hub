@@ -2,6 +2,44 @@
 
 This guide covers upgrading from a previous MeshCore Hub release to the current version. Check the relevant version section below before upgrading.
 
+## v0.10.0
+
+This release includes **breaking changes** to the admin authentication model.
+
+### Overview of Changes
+
+| Area | Before | After |
+|------|--------|-------|
+| Admin auth | `WEB_ADMIN_ENABLED=true` (open access) | OIDC/OAuth2 authentication via identity provider |
+| Auth library | None | Authlib (`authlib>=1.3.0`) |
+| Admin access | Anyone with the URL | Authenticated users with `admin` role from IdP |
+| Session mgmt | None | Starlette `SessionMiddleware` (signed cookies) |
+| Write gating | None (API proxy open) | POST/PUT/DELETE/PATCH require admin session when OIDC enabled |
+
+### Migration Steps
+
+1. **Set up an OIDC identity provider** (LogTo, Keycloak, etc.)
+2. **Configure OIDC environment variables** in your `.env`:
+   ```bash
+   OIDC_ENABLED=true
+   OIDC_CLIENT_ID=your-client-id
+   OIDC_CLIENT_SECRET=your-client-secret
+   OIDC_DISCOVERY_URL=https://your-idp.example.com/.well-known/openid-configuration
+   OIDC_SESSION_SECRET=$(openssl rand -hex 32)
+   ```
+3. **Remove `WEB_ADMIN_ENABLED`** from your `.env` (no longer used)
+4. **Configure roles** in your IdP: assign `admin` and/or `member` roles to users
+
+### Removed Variables
+
+| Variable | Reason |
+|----------|--------|
+| `WEB_ADMIN_ENABLED` | Replaced by `OIDC_ENABLED` |
+
+### New Variables
+
+See the OIDC section in `.env.example` for the full list of 12 new environment variables.
+
 ## v0.9.0
 
 This release includes **breaking changes** to the MQTT broker, packet capture service, data ingestion pipeline, and public key handling.

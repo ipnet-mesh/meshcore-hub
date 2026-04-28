@@ -25,6 +25,18 @@ export async function apiGet(path, params = {}) {
 }
 
 /**
+ * Check response for auth errors and redirect to login if needed.
+ * @param {Response} response
+ */
+function checkAuthResponse(response) {
+    const config = window.__APP_CONFIG__ || {};
+    if (config.oidc_enabled && (response.status === 401 || response.status === 403)) {
+        const next = encodeURIComponent(window.location.pathname + window.location.search);
+        window.location.href = `/auth/login?next=${next}`;
+    }
+}
+
+/**
  * Make a POST request with JSON body.
  * @param {string} path - URL path
  * @param {Object} body - Request body
@@ -36,6 +48,7 @@ export async function apiPost(path, body) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
     });
+    checkAuthResponse(response);
     if (!response.ok) {
         const text = await response.text();
         throw new Error(`API error: ${response.status} - ${text}`);
@@ -56,6 +69,7 @@ export async function apiPut(path, body) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
     });
+    checkAuthResponse(response);
     if (!response.ok) {
         const text = await response.text();
         throw new Error(`API error: ${response.status} - ${text}`);
@@ -71,6 +85,7 @@ export async function apiPut(path, body) {
  */
 export async function apiDelete(path) {
     const response = await fetch(path, { method: 'DELETE' });
+    checkAuthResponse(response);
     if (!response.ok) {
         const text = await response.text();
         throw new Error(`API error: ${response.status} - ${text}`);

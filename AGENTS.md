@@ -637,7 +637,18 @@ Key variables:
 - `COLLECTOR_CHANNEL_KEYS` - Additional decoder channel keys for decrypting GroupText packets
 - `COLLECTOR_INCLUDE_TEST_CHANNEL` - Include built-in 'test' channel messages (default: `false`)
 - `API_READ_KEY`, `API_ADMIN_KEY` - API authentication keys
-- `WEB_ADMIN_ENABLED` - Enable admin interface at /a/ (default: `false`)
+- `OIDC_ENABLED` - Enable OIDC authentication (default: `false`)
+- `OIDC_CLIENT_ID` - OIDC client ID (required if OIDC_ENABLED=true)
+- `OIDC_CLIENT_SECRET` - OIDC client secret (required if OIDC_ENABLED=true)
+- `OIDC_DISCOVERY_URL` - OIDC discovery URL (required if OIDC_ENABLED=true)
+- `OIDC_REDIRECT_URI` - Explicit callback URL (overrides auto-derivation)
+- `OIDC_SCOPES` - OAuth scopes (default: `openid email profile`)
+- `OIDC_ROLES_CLAIM` - ID token claim for roles (default: `roles`)
+- `OIDC_ADMIN_ROLE` - Role value for admin access (default: `admin`)
+- `OIDC_MEMBER_ROLE` - Role value for member access (default: `member`)
+- `OIDC_SESSION_SECRET` - Secret for signing session cookies (required if OIDC_ENABLED=true)
+- `OIDC_SESSION_MAX_AGE` - Session lifetime in seconds (default: `86400`)
+- `OIDC_COOKIE_SECURE` - HTTPS-only cookies (default: `false`)
 - `WEB_THEME` - Default theme for the web dashboard (default: `dark`, options: `dark`, `light`). Users can override via the theme toggle in the navbar, which persists their preference in browser localStorage.
 - `WEB_AUTO_REFRESH_SECONDS` - Auto-refresh interval in seconds for list pages (default: `30`, `0` to disable)
 - `TZ` - Timezone for web dashboard date/time display (default: `UTC`, e.g., `America/New_York`, `Europe/London`)
@@ -690,7 +701,7 @@ meshcore-hub collector seed
 docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile seed up
 ```
 
-**Note:** Once the admin UI is enabled (`WEB_ADMIN_ENABLED=true`), tags should be managed through the web interface rather than seed files.
+**Note:** When OIDC is enabled (`OIDC_ENABLED=true`), the admin UI requires authenticated sessions with the `admin` role. Tags should be managed through the web interface by authenticated admin users.
 
 ### Webhook Configuration
 

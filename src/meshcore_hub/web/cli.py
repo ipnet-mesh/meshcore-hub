@@ -183,6 +183,8 @@ def web(
     if effective_city and effective_country:
         click.echo(f"Location: {effective_city}, {effective_country}")
     click.echo(f"Reload mode: {reload}")
+    oidc_status = "enabled" if settings.oidc_enabled else "disabled"
+    click.echo(f"OIDC: {oidc_status}")
     disabled_features = [
         name for name, enabled in settings.features.items() if not enabled
     ]

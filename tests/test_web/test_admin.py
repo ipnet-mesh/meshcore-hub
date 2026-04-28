@@ -1,19 +1,31 @@
 """Tests for admin web routes (SPA)."""
 
 import json
-from typing import Any
+from typing import Any, Generator
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from meshcore_hub.web.app import create_app
 
-from .conftest import MockHttpClient
+from .conftest import ADMIN_USER, MockHttpClient
 
 
 @pytest.fixture
-def admin_app(mock_http_client: MockHttpClient) -> Any:
-    """Create a web app with admin enabled."""
+def admin_app(mock_http_client: MockHttpClient, monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Create a web app with OIDC enabled for admin access."""
+    from .conftest import ALL_FEATURES_ENABLED
+
+    monkeypatch.setenv("OIDC_ENABLED", "true")
+    monkeypatch.setenv("OIDC_CLIENT_ID", "test-client-id")
+    monkeypatch.setenv("OIDC_CLIENT_SECRET", "test-client-secret")
+    monkeypatch.setenv(
+        "OIDC_DISCOVERY_URL",
+        "https://idp.example.com/.well-known/openid-configuration",
+    )
+    monkeypatch.setenv("OIDC_SESSION_SECRET", "test-session-secret")
+
     app = create_app(
         api_url="http://localhost:8000",
         api_key="test-api-key",
@@ -22,17 +34,19 @@ def admin_app(mock_http_client: MockHttpClient) -> Any:
         network_country="Test Country",
         network_radio_config="Test Radio Config",
         network_contact_email="test@example.com",
-        admin_enabled=True,
+        features=ALL_FEATURES_ENABLED,
     )
 
     app.state.http_client = mock_http_client
-
     return app
 
 
 @pytest.fixture
-def admin_app_disabled(mock_http_client: MockHttpClient) -> Any:
-    """Create a web app with admin disabled."""
+def admin_app_disabled(
+    mock_http_client: MockHttpClient, monkeypatch: pytest.MonkeyPatch
+) -> Any:
+    """Create a web app with OIDC disabled (admin disabled)."""
+    monkeypatch.setenv("OIDC_ENABLED", "false")
     app = create_app(
         api_url="http://localhost:8000",
         api_key="test-api-key",
@@ -41,7 +55,6 @@ def admin_app_disabled(mock_http_client: MockHttpClient) -> Any:
         network_country="Test Country",
         network_radio_config="Test Radio Config",
         network_contact_email="test@example.com",
-        admin_enabled=False,
     )
 
     app.state.http_client = mock_http_client
@@ -50,10 +63,16 @@ def admin_app_disabled(mock_http_client: MockHttpClient) -> Any:
 
 
 @pytest.fixture
-def admin_client(admin_app: Any, mock_http_client: MockHttpClient) -> TestClient:
-    """Create a test client with admin enabled."""
+def admin_client(
+    admin_app: Any, mock_http_client: MockHttpClient
+) -> Generator[TestClient, None, None]:
+    """Create a test client with OIDC admin session."""
     admin_app.state.http_client = mock_http_client
-    return TestClient(admin_app, raise_server_exceptions=True)
+    with (
+        patch("meshcore_hub.web.app.get_session_user", return_value=ADMIN_USER),
+        patch("meshcore_hub.web.oidc.get_session_user", return_value=ADMIN_USER),
+    ):
+        yield TestClient(admin_app, raise_server_exceptions=True)
 
 
 @pytest.fixture
@@ -70,7 +89,7 @@ class TestAdminHome:
 
     In the SPA architecture, admin routes serve the same shell HTML.
     Admin access control is handled client-side based on
-    window.__APP_CONFIG__.admin_enabled.
+    window.__APP_CONFIG__.is_admin when OIDC is enabled.
     """
 
     def test_admin_home_returns_spa_shell(self, admin_client):
@@ -79,26 +98,21 @@ class TestAdminHome:
         assert response.status_code == 200
         assert "window.__APP_CONFIG__" in response.text
 
-    def test_admin_home_config_admin_enabled(self, admin_client):
-        """Test admin config shows admin_enabled: true."""
+    def test_admin_home_config_is_admin(self, admin_client):
+        """Test admin config shows is_admin: true."""
         response = admin_client.get("/a/")
-        text = response.text
-        config_start = text.find("window.__APP_CONFIG__ = ") + len(
-            "window.__APP_CONFIG__ = "
-        )
-        config_end = text.find(";", config_start)
-        config = json.loads(text[config_start:config_end])
-
-        assert config["admin_enabled"] is True
+        config = _extract_config(response.text)
+        assert config["is_admin"] is True
+        assert config["oidc_enabled"] is True
 
     def test_admin_home_disabled_returns_spa_shell(
         self,
         admin_client_disabled,
     ):
-        """Test admin page returns SPA shell even when disabled.
+        """Test admin page returns SPA shell even when OIDC disabled.
 
         The SPA catch-all serves the shell for all routes.
-        Client-side code checks admin_enabled to show/hide admin UI.
+        Client-side code checks oidc_enabled/is_admin to show/hide admin UI.
         """
         response = admin_client_disabled.get("/a/")
         assert response.status_code == 200
@@ -135,15 +149,22 @@ class TestAdminNodeTags:
 class TestAdminFooterLink:
     """Tests for admin link in footer."""
 
-    def test_admin_link_visible_when_enabled(self, admin_client):
-        """Test that admin link appears in footer when enabled."""
+    def test_admin_link_visible_when_oidc_enabled(self, admin_client):
+        """Test that admin link appears in footer when OIDC is enabled."""
         response = admin_client.get("/")
         assert response.status_code == 200
         assert 'href="/a/"' in response.text
         assert "Admin" in response.text
 
-    def test_admin_link_hidden_when_disabled(self, admin_client_disabled):
-        """Test that admin link does not appear in footer when disabled."""
+    def test_admin_link_hidden_when_oidc_disabled(self, admin_client_disabled):
+        """Test that admin link does not appear in footer when OIDC disabled."""
         response = admin_client_disabled.get("/")
         assert response.status_code == 200
         assert 'href="/a/"' not in response.text
+
+
+def _extract_config(text: str) -> dict[str, Any]:
+    """Extract __APP_CONFIG__ from SPA HTML."""
+    start = text.find("window.__APP_CONFIG__ = ") + len("window.__APP_CONFIG__ = ")
+    end = text.find(";", start)
+    return json.loads(text[start:end])  # type: ignore[no-any-return]

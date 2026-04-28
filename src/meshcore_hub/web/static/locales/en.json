@@ -185,10 +185,21 @@
     "admin": {
         "access_denied": "Access Denied",
         "admin_not_enabled": "The admin interface is not enabled.",
-        "admin_enable_hint": "Set <code>WEB_ADMIN_ENABLED=true</code> to enable admin features.",
+        "admin_enable_hint": "Set <code>OIDC_ENABLED=true</code> and configure your OIDC provider to enable admin features.",
         "welcome": "Welcome to the admin panel.",
         "members_description": "Manage network members and operators.",
         "tags_description": "Manage custom tags and metadata for network nodes."
+    },
+    "auth": {
+        "login": "Login",
+        "logout": "Logout",
+        "login_required": "Login required",
+        "admin_required": "Admin access required",
+        "login_hint": "Log in to access admin features",
+        "logged_in_as": "Logged in as {{name}}",
+        "session_expired": "Session expired, please log in again",
+        "role_admin": "admin",
+        "role_member": "member"
     },
     "admin_members": {
         "network_members": "Network Members ({{count}})",
@@ -215,5 +226,11 @@
     },
     "footer": {
         "powered_by": "Powered by"
+    },
+    "errors": {
+        "go_home": "Go Home",
+        "not_found": "Page not found",
+        "server_error": "Internal server error",
+        "unexpected": "An unexpected error occurred"
     }
 }

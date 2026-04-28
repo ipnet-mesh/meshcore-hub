@@ -6,7 +6,7 @@
  */
 
 import { Router } from './router.js';
-import { getConfig } from './components.js';
+import { getConfig, renderAuthSection } from './components.js';
 import { loadLocale, t } from './i18n.js';
 
 // Page modules (lazy-loaded)
@@ -87,11 +87,13 @@ if (features.pages !== false) {
     router.addRoute('/pages/:slug', pageHandler(pages.customPage));
 }
 
-// Admin routes
-router.addRoute('/a', pageHandler(pages.adminIndex));
-router.addRoute('/a/', pageHandler(pages.adminIndex));
-router.addRoute('/a/node-tags', pageHandler(pages.adminNodeTags));
-router.addRoute('/a/members', pageHandler(pages.adminMembers));
+// Admin routes (only register when OIDC disabled or user is admin)
+if (!config.oidc_enabled || config.is_admin) {
+    router.addRoute('/a', pageHandler(pages.adminIndex));
+    router.addRoute('/a/', pageHandler(pages.adminIndex));
+    router.addRoute('/a/node-tags', pageHandler(pages.adminNodeTags));
+    router.addRoute('/a/members', pageHandler(pages.adminMembers));
+}
 
 // 404 handler
 router.setNotFound(pageHandler(pages.notFound));
@@ -180,4 +182,9 @@ router.onNavigate((pathname) => {
 // Load locale then start the router
 const locale = localStorage.getItem('meshcore-locale') || config.locale || 'en';
 await loadLocale(locale);
+
+// Render auth section in navbar (after translations are loaded)
+const authSection = document.getElementById('auth-section');
+renderAuthSection(authSection, config);
+
 router.start();

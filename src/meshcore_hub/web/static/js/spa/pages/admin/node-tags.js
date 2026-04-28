@@ -10,13 +10,13 @@ export async function render(container, params, router) {
     try {
         const config = getConfig();
 
-        if (!config.admin_enabled) {
+        if (!config.is_admin && config.oidc_enabled) {
             litRender(html`
 <div class="flex flex-col items-center justify-center py-20">
     ${iconLock('h-16 w-16 opacity-30 mb-4')}
     <h1 class="text-3xl font-bold mb-2">${t('admin.access_denied')}</h1>
-    <p class="opacity-70">${t('admin.admin_not_enabled')}</p>
-    <a href="/" class="btn btn-primary mt-6">${t('common.go_home')}</a>
+    <p class="opacity-70">${t('auth.admin_required')}</p>
+    <a href="/auth/login" class="btn btn-primary mt-6">${t('auth.login')}</a>
 </div>`, container);
             return;
         }

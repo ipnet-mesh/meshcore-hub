@@ -12,15 +12,25 @@ from zoneinfo import ZoneInfo
 
 import httpx
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.sessions import SessionMiddleware
 
 from meshcore_hub import __version__
 from meshcore_hub.collector.letsmesh_decoder import LetsMeshPacketDecoder
 from meshcore_hub.common.i18n import load_locale, t
 from meshcore_hub.common.schemas import RadioConfig
 from meshcore_hub.web.middleware import CacheControlMiddleware
+from meshcore_hub.web.oidc import (
+    get_session_user,
+    get_user_roles,
+    init_oidc,
+    oauth,
+    strip_userinfo,
+    validate_discovery,
+)
 from meshcore_hub.web.pages import PageLoader
 
 logger = logging.getLogger(__name__)
@@ -92,6 +102,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         timeout=30.0,
     )
 
+    if getattr(app.state, "oidc_enabled", False):
+        ok = await validate_discovery()
+        if not ok:
+            logger.warning(
+                "OIDC discovery failed — login will not work until IdP is reachable"
+            )
+
     logger.info(f"Web dashboard started, API URL: {api_url}")
 
     yield
@@ -153,7 +170,6 @@ def _build_config_json(app: FastAPI, request: Request) -> str:
         "network_contact_github": app.state.network_contact_github,
         "network_contact_youtube": app.state.network_contact_youtube,
         "network_welcome_text": app.state.network_welcome_text,
-        "admin_enabled": app.state.admin_enabled,
         "features": features,
         "custom_pages": custom_pages,
         "logo_url": app.state.logo_url,
@@ -168,6 +184,28 @@ def _build_config_json(app: FastAPI, request: Request) -> str:
         "logo_invert_light": app.state.logo_invert_light,
     }
 
+    if getattr(app.state, "oidc_enabled", False):
+        user = get_session_user(request)
+        is_member, is_admin = get_user_roles(
+            request,
+            app.state.oidc_roles_claim,
+            app.state.oidc_admin_role,
+            app.state.oidc_member_role,
+        )
+        config.update(
+            oidc_enabled=True,
+            user=user,
+            is_member=is_member,
+            is_admin=is_admin,
+        )
+    else:
+        config.update(
+            oidc_enabled=False,
+            user=None,
+            is_member=False,
+            is_admin=False,
+        )
+
     # Escape "</script>" sequences to prevent XSS breakout from the
     # <script> block where this JSON is embedded via |safe in the
     # Jinja2 template.  "<\/" is valid JSON per the spec and parsed
@@ -178,7 +216,6 @@ def _build_config_json(app: FastAPI, request: Request) -> str:
 def create_app(
     api_url: str | None = None,
     api_key: str | None = None,
-    admin_enabled: bool | None = None,
     network_name: str | None = None,
     network_city: str | None = None,
     network_country: str | None = None,
@@ -198,7 +235,6 @@ def create_app(
     Args:
         api_url: Base URL of the MeshCore Hub API
         api_key: API key for authentication
-        admin_enabled: Enable admin interface at /a/
         network_name: Display name for the network
         network_city: City where the network is located
         network_country: Country where the network is located
@@ -212,6 +248,11 @@ def create_app(
 
     Returns:
         Configured FastAPI application
+
+    When OIDC is enabled via environment variables (OIDC_ENABLED=true),
+    the app adds SessionMiddleware and registers auth routes (/auth/login,
+    /auth/callback, /auth/logout, /auth/user). Write methods through the
+    API proxy require admin session when OIDC is enabled.
     """
     # Load settings from environment if not provided
     from meshcore_hub.common.config import get_web_settings
@@ -227,13 +268,31 @@ def create_app(
         redoc_url=None,
     )
 
-    # Compute effective admin flag (parameter overrides setting)
-    effective_admin = (
-        admin_enabled if admin_enabled is not None else settings.web_admin_enabled
-    )
-
     # Add cache control headers based on resource type
     app.add_middleware(CacheControlMiddleware)
+
+    # OIDC / session middleware
+    if settings.oidc_enabled:
+        app.add_middleware(
+            SessionMiddleware,
+            secret_key=settings.oidc_session_secret or "insecure-dev-secret",
+            session_cookie="meshcore-session",
+            max_age=settings.oidc_session_max_age,
+            same_site="lax",
+            https_only=settings.oidc_cookie_secure,
+        )
+        init_oidc(
+            client_id=settings.oidc_client_id or "",
+            client_secret=settings.oidc_client_secret or "",
+            discovery_url=settings.oidc_discovery_url or "",
+            scopes=settings.oidc_scopes,
+        )
+        app.state.oidc_enabled = True
+        app.state.oidc_roles_claim = settings.oidc_roles_claim
+        app.state.oidc_admin_role = settings.oidc_admin_role
+        app.state.oidc_member_role = settings.oidc_member_role
+    else:
+        app.state.oidc_enabled = False
 
     # Load i18n translations
     app.state.web_locale = settings.web_locale or "en"
@@ -250,7 +309,6 @@ def create_app(
     )
     app.state.api_url = api_url or settings.api_base_url
     app.state.api_key = api_key or settings.api_key
-    app.state.admin_enabled = effective_admin
     app.state.network_name = network_name or settings.network_name
     app.state.network_city = network_city or settings.network_city
     app.state.network_country = network_country or settings.network_country
@@ -298,6 +356,65 @@ def create_app(
     templates.env.globals["t"] = t
     app.state.templates = templates
 
+    # --- Error handlers ---
+    def _is_api_request(request: Request) -> bool:
+        return request.url.path.startswith("/api/")
+
+    def _render_error_html(
+        request: Request, status_code: int, message: str, detail: str = ""
+    ) -> Response:
+        tmpl: Jinja2Templates = request.app.state.templates
+        return tmpl.TemplateResponse(
+            request,
+            "error.html",
+            {
+                "status_code": status_code,
+                "message": message,
+                "detail": detail,
+                "theme": getattr(request.app.state, "web_theme", "dark"),
+                "network_name": getattr(
+                    request.app.state, "network_name", "MeshCore Hub"
+                ),
+                "version": __version__,
+            },
+            status_code=status_code,
+        )
+
+    @app.exception_handler(StarletteHTTPException)
+    async def http_exception_handler(
+        request: Request, exc: StarletteHTTPException
+    ) -> Response:
+        if _is_api_request(request):
+            return JSONResponse(
+                {"detail": exc.detail},
+                status_code=exc.status_code,
+            )
+        message_map = {
+            404: "Page not found",
+            405: "Method not allowed",
+        }
+        return _render_error_html(
+            request,
+            exc.status_code,
+            message_map.get(exc.status_code, "Something went wrong"),
+            str(exc.detail) if exc.detail else "",
+        )
+
+    @app.exception_handler(Exception)
+    async def generic_exception_handler(request: Request, exc: Exception) -> Response:
+        logger.exception("Unhandled exception on %s: %s", request.url.path, exc)
+        if _is_api_request(request):
+            return JSONResponse(
+                {"detail": "Internal server error"},
+                status_code=500,
+            )
+        return _render_error_html(
+            request,
+            500,
+            "Internal server error",
+            "",
+        )
+
     # Compute timezone
     app.state.timezone = settings.tz
     try:
@@ -335,6 +452,25 @@ def create_app(
     )
     async def api_proxy(request: Request, path: str) -> Response:
         """Proxy API requests to the backend API server."""
+        # OIDC write gating: block non-admin sessions
+        if request.app.state.oidc_enabled and request.method in (
+            "POST",
+            "PUT",
+            "DELETE",
+            "PATCH",
+        ):
+            _, is_admin = get_user_roles(
+                request,
+                request.app.state.oidc_roles_claim,
+                request.app.state.oidc_admin_role,
+                request.app.state.oidc_member_role,
+            )
+            if not is_admin:
+                return JSONResponse(
+                    {"detail": "Admin access required", "code": "AUTH_REQUIRED"},
+                    status_code=403,
+                )
+
         client: httpx.AsyncClient = request.app.state.http_client
         url = f"/api/{path}"
 
@@ -656,10 +792,83 @@ def create_app(
 
         return Response(content=xml, media_type="application/xml")
 
+    # --- Auth Routes (OIDC) ---
+    @app.get("/auth/login", tags=["Auth"])
+    async def auth_login(request: Request) -> Response:
+        """Initiate OIDC login flow."""
+        if not request.app.state.oidc_enabled:
+            return JSONResponse({"detail": "OIDC not enabled"}, status_code=400)
+        next_url = request.query_params.get("next", "/")
+        request.session["next"] = next_url
+        redirect_uri = getattr(request.app.state, "oidc_redirect_uri", None) or str(
+            request.url_for("auth_callback")
+        )
+        return await oauth.oidc.authorize_redirect(request, redirect_uri)  # type: ignore[no-any-return]
+
+    @app.get("/auth/callback", tags=["Auth"], name="auth_callback")
+    async def auth_callback(request: Request) -> Response:
+        """Handle OIDC callback and store user in session."""
+        if not request.app.state.oidc_enabled:
+            return JSONResponse({"detail": "OIDC not enabled"}, status_code=400)
+        token = await oauth.oidc.authorize_access_token(request)
+        userinfo = token.get("userinfo", {})
+        roles_claim = request.app.state.oidc_roles_claim
+        request.session["user"] = strip_userinfo(userinfo, roles_claim)
+        next_url = request.session.pop("next", "/")
+        from starlette.responses import RedirectResponse
+
+        return RedirectResponse(url=next_url)
+
+    @app.get("/auth/logout", tags=["Auth"])
+    async def auth_logout(request: Request) -> Response:
+        """Clear session and redirect to IdP end_session_endpoint."""
+        if not request.app.state.oidc_enabled:
+            return JSONResponse({"detail": "OIDC not enabled"}, status_code=400)
+        request.session.clear()
+        from starlette.responses import RedirectResponse
+
+        try:
+            metadata = await oauth.oidc.load_server_metadata()
+            end_session = metadata.get("end_session_endpoint")
+        except Exception:
+            end_session = None
+        if end_session:
+            return RedirectResponse(url=end_session)
+        return RedirectResponse(url="/")
+
+    @app.get("/auth/user", tags=["Auth"])
+    async def auth_user(request: Request) -> JSONResponse:
+        """Return current user JSON or 401 when not logged in."""
+        if not request.app.state.oidc_enabled:
+            return JSONResponse({"detail": "OIDC not enabled"}, status_code=400)
+        user = get_session_user(request)
+        if not user:
+            return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+        is_member, is_admin = get_user_roles(
+            request,
+            request.app.state.oidc_roles_claim,
+            request.app.state.oidc_admin_role,
+            request.app.state.oidc_member_role,
+        )
+        return JSONResponse(
+            {"user": user, "is_member": is_member, "is_admin": is_admin}
+        )
+
     # --- SPA Catch-All (MUST be last) ---
-    @app.api_route("/{path:path}", methods=["GET"], tags=["SPA"])
-    async def spa_catchall(request: Request, path: str = "") -> HTMLResponse:
+    @app.api_route("/{path:path}", methods=["GET"], tags=["SPA"], response_model=None)
+    async def spa_catchall(request: Request, path: str = "") -> Response:
         """Serve the SPA shell for all non-API routes."""
+        # Admin route protection when OIDC is enabled
+        if path.startswith("a") and (
+            path == "a" or path == "a/" or path.startswith("a/")
+        ):
+            if request.app.state.oidc_enabled:
+                user = get_session_user(request)
+                if not user:
+                    from starlette.responses import RedirectResponse
+
+                    return RedirectResponse(url=f"/auth/login?next=/{path}")
+
         templates_inst: Jinja2Templates = request.app.state.templates
         features = request.app.state.features
         page_loader = request.app.state.page_loader
@@ -681,7 +890,7 @@ def create_app(
                 "network_contact_github": request.app.state.network_contact_github,
                 "network_contact_youtube": request.app.state.network_contact_youtube,
                 "network_welcome_text": request.app.state.network_welcome_text,
-                "admin_enabled": request.app.state.admin_enabled,
+                "oidc_enabled": request.app.state.oidc_enabled,
                 "features": features,
                 "custom_pages": custom_pages,
                 "logo_url": request.app.state.logo_url,

@@ -125,6 +125,9 @@
             </ul>
         </div>
         <div class="navbar-end gap-1 pr-2">
+            {% if oidc_enabled %}
+            <div id="auth-section"></div>
+            {% endif %}
             <span id="nav-loading" class="loading loading-spinner loading-sm hidden"></span>
             <label class="swap swap-rotate btn btn-ghost btn-circle btn-sm">
                 <input type="checkbox" id="theme-toggle" />
@@ -166,7 +169,7 @@
                 <a href="{{ network_contact_youtube }}" target="_blank" rel="noopener noreferrer" class="link link-hover">{{ t('links.youtube') }}</a>
                 {% endif %}
             </p>
-            <p class="text-xs opacity-50 mt-2">{% if admin_enabled %}<a href="/a/" class="link link-hover">{{ t('entities.admin') }}</a> | {% endif %}{{ t('footer.powered_by') }} <a href="https://github.com/ipnet-mesh/meshcore-hub" target="_blank" rel="noopener noreferrer" class="link link-hover">MeshCore Hub</a> {{ version }}</p>
+            <p class="text-xs opacity-50 mt-2">{% if oidc_enabled %}<a href="/a/" class="link link-hover">{{ t('entities.admin') }}</a> | {% endif %}{{ t('footer.powered_by') }} <a href="https://github.com/ipnet-mesh/meshcore-hub" target="_blank" rel="noopener noreferrer" class="link link-hover">MeshCore Hub</a> {{ version }}</p>
         </aside>
     </footer>
 

@@ -193,7 +193,18 @@ Complete list from `docker-compose.yml` collector `environment:` block:
 | `WEB_THEME` | `dark` | Theme |
 | `WEB_LOCALE` | `en` | Locale |
 | `WEB_DATETIME_LOCALE` | `en-US` | Locale |
-| `WEB_ADMIN_ENABLED` | `false` | Admin |
+| `OIDC_ENABLED` | `false` | Auth |
+| `OIDC_CLIENT_ID` | (empty) | Auth |
+| `OIDC_CLIENT_SECRET` | (empty) | Auth |
+| `OIDC_DISCOVERY_URL` | (empty) | Auth |
+| `OIDC_REDIRECT_URI` | (empty) | Auth |
+| `OIDC_SCOPES` | `openid email profile` | Auth |
+| `OIDC_ROLES_CLAIM` | `roles` | Auth |
+| `OIDC_ADMIN_ROLE` | `admin` | Auth |
+| `OIDC_MEMBER_ROLE` | `member` | Auth |
+| `OIDC_SESSION_SECRET` | (empty) | Auth |
+| `OIDC_SESSION_MAX_AGE` | `86400` | Auth |
+| `OIDC_COOKIE_SECURE` | `false` | Auth |
 | `NETWORK_NAME` | `MeshCore Network` | Network |
 | `NETWORK_CITY` | (empty) | Network |
 | `NETWORK_COUNTRY` | (empty) | Network |
