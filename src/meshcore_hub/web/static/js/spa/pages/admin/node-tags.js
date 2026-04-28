@@ -21,17 +21,6 @@ export async function render(container, params, router) {
             return;
         }
 
-        if (!config.is_authenticated) {
-            litRender(html`
-<div class="flex flex-col items-center justify-center py-20">
-    ${iconLock('h-16 w-16 opacity-30 mb-4')}
-    <h1 class="text-3xl font-bold mb-2">${t('admin.auth_required')}</h1>
-    <p class="opacity-70">${t('admin.auth_required_description')}</p>
-    <a href="/oauth2/start?rd=${encodeURIComponent(window.location.pathname)}" class="btn btn-primary mt-6">${t('common.sign_in')}</a>
-</div>`, container);
-            return;
-        }
-
         const selectedPublicKey = (params.query && params.query.public_key) || '';
         const flashMessage = (params.query && params.query.message) || '';
         const flashError = (params.query && params.query.error) || '';
@@ -313,7 +302,6 @@ export async function render(container, params, router) {
             </ul>
         </div>
     </div>
-    <a href="/oauth2/sign_out" target="_blank" class="btn btn-outline btn-sm">${t('common.sign_out')}</a>
 </div>
 
 ${flashHtml}

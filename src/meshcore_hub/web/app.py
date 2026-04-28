@@ -15,7 +15,6 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from meshcore_hub import __version__
 from meshcore_hub.collector.letsmesh_decoder import LetsMeshPacketDecoder
@@ -74,22 +73,6 @@ def _resolve_logo(media_home: Path) -> tuple[str, bool, Path | None]:
 
     # Default packaged logo is monochrome and needs darkening in light mode.
     return "/static/img/logo.svg", True, None
-
-
-def _is_authenticated_proxy_request(request: Request) -> bool:
-    """Check whether request is authenticated by an upstream auth proxy.
-
-    Supported patterns:
-    - OAuth2/OIDC proxy headers: X-Forwarded-User, X-Auth-Request-User
-    - Forwarded Basic auth header: Authorization: Basic ...
-    """
-    if request.headers.get("x-forwarded-user"):
-        return True
-    if request.headers.get("x-auth-request-user"):
-        return True
-
-    auth_header = request.headers.get("authorization", "")
-    return auth_header.lower().startswith("basic ")
 
 
 @asynccontextmanager
@@ -177,7 +160,6 @@ def _build_config_json(app: FastAPI, request: Request) -> str:
         "version": __version__,
         "timezone": app.state.timezone_abbr,
         "timezone_iana": app.state.timezone,
-        "is_authenticated": _is_authenticated_proxy_request(request),
         "default_theme": app.state.web_theme,
         "locale": app.state.web_locale,
         "datetime_locale": app.state.web_datetime_locale,
@@ -245,25 +227,10 @@ def create_app(
         redoc_url=None,
     )
 
-    # Trust proxy headers (X-Forwarded-Proto, X-Forwarded-For) for HTTPS detection
-    trusted_hosts_raw = settings.web_trusted_proxy_hosts
-    if trusted_hosts_raw == "*":
-        trusted_hosts: str | list[str] = "*"
-    else:
-        trusted_hosts = [h.strip() for h in trusted_hosts_raw.split(",") if h.strip()]
-    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=trusted_hosts)
-
     # Compute effective admin flag (parameter overrides setting)
     effective_admin = (
         admin_enabled if admin_enabled is not None else settings.web_admin_enabled
     )
-
-    # Warn when admin is enabled but proxy trust is wide open
-    if effective_admin and settings.web_trusted_proxy_hosts == "*":
-        logger.warning(
-            "WEB_ADMIN_ENABLED is true but WEB_TRUSTED_PROXY_HOSTS is '*' (trust all). "
-            "Consider restricting to your reverse proxy IP for production deployments."
-        )
 
     # Add cache control headers based on resource type
     app.add_middleware(CacheControlMiddleware)
@@ -383,25 +350,6 @@ def create_app(
         headers: dict[str, str] = {}
         if "content-type" in request.headers:
             headers["content-type"] = request.headers["content-type"]
-
-        # Forward auth proxy headers for admin operations
-        for h in ("x-forwarded-user", "x-forwarded-email", "x-forwarded-groups"):
-            if h in request.headers:
-                headers[h] = request.headers[h]
-
-        # Block mutating requests from unauthenticated users when admin is
-        # enabled.  OAuth2Proxy is expected to set X-Forwarded-User for
-        # authenticated sessions; without it, write operations must be
-        # rejected server-side to prevent auth bypass.
-        if (
-            request.method in ("POST", "PUT", "DELETE", "PATCH")
-            and request.app.state.admin_enabled
-            and not _is_authenticated_proxy_request(request)
-        ):
-            return JSONResponse(
-                {"detail": "Authentication required"},
-                status_code=401,
-            )
 
         try:
             response = await client.request(
