@@ -240,10 +240,10 @@ ${flashHtml}
             try {
                 await apiPost('/api/v1/members', body);
                 container.querySelector('#addModal').close();
-                router.navigate('/admin/members?message=' + encodeURIComponent(t('common.entity_added_success', { entity: t('entities.member') })));
+                router.navigate('/admin/members?message=' + encodeURIComponent(t('common.entity_added_success', { entity: t('entities.member') })), true);
             } catch (err) {
                 container.querySelector('#addModal').close();
-                router.navigate('/admin/members?error=' + encodeURIComponent(err.message));
+                router.navigate('/admin/members?error=' + encodeURIComponent(err.message), true);
             }
         }, { signal });
 
@@ -280,10 +280,10 @@ ${flashHtml}
             try {
                 await apiPut('/api/v1/members/' + encodeURIComponent(id), body);
                 container.querySelector('#editModal').close();
-                router.navigate('/admin/members?message=' + encodeURIComponent(t('common.entity_updated_success', { entity: t('entities.member') })));
+                router.navigate('/admin/members?message=' + encodeURIComponent(t('common.entity_updated_success', { entity: t('entities.member') })), true);
             } catch (err) {
                 container.querySelector('#editModal').close();
-                router.navigate('/admin/members?error=' + encodeURIComponent(err.message));
+                router.navigate('/admin/members?error=' + encodeURIComponent(err.message), true);
             }
         }, { signal });
 
@@ -310,10 +310,10 @@ ${flashHtml}
             try {
                 await apiDelete('/api/v1/members/' + encodeURIComponent(activeDeleteId));
                 container.querySelector('#deleteModal').close();
-                router.navigate('/admin/members?message=' + encodeURIComponent(t('common.entity_deleted_success', { entity: t('entities.member') })));
+                router.navigate('/admin/members?message=' + encodeURIComponent(t('common.entity_deleted_success', { entity: t('entities.member') })), true);
             } catch (err) {
                 container.querySelector('#deleteModal').close();
-                router.navigate('/admin/members?error=' + encodeURIComponent(err.message));
+                router.navigate('/admin/members?error=' + encodeURIComponent(err.message), true);
             }
         });
 
