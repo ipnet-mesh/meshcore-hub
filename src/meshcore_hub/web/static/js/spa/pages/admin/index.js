@@ -48,7 +48,7 @@ export async function render(container, params, router) {
 </div>
 
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-    <a href="/a/members" class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow">
+    <a href="/admin/members" class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow">
         <div class="card-body">
             <h2 class="card-title">
                 ${iconUsers('h-6 w-6')}
@@ -57,7 +57,7 @@ export async function render(container, params, router) {
             <p>${t('admin.members_description')}</p>
         </div>
     </a>
-    <a href="/a/node-tags" class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow">
+    <a href="/admin/node-tags" class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow">
         <div class="card-body">
             <h2 class="card-title">
                 ${iconTag('h-6 w-6')}

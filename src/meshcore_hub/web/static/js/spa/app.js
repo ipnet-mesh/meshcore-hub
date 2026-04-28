@@ -89,10 +89,10 @@ if (features.pages !== false) {
 
 // Admin routes (only register when OIDC disabled or user is admin)
 if (!config.oidc_enabled || config.is_admin) {
-    router.addRoute('/a', pageHandler(pages.adminIndex));
-    router.addRoute('/a/', pageHandler(pages.adminIndex));
-    router.addRoute('/a/node-tags', pageHandler(pages.adminNodeTags));
-    router.addRoute('/a/members', pageHandler(pages.adminMembers));
+    router.addRoute('/admin', pageHandler(pages.adminIndex));
+    router.addRoute('/admin/', pageHandler(pages.adminIndex));
+    router.addRoute('/admin/node-tags', pageHandler(pages.adminNodeTags));
+    router.addRoute('/admin/members', pageHandler(pages.adminMembers));
 }
 
 // 404 handler
@@ -147,10 +147,10 @@ function updatePageTitle(pathname) {
     const networkName = config.network_name || 'MeshCore Network';
     const titles = {
         '/': networkName,
-        '/a': composePageTitle('entities.admin'),
-        '/a/': composePageTitle('entities.admin'),
-        '/a/node-tags': `${t('entities.tags')} - ${t('entities.admin')} - ${networkName}`,
-        '/a/members': `${t('entities.members')} - ${t('entities.admin')} - ${networkName}`,
+        '/admin': composePageTitle('entities.admin'),
+        '/admin/': composePageTitle('entities.admin'),
+        '/admin/node-tags': `${t('entities.tags')} - ${t('entities.admin')} - ${networkName}`,
+        '/admin/members': `${t('entities.members')} - ${t('entities.admin')} - ${networkName}`,
     };
 
     // Add feature-dependent titles

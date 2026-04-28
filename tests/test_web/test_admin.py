@@ -94,13 +94,13 @@ class TestAdminHome:
 
     def test_admin_home_returns_spa_shell(self, admin_client):
         """Test admin home page returns the SPA shell."""
-        response = admin_client.get("/a/")
+        response = admin_client.get("/admin/")
         assert response.status_code == 200
         assert "window.__APP_CONFIG__" in response.text
 
     def test_admin_home_config_is_admin(self, admin_client):
         """Test admin config shows is_admin: true."""
-        response = admin_client.get("/a/")
+        response = admin_client.get("/admin/")
         config = _extract_config(response.text)
         assert config["is_admin"] is True
         assert config["oidc_enabled"] is True
@@ -114,7 +114,7 @@ class TestAdminHome:
         The SPA catch-all serves the shell for all routes.
         Client-side code checks oidc_enabled/is_admin to show/hide admin UI.
         """
-        response = admin_client_disabled.get("/a/")
+        response = admin_client_disabled.get("/admin/")
         assert response.status_code == 200
         assert "window.__APP_CONFIG__" in response.text
 
@@ -124,14 +124,14 @@ class TestAdminNodeTags:
 
     def test_node_tags_page_returns_spa_shell(self, admin_client):
         """Test node tags page returns the SPA shell."""
-        response = admin_client.get("/a/node-tags")
+        response = admin_client.get("/admin/node-tags")
         assert response.status_code == 200
         assert "window.__APP_CONFIG__" in response.text
 
     def test_node_tags_page_with_public_key(self, admin_client):
         """Test node tags page with public_key param returns SPA shell."""
         response = admin_client.get(
-            "/a/node-tags?public_key=abc123def456abc123def456abc123de",
+            "/admin/node-tags?public_key=abc123def456abc123def456abc123de",
         )
         assert response.status_code == 200
         assert "window.__APP_CONFIG__" in response.text
@@ -141,7 +141,7 @@ class TestAdminNodeTags:
         admin_client_disabled,
     ):
         """Test node tags page returns SPA shell even when admin is disabled."""
-        response = admin_client_disabled.get("/a/node-tags")
+        response = admin_client_disabled.get("/admin/node-tags")
         assert response.status_code == 200
         assert "window.__APP_CONFIG__" in response.text
 
@@ -153,14 +153,14 @@ class TestAdminFooterLink:
         """Test that admin link appears in footer when OIDC is enabled."""
         response = admin_client.get("/")
         assert response.status_code == 200
-        assert 'href="/a/"' in response.text
+        assert 'href="/admin/"' in response.text
         assert "Admin" in response.text
 
     def test_admin_link_hidden_when_oidc_disabled(self, admin_client_disabled):
         """Test that admin link does not appear in footer when OIDC disabled."""
         response = admin_client_disabled.get("/")
         assert response.status_code == 200
-        assert 'href="/a/"' not in response.text
+        assert 'href="/admin/"' not in response.text
 
 
 def _extract_config(text: str) -> dict[str, Any]:

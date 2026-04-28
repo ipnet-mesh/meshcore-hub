@@ -450,7 +450,7 @@ def create_app(
     # --- API Proxy ---
     @app.api_route(
         "/api/{path:path}",
-        methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+        methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
         tags=["API Proxy"],
     )
     async def api_proxy(request: Request, path: str) -> Response:
@@ -910,8 +910,8 @@ def create_app(
     async def spa_catchall(request: Request, path: str = "") -> Response:
         """Serve the SPA shell for all non-API routes."""
         # Admin route protection when OIDC is enabled
-        if path.startswith("a") and (
-            path == "a" or path == "a/" or path.startswith("a/")
+        if path.startswith("admin") and (
+            path == "admin" or path == "admin/" or path.startswith("admin/")
         ):
             if request.app.state.oidc_enabled:
                 user = get_session_user(request)
@@ -919,6 +919,11 @@ def create_app(
                     from starlette.responses import RedirectResponse
 
                     return RedirectResponse(url=f"/auth/login?next=/{path}")
+                logger.debug(
+                    "Admin route access: path=%s, user=%s",
+                    path,
+                    user.get("name"),
+                )
 
         templates_inst: Jinja2Templates = request.app.state.templates
         features = request.app.state.features

@@ -93,10 +93,10 @@ Role assignment flow:
 ```
 Browser                      Web App (:8080)                  OIDC Provider (IdP)
   |                               |                               |
-  | GET /a/node-tags              |                               |
+  | GET /admin/node-tags              |                               |
   |------------------------------>|                               |
   |                               | No session                    |
-  | 302 /auth/login?next=/a/node-tags                              |
+  | 302 /auth/login?next=/admin/node-tags                              |
   |<------------------------------|                               |
   |                               |                               |
   | GET /auth/login               |                               |
@@ -116,10 +116,10 @@ Browser                      Web App (:8080)                  OIDC Provider (IdP
   |                               |<------------------------------|
   |                               | Extract userinfo + roles      |
   |                               | Set session cookie            |
-  | 302 → /a/node-tags            |                               |
+  | 302 → /admin/node-tags            |                               |
   |<------------------------------|                               |
   |                               |                               |
-  | GET /a/node-tags              |                               |
+  | GET /admin/node-tags              |                               |
   |------------------------------>|                               |
   |                               | Session valid, role=admin     |
   |                               | Proxy to API with api_key     |

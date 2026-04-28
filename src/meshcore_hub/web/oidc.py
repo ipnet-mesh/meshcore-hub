@@ -54,6 +54,13 @@ def get_user_roles(
         roles = [roles]
     is_admin = admin_role in roles
     is_member = member_role in roles
+    logger.info(
+        "OIDC roles check: roles_claim=%s, raw_roles=%s, is_member=%s, is_admin=%s",
+        roles_claim,
+        roles,
+        is_member,
+        is_admin,
+    )
     return is_member, is_admin
 
 

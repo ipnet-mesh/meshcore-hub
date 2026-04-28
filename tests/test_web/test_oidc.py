@@ -54,7 +54,7 @@ class TestAuthLogin:
                 url="https://idp.example.com/authorize?state=abc"
             )
             response = client_with_oidc.get(
-                "/auth/login?next=/a/node-tags", follow_redirects=False
+                "/auth/login?next=/admin/node-tags", follow_redirects=False
             )
             assert response.status_code == 307
             assert "idp.example.com" in response.headers["location"]
@@ -161,7 +161,7 @@ class TestAdminRouteProtection:
 
     def test_no_session_redirects_to_login(self, client_with_oidc: TestClient) -> None:
         """Test admin route redirects to /auth/login without session."""
-        response = client_with_oidc.get("/a/", follow_redirects=False)
+        response = client_with_oidc.get("/admin/", follow_redirects=False)
         assert response.status_code == 307
         assert "/auth/login" in response.headers["location"]
 
@@ -169,7 +169,7 @@ class TestAdminRouteProtection:
         self, client_with_oidc_member_session: TestClient
     ) -> None:
         """Test member session gets SPA shell (client-side shows access denied)."""
-        response = client_with_oidc_member_session.get("/a/")
+        response = client_with_oidc_member_session.get("/admin/")
         assert response.status_code == 200
         assert "window.__APP_CONFIG__" in response.text
         config = _extract_config(response.text)
@@ -180,7 +180,7 @@ class TestAdminRouteProtection:
         self, client_with_oidc_admin_session: TestClient
     ) -> None:
         """Test admin session gets SPA shell with admin config."""
-        response = client_with_oidc_admin_session.get("/a/")
+        response = client_with_oidc_admin_session.get("/admin/")
         assert response.status_code == 200
         config = _extract_config(response.text)
         assert config["oidc_enabled"] is True
@@ -239,7 +239,7 @@ class TestBackwardCompatibility:
         self, client: TestClient
     ) -> None:
         """Test admin routes serve SPA shell when OIDC disabled (no redirect)."""
-        response = client.get("/a/")
+        response = client.get("/admin/")
         assert response.status_code == 200
         assert "window.__APP_CONFIG__" in response.text
 
@@ -247,7 +247,7 @@ class TestBackwardCompatibility:
         """Test footer has no admin link when OIDC disabled."""
         response = client.get("/")
         assert response.status_code == 200
-        assert 'href="/a/"' not in response.text
+        assert 'href="/admin/"' not in response.text
 
 
 class TestConfigInjection:

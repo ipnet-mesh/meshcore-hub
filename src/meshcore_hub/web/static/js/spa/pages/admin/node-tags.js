@@ -297,7 +297,7 @@ export async function render(container, params, router) {
         <div class="text-sm breadcrumbs">
             <ul>
                 <li><a href="/">${t('entities.home')}</a></li>
-                <li><a href="/a/">${t('entities.admin')}</a></li>
+                <li><a href="/admin/">${t('entities.admin')}</a></li>
                 <li>${t('entities.tags')}</li>
             </ul>
         </div>
@@ -328,21 +328,25 @@ ${flashHtml}
 
 ${contentHtml}`, container);
 
+        const ac = new AbortController();
+        const signal = ac.signal;
+        const on = (el, evt, fn) => el.addEventListener(evt, fn, { signal });
+
         // Event: node selector change
         const nodeSelector = container.querySelector('#node-selector');
-        nodeSelector.addEventListener('change', () => {
+        on(nodeSelector, 'change', () => {
             const pk = nodeSelector.value;
             if (pk) {
-                router.navigate('/a/node-tags?public_key=' + encodeURIComponent(pk));
+                router.navigate('/admin/node-tags?public_key=' + encodeURIComponent(pk));
             } else {
-                router.navigate('/a/node-tags');
+                router.navigate('/admin/node-tags');
             }
         });
 
-        container.querySelector('#load-tags-btn').addEventListener('click', () => {
+        on(container.querySelector('#load-tags-btn'), 'click', () => {
             const pk = nodeSelector.value;
             if (pk) {
-                router.navigate('/a/node-tags?public_key=' + encodeURIComponent(pk));
+                router.navigate('/admin/node-tags?public_key=' + encodeURIComponent(pk));
             }
         });
 
@@ -361,15 +365,15 @@ ${contentHtml}`, container);
                     await apiPost('/api/v1/nodes/' + encodeURIComponent(selectedPublicKey) + '/tags', {
                         key, value, value_type,
                     });
-                    router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&message=' + encodeURIComponent(t('common.entity_added_success', { entity: t('entities.tag') })));
+                    router.navigate('/admin/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&message=' + encodeURIComponent(t('common.entity_added_success', { entity: t('entities.tag') })));
                 } catch (err) {
-                    router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&error=' + encodeURIComponent(err.message));
+                    router.navigate('/admin/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&error=' + encodeURIComponent(err.message));
                 }
-            });
+            }, { signal });
 
             // Edit button handlers
             container.querySelectorAll('.btn-edit').forEach(btn => {
-                btn.addEventListener('click', () => {
+                on(btn, 'click', () => {
                     const row = btn.closest('tr');
                     activeTagKey = row.dataset.tagKey;
                     container.querySelector('#editKeyDisplay').value = activeTagKey;
@@ -379,7 +383,7 @@ ${contentHtml}`, container);
                 });
             });
 
-            container.querySelector('#editCancel').addEventListener('click', () => {
+            on(container.querySelector('#editCancel'), 'click', () => {
                 container.querySelector('#editModal').close();
             });
 
@@ -393,16 +397,16 @@ ${contentHtml}`, container);
                         value, value_type,
                     });
                     container.querySelector('#editModal').close();
-                    router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&message=' + encodeURIComponent(t('common.entity_updated_success', { entity: t('entities.tag') })));
+                    router.navigate('/admin/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&message=' + encodeURIComponent(t('common.entity_updated_success', { entity: t('entities.tag') })));
                 } catch (err) {
                     container.querySelector('#editModal').close();
-                    router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&error=' + encodeURIComponent(err.message));
+                    router.navigate('/admin/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&error=' + encodeURIComponent(err.message));
                 }
-            });
+            }, { signal });
 
             // Move button handlers
             container.querySelectorAll('.btn-move').forEach(btn => {
-                btn.addEventListener('click', () => {
+                on(btn, 'click', () => {
                     const row = btn.closest('tr');
                     activeTagKey = row.dataset.tagKey;
                     container.querySelector('#moveKeyDisplay').value = activeTagKey;
@@ -411,7 +415,7 @@ ${contentHtml}`, container);
                 });
             });
 
-            container.querySelector('#moveCancel').addEventListener('click', () => {
+            on(container.querySelector('#moveCancel'), 'click', () => {
                 container.querySelector('#moveModal').close();
             });
 
@@ -425,16 +429,16 @@ ${contentHtml}`, container);
                         new_public_key: newPublicKey,
                     });
                     container.querySelector('#moveModal').close();
-                    router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&message=' + encodeURIComponent(t('common.entity_moved_success', { entity: t('entities.tag') })));
+                    router.navigate('/admin/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&message=' + encodeURIComponent(t('common.entity_moved_success', { entity: t('entities.tag') })));
                 } catch (err) {
                     container.querySelector('#moveModal').close();
-                    router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&error=' + encodeURIComponent(err.message));
+                    router.navigate('/admin/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&error=' + encodeURIComponent(err.message));
                 }
-            });
+            }, { signal });
 
             // Delete button handlers
             container.querySelectorAll('.btn-delete').forEach(btn => {
-                btn.addEventListener('click', () => {
+                on(btn, 'click', () => {
                     const row = btn.closest('tr');
                     activeTagKey = row.dataset.tagKey;
                     const confirmMsg = t('common.delete_entity_confirm', {
@@ -446,30 +450,30 @@ ${contentHtml}`, container);
                 });
             });
 
-            container.querySelector('#deleteCancel').addEventListener('click', () => {
+            on(container.querySelector('#deleteCancel'), 'click', () => {
                 container.querySelector('#deleteModal').close();
             });
 
-            container.querySelector('#deleteConfirm').addEventListener('click', async () => {
+            on(container.querySelector('#deleteConfirm'), 'click', async () => {
                 try {
                     await apiDelete('/api/v1/nodes/' + encodeURIComponent(selectedPublicKey) + '/tags/' + encodeURIComponent(activeTagKey));
                     container.querySelector('#deleteModal').close();
-                    router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&message=' + encodeURIComponent(t('common.entity_deleted_success', { entity: t('entities.tag') })));
+                    router.navigate('/admin/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&message=' + encodeURIComponent(t('common.entity_deleted_success', { entity: t('entities.tag') })));
                 } catch (err) {
                     container.querySelector('#deleteModal').close();
-                    router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&error=' + encodeURIComponent(err.message));
+                    router.navigate('/admin/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&error=' + encodeURIComponent(err.message));
                 }
             });
 
             // Copy All button
             const copyAllBtn = container.querySelector('#btn-copy-all');
             if (copyAllBtn) {
-                copyAllBtn.addEventListener('click', () => {
+                on(copyAllBtn, 'click', () => {
                     container.querySelector('#copyAllDestination').selectedIndex = 0;
                     container.querySelector('#copyAllModal').showModal();
                 });
 
-                container.querySelector('#copyAllCancel').addEventListener('click', () => {
+                on(container.querySelector('#copyAllCancel'), 'click', () => {
                     container.querySelector('#copyAllModal').close();
                 });
 
@@ -482,37 +486,39 @@ ${contentHtml}`, container);
                         const result = await apiPost('/api/v1/nodes/' + encodeURIComponent(selectedPublicKey) + '/tags/copy-to/' + encodeURIComponent(destKey));
                         container.querySelector('#copyAllModal').close();
                         const msg = t('admin_node_tags.copied_entities', { copied: result.copied, skipped: result.skipped });
-                        router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&message=' + encodeURIComponent(msg));
+                        router.navigate('/admin/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&message=' + encodeURIComponent(msg));
                     } catch (err) {
                         container.querySelector('#copyAllModal').close();
-                        router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&error=' + encodeURIComponent(err.message));
+                        router.navigate('/admin/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&error=' + encodeURIComponent(err.message));
                     }
-                });
+                }, { signal });
             }
 
             // Delete All button
             const deleteAllBtn = container.querySelector('#btn-delete-all');
             if (deleteAllBtn) {
-                deleteAllBtn.addEventListener('click', () => {
+                on(deleteAllBtn, 'click', () => {
                     container.querySelector('#deleteAllModal').showModal();
                 });
 
-                container.querySelector('#deleteAllCancel').addEventListener('click', () => {
+                on(container.querySelector('#deleteAllCancel'), 'click', () => {
                     container.querySelector('#deleteAllModal').close();
                 });
 
-                container.querySelector('#deleteAllConfirm').addEventListener('click', async () => {
+                on(container.querySelector('#deleteAllConfirm'), 'click', async () => {
                     try {
                         await apiDelete('/api/v1/nodes/' + encodeURIComponent(selectedPublicKey) + '/tags');
                         container.querySelector('#deleteAllModal').close();
-                        router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&message=' + encodeURIComponent(t('common.all_entity_deleted_success', { entity: t('entities.tags').toLowerCase() })));
+                        router.navigate('/admin/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&message=' + encodeURIComponent(t('common.all_entity_deleted_success', { entity: t('entities.tags').toLowerCase() })));
                     } catch (err) {
                         container.querySelector('#deleteAllModal').close();
-                        router.navigate('/a/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&error=' + encodeURIComponent(err.message));
+                        router.navigate('/admin/node-tags?public_key=' + encodeURIComponent(selectedPublicKey) + '&error=' + encodeURIComponent(err.message));
                     }
                 });
             }
         }
+
+        return () => ac.abort();
 
     } catch (e) {
         litRender(errorAlert(e.message || t('common.failed_to_load_page')), container);
