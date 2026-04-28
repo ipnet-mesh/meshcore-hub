@@ -642,7 +642,8 @@ Key variables:
 - `OIDC_CLIENT_SECRET` - OIDC client secret (required if OIDC_ENABLED=true)
 - `OIDC_DISCOVERY_URL` - OIDC discovery URL (required if OIDC_ENABLED=true)
 - `OIDC_REDIRECT_URI` - Explicit callback URL (overrides auto-derivation)
-- `OIDC_SCOPES` - OAuth scopes (default: `openid email profile`)
+- `OIDC_POST_LOGOUT_REDIRECT_URI` - Post-logout redirect URI (must match IdP sign-out URIs, falls back to `OIDC_REDIRECT_URI` base)
+- `OIDC_SCOPES` - OAuth scopes (default: `openid email profile`). The `openid` scope is required for ID tokens and userinfo. Quotes are stripped automatically for direnv compatibility.
 - `OIDC_ROLES_CLAIM` - ID token claim for roles (default: `roles`)
 - `OIDC_ADMIN_ROLE` - Role value for admin access (default: `admin`)
 - `OIDC_MEMBER_ROLE` - Role value for member access (default: `member`)

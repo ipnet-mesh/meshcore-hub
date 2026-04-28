@@ -293,6 +293,13 @@ class WebSettings(CommonSettings):
         default=None,
         description="OIDC callback URL (overrides auto-derivation)",
     )
+    oidc_post_logout_redirect_uri: Optional[str] = Field(
+        default=None,
+        description=(
+            "OIDC post-logout redirect URI (must match Sign-out redirect URIs "
+            "in IdP config). Falls back to OIDC_REDIRECT_URI base or request.base_url."
+        ),
+    )
     oidc_scopes: str = Field(
         default="openid email profile", description="OAuth scopes to request"
     )

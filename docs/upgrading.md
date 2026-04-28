@@ -38,7 +38,9 @@ This release includes **breaking changes** to the admin authentication model.
 
 ### New Variables
 
-See the OIDC section in `.env.example` for the full list of 12 new environment variables.
+See the OIDC section in `.env.example` for the full list of environment variables.
+
+**Important for LogTo users:** You must pass `client_id` in the logout request for the post-logout redirect to work. This is handled automatically by the application. You also need to register your app's URL as a **Sign-out redirect URI** in the LogTo admin console (e.g. `https://ipnt.uk`). If the redirect still doesn't work after updating, set `OIDC_POST_LOGOUT_REDIRECT_URI` explicitly to match your registered URI.
 
 ## v0.9.0
 

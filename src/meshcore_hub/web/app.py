@@ -288,6 +288,9 @@ def create_app(
             scopes=settings.oidc_scopes,
         )
         app.state.oidc_enabled = True
+        app.state.oidc_client_id = settings.oidc_client_id
+        app.state.oidc_redirect_uri = settings.oidc_redirect_uri
+        app.state.oidc_post_logout_redirect_uri = settings.oidc_post_logout_redirect_uri
         app.state.oidc_roles_claim = settings.oidc_roles_claim
         app.state.oidc_admin_role = settings.oidc_admin_role
         app.state.oidc_member_role = settings.oidc_member_role
@@ -803,7 +806,12 @@ def create_app(
         redirect_uri = getattr(request.app.state, "oidc_redirect_uri", None) or str(
             request.url_for("auth_callback")
         )
-        return await oauth.oidc.authorize_redirect(request, redirect_uri)  # type: ignore[no-any-return]
+        response: Response = await oauth.oidc.authorize_redirect(request, redirect_uri)
+        logger.info(
+            "OIDC login: authorization URL=%s",
+            response.headers.get("location", "unknown"),
+        )
+        return response
 
     @app.get("/auth/callback", tags=["Auth"], name="auth_callback")
     async def auth_callback(request: Request) -> Response:
@@ -811,9 +819,29 @@ def create_app(
         if not request.app.state.oidc_enabled:
             return JSONResponse({"detail": "OIDC not enabled"}, status_code=400)
         token = await oauth.oidc.authorize_access_token(request)
-        userinfo = token.get("userinfo", {})
+        logger.info(
+            "OIDC callback: token keys=%s, granted scope=%s",
+            list(token.keys()),
+            token.get("scope"),
+        )
+
+        userinfo = token.get("userinfo") or {}
+        logger.info("OIDC callback: ID token userinfo=%s", dict(userinfo))
+
+        if not userinfo.get("name") and not userinfo.get("email"):
+            try:
+                userinfo = await oauth.oidc.userinfo(token=token)
+                logger.info("OIDC callback: /userinfo endpoint=%s", dict(userinfo))
+            except Exception:
+                logger.exception(
+                    "OIDC userinfo fetch failed, using ID token claims only"
+                )
         roles_claim = request.app.state.oidc_roles_claim
-        request.session["user"] = strip_userinfo(userinfo, roles_claim)
+        session_user = strip_userinfo(userinfo, roles_claim)
+        logger.info("OIDC callback: session user=%s", session_user)
+
+        request.session["user"] = session_user
+        request.session["id_token"] = token.get("id_token")
         next_url = request.session.pop("next", "/")
         from starlette.responses import RedirectResponse
 
@@ -824,17 +852,40 @@ def create_app(
         """Clear session and redirect to IdP end_session_endpoint."""
         if not request.app.state.oidc_enabled:
             return JSONResponse({"detail": "OIDC not enabled"}, status_code=400)
-        request.session.clear()
         from starlette.responses import RedirectResponse
 
+        id_token_hint = request.session.get("id_token")
+        client_id = request.app.state.oidc_client_id
+
+        post_logout_uri = request.app.state.oidc_post_logout_redirect_uri
+        if not post_logout_uri:
+            redirect_uri = getattr(request.app.state, "oidc_redirect_uri", None)
+            if redirect_uri:
+                base = redirect_uri.rsplit("/auth/callback", 1)[0]
+                post_logout_uri = base.rstrip("/") + "/"
+            else:
+                post_logout_uri = str(request.base_url).rstrip("/")
+
+        logger.info(
+            "OIDC logout: client_id=%s, id_token_hint=%s, post_logout_redirect_uri=%s",
+            client_id,
+            "present" if id_token_hint else "MISSING",
+            post_logout_uri,
+        )
+
         try:
-            metadata = await oauth.oidc.load_server_metadata()
-            end_session = metadata.get("end_session_endpoint")
+            response: Response = await oauth.oidc.logout_redirect(
+                request,
+                post_logout_redirect_uri=post_logout_uri,
+                id_token_hint=id_token_hint,
+                client_id=client_id,
+            )
         except Exception:
-            end_session = None
-        if end_session:
-            return RedirectResponse(url=end_session)
-        return RedirectResponse(url="/")
+            logger.exception("OIDC logout_redirect failed, redirecting to /")
+            response = RedirectResponse(url="/")
+
+        request.session.clear()
+        return response
 
     @app.get("/auth/user", tags=["Auth"])
     async def auth_user(request: Request) -> JSONResponse:
