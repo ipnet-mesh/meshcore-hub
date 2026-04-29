@@ -88,7 +88,7 @@ if (features.pages !== false) {
     router.addRoute('/pages/:slug', pageHandler(pages.customPage));
 }
 
-// Admin routes (only register when OIDC disabled or user is admin)
+// Admin routes (only register when OIDC enabled and user has admin role)
 if (hasRole('admin')) {
     router.addRoute('/admin', pageHandler(pages.adminIndex));
     router.addRoute('/admin/', pageHandler(pages.adminIndex));

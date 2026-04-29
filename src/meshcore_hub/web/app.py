@@ -1019,21 +1019,24 @@ def create_app(
     @app.api_route("/{path:path}", methods=["GET"], tags=["SPA"], response_model=None)
     async def spa_catchall(request: Request, path: str = "") -> Response:
         """Serve the SPA shell for all non-API routes."""
-        # Admin route protection when OIDC is enabled
+        # Admin route protection
         if path.startswith("admin") and (
             path == "admin" or path == "admin/" or path.startswith("admin/")
         ):
-            if request.app.state.oidc_enabled:
-                user = get_session_user(request)
-                if not user:
-                    from starlette.responses import RedirectResponse
+            if not request.app.state.oidc_enabled:
+                from starlette.responses import RedirectResponse
 
-                    return RedirectResponse(url=f"/auth/login?next=/{path}")
-                logger.debug(
-                    "Admin route access: path=%s, user=%s",
-                    path,
-                    user.get("name"),
-                )
+                return RedirectResponse(url="/")
+            user = get_session_user(request)
+            if not user:
+                from starlette.responses import RedirectResponse
+
+                return RedirectResponse(url=f"/auth/login?next=/{path}")
+            logger.debug(
+                "Admin route access: path=%s, user=%s",
+                path,
+                user.get("name"),
+            )
 
         templates_inst: Jinja2Templates = request.app.state.templates
         features = request.app.state.features

@@ -234,13 +234,11 @@ class TestBackwardCompatibility:
         assert config["oidc_enabled"] is False
         assert config["roles"] == []
 
-    def test_admin_routes_serve_spa_shell_when_oidc_disabled(
-        self, client: TestClient
-    ) -> None:
-        """Test admin routes serve SPA shell when OIDC disabled (no redirect)."""
-        response = client.get("/admin/")
-        assert response.status_code == 200
-        assert "window.__APP_CONFIG__" in response.text
+    def test_admin_routes_blocked_when_oidc_disabled(self, client: TestClient) -> None:
+        """Test admin routes redirect to home when OIDC disabled."""
+        response = client.get("/admin/", follow_redirects=False)
+        assert response.status_code == 307
+        assert response.headers["location"] == "/"
 
 
 class TestConfigInjection:

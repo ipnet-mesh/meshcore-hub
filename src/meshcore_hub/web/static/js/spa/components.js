@@ -33,7 +33,7 @@ export function getConfig() {
  */
 export function hasRole(roleName) {
     const config = getConfig();
-    if (!config.oidc_enabled) return true;
+    if (!config.oidc_enabled) return false;
     const actualRole = (config.role_names || {})[roleName] || roleName;
     return (config.roles || []).includes(actualRole);
 }
