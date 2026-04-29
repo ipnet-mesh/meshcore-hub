@@ -265,6 +265,7 @@ services:
       - WEB_THEME=${WEB_THEME:-dark}
       - WEB_LOCALE=${WEB_LOCALE:-en}
       - WEB_DATETIME_LOCALE=${WEB_DATETIME_LOCALE:-en-US}
+      - WEB_DEBUG=${WEB_DEBUG:-false}
       # OIDC authentication (see .env.example for details)
       - OIDC_ENABLED=${OIDC_ENABLED:-false}
       - OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-}
@@ -273,8 +274,9 @@ services:
       - OIDC_REDIRECT_URI=${OIDC_REDIRECT_URI:-}
       - OIDC_SCOPES=${OIDC_SCOPES:-openid email profile}
       - OIDC_ROLES_CLAIM=${OIDC_ROLES_CLAIM:-roles}
-      - OIDC_ADMIN_ROLE=${OIDC_ADMIN_ROLE:-admin}
-      - OIDC_MEMBER_ROLE=${OIDC_MEMBER_ROLE:-member}
+      - OIDC_ROLE_ADMIN=${OIDC_ROLE_ADMIN:-admin}
+      - OIDC_ROLE_OPERATOR=${OIDC_ROLE_OPERATOR:-operator}
+      - OIDC_ROLE_MEMBER=${OIDC_ROLE_MEMBER:-member}
       - OIDC_SESSION_SECRET=${OIDC_SESSION_SECRET:-}
       - OIDC_SESSION_MAX_AGE=${OIDC_SESSION_MAX_AGE:-86400}
       - OIDC_COOKIE_SECURE=${OIDC_COOKIE_SECURE:-false}

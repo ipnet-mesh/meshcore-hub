@@ -24,8 +24,8 @@ from meshcore_hub.common.i18n import load_locale, t
 from meshcore_hub.common.schemas import RadioConfig
 from meshcore_hub.web.middleware import CacheControlMiddleware
 from meshcore_hub.web.oidc import (
+    get_session_roles,
     get_session_user,
-    get_user_roles,
     init_oidc,
     oauth,
     strip_userinfo,
@@ -39,6 +39,98 @@ logger = logging.getLogger(__name__)
 PACKAGE_DIR = Path(__file__).parent
 TEMPLATES_DIR = PACKAGE_DIR / "templates"
 STATIC_DIR = PACKAGE_DIR / "static"
+
+
+# Per-endpoint, per-method role access mapping for the API proxy.
+# Key: URL path prefix (after /api/), Value: {method -> allowed roles}.
+# _OPEN = unconditional access (OIDC on or off, anonymous OK).
+# Method not listed = denied. No prefix match = denied.
+_OPEN: frozenset[str] = frozenset()
+
+
+def _build_endpoint_access(
+    role_admin: str,
+    role_operator: str = "operator",
+    role_member: str = "member",
+) -> dict[str, dict[str, frozenset[str]]]:
+    """Build the per-endpoint access mapping using configured role names.
+
+    Args:
+        role_admin: The IdP role name that grants admin access.
+        role_operator: The IdP role name that grants operator access.
+        role_member: The IdP role name that grants member access.
+
+    Returns:
+        Endpoint access mapping dict.
+    """
+    admin = frozenset({role_admin})
+    any_authenticated = frozenset({role_admin, role_operator, role_member})
+    operator_admin = frozenset({role_admin, role_operator})
+    return {
+        "v1/nodes": {
+            "GET": _OPEN,
+        },
+        "v1/nodes/": {
+            "GET": _OPEN,
+            "POST": admin,
+            "PUT": admin,
+            "DELETE": admin,
+        },
+        "v1/members": {
+            "GET": _OPEN,
+            "POST": admin,
+            "PUT": admin,
+            "DELETE": admin,
+        },
+        "v1/messages": {
+            "GET": _OPEN,
+        },
+        "v1/advertisements": {
+            "GET": _OPEN,
+        },
+        "v1/dashboard": {
+            "GET": _OPEN,
+        },
+        "v1/trace-paths": {
+            "GET": _OPEN,
+        },
+        "v1/telemetry": {
+            "GET": _OPEN,
+        },
+        "v1/adoptions": {
+            "POST": operator_admin,
+            "DELETE": operator_admin,
+        },
+        "v1/user/profile": {
+            "GET": any_authenticated,
+            "PUT": any_authenticated,
+        },
+    }
+
+
+def check_api_access(
+    path: str,
+    method: str,
+    oidc_enabled: bool,
+    user_roles: frozenset[str],
+    mapping: dict[str, dict[str, frozenset[str]]],
+) -> bool:
+    """Check if user has required role for the given API path + method.
+
+    Longest prefix wins. Method must be explicitly listed.
+    _OPEN means unconditional access. Specific roles require OIDC on + role match.
+    """
+    for prefix in sorted(mapping, key=len, reverse=True):
+        if path.startswith(prefix):
+            required = mapping[prefix].get(method)
+            if required is None:
+                return False
+            if not required:
+                return True
+            if not oidc_enabled:
+                return False
+            return bool(user_roles & required)
+    return False
 
 
 def _parse_decoder_key_entries(raw: str | None) -> list[str]:
@@ -182,28 +274,30 @@ def _build_config_json(app: FastAPI, request: Request) -> str:
         "auto_refresh_seconds": app.state.auto_refresh_seconds,
         "channel_labels": app.state.channel_labels,
         "logo_invert_light": app.state.logo_invert_light,
+        "debug": app.state.web_debug,
+    }
+
+    role_names = {
+        "admin": app.state.oidc_role_admin,
+        "operator": app.state.oidc_role_operator,
+        "member": app.state.oidc_role_member,
     }
 
     if getattr(app.state, "oidc_enabled", False):
         user = get_session_user(request)
-        is_member, is_admin = get_user_roles(
-            request,
-            app.state.oidc_roles_claim,
-            app.state.oidc_admin_role,
-            app.state.oidc_member_role,
-        )
+        roles = get_session_roles(request, app.state.oidc_roles_claim)
         config.update(
             oidc_enabled=True,
             user=user,
-            is_member=is_member,
-            is_admin=is_admin,
+            roles=roles,
+            role_names=role_names,
         )
     else:
         config.update(
             oidc_enabled=False,
             user=None,
-            is_member=False,
-            is_admin=False,
+            roles=[],
+            role_names=role_names,
         )
 
     # Escape "</script>" sequences to prevent XSS breakout from the
@@ -292,10 +386,20 @@ def create_app(
         app.state.oidc_redirect_uri = settings.oidc_redirect_uri
         app.state.oidc_post_logout_redirect_uri = settings.oidc_post_logout_redirect_uri
         app.state.oidc_roles_claim = settings.oidc_roles_claim
-        app.state.oidc_admin_role = settings.oidc_admin_role
-        app.state.oidc_member_role = settings.oidc_member_role
+        app.state.oidc_role_admin = settings.oidc_role_admin
+        app.state.oidc_role_operator = settings.oidc_role_operator
+        app.state.oidc_role_member = settings.oidc_role_member
     else:
         app.state.oidc_enabled = False
+        app.state.oidc_role_admin = settings.oidc_role_admin
+        app.state.oidc_role_operator = settings.oidc_role_operator
+        app.state.oidc_role_member = settings.oidc_role_member
+
+    app.state.endpoint_access = _build_endpoint_access(
+        role_admin=settings.oidc_role_admin,
+        role_operator=settings.oidc_role_operator,
+        role_member=settings.oidc_role_member,
+    )
 
     # Load i18n translations
     app.state.web_locale = settings.web_locale or "en"
@@ -304,6 +408,7 @@ def create_app(
 
     # Auto-refresh interval
     app.state.auto_refresh_seconds = settings.web_auto_refresh_seconds
+    app.state.web_debug = settings.web_debug
     app.state.channel_labels = _build_channel_labels()
 
     # Store configuration in app state (use args if provided, else settings)
@@ -455,24 +560,22 @@ def create_app(
     )
     async def api_proxy(request: Request, path: str) -> Response:
         """Proxy API requests to the backend API server."""
-        # OIDC write gating: block non-admin sessions
-        if request.app.state.oidc_enabled and request.method in (
-            "POST",
-            "PUT",
-            "DELETE",
-            "PATCH",
+        oidc_enabled = getattr(request.app.state, "oidc_enabled", False)
+        user_roles: frozenset[str] = frozenset()
+        if oidc_enabled:
+            roles_claim = getattr(request.app.state, "oidc_roles_claim", "roles")
+            user_roles = frozenset(get_session_roles(request, roles_claim))
+        if not check_api_access(
+            path,
+            request.method,
+            oidc_enabled,
+            user_roles,
+            request.app.state.endpoint_access,
         ):
-            _, is_admin = get_user_roles(
-                request,
-                request.app.state.oidc_roles_claim,
-                request.app.state.oidc_admin_role,
-                request.app.state.oidc_member_role,
+            return JSONResponse(
+                {"detail": "Access denied", "code": "AUTH_REQUIRED"},
+                status_code=403,
             )
-            if not is_admin:
-                return JSONResponse(
-                    {"detail": "Admin access required", "code": "AUTH_REQUIRED"},
-                    status_code=403,
-                )
 
         client: httpx.AsyncClient = request.app.state.http_client
         url = f"/api/{path}"
@@ -489,6 +592,15 @@ def create_app(
         headers: dict[str, str] = {}
         if "content-type" in request.headers:
             headers["content-type"] = request.headers["content-type"]
+
+        # Inject authenticated user identity when OIDC is enabled
+        if oidc_enabled:
+            user = get_session_user(request)
+            if user and user.get("sub"):
+                headers["X-User-Id"] = user["sub"]
+                roles = get_session_roles(request, roles_claim)
+                if roles:
+                    headers["X-User-Roles"] = ",".join(roles)
 
         try:
             response = await client.request(
@@ -895,15 +1007,11 @@ def create_app(
         user = get_session_user(request)
         if not user:
             return JSONResponse({"detail": "Not authenticated"}, status_code=401)
-        is_member, is_admin = get_user_roles(
+        roles = get_session_roles(
             request,
             request.app.state.oidc_roles_claim,
-            request.app.state.oidc_admin_role,
-            request.app.state.oidc_member_role,
         )
-        return JSONResponse(
-            {"user": user, "is_member": is_member, "is_admin": is_admin}
-        )
+        return JSONResponse({"user": user, "roles": roles})
 
     # --- SPA Catch-All (MUST be last) ---
     @app.api_route("/{path:path}", methods=["GET"], tags=["SPA"], response_model=None)

@@ -8,10 +8,29 @@ from sqlalchemy.orm import selectinload
 
 from meshcore_hub.api.auth import RequireRead
 from meshcore_hub.api.dependencies import DbSession
-from meshcore_hub.common.models import Node, NodeTag
-from meshcore_hub.common.schemas.nodes import NodeList, NodeRead
+from meshcore_hub.common.models import Node, NodeTag, UserProfileNode
+from meshcore_hub.common.schemas.nodes import AdoptedByUser, NodeList, NodeRead
 
 router = APIRouter()
+
+
+def _get_adopted_by(node: Node) -> Optional[AdoptedByUser]:
+    """Extract adopted_by info from a node's eager-loaded associations."""
+    if node.user_profile_associations:
+        profile = node.user_profile_associations[0].user_profile
+        return AdoptedByUser(
+            user_id=profile.user_id,
+            name=profile.name,
+            callsign=profile.callsign,
+        )
+    return None
+
+
+def _node_to_read(node: Node) -> NodeRead:
+    """Convert a Node ORM object to NodeRead schema with adopted_by."""
+    node_read = NodeRead.model_validate(node)
+    node_read.adopted_by = _get_adopted_by(node)
+    return node_read
 
 
 @router.get("", response_model=NodeList)
@@ -28,8 +47,13 @@ async def list_nodes(
     offset: int = Query(0, ge=0, description="Page offset"),
 ) -> NodeList:
     """List all nodes with pagination and filtering."""
-    # Build base query with tags loaded
-    query = select(Node).options(selectinload(Node.tags))
+    # Build base query with tags and adoption info loaded
+    query = select(Node).options(
+        selectinload(Node.tags),
+        selectinload(Node.user_profile_associations).selectinload(
+            UserProfileNode.user_profile
+        ),
+    )
 
     if search:
         # Search in public key, node name, or name tag
@@ -113,7 +137,7 @@ async def list_nodes(
     nodes = session.execute(query).scalars().all()
 
     return NodeList(
-        items=[NodeRead.model_validate(n) for n in nodes],
+        items=[_node_to_read(n) for n in nodes],
         total=total,
         limit=limit,
         offset=offset,
@@ -132,7 +156,12 @@ async def get_node_by_prefix(
     """
     query = (
         select(Node)
-        .options(selectinload(Node.tags))
+        .options(
+            selectinload(Node.tags),
+            selectinload(Node.user_profile_associations).selectinload(
+                UserProfileNode.user_profile
+            ),
+        )
         .where(Node.public_key.startswith(prefix))
         .order_by(Node.public_key)
         .limit(1)
@@ -142,7 +171,7 @@ async def get_node_by_prefix(
     if not node:
         raise HTTPException(status_code=404, detail="Node not found")
 
-    return NodeRead.model_validate(node)
+    return _node_to_read(node)
 
 
 @router.get("/{public_key}", response_model=NodeRead)
@@ -154,7 +183,12 @@ async def get_node(
     """Get a single node by exact public key match."""
     query = (
         select(Node)
-        .options(selectinload(Node.tags))
+        .options(
+            selectinload(Node.tags),
+            selectinload(Node.user_profile_associations).selectinload(
+                UserProfileNode.user_profile
+            ),
+        )
         .where(Node.public_key == public_key)
     )
     node = session.execute(query).scalar_one_or_none()
@@ -162,4 +196,4 @@ async def get_node(
     if not node:
         raise HTTPException(status_code=404, detail="Node not found")
 
-    return NodeRead.model_validate(node)
+    return _node_to_read(node)

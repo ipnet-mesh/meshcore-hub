@@ -1,7 +1,7 @@
 import { apiGet, apiPost, apiPut, apiDelete } from '../../api.js';
 import {
     html, litRender, nothing,
-    getConfig, errorAlert, successAlert, t, escapeHtml,
+    getConfig, hasRole, errorAlert, successAlert, t, escapeHtml,
 } from '../../components.js';
 import { iconLock } from '../../icons.js';
 
@@ -9,7 +9,7 @@ export async function render(container, params, router) {
     try {
         const config = getConfig();
 
-        if (!config.is_admin && config.oidc_enabled) {
+        if (!hasRole('admin')) {
             litRender(html`
 <div class="flex flex-col items-center justify-center py-20">
     ${iconLock('h-16 w-16 opacity-30 mb-4')}

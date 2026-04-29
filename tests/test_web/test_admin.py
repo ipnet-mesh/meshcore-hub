@@ -89,7 +89,7 @@ class TestAdminHome:
 
     In the SPA architecture, admin routes serve the same shell HTML.
     Admin access control is handled client-side based on
-    window.__APP_CONFIG__.is_admin when OIDC is enabled.
+    window.__APP_CONFIG__.roles when OIDC is enabled.
     """
 
     def test_admin_home_returns_spa_shell(self, admin_client):
@@ -98,11 +98,11 @@ class TestAdminHome:
         assert response.status_code == 200
         assert "window.__APP_CONFIG__" in response.text
 
-    def test_admin_home_config_is_admin(self, admin_client):
-        """Test admin config shows is_admin: true."""
+    def test_admin_home_config_has_admin_role(self, admin_client):
+        """Test admin config includes admin in roles."""
         response = admin_client.get("/admin/")
         config = _extract_config(response.text)
-        assert config["is_admin"] is True
+        assert "admin" in config["roles"]
         assert config["oidc_enabled"] is True
 
     def test_admin_home_disabled_returns_spa_shell(
@@ -112,7 +112,7 @@ class TestAdminHome:
         """Test admin page returns SPA shell even when OIDC disabled.
 
         The SPA catch-all serves the shell for all routes.
-        Client-side code checks oidc_enabled/is_admin to show/hide admin UI.
+        Client-side code checks oidc_enabled/roles to show/hide admin UI.
         """
         response = admin_client_disabled.get("/admin/")
         assert response.status_code == 200
@@ -144,23 +144,6 @@ class TestAdminNodeTags:
         response = admin_client_disabled.get("/admin/node-tags")
         assert response.status_code == 200
         assert "window.__APP_CONFIG__" in response.text
-
-
-class TestAdminFooterLink:
-    """Tests for admin link in footer."""
-
-    def test_admin_link_visible_when_oidc_enabled(self, admin_client):
-        """Test that admin link appears in footer when OIDC is enabled."""
-        response = admin_client.get("/")
-        assert response.status_code == 200
-        assert 'href="/admin/"' in response.text
-        assert "Admin" in response.text
-
-    def test_admin_link_hidden_when_oidc_disabled(self, admin_client_disabled):
-        """Test that admin link does not appear in footer when OIDC disabled."""
-        response = admin_client_disabled.get("/")
-        assert response.status_code == 200
-        assert 'href="/admin/"' not in response.text
 
 
 def _extract_config(text: str) -> dict[str, Any]:

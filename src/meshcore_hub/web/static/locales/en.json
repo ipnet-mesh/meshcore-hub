@@ -148,7 +148,15 @@
         "channel": "Channel {{number}}"
     },
     "nodes": {
-        "scan_to_add": "Scan to add as contact"
+        "scan_to_add": "Scan to add as contact",
+        "ownership": "Ownership",
+        "adopt": "Adopt",
+        "release": "Release",
+        "adopted_by": "Adopted by {{name}}",
+        "not_adopted": "This node has not been adopted by any operator.",
+        "adopt_success": "Node adopted successfully",
+        "release_success": "Node released successfully",
+        "release_confirm": "Are you sure you want to release this node?"
     },
     "advertisements": {},
     "messages": {
@@ -200,6 +208,19 @@
         "session_expired": "Session expired, please log in again",
         "role_admin": "admin",
         "role_member": "member"
+    },
+    "user_profile": {
+        "title": "Profile",
+        "your_profile": "Your Profile",
+        "profile_updated": "Profile updated successfully",
+        "save_profile": "Save Profile",
+        "name_label": "Display Name",
+        "name_placeholder": "Your name or preferred name",
+        "callsign_label": "Callsign",
+        "callsign_placeholder": "Amateur radio callsign (e.g., W1ABC)",
+        "adopted_nodes": "Adopted Nodes",
+        "no_adopted_nodes": "No adopted nodes",
+        "login_to_view": "Log in to view your profile"
     },
     "admin_members": {
         "network_members": "Network Members ({{count}})",

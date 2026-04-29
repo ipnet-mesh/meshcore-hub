@@ -1,11 +1,11 @@
-import { html, litRender, unsafeHTML, getConfig, errorAlert, t } from '../../components.js';
+import { html, litRender, unsafeHTML, getConfig, hasRole, errorAlert, t } from '../../components.js';
 import { iconLock, iconUsers, iconTag } from '../../icons.js';
 
 export async function render(container, params, router) {
     try {
         const config = getConfig();
 
-        if (config.oidc_enabled ? !config.is_admin : false) {
+        if (!hasRole('admin')) {
             litRender(html`
 <div class="flex flex-col items-center justify-center py-20">
     ${iconLock('h-16 w-16 opacity-30 mb-4')}

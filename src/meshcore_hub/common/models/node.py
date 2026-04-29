@@ -10,6 +10,7 @@ from meshcore_hub.common.models.base import Base, TimestampMixin, UUIDMixin, utc
 
 if TYPE_CHECKING:
     from meshcore_hub.common.models.node_tag import NodeTag
+    from meshcore_hub.common.models.user_profile_node import UserProfileNode
 
 
 class Node(Base, UUIDMixin, TimestampMixin):
@@ -77,6 +78,12 @@ class Node(Base, UUIDMixin, TimestampMixin):
     # Relationships
     tags: Mapped[list["NodeTag"]] = relationship(
         "NodeTag",
+        back_populates="node",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    user_profile_associations: Mapped[list["UserProfileNode"]] = relationship(
+        "UserProfileNode",
         back_populates="node",
         cascade="all, delete-orphan",
         lazy="selectin",

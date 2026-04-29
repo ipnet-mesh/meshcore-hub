@@ -200,8 +200,9 @@ Complete list from `docker-compose.yml` collector `environment:` block:
 | `OIDC_REDIRECT_URI` | (empty) | Auth |
 | `OIDC_SCOPES` | `openid email profile` | Auth |
 | `OIDC_ROLES_CLAIM` | `roles` | Auth |
-| `OIDC_ADMIN_ROLE` | `admin` | Auth |
-| `OIDC_MEMBER_ROLE` | `member` | Auth |
+| `OIDC_ROLE_ADMIN` | `admin` | Auth |
+| `OIDC_ROLE_OPERATOR` | `operator` | Auth |
+| `OIDC_ROLE_MEMBER` | `member` | Auth |
 | `OIDC_SESSION_SECRET` | (empty) | Auth |
 | `OIDC_SESSION_MAX_AGE` | `86400` | Auth |
 | `OIDC_COOKIE_SECURE` | `false` | Auth |

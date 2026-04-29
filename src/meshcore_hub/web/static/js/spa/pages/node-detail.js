@@ -1,8 +1,8 @@
-import { apiGet } from '../api.js';
+import { apiGet, apiPost, apiDelete } from '../api.js';
 import {
     html, litRender, nothing,
-    getConfig, typeEmoji, formatDateTime,
-    truncateKey, errorAlert, copyToClipboard, t,
+    getConfig, hasRole, typeEmoji, formatDateTime,
+    truncateKey, errorAlert, successAlert, copyToClipboard, t,
 } from '../components.js';
 import { iconError } from '../icons.js';
 
@@ -126,11 +126,17 @@ export async function render(container, params, router) {
             </div>`
             : html`<p class="opacity-70">${t('common.no_entity_defined', { entity: t('entities.tags').toLowerCase() })}</p>`;
 
-        const adminTagsHtml = (config.oidc_enabled ? config.is_admin : false)
+        const adminTagsHtml = hasRole('admin')
             ? html`<div class="mt-3">
                 <a href="/admin/node-tags?public_key=${node.public_key}" class="btn btn-sm btn-outline">${tags.length > 0 ? t('common.edit_entity', { entity: t('entities.tags') }) : t('common.add_entity', { entity: t('entities.tags') })}</a>
             </div>`
             : nothing;
+
+        const adoptionHtml = renderAdoptionSection(node, config);
+
+        const flashMessage = (params.query && params.query.message) || '';
+        const flashError = (params.query && params.query.error) || '';
+        const flashHtml = flashMessage ? successAlert(flashMessage) : flashError ? errorAlert(flashError) : nothing;
 
         litRender(html`
 <div class="breadcrumbs text-sm mb-4">
@@ -150,6 +156,8 @@ export async function render(container, params, router) {
 </div>
 
 ${heroHtml}
+
+${flashHtml}
 
 <div class="card bg-base-100 shadow-xl mb-6">
     <div class="card-body">
@@ -182,7 +190,9 @@ ${heroHtml}
             ${adminTagsHtml}
         </div>
     </div>
-</div>`, container);
+</div>
+
+${adoptionHtml}`, container);
 
         // Initialize map if coordinates exist
         if (hasCoords && typeof L !== 'undefined') {
@@ -227,6 +237,32 @@ ${heroHtml}
             cleanupFns.push(() => clearInterval(qrInterval));
         }
 
+        // Wire up adoption buttons
+        const adoptBtn = container.querySelector('.btn-adopt-node');
+        if (adoptBtn) {
+            adoptBtn.addEventListener('click', async () => {
+                try {
+                    await apiPost('/api/v1/adoptions', { public_key: node.public_key });
+                    router.navigate('/nodes/' + node.public_key + '?message=' + encodeURIComponent(t('nodes.adopt_success')), true);
+                } catch (err) {
+                    router.navigate('/nodes/' + node.public_key + '?error=' + encodeURIComponent(err.message), true);
+                }
+            });
+        }
+
+        const releaseBtn = container.querySelector('.btn-release-node');
+        if (releaseBtn) {
+            releaseBtn.addEventListener('click', async () => {
+                if (!confirm(t('nodes.release_confirm'))) return;
+                try {
+                    await apiDelete('/api/v1/adoptions/' + node.public_key);
+                    router.navigate('/nodes/' + node.public_key + '?message=' + encodeURIComponent(t('nodes.release_success')), true);
+                } catch (err) {
+                    router.navigate('/nodes/' + node.public_key + '?error=' + encodeURIComponent(err.message), true);
+                }
+            });
+        }
+
         return () => {
             cleanupFns.forEach(fn => fn());
         };
@@ -237,6 +273,55 @@ ${heroHtml}
             litRender(errorAlert(e.message), container);
         }
     }
+}
+
+function renderAdoptionSection(node, config) {
+    if (!config.oidc_enabled || !config.user) return nothing;
+
+    const isOperator = hasRole('operator');
+    const isAdmin = hasRole('admin');
+    if (!isOperator && !isAdmin) {
+        if (node.adopted_by) {
+            const ownerName = node.adopted_by.name || node.adopted_by.user_id;
+            return html`<div class="card bg-base-100 shadow-xl mt-6">
+                <div class="card-body">
+                    <h2 class="card-title">${t('nodes.ownership')}</h2>
+                    <p class="text-sm opacity-70">${t('nodes.adopted_by', { name: ownerName })}</p>
+                </div>
+            </div>`;
+        }
+        return nothing;
+    }
+
+    if (node.adopted_by) {
+        const ownerName = node.adopted_by.name || node.adopted_by.user_id;
+        const isOwner = node.adopted_by.user_id === config.user.sub;
+        const canRelease = isOwner || isAdmin;
+
+        const releaseBtnHtml = canRelease
+            ? html`<button class="btn btn-sm btn-outline btn-error btn-release-node">${t('nodes.release')}</button>`
+            : nothing;
+
+        return html`<div class="card bg-base-100 shadow-xl mt-6">
+            <div class="card-body">
+                <h2 class="card-title">${t('nodes.ownership')}</h2>
+                <div class="flex items-center justify-between">
+                    <p class="text-sm opacity-70">${t('nodes.adopted_by', { name: ownerName })}</p>
+                    ${releaseBtnHtml}
+                </div>
+            </div>
+        </div>`;
+    }
+
+    return html`<div class="card bg-base-100 shadow-xl mt-6">
+        <div class="card-body">
+            <h2 class="card-title">${t('nodes.ownership')}</h2>
+            <p class="text-sm opacity-70">${t('nodes.not_adopted')}</p>
+            <div class="mt-2">
+                <button class="btn btn-sm btn-primary btn-adopt-node">${t('nodes.adopt')}</button>
+            </div>
+        </div>
+    </div>`;
 }
 
 function renderNotFound(publicKey) {

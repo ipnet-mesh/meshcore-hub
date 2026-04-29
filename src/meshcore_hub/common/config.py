@@ -134,7 +134,7 @@ class CollectorSettings(CommonSettings):
         default=True, description="Enable automatic cleanup of inactive nodes"
     )
     node_cleanup_days: int = Field(
-        default=7,
+        default=30,
         description="Remove nodes not seen for this many days (last_seen)",
         ge=1,
     )
@@ -277,7 +277,10 @@ class WebSettings(CommonSettings):
     web_auto_refresh_seconds: int = Field(
         default=30,
         description="Auto-refresh interval in seconds for list pages (0 to disable)",
-        ge=0,
+    )
+    web_debug: bool = Field(
+        default=False,
+        description="Enable debug mode in the web dashboard",
     )
 
     # OIDC / OAuth2 authentication
@@ -306,11 +309,14 @@ class WebSettings(CommonSettings):
     oidc_roles_claim: str = Field(
         default="roles", description="ID token claim containing user roles"
     )
-    oidc_admin_role: str = Field(
-        default="admin", description="Role value granting admin access"
+    oidc_role_admin: str = Field(
+        default="admin", description="IdP role name for admin access"
     )
-    oidc_member_role: str = Field(
-        default="member", description="Role value granting member access"
+    oidc_role_operator: str = Field(
+        default="operator", description="IdP role name for operator access"
+    )
+    oidc_role_member: str = Field(
+        default="member", description="IdP role name for member access"
     )
     oidc_session_secret: Optional[str] = Field(
         default=None, description="Secret key for signing session cookies"

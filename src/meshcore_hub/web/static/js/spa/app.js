@@ -6,7 +6,7 @@
  */
 
 import { Router } from './router.js';
-import { getConfig, renderAuthSection } from './components.js';
+import { getConfig, hasRole, renderAuthSection } from './components.js';
 import { loadLocale, t } from './i18n.js';
 
 // Page modules (lazy-loaded)
@@ -24,6 +24,7 @@ const pages = {
     adminIndex: () => import('./pages/admin/index.js'),
     adminNodeTags: () => import('./pages/admin/node-tags.js'),
     adminMembers: () => import('./pages/admin/members.js'),
+    profile: () => import('./pages/profile.js'),
 };
 
 // Main app container
@@ -88,11 +89,16 @@ if (features.pages !== false) {
 }
 
 // Admin routes (only register when OIDC disabled or user is admin)
-if (!config.oidc_enabled || config.is_admin) {
+if (hasRole('admin')) {
     router.addRoute('/admin', pageHandler(pages.adminIndex));
     router.addRoute('/admin/', pageHandler(pages.adminIndex));
     router.addRoute('/admin/node-tags', pageHandler(pages.adminNodeTags));
     router.addRoute('/admin/members', pageHandler(pages.adminMembers));
+}
+
+// Profile route (only register when OIDC enabled)
+if (config.oidc_enabled) {
+    router.addRoute('/profile', pageHandler(pages.profile));
 }
 
 // 404 handler
@@ -160,6 +166,7 @@ function updatePageTitle(pathname) {
     if (features.advertisements !== false) titles['/advertisements'] = composePageTitle('entities.advertisements');
     if (features.map !== false) titles['/map'] = composePageTitle('entities.map');
     if (features.members !== false) titles['/members'] = composePageTitle('entities.members');
+    titles['/profile'] = composePageTitle('links.profile');
 
     if (titles[pathname]) {
         document.title = titles[pathname];

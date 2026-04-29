@@ -27,6 +27,8 @@ from meshcore_hub.common.models import (
     NodeTag,
     Telemetry,
     TracePath,
+    UserProfile,
+    UserProfileNode,
 )
 
 
@@ -424,3 +426,30 @@ def sample_node_with_member_tag(api_db_session):
     api_db_session.commit()
     api_db_session.refresh(node)
     return node
+
+
+@pytest.fixture
+def sample_user_profile(api_db_session):
+    """Create a sample user profile in the database."""
+    profile = UserProfile(
+        user_id="oidc-user-123",
+        name="Test User",
+        callsign="W1TEST",
+    )
+    api_db_session.add(profile)
+    api_db_session.commit()
+    api_db_session.refresh(profile)
+    return profile
+
+
+@pytest.fixture
+def sample_adopted_node(api_db_session, sample_user_profile, sample_node):
+    """Create a sample adopted node association."""
+    association = UserProfileNode(
+        user_profile_id=sample_user_profile.id,
+        node_id=sample_node.id,
+    )
+    api_db_session.add(association)
+    api_db_session.commit()
+    api_db_session.refresh(association)
+    return association

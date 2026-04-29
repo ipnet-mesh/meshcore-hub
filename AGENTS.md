@@ -267,9 +267,12 @@ meshcore-hub/
 │   │   ├── models/           # SQLAlchemy models
 │   │   │   ├── node.py       # Node model
 │   │   │   ├── member.py     # Network member model
+│   │   │   ├── user_profile.py     # User profile model (OIDC users)
+│   │   │   ├── user_profile_node.py # User-node adoption join table
 │   │   │   └── ...
 │   │   └── schemas/          # Pydantic schemas
 │   │       ├── members.py    # Member API schemas
+│   │       ├── user_profiles.py  # User profile API schemas
 │   │       └── ...
 │   ├── collector/
 │   │   ├── cli.py            # Collector CLI with seed commands
@@ -289,7 +292,9 @@ meshcore-hub/
 │   │   ├── metrics.py        # Prometheus metrics endpoint
 │   │   └── routes/           # API routes
 │   │       ├── members.py    # Member CRUD endpoints
-│   │       └── ...
+│   │   ├── user_profiles.py  # User profile endpoints (GET/PUT profile)
+│   │   ├── adoptions.py      # Node adoption endpoints (POST adopt, DELETE release)
+│   │   └── ...
 │   └── web/
 │       ├── cli.py
 │       ├── app.py            # FastAPI app
@@ -646,13 +651,15 @@ Key variables:
 - `OIDC_POST_LOGOUT_REDIRECT_URI` - Post-logout redirect URI (must match IdP sign-out URIs, falls back to `OIDC_REDIRECT_URI` base)
 - `OIDC_SCOPES` - OAuth scopes (default: `openid email profile`). The `openid` scope is required for ID tokens and userinfo. Quotes are stripped automatically. When using LogTo as the OIDC provider, include `roles` in `OIDC_SCOPES` (e.g., `"openid email profile roles"`) to enable role-based admin access.
 - `OIDC_ROLES_CLAIM` - ID token claim for roles (default: `roles`)
-- `OIDC_ADMIN_ROLE` - Role value for admin access (default: `admin`)
-- `OIDC_MEMBER_ROLE` - Role value for member access (default: `member`)
+- `OIDC_ROLE_ADMIN` - IdP role name for admin access (default: `admin`)
+- `OIDC_ROLE_OPERATOR` - IdP role name for operator access (default: `operator`)
+- `OIDC_ROLE_MEMBER` - IdP role name for member access (default: `member`)
 - `OIDC_SESSION_SECRET` - Secret for signing session cookies (required if OIDC_ENABLED=true)
 - `OIDC_SESSION_MAX_AGE` - Session lifetime in seconds (default: `86400`)
 - `OIDC_COOKIE_SECURE` - HTTPS-only cookies (default: `false`)
 - `WEB_THEME` - Default theme for the web dashboard (default: `dark`, options: `dark`, `light`). Users can override via the theme toggle in the navbar, which persists their preference in browser localStorage.
 - `WEB_AUTO_REFRESH_SECONDS` - Auto-refresh interval in seconds for list pages (default: `30`, `0` to disable)
+- `WEB_DEBUG` - Enable debug mode in the web dashboard (default: `false`)
 - `TZ` - Timezone for web dashboard date/time display (default: `UTC`, e.g., `America/New_York`, `Europe/London`)
 - `FEATURE_DASHBOARD`, `FEATURE_NODES`, `FEATURE_ADVERTISEMENTS`, `FEATURE_MESSAGES`, `FEATURE_MAP`, `FEATURE_MEMBERS`, `FEATURE_PAGES` - Feature flags to enable/disable specific web dashboard pages (default: all `true`). Dependencies: Dashboard auto-disables when all of Nodes/Advertisements/Messages are disabled. Map auto-disables when Nodes is disabled.
 - `NETWORK_DOMAIN` - Network domain name (default: none)
@@ -733,7 +740,7 @@ When enabled, the collector automatically deletes event data older than the rete
 | Variable | Description |
 |----------|-------------|
 | `NODE_CLEANUP_ENABLED` | Enable automatic cleanup of inactive nodes (default: true) |
-| `NODE_CLEANUP_DAYS` | Remove nodes not seen for this many days (default: 7) |
+| `NODE_CLEANUP_DAYS` | Remove nodes not seen for this many days (default: 30) |
 
 When enabled, the collector automatically removes nodes where:
 - `last_seen` is older than the configured number of days

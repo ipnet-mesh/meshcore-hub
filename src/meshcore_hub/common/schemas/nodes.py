@@ -72,6 +72,17 @@ class NodeTagRead(BaseModel):
         from_attributes = True
 
 
+class AdoptedByUser(BaseModel):
+    """Schema for the user who has adopted a node."""
+
+    user_id: str = Field(..., description="OIDC subject identifier")
+    name: Optional[str] = Field(default=None, description="User display name")
+    callsign: Optional[str] = Field(default=None, description="Amateur radio callsign")
+
+    class Config:
+        from_attributes = True
+
+
 class NodeRead(BaseModel):
     """Schema for reading a node."""
 
@@ -88,6 +99,9 @@ class NodeRead(BaseModel):
     created_at: datetime = Field(..., description="Record creation timestamp")
     updated_at: datetime = Field(..., description="Record update timestamp")
     tags: list[NodeTagRead] = Field(default_factory=list, description="Node tags")
+    adopted_by: Optional[AdoptedByUser] = Field(
+        default=None, description="User who has adopted this node"
+    )
 
     class Config:
         from_attributes = True
