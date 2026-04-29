@@ -372,7 +372,7 @@ The collector automatically cleans up old event data and inactive nodes:
 | `OIDC_ENABLED`             | `false`                 | Enable OIDC authentication for the web dashboard                                                                                                                                                                                              |
 | `OIDC_CLIENT_ID`           | _(none)_                | OIDC client ID (from IdP, required when OIDC_ENABLED=true)                                                                                                                                                                                    |
 | `OIDC_CLIENT_SECRET`       | _(none)_                | OIDC client secret (from IdP, required when OIDC_ENABLED=true)                                                                                                                                                                                |
-| `OIDC_DISCOVERY_URL`       | _(none)_                | IdP's `.well-known/openid-configuration` URL (required when OIDC_ENABLED=true)                                                                                                                                                                |
+| `OIDC_DISCOVERY_URL`       | _(none)_                | IdP base URL — `.well-known/openid-configuration` is appended automatically (required when OIDC_ENABLED=true)                                                                                                                                |
 | `OIDC_REDIRECT_URI`        | _(auto-derived)_        | Explicit callback URL (overrides auto-derivation from request)                                                                                                                                                                                |
 | `OIDC_POST_LOGOUT_REDIRECT_URI` | _(auto-derived)_  | Post-logout redirect URI (must match Sign-out redirect URIs in IdP). Falls back to `OIDC_REDIRECT_URI` base or `request.base_url`                                                                                                           |
 | `OIDC_SCOPES`              | `openid email profile`  | OAuth scopes to request. The `openid` scope is required for ID tokens. Quotes are stripped automatically.  |
@@ -448,6 +448,8 @@ curl -H "Authorization: Bearer <API_READ_KEY>" http://localhost:8000/api/v1/node
 # Admin access
 curl -H "Authorization: Bearer <API_ADMIN_KEY>" http://localhost:8000/api/v1/members
 ```
+
+The web dashboard supports OIDC/OAuth2 authentication for admin access. When enabled, users must authenticate with an identity provider and have the `admin` role assigned. See [docs/auth.md](docs/auth.md) for setup instructions and IdP-specific guides.
 
 ### Example Endpoints
 
@@ -597,6 +599,7 @@ meshcore-hub/
 - [docs/seeding.md](docs/seeding.md) - Seed data format and import guide
 - [docs/i18n.md](docs/i18n.md) - Translation reference guide
 - [docs/content.md](docs/content.md) - Custom content setup guide
+- [docs/auth.md](docs/auth.md) - OIDC authentication setup and configuration
 - [docs/webhooks.md](docs/webhooks.md) - Webhook configuration reference
 - [AGENTS.md](AGENTS.md) - Guidelines for AI coding assistants
 

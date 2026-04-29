@@ -16,7 +16,7 @@ This document provides context and guidelines for AI coding assistants working o
 * You MUST install all project dependencies using `pip install -e ".[dev]"` command`
 * You MUST install `pre-commit` for quality checks
 * **Never `git push` without explicit confirmation** — staging and committing after discrete changes is fine, but pushing to remote requires the user to explicitly request it
-* You MUST keep project documentation in sync with behavior/config/schema changes made in code (at minimum update relevant sections in `README.md`, `SCHEMAS.md`, `docs/upgrading.md`, `docs/letsmesh.md` when applicable)
+* You MUST keep project documentation in sync with behavior/config/schema changes made in code (at minimum update relevant sections in `README.md`, `SCHEMAS.md`, `docs/upgrading.md`, `docs/auth.md`, `docs/letsmesh.md` when applicable)
 * Before commiting:
   - Run **targeted tests** for the components you changed, not the full suite:
     - `pytest tests/test_web/` for web-only changes (templates, static JS, web routes)
@@ -39,6 +39,7 @@ MeshCore Hub is a Python 3.14+ monorepo for managing and orchestrating MeshCore 
 
 - [SCHEMAS.md](SCHEMAS.md) - MeshCore event JSON schemas and database mappings
 - [docs/upgrading.md](docs/upgrading.md) - Upgrade guide for breaking changes
+- [docs/auth.md](docs/auth.md) - OIDC authentication setup and configuration
 - [docs/letsmesh.md](docs/letsmesh.md) - LetsMesh packet decoding details
 - [docs/seeding.md](docs/seeding.md) - Seed data format and import guide
 - [docs/i18n.md](docs/i18n.md) - Translation reference guide
@@ -643,7 +644,7 @@ Key variables:
 - `OIDC_DISCOVERY_URL` - OIDC discovery URL (required if OIDC_ENABLED=true)
 - `OIDC_REDIRECT_URI` - Explicit callback URL (overrides auto-derivation)
 - `OIDC_POST_LOGOUT_REDIRECT_URI` - Post-logout redirect URI (must match IdP sign-out URIs, falls back to `OIDC_REDIRECT_URI` base)
-- `OIDC_SCOPES` - OAuth scopes (default: `openid email profile`). The `openid` scope is required for ID tokens and userinfo. Quotes are stripped automatically for direnv compatibility. When using LogTo as the OIDC provider, include `roles` in `OIDC_SCOPES` (e.g., `"openid email profile roles"`) to enable role-based admin access.
+- `OIDC_SCOPES` - OAuth scopes (default: `openid email profile`). The `openid` scope is required for ID tokens and userinfo. Quotes are stripped automatically. When using LogTo as the OIDC provider, include `roles` in `OIDC_SCOPES` (e.g., `"openid email profile roles"`) to enable role-based admin access.
 - `OIDC_ROLES_CLAIM` - ID token claim for roles (default: `roles`)
 - `OIDC_ADMIN_ROLE` - Role value for admin access (default: `admin`)
 - `OIDC_MEMBER_ROLE` - Role value for member access (default: `member`)
