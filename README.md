@@ -330,6 +330,10 @@ All components are configured via environment variables. Create a `.env` file or
 
 For details on how the collector normalizes and decodes LetsMesh packets, see [docs/letsmesh.md](docs/letsmesh.md).
 
+### OIDC Authentication
+
+The web dashboard supports OIDC/OAuth2 authentication. When enabled (`OIDC_ENABLED=true`), the admin interface requires users to authenticate with an identity provider (e.g. LogTo, Keycloak) and have the `admin` role assigned. See [docs/auth.md](docs/auth.md) for setup instructions, configuration reference, and IdP-specific guides.
+
 ### Webhooks
 
 The collector can forward events (advertisements, messages) to external HTTP endpoints via webhooks with configurable URLs, secrets, retries, and timeouts. See [docs/webhooks.md](docs/webhooks.md) for the full configuration reference and payload format.
