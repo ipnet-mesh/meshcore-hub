@@ -330,6 +330,10 @@ All components are configured via environment variables. Create a `.env` file or
 
 For details on how the collector normalizes and decodes LetsMesh packets, see [docs/letsmesh.md](docs/letsmesh.md).
 
+### OIDC Authentication
+
+The web dashboard supports OIDC/OAuth2 authentication. When enabled (`OIDC_ENABLED=true`), the admin interface requires users to authenticate with an identity provider (e.g. LogTo, Keycloak) and have the `admin` role assigned. See [docs/auth.md](docs/auth.md) for setup instructions, configuration reference, and IdP-specific guides.
+
 ### Webhooks
 
 The collector can forward events (advertisements, messages) to external HTTP endpoints via webhooks with configurable URLs, secrets, retries, and timeouts. See [docs/webhooks.md](docs/webhooks.md) for the full configuration reference and payload format.
@@ -369,7 +373,19 @@ The collector automatically cleans up old event data and inactive nodes:
 | `WEB_LOCALE`               | `en`                    | Locale/language for the web dashboard (e.g., `en`, `es`, `fr`)                                                                                                                                                                               |
 | `WEB_DATETIME_LOCALE`      | `en-US`                 | Locale used for date formatting in the web dashboard (e.g., `en-US` for MM/DD/YYYY, `en-GB` for DD/MM/YYYY).                                                                                                                                 |
 | `WEB_AUTO_REFRESH_SECONDS` | `30`                    | Auto-refresh interval in seconds for list pages (0 to disable)                                                                                                                                                                               |
-| `WEB_ADMIN_ENABLED`        | `false`                 | Enable admin interface at /a/                                                                                                       |
+| `OIDC_ENABLED`             | `false`                 | Enable OIDC authentication for the web dashboard                                                                                                                                                                                              |
+| `OIDC_CLIENT_ID`           | _(none)_                | OIDC client ID (from IdP, required when OIDC_ENABLED=true)                                                                                                                                                                                    |
+| `OIDC_CLIENT_SECRET`       | _(none)_                | OIDC client secret (from IdP, required when OIDC_ENABLED=true)                                                                                                                                                                                |
+| `OIDC_DISCOVERY_URL`       | _(none)_                | IdP base URL — `.well-known/openid-configuration` is appended automatically (required when OIDC_ENABLED=true)                                                                                                                                |
+| `OIDC_REDIRECT_URI`        | _(auto-derived)_        | Explicit callback URL (overrides auto-derivation from request)                                                                                                                                                                                |
+| `OIDC_POST_LOGOUT_REDIRECT_URI` | _(auto-derived)_  | Post-logout redirect URI (must match Sign-out redirect URIs in IdP). Falls back to `OIDC_REDIRECT_URI` base or `request.base_url`                                                                                                           |
+| `OIDC_SCOPES`              | `openid email profile`  | OAuth scopes to request. The `openid` scope is required for ID tokens. Quotes are stripped automatically.  |
+| `OIDC_ROLES_CLAIM`         | `roles`                 | ID token claim name containing user roles                                                                                                                                                                                                     |
+| `OIDC_ADMIN_ROLE`          | `admin`                 | Role value granting admin access                                                                                                                                                                                                              |
+| `OIDC_MEMBER_ROLE`         | `member`                | Role value granting member access                                                                                                                                                                                                             |
+| `OIDC_SESSION_SECRET`      | _(none)_                | Secret for signing session cookies (required when OIDC_ENABLED=true)                                                                                                                                                                          |
+| `OIDC_SESSION_MAX_AGE`     | `86400`                 | Session cookie lifetime in seconds (default 24 hours)                                                                                                                                                                                         |
+| `OIDC_COOKIE_SECURE`       | `false`                 | HTTPS-only session cookies (enable in production)                                                                                                                                                                                             |
 | `TZ`                       | `UTC`                   | Timezone for displaying dates/times (e.g., `America/New_York`, `Europe/London`)                                                                                                                                                              |
 | `NETWORK_DOMAIN`           | _(none)_                | Network domain name (optional)                                                                                                                                                                                                               |
 | `NETWORK_NAME`             | `MeshCore Network`      | Display name for the network                                                                                                                                                                                                                 |
@@ -436,6 +452,8 @@ curl -H "Authorization: Bearer <API_READ_KEY>" http://localhost:8000/api/v1/node
 # Admin access
 curl -H "Authorization: Bearer <API_ADMIN_KEY>" http://localhost:8000/api/v1/members
 ```
+
+The web dashboard supports OIDC/OAuth2 authentication for admin access. When enabled, users must authenticate with an identity provider and have the `admin` role assigned. See [docs/auth.md](docs/auth.md) for setup instructions and IdP-specific guides.
 
 ### Example Endpoints
 
@@ -585,6 +603,7 @@ meshcore-hub/
 - [docs/seeding.md](docs/seeding.md) - Seed data format and import guide
 - [docs/i18n.md](docs/i18n.md) - Translation reference guide
 - [docs/content.md](docs/content.md) - Custom content setup guide
+- [docs/auth.md](docs/auth.md) - OIDC authentication setup and configuration
 - [docs/webhooks.md](docs/webhooks.md) - Webhook configuration reference
 - [AGENTS.md](AGENTS.md) - Guidelines for AI coding assistants
 

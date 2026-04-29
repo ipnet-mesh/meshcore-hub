@@ -126,9 +126,9 @@ export async function render(container, params, router) {
             </div>`
             : html`<p class="opacity-70">${t('common.no_entity_defined', { entity: t('entities.tags').toLowerCase() })}</p>`;
 
-        const adminTagsHtml = config.admin_enabled
+        const adminTagsHtml = (config.oidc_enabled ? config.is_admin : false)
             ? html`<div class="mt-3">
-                <a href="/a/node-tags?public_key=${node.public_key}" class="btn btn-sm btn-outline">${tags.length > 0 ? t('common.edit_entity', { entity: t('entities.tags') }) : t('common.add_entity', { entity: t('entities.tags') })}</a>
+                <a href="/admin/node-tags?public_key=${node.public_key}" class="btn btn-sm btn-outline">${tags.length > 0 ? t('common.edit_entity', { entity: t('entities.tags') }) : t('common.add_entity', { entity: t('entities.tags') })}</a>
             </div>`
             : nothing;
 

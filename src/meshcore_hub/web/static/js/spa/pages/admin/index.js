@@ -5,13 +5,24 @@ export async function render(container, params, router) {
     try {
         const config = getConfig();
 
-        if (!config.admin_enabled) {
+        if (config.oidc_enabled ? !config.is_admin : false) {
+            litRender(html`
+<div class="flex flex-col items-center justify-center py-20">
+    ${iconLock('h-16 w-16 opacity-30 mb-4')}
+    <h1 class="text-3xl font-bold mb-2">${t('admin.access_denied')}</h1>
+    <p class="opacity-70">${t('auth.admin_required')}</p>
+    <p class="text-sm opacity-50 mt-2">${t('auth.login_hint')}</p>
+    <a href="/auth/login" class="btn btn-primary mt-6">${t('auth.login')}</a>
+</div>`, container);
+            return;
+        }
+
+        if (!config.oidc_enabled) {
             litRender(html`
 <div class="flex flex-col items-center justify-center py-20">
     ${iconLock('h-16 w-16 opacity-30 mb-4')}
     <h1 class="text-3xl font-bold mb-2">${t('admin.access_denied')}</h1>
     <p class="opacity-70">${t('admin.admin_not_enabled')}</p>
-    <p class="text-sm opacity-50 mt-2">${unsafeHTML(t('admin.admin_enable_hint'))}</p>
     <a href="/" class="btn btn-primary mt-6">${t('common.go_home')}</a>
 </div>`, container);
             return;
@@ -37,7 +48,7 @@ export async function render(container, params, router) {
 </div>
 
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-    <a href="/a/members" class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow">
+    <a href="/admin/members" class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow">
         <div class="card-body">
             <h2 class="card-title">
                 ${iconUsers('h-6 w-6')}
@@ -46,7 +57,7 @@ export async function render(container, params, router) {
             <p>${t('admin.members_description')}</p>
         </div>
     </a>
-    <a href="/a/node-tags" class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow">
+    <a href="/admin/node-tags" class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow">
         <div class="card-body">
             <h2 class="card-title">
                 ${iconTag('h-6 w-6')}

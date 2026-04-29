@@ -570,3 +570,48 @@ export function submitOnEnter(e) {
         e.target.closest('form').requestSubmit();
     }
 }
+
+/**
+ * Render the auth section in the navbar.
+ * Shows a login button when not authenticated, or a user dropdown when logged in.
+ * @param {HTMLElement} container - The #auth-section element
+ * @param {Object} config - App configuration object
+ */
+export function renderAuthSection(container, config) {
+    if (!container) return;
+    if (!config.oidc_enabled) {
+        container.innerHTML = '';
+        return;
+    }
+
+    const user = config.user;
+    if (!user) {
+        container.innerHTML = `
+            <a href="/auth/login" class="btn btn-sm btn-outline">${t('auth.login')}</a>
+        `;
+        return;
+    }
+
+    const displayName = user.name || user.email || 'User';
+    const initials = displayName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+    const pictureHtml = user.picture
+        ? `<img src="${user.picture}" alt="${displayName}" class="w-8 h-8 rounded-full" />`
+        : `<span class="text-sm font-bold">${initials}</span>`;
+    const roleBadge = config.is_admin
+        ? `<span class="badge badge-primary badge-sm">${t('auth.role_admin')}</span>`
+        : config.is_member
+            ? `<span class="badge badge-ghost badge-sm">${t('auth.role_member')}</span>`
+            : '';
+
+    container.innerHTML = `
+        <div class="dropdown dropdown-end">
+            <div tabindex="0" role="button" class="btn btn-ghost btn-circle btn-sm avatar">
+                ${pictureHtml}
+            </div>
+            <ul tabindex="0" class="dropdown-content menu menu-sm z-[1] p-2 shadow bg-base-100 rounded-box w-52 mt-3">
+                <li class="menu-title"><span>${displayName}</span>${roleBadge}</li>
+                <li><a href="/auth/logout">${t('auth.logout')}</a></li>
+            </ul>
+        </div>
+    `;
+}

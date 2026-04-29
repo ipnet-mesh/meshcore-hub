@@ -9,13 +9,13 @@ export async function render(container, params, router) {
     try {
         const config = getConfig();
 
-        if (!config.admin_enabled) {
+        if (!config.is_admin && config.oidc_enabled) {
             litRender(html`
 <div class="flex flex-col items-center justify-center py-20">
     ${iconLock('h-16 w-16 opacity-30 mb-4')}
     <h1 class="text-3xl font-bold mb-2">${t('admin.access_denied')}</h1>
-    <p class="opacity-70">${t('admin.admin_not_enabled')}</p>
-    <a href="/" class="btn btn-primary mt-6">${t('common.go_home')}</a>
+    <p class="opacity-70">${t('auth.admin_required')}</p>
+    <a href="/auth/login" class="btn btn-primary mt-6">${t('auth.login')}</a>
 </div>`, container);
             return;
         }
@@ -78,7 +78,7 @@ export async function render(container, params, router) {
         <div class="text-sm breadcrumbs">
             <ul>
                 <li><a href="/">${t('entities.home')}</a></li>
-                <li><a href="/a/">${t('entities.admin')}</a></li>
+                <li><a href="/admin/">${t('entities.admin')}</a></li>
                 <li>${t('entities.members')}</li>
             </ul>
         </div>
@@ -211,15 +211,18 @@ ${flashHtml}
 </dialog>`, container);
 
         let activeDeleteId = '';
+        const ac = new AbortController();
+        const signal = ac.signal;
+        const on = (el, evt, fn) => el.addEventListener(evt, fn, { signal });
 
         // Add Member
-        container.querySelector('#btn-add-member').addEventListener('click', () => {
+        on(container.querySelector('#btn-add-member'), 'click', () => {
             const form = container.querySelector('#add-member-form');
             form.reset();
             container.querySelector('#addModal').showModal();
         });
 
-        container.querySelector('#addCancel').addEventListener('click', () => {
+        on(container.querySelector('#addCancel'), 'click', () => {
             container.querySelector('#addModal').close();
         });
 
@@ -237,16 +240,16 @@ ${flashHtml}
             try {
                 await apiPost('/api/v1/members', body);
                 container.querySelector('#addModal').close();
-                router.navigate('/a/members?message=' + encodeURIComponent(t('common.entity_added_success', { entity: t('entities.member') })));
+                router.navigate('/admin/members?message=' + encodeURIComponent(t('common.entity_added_success', { entity: t('entities.member') })), true);
             } catch (err) {
                 container.querySelector('#addModal').close();
-                router.navigate('/a/members?error=' + encodeURIComponent(err.message));
+                router.navigate('/admin/members?error=' + encodeURIComponent(err.message), true);
             }
-        });
+        }, { signal });
 
         // Edit Member
         container.querySelectorAll('.btn-edit').forEach(btn => {
-            btn.addEventListener('click', () => {
+            on(btn, 'click', () => {
                 const row = btn.closest('tr');
                 container.querySelector('#edit_id').value = row.dataset.memberId;
                 container.querySelector('#edit_member_id').value = row.dataset.memberMemberId;
@@ -258,7 +261,7 @@ ${flashHtml}
             });
         });
 
-        container.querySelector('#editCancel').addEventListener('click', () => {
+        on(container.querySelector('#editCancel'), 'click', () => {
             container.querySelector('#editModal').close();
         });
 
@@ -277,16 +280,16 @@ ${flashHtml}
             try {
                 await apiPut('/api/v1/members/' + encodeURIComponent(id), body);
                 container.querySelector('#editModal').close();
-                router.navigate('/a/members?message=' + encodeURIComponent(t('common.entity_updated_success', { entity: t('entities.member') })));
+                router.navigate('/admin/members?message=' + encodeURIComponent(t('common.entity_updated_success', { entity: t('entities.member') })), true);
             } catch (err) {
                 container.querySelector('#editModal').close();
-                router.navigate('/a/members?error=' + encodeURIComponent(err.message));
+                router.navigate('/admin/members?error=' + encodeURIComponent(err.message), true);
             }
-        });
+        }, { signal });
 
         // Delete Member
         container.querySelectorAll('.btn-delete').forEach(btn => {
-            btn.addEventListener('click', () => {
+            on(btn, 'click', () => {
                 const row = btn.closest('tr');
                 activeDeleteId = row.dataset.memberId;
                 const memberName = row.dataset.memberName;
@@ -299,20 +302,22 @@ ${flashHtml}
             });
         });
 
-        container.querySelector('#deleteCancel').addEventListener('click', () => {
+        on(container.querySelector('#deleteCancel'), 'click', () => {
             container.querySelector('#deleteModal').close();
         });
 
-        container.querySelector('#deleteConfirm').addEventListener('click', async () => {
+        on(container.querySelector('#deleteConfirm'), 'click', async () => {
             try {
                 await apiDelete('/api/v1/members/' + encodeURIComponent(activeDeleteId));
                 container.querySelector('#deleteModal').close();
-                router.navigate('/a/members?message=' + encodeURIComponent(t('common.entity_deleted_success', { entity: t('entities.member') })));
+                router.navigate('/admin/members?message=' + encodeURIComponent(t('common.entity_deleted_success', { entity: t('entities.member') })), true);
             } catch (err) {
                 container.querySelector('#deleteModal').close();
-                router.navigate('/a/members?error=' + encodeURIComponent(err.message));
+                router.navigate('/admin/members?error=' + encodeURIComponent(err.message), true);
             }
         });
+
+        return () => ac.abort();
 
     } catch (e) {
         litRender(errorAlert(e.message || t('common.failed_to_load_page')), container);

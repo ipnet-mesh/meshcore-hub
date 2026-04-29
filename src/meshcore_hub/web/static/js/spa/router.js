@@ -146,7 +146,7 @@ export class Router {
 
             // Skip non-SPA paths (static files, API, media, OAuth, SEO)
             if (href.startsWith('/static/') || href.startsWith('/media/') ||
-                href.startsWith('/api/') ||
+                href.startsWith('/api/') || href.startsWith('/auth/') ||
                 href.startsWith('/health') || href === '/robots.txt' ||
                 href === '/sitemap.xml') return;
 

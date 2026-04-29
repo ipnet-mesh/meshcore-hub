@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ theme }}">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ status_code }} - {{ network_name }}</title>
+    <style>
+        :root {
+            --bg: oklch(0.22 0.014 259);
+            --card-bg: oklch(0.26 0.014 259);
+            --text: oklch(0.92 0.004 259);
+            --text-muted: oklch(0.65 0.004 259);
+            --accent: oklch(0.65 0.24 265);
+            --accent-text: oklch(0.98 0.004 265);
+        }
+        [data-theme="light"] {
+            --bg: oklch(0.96 0.006 259);
+            --card-bg: oklch(1.0 0 0);
+            --text: oklch(0.22 0.014 259);
+            --text-muted: oklch(0.50 0.014 259);
+            --accent: oklch(0.55 0.24 265);
+            --accent-text: oklch(0.98 0.004 265);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .card {
+            background: var(--card-bg);
+            border-radius: 1rem;
+            padding: 3rem;
+            max-width: 28rem;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        .code {
+            font-size: 5rem;
+            font-weight: 800;
+            line-height: 1;
+            color: var(--text-muted);
+        }
+        .message {
+            margin-top: 1rem;
+            font-size: 1.1rem;
+            color: var(--text);
+        }
+        .detail {
+            margin-top: 0.5rem;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+        .btn {
+            display: inline-block;
+            margin-top: 2rem;
+            padding: 0.6rem 1.8rem;
+            background: var(--accent);
+            color: var(--accent-text);
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 0.95rem;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: opacity 0.15s;
+        }
+        .btn:hover { opacity: 0.85; }
+        .version {
+            margin-top: 2rem;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="code">{{ status_code }}</div>
+        <div class="message">{{ message }}</div>
+        {% if detail %}
+        <div class="detail">{{ detail }}</div>
+        {% endif %}
+        <a href="/" class="btn">Go Home</a>
+        <div class="version">{{ network_name }} &middot; v{{ version }}</div>
+    </div>
+</body>
+</html>

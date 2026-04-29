@@ -280,10 +280,46 @@ class WebSettings(CommonSettings):
         ge=0,
     )
 
-    # Admin interface (disabled by default for security)
-    web_admin_enabled: bool = Field(
-        default=False,
-        description="Enable admin interface at /a/",
+    # OIDC / OAuth2 authentication
+    oidc_enabled: bool = Field(default=False, description="Enable OIDC authentication")
+    oidc_client_id: Optional[str] = Field(default=None, description="OIDC client ID")
+    oidc_client_secret: Optional[str] = Field(
+        default=None, description="OIDC client secret"
+    )
+    oidc_discovery_url: Optional[str] = Field(
+        default=None, description="OIDC discovery URL"
+    )
+    oidc_redirect_uri: Optional[str] = Field(
+        default=None,
+        description="OIDC callback URL (overrides auto-derivation)",
+    )
+    oidc_post_logout_redirect_uri: Optional[str] = Field(
+        default=None,
+        description=(
+            "OIDC post-logout redirect URI (must match Sign-out redirect URIs "
+            "in IdP config). Falls back to OIDC_REDIRECT_URI base or request.base_url."
+        ),
+    )
+    oidc_scopes: str = Field(
+        default="openid email profile", description="OAuth scopes to request"
+    )
+    oidc_roles_claim: str = Field(
+        default="roles", description="ID token claim containing user roles"
+    )
+    oidc_admin_role: str = Field(
+        default="admin", description="Role value granting admin access"
+    )
+    oidc_member_role: str = Field(
+        default="member", description="Role value granting member access"
+    )
+    oidc_session_secret: Optional[str] = Field(
+        default=None, description="Secret key for signing session cookies"
+    )
+    oidc_session_max_age: int = Field(
+        default=86400, description="Session cookie lifetime in seconds"
+    )
+    oidc_cookie_secure: bool = Field(
+        default=False, description="HTTPS-only session cookies (enable in production)"
     )
 
     # API connection

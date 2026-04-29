@@ -1,7 +1,7 @@
 """Web dashboard test fixtures."""
 
-from typing import Any
-from unittest.mock import MagicMock
+from typing import Any, Generator
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -321,6 +321,7 @@ def web_app(mock_http_client: MockHttpClient, monkeypatch: pytest.MonkeyPatch) -
     # Ensure tests use a consistent locale regardless of local .env
     monkeypatch.setenv("WEB_DATETIME_LOCALE", "en-US")
     monkeypatch.setenv("COLLECTOR_INCLUDE_TEST_CHANNEL", "true")
+    monkeypatch.setenv("OIDC_ENABLED", "false")
     app = create_app(
         api_url="http://localhost:8000",
         api_key="test-api-key",
@@ -349,6 +350,84 @@ def client(web_app: Any, mock_http_client: MockHttpClient) -> TestClient:
     # Ensure the mock client is attached
     web_app.state.http_client = mock_http_client
     return TestClient(web_app, raise_server_exceptions=True)
+
+
+@pytest.fixture
+def web_app_with_oidc(
+    mock_http_client: MockHttpClient, monkeypatch: pytest.MonkeyPatch
+) -> Any:
+    """Create a web app with OIDC enabled and session middleware."""
+    monkeypatch.setenv("OIDC_ENABLED", "true")
+    monkeypatch.setenv("OIDC_CLIENT_ID", "test-client-id")
+    monkeypatch.setenv("OIDC_CLIENT_SECRET", "test-client-secret")
+    monkeypatch.setenv(
+        "OIDC_DISCOVERY_URL", "https://idp.example.com/.well-known/openid-configuration"
+    )
+    monkeypatch.setenv("OIDC_SESSION_SECRET", "test-session-secret")
+    monkeypatch.setenv("WEB_DATETIME_LOCALE", "en-US")
+    monkeypatch.setenv("COLLECTOR_INCLUDE_TEST_CHANNEL", "true")
+
+    app = create_app(
+        api_url="http://localhost:8000",
+        api_key="test-api-key",
+        network_name="Test Network",
+        features=ALL_FEATURES_ENABLED,
+    )
+
+    app.state.http_client = mock_http_client
+    return app
+
+
+ADMIN_USER = {
+    "sub": "admin-1",
+    "name": "Admin User",
+    "email": "admin@example.com",
+    "picture": None,
+    "roles": ["admin", "member"],
+}
+
+MEMBER_USER = {
+    "sub": "member-1",
+    "name": "Member User",
+    "email": "member@example.com",
+    "picture": None,
+    "roles": ["member"],
+}
+
+
+@pytest.fixture
+def client_with_oidc(
+    web_app_with_oidc: Any, mock_http_client: MockHttpClient
+) -> TestClient:
+    """Create a test client with OIDC enabled (no session)."""
+    web_app_with_oidc.state.http_client = mock_http_client
+    return TestClient(web_app_with_oidc, raise_server_exceptions=True)
+
+
+@pytest.fixture
+def client_with_oidc_admin_session(
+    web_app_with_oidc: Any, mock_http_client: MockHttpClient
+) -> Generator[TestClient, None, None]:
+    """Create a test client with OIDC enabled and admin session via mock."""
+    web_app_with_oidc.state.http_client = mock_http_client
+    with (
+        patch("meshcore_hub.web.app.get_session_user", return_value=ADMIN_USER),
+        patch("meshcore_hub.web.oidc.get_session_user", return_value=ADMIN_USER),
+    ):
+        yield TestClient(web_app_with_oidc, raise_server_exceptions=True)
+
+
+@pytest.fixture
+def client_with_oidc_member_session(
+    web_app_with_oidc: Any, mock_http_client: MockHttpClient
+) -> Generator[TestClient, None, None]:
+    """Create a test client with OIDC enabled and member session via mock."""
+    web_app_with_oidc.state.http_client = mock_http_client
+    with (
+        patch("meshcore_hub.web.app.get_session_user", return_value=MEMBER_USER),
+        patch("meshcore_hub.web.oidc.get_session_user", return_value=MEMBER_USER),
+    ):
+        yield TestClient(web_app_with_oidc, raise_server_exceptions=True)
 
 
 @pytest.fixture
