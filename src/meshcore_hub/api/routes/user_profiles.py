@@ -2,10 +2,10 @@
 
 import logging
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from sqlalchemy import select
 
-from meshcore_hub.api.auth import RequireUserOwner
+from meshcore_hub.api.auth import RequireUserOwner, X_USER_NAME_HEADER
 from meshcore_hub.api.dependencies import DbSession
 from meshcore_hub.common.models import UserProfile
 from meshcore_hub.common.schemas.user_profiles import (
@@ -29,14 +29,17 @@ def _verify_owner(user_id: str, requested_id: str) -> None:
         )
 
 
-def _get_or_create_profile(session: DbSession, user_id: str) -> UserProfile:
-    """Get existing profile or create a new blank one."""
+def _get_or_create_profile(
+    session: DbSession, user_id: str, request: Request
+) -> UserProfile:
+    """Get existing profile or create a new one with name from IdP."""
     query = select(UserProfile).where(UserProfile.user_id == user_id)
     profile = session.execute(query).scalar_one_or_none()
     if profile:
         return profile
 
-    profile = UserProfile(user_id=user_id)
+    idp_name = request.headers.get(X_USER_NAME_HEADER) or None
+    profile = UserProfile(user_id=user_id, name=idp_name)
     session.add(profile)
     session.commit()
     session.refresh(profile)
@@ -49,10 +52,11 @@ async def get_profile(
     user_id: str,
     caller_id: RequireUserOwner,
     session: DbSession,
+    request: Request,
 ) -> UserProfileWithNodes:
     """Get or create a user profile. Auto-creates on first access."""
     _verify_owner(caller_id, user_id)
-    profile = _get_or_create_profile(session, user_id)
+    profile = _get_or_create_profile(session, user_id, request)
 
     adopted_nodes = []
     for assoc in profile.node_associations:
@@ -82,10 +86,11 @@ async def update_profile(
     profile_update: UserProfileUpdate,
     caller_id: RequireUserOwner,
     session: DbSession,
+    request: Request,
 ) -> UserProfileRead:
     """Update a user profile."""
     _verify_owner(caller_id, user_id)
-    profile = _get_or_create_profile(session, user_id)
+    profile = _get_or_create_profile(session, user_id, request)
 
     if profile_update.name is not None:
         profile.name = profile_update.name

@@ -598,6 +598,8 @@ def create_app(
             user = get_session_user(request)
             if user and user.get("sub"):
                 headers["X-User-Id"] = user["sub"]
+                if user.get("name"):
+                    headers["X-User-Name"] = user["name"]
                 roles = get_session_roles(request, roles_claim)
                 if roles:
                     headers["X-User-Roles"] = ",".join(roles)

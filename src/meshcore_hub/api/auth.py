@@ -14,6 +14,7 @@ security = HTTPBearer(auto_error=False)
 
 # Header constants for proxy-injected user identity
 X_USER_ID_HEADER = "X-User-Id"
+X_USER_NAME_HEADER = "X-User-Name"
 X_USER_ROLES_HEADER = "X-User-Roles"
 
 

@@ -8,6 +8,11 @@ OPERATOR_HEADERS = {
     "X-User-Id": TEST_USER_ID,
     "X-User-Roles": "operator",
 }
+OPERATOR_HEADERS_WITH_NAME = {
+    "X-User-Id": TEST_USER_ID,
+    "X-User-Roles": "operator",
+    "X-User-Name": "Operator Name",
+}
 ADMIN_HEADERS = {
     "X-User-Id": TEST_USER_ID,
     "X-User-Roles": "admin",
@@ -54,6 +59,25 @@ class TestAdoptNode:
             headers=OPERATOR_HEADERS,
         )
         assert response.status_code == 201
+
+    def test_adopt_node_auto_creates_profile_with_name(
+        self, client_no_auth, sample_node, api_db_session
+    ):
+        """Test adopting a node auto-creates profile with IdP name."""
+        response = client_no_auth.post(
+            "/api/v1/adoptions",
+            json={"public_key": sample_node.public_key},
+            headers=OPERATOR_HEADERS_WITH_NAME,
+        )
+        assert response.status_code == 201
+
+        from meshcore_hub.common.models import UserProfile as UP
+
+        profile = (
+            api_db_session.query(UP).filter(UP.user_id == TEST_USER_ID).one_or_none()
+        )
+        assert profile is not None
+        assert profile.name == "Operator Name"
 
     def test_adopt_node_by_admin(self, client_no_auth, sample_node):
         """Test an admin can adopt a node."""

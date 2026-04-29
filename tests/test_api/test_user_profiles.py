@@ -3,6 +3,11 @@
 TEST_USER_ID = "oidc-user-123"
 OTHER_USER_ID = "oidc-user-456"
 USER_HEADERS = {"X-User-Id": TEST_USER_ID, "X-User-Roles": "operator"}
+USER_HEADERS_WITH_NAME = {
+    "X-User-Id": TEST_USER_ID,
+    "X-User-Roles": "operator",
+    "X-User-Name": "IdP Display Name",
+}
 OTHER_USER_HEADERS = {"X-User-Id": OTHER_USER_ID, "X-User-Roles": "operator"}
 OPERATOR_HEADERS = {
     "X-User-Id": TEST_USER_ID,
@@ -35,6 +40,30 @@ class TestGetProfile:
         assert "id" in data
         assert "created_at" in data
         assert data["nodes"] == []
+
+    def test_get_profile_auto_creates_with_name(self, client_no_auth):
+        """Test auto-created profile is populated with name from IdP."""
+        response = client_no_auth.get(
+            f"/api/v1/user/profile/{TEST_USER_ID}",
+            headers=USER_HEADERS_WITH_NAME,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["user_id"] == TEST_USER_ID
+        assert data["name"] == "IdP Display Name"
+        assert data["callsign"] is None
+
+    def test_get_profile_does_not_overwrite_existing_name(
+        self, client_no_auth, sample_user_profile
+    ):
+        """Test that IdP name does not overwrite an existing profile name."""
+        response = client_no_auth.get(
+            f"/api/v1/user/profile/{sample_user_profile.user_id}",
+            headers=USER_HEADERS_WITH_NAME,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == sample_user_profile.name
 
     def test_get_existing_profile(self, client_no_auth, sample_user_profile):
         """Test getting an existing profile."""
@@ -123,17 +152,17 @@ class TestUpdateProfile:
         assert data["callsign"] == "G1NEW"
         assert data["name"] == sample_user_profile.name
 
-    def test_update_profile_auto_creates(self, client_no_auth):
-        """Test updating a non-existent profile auto-creates it."""
+    def test_update_profile_auto_creates_with_name(self, client_no_auth):
+        """Test updating a non-existent profile auto-creates it with IdP name."""
         response = client_no_auth.put(
             f"/api/v1/user/profile/{TEST_USER_ID}",
-            json={"name": "Auto Created", "callsign": "W1AUTO"},
-            headers=USER_HEADERS,
+            json={"callsign": "W1AUTO"},
+            headers=USER_HEADERS_WITH_NAME,
         )
         assert response.status_code == 200
         data = response.json()
         assert data["user_id"] == TEST_USER_ID
-        assert data["name"] == "Auto Created"
+        assert data["name"] == "IdP Display Name"
         assert data["callsign"] == "W1AUTO"
 
     def test_update_profile_rejects_wrong_user(self, client_no_auth):
