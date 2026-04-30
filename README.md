@@ -427,7 +427,7 @@ The web dashboard supports custom markdown pages and media files (including cust
 
 ## Seed Data
 
-The database can be seeded with node tags and network members from YAML files. See [docs/seeding.md](docs/seeding.md) for format details, directory structure, and running the seed process.
+The database can be seeded with node tags from YAML files. See [docs/seeding.md](docs/seeding.md) for format details, directory structure, and running the seed process.
 
 ## API Documentation
 

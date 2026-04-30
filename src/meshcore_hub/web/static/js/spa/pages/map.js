@@ -120,7 +120,6 @@ export async function render(container, params, router) {
     try {
         const data = await apiGet('/map/data');
         const allNodes = data.nodes || [];
-        const allMembers = data.members || [];
         const mapCenter = data.center || { lat: 0, lon: 0 };
         const infraCenter = data.infra_center || null;
         const debug = data.debug || {};
@@ -129,9 +128,9 @@ export async function render(container, params, router) {
         const isMobile = window.innerWidth < 768;
         const BOUNDS_PADDING = isMobilePortrait ? [50, 50] : (isMobile ? [75, 75] : [100, 100]);
 
-        const sortedMembers = allMembers.slice().sort((a, b) => a.name.localeCompare(b.name));
-
         function applyFilters() {
+
+        const isMobilePortrait
             const filteredNodes = applyFiltersCore();
             const categoryFilter = container.querySelector('#filter-category').value;
 
@@ -165,7 +164,6 @@ export async function render(container, params, router) {
         function clearFiltersHandler() {
             container.querySelector('#filter-category').value = '';
             container.querySelector('#filter-type').value = '';
-            container.querySelector('#filter-member').value = '';
             container.querySelector('#show-labels').checked = false;
             updateLabelVisibility();
             applyFilters();
@@ -202,22 +200,6 @@ export async function render(container, params, router) {
                     <option value="chat">${t('node_types.chat')}</option>
                     <option value="repeater">${t('node_types.repeater')}</option>
                     <option value="room">${t('node_types.room')}</option>
-                </select>
-            </div>
-            <div class="form-control">
-                <label class="label py-1">
-                    <span class="label-text">${t('entities.member')}</span>
-                </label>
-                <select id="filter-member" class="select select-bordered select-sm" @change=${applyFilters}>
-                    <option value="">${t('common.all_entity', { entity: t('entities.members') })}</option>
-                    ${sortedMembers
-                        .filter(m => m.member_id)
-                        .map(m => {
-                            const label = m.callsign
-                                ? m.name + ' (' + m.callsign + ')'
-                                : m.name;
-                            return html`<option value=${m.member_id}>${label}</option>`;
-                        })}
                 </select>
             </div>
             <div class="form-control">
@@ -270,13 +252,11 @@ export async function render(container, params, router) {
         function applyFiltersCore() {
             const categoryFilter = container.querySelector('#filter-category').value;
             const typeFilter = container.querySelector('#filter-type').value;
-            const memberFilter = container.querySelector('#filter-member').value;
 
             const filteredNodes = allNodes.filter(node => {
                 if (categoryFilter === 'infra' && !node.is_infra) return false;
                 const nodeType = normalizeType(node.adv_type);
                 if (typeFilter && nodeType !== typeFilter) return false;
-                if (memberFilter && node.member_id !== memberFilter) return false;
                 return true;
             });
 

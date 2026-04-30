@@ -179,10 +179,8 @@
         "select_destination_node": "-- Select destination node --"
     },
     "members": {
-        "empty_state_description": "To display network members, create a members.yaml file in your seed directory.",
-        "members_file_format": "Members File Format",
-        "members_file_description": "Create a YAML file at <code>$SEED_HOME/members.yaml</code> with the following structure:",
-        "members_import_instructions": "Run <code>meshcore-hub collector seed</code> to import members.<br/>To associate nodes with members, add a <code>member_id</code> tag to nodes in <code>node_tags.yaml</code>."
+        "empty_state_description": "No members yet.",
+        "empty_description": "Members will appear here once users log in and adopt nodes."
     },
     "not_found": {
         "description": "The page you're looking for doesn't exist or has been moved."
@@ -195,7 +193,6 @@
         "admin_not_enabled": "The admin interface is not enabled.",
         "admin_enable_hint": "Set <code>OIDC_ENABLED=true</code> and configure your OIDC provider to enable admin features.",
         "welcome": "Welcome to the admin panel.",
-        "members_description": "Manage network members and operators.",
         "tags_description": "Manage custom tags and metadata for network nodes."
     },
     "auth": {
@@ -220,13 +217,19 @@
         "callsign_placeholder": "Amateur radio callsign (e.g., W1ABC)",
         "adopted_nodes": "Adopted Nodes",
         "no_adopted_nodes": "No adopted nodes",
-        "login_to_view": "Log in to view your profile"
+        "login_to_view": "Log in to view your profile",
+        "view_profile": "View Profile",
+        "edit_profile": "Edit Profile",
+        "role_operator": "Operator",
+        "role_member": "Member",
+        "member_since": "Member since {{date}}"
     },
-    "admin_members": {
-        "network_members": "Network Members ({{count}})",
-        "member_id": "Member ID",
-        "member_id_hint": "Unique identifier (letters, numbers, underscore)",
-        "empty_state_hint": "Click \"Add Member\" to create the first member."
+    "members_page": {
+        "operators": "Operators",
+        "members": "Members",
+        "node_count": "{{count}} nodes",
+        "empty_state": "No members yet",
+        "empty_description": "Members will appear here once users log in and adopt nodes."
     },
     "admin_node_tags": {
         "select_node": "Select Node",

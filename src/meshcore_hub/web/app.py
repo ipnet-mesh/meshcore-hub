@@ -76,11 +76,8 @@ def _build_endpoint_access(
             "PUT": admin,
             "DELETE": admin,
         },
-        "v1/members": {
+        "v1/user/profiles": {
             "GET": _OPEN,
-            "POST": admin,
-            "PUT": admin,
-            "DELETE": admin,
         },
         "v1/messages": {
             "GET": _OPEN,
@@ -102,7 +99,7 @@ def _build_endpoint_access(
             "DELETE": operator_admin,
         },
         "v1/user/profile": {
-            "GET": any_authenticated,
+            "GET": _OPEN,
             "PUT": any_authenticated,
         },
     }
@@ -648,28 +645,23 @@ def create_app(
         if not request.app.state.features.get("map", True):
             return JSONResponse({"detail": "Map feature is disabled"}, status_code=404)
         nodes_with_location: list[dict[str, Any]] = []
-        members_list: list[dict[str, Any]] = []
-        members_by_id: dict[str, dict[str, Any]] = {}
+        profiles_by_id: dict[str, dict[str, Any]] = {}
         error: str | None = None
         total_nodes = 0
         nodes_with_coords = 0
 
         try:
-            # Fetch all members to build lookup by member_id
-            members_response = await request.app.state.http_client.get(
-                "/api/v1/members", params={"limit": 500}
+            profiles_response = await request.app.state.http_client.get(
+                "/api/v1/user/profiles", params={"limit": 500}
             )
-            if members_response.status_code == 200:
-                members_data = members_response.json()
-                for member in members_data.get("items", []):
-                    member_info = {
-                        "member_id": member.get("member_id"),
-                        "name": member.get("name"),
-                        "callsign": member.get("callsign"),
+            if profiles_response.status_code == 200:
+                profiles_data = profiles_response.json()
+                for profile in profiles_data.get("items", []):
+                    profiles_by_id[profile["id"]] = {
+                        "id": profile.get("id"),
+                        "name": profile.get("name"),
+                        "callsign": profile.get("callsign"),
                     }
-                    members_list.append(member_info)
-                    if member.get("member_id"):
-                        members_by_id[member["member_id"]] = member_info
 
             # Fetch all nodes from API
             response = await request.app.state.http_client.get(
@@ -686,7 +678,6 @@ def create_app(
                     tag_lon = None
                     friendly_name = None
                     role = None
-                    node_member_id = None
 
                     for tag in tags:
                         key = tag.get("key")
@@ -704,8 +695,6 @@ def create_app(
                             friendly_name = tag.get("value")
                         elif key == "role":
                             role = tag.get("value")
-                        elif key == "member_id":
-                            node_member_id = tag.get("value")
 
                     lat = tag_lat if tag_lat is not None else node.get("lat")
                     lon = tag_lon if tag_lon is not None else node.get("lon")
@@ -722,9 +711,16 @@ def create_app(
                         or node.get("public_key", "")[:12]
                     )
                     public_key = node.get("public_key")
-                    owner = (
-                        members_by_id.get(node_member_id) if node_member_id else None
-                    )
+
+                    adopted_by = node.get("adopted_by")
+                    owner = None
+                    if adopted_by and adopted_by.get("user_id"):
+                        pass
+                    if adopted_by:
+                        owner = {
+                            "name": adopted_by.get("name"),
+                            "callsign": adopted_by.get("callsign"),
+                        }
 
                     nodes_with_location.append(
                         {
@@ -736,7 +732,6 @@ def create_app(
                             "last_seen": node.get("last_seen"),
                             "role": role,
                             "is_infra": role == "infra",
-                            "member_id": node_member_id,
                             "owner": owner,
                         }
                     )
@@ -770,7 +765,7 @@ def create_app(
         return JSONResponse(
             {
                 "nodes": nodes_with_location,
-                "members": members_list,
+                "profiles": list(profiles_by_id.values()),
                 "center": {"lat": center_lat, "lon": center_lon},
                 "infra_center": infra_center,
                 "debug": {
@@ -956,6 +951,20 @@ def create_app(
 
         request.session["user"] = session_user
         request.session["id_token"] = token.get("id_token")
+
+        try:
+            profile_headers: dict[str, str] = {
+                "X-User-Id": session_user.get("sub", ""),
+                "X-User-Roles": ",".join(session_user.get("roles", [])),
+            }
+            if session_user.get("name"):
+                profile_headers["X-User-Name"] = session_user["name"]
+            await request.app.state.http_client.get(
+                "/api/v1/user/profile/me", headers=profile_headers
+            )
+        except Exception:
+            logger.exception("Failed to ensure user profile exists")
+
         next_url = request.session.pop("next", "/")
         from starlette.responses import RedirectResponse
 

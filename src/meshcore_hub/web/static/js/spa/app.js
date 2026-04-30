@@ -23,7 +23,6 @@ const pages = {
     notFound: () => import('./pages/not-found.js'),
     adminIndex: () => import('./pages/admin/index.js'),
     adminNodeTags: () => import('./pages/admin/node-tags.js'),
-    adminMembers: () => import('./pages/admin/members.js'),
     profile: () => import('./pages/profile.js'),
 };
 
@@ -93,12 +92,12 @@ if (hasRole('admin')) {
     router.addRoute('/admin', pageHandler(pages.adminIndex));
     router.addRoute('/admin/', pageHandler(pages.adminIndex));
     router.addRoute('/admin/node-tags', pageHandler(pages.adminNodeTags));
-    router.addRoute('/admin/members', pageHandler(pages.adminMembers));
 }
 
 // Profile route (only register when OIDC enabled)
 if (config.oidc_enabled) {
     router.addRoute('/profile', pageHandler(pages.profile));
+    router.addRoute('/profile/:id', pageHandler(pages.profile));
 }
 
 // 404 handler
@@ -156,7 +155,6 @@ function updatePageTitle(pathname) {
         '/admin': composePageTitle('entities.admin'),
         '/admin/': composePageTitle('entities.admin'),
         '/admin/node-tags': `${t('entities.tags')} - ${t('entities.admin')} - ${networkName}`,
-        '/admin/members': `${t('entities.members')} - ${t('entities.admin')} - ${networkName}`,
     };
 
     // Add feature-dependent titles

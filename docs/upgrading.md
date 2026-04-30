@@ -2,6 +2,60 @@
 
 This guide covers upgrading from a previous MeshCore Hub release to the current version. Check the relevant version section below before upgrading.
 
+## v0.11.0
+
+This release removes the `Member` model/table entirely, replacing it with `UserProfile`-backed data. The members system is now driven by OIDC user profiles with roles instead of manually seeded entries.
+
+### Overview of Changes
+
+| Area | Before | After |
+|------|--------|-------|
+| Network Members | `members` table + CRUD API + YAML seed | Removed — replaced by `UserProfile` roles |
+| Member model | `Member` SQLAlchemy model | Deleted (table dropped) |
+| Member API | `GET/POST/PUT/DELETE /api/v1/members` | Removed — replaced by `GET /api/v1/user/profiles` |
+| Member seeding | `members.yaml` + `import-members` CLI | Removed — profiles auto-created from OIDC |
+| Node tags | `member_id` tag key | Replaced by `adopted_by` filter via `user_profile_nodes` |
+| Nodes API | `?member_id=` query param | `?adopted_by=` query param (profile UUID) |
+| Ads API | `?member_id=` query param | `?adopted_by=` query param (profile UUID) |
+| Prometheus | `meshcore_members_total` gauge | `meshcore_user_profiles_total` + `meshcore_user_profiles_by_role` |
+| Profile endpoint | `GET /api/v1/user/profile/{user_id}` | `GET /api/v1/user/profile/{profile_id}` (UUID) |
+| Profile endpoint | Owner-only GET | Public GET (owner sees `user_id`, public view omits it) |
+| New endpoint | — | `GET /api/v1/user/profiles` (list all, paginated, no `user_id`) |
+| User profiles | `roles` column missing | `roles` TEXT column added (comma-separated, parsed to list) |
+| Admin members UI | `/admin/members` admin page | Removed — Members page now reads from UserProfile |
+| Profile page | Owner-only editable | `/profile/:id` public view + `/profile` owner edit |
+| Truncate CLI | `--members` flag | Removed |
+| `collector seed` | Imports members.yaml | Removed — only imports node_tags.yaml |
+| Seed files | `members.yaml` required | `members.yaml` removed |
+
+### Migration Steps
+
+1. **Run database migration** — adds `roles` column to `user_profiles`, drops `members` table
+2. **Remove `members.yaml`** from your seed directory (no longer used)
+3. **Remove `member_id` tag keys** from `node_tags.yaml` (no longer functional — use node adoption instead)
+4. **Update Prometheus alerting rules** that reference `meshcore_members_total` to use `meshcore_user_profiles_total`
+
+### Removed Files
+
+- `seed/members.yaml`
+- `example/seed/members.yaml`
+
+### Removed CLI Commands
+
+- `meshcore-hub collector import-members`
+- `--members` flag on `meshcore-hub collector truncate`
+
+### Behavior Changes
+
+- The Members page (`/members`) now displays OIDC user profiles grouped by role instead of seeded member data
+- The `member_id` node tag is no longer used for filtering or display — use node adoption instead
+- Profile endpoints now use UUIDs instead of OIDC `user_id` strings in URLs
+- Public profile view (`/profile/{uuid}`) is accessible without authentication
+
+### Database Migration
+
+The migration adds a `roles` column (TEXT, nullable) to `user_profiles` and drops the `members` table.
+
 ## v0.10.0
 
 This release includes **breaking changes** to the admin authentication model, OIDC role configuration, and adds user profiles with node adoption.

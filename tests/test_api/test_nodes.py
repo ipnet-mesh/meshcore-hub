@@ -168,20 +168,6 @@ class TestListNodesFilters:
         assert room_node.public_key in room_keys
         assert name_only_room_node.public_key not in room_keys
 
-    def test_filter_by_member_id(self, client_no_auth, sample_node_with_member_tag):
-        """Test filtering nodes by member_id tag."""
-        # Match alice
-        response = client_no_auth.get("/api/v1/nodes?member_id=alice")
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data["items"]) == 1
-
-        # No match
-        response = client_no_auth.get("/api/v1/nodes?member_id=unknown")
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data["items"]) == 0
-
 
 class TestGetNode:
     """Tests for GET /nodes/{public_key} endpoint."""

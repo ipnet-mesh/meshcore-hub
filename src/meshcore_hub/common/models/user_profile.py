@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import String
+from sqlalchemy import String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from meshcore_hub.common.models.base import Base, TimestampMixin, UUIDMixin
@@ -22,6 +22,7 @@ class UserProfile(Base, UUIDMixin, TimestampMixin):
         user_id: OIDC subject identifier (unique, from IdP 'sub' claim)
         name: User's display name or preferred name (blank initially)
         callsign: Amateur radio callsign (blank initially)
+        roles: Comma-separated OIDC roles string (updated on each auth)
         created_at: Record creation timestamp
         updated_at: Record update timestamp
     """
@@ -42,6 +43,11 @@ class UserProfile(Base, UUIDMixin, TimestampMixin):
         String(20),
         nullable=True,
     )
+    roles: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        default=None,
+    )
 
     node_associations: Mapped[list["UserProfileNode"]] = relationship(
         "UserProfileNode",
@@ -49,6 +55,13 @@ class UserProfile(Base, UUIDMixin, TimestampMixin):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+
+    @property
+    def role_list(self) -> list[str]:
+        """Parse comma-separated roles string into a list."""
+        if not self.roles:
+            return []
+        return [r.strip() for r in self.roles.split(",") if r.strip()]
 
     def __repr__(self) -> str:
         return f"<UserProfile(id={self.id}, user_id={self.user_id}, name={self.name})>"

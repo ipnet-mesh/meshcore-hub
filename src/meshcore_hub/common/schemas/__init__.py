@@ -25,12 +25,6 @@ from meshcore_hub.common.schemas.messages import (
     MessageList,
     MessageFilters,
 )
-from meshcore_hub.common.schemas.members import (
-    MemberCreate,
-    MemberUpdate,
-    MemberRead,
-    MemberList,
-)
 from meshcore_hub.common.schemas.network import (
     RadioConfig,
 )
@@ -58,11 +52,6 @@ __all__ = [
     "MessageRead",
     "MessageList",
     "MessageFilters",
-    # Members
-    "MemberCreate",
-    "MemberUpdate",
-    "MemberRead",
-    "MemberList",
     # Network
     "RadioConfig",
 ]

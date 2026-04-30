@@ -325,7 +325,6 @@ def seed_cmd(
 
     Looks for the following files in SEED_HOME:
     - node_tags.yaml: Node tag definitions (keyed by public_key)
-    - members.yaml: Network member definitions
 
     Files that don't exist are skipped. This command is idempotent -
     existing records are updated, new records are created.
@@ -379,7 +378,6 @@ def _run_seed_import(
     """
     from pathlib import Path
 
-    from meshcore_hub.collector.member_import import import_members
     from meshcore_hub.collector.tag_import import import_tags
 
     imported_any = False
@@ -409,26 +407,6 @@ def _run_seed_import(
         imported_any = True
     elif verbose:
         click.echo(f"\nNo node_tags.yaml found in {seed_home}")
-
-    # Import members if file exists
-    members_file = Path(seed_home) / "members.yaml"
-    if members_file.exists():
-        if verbose:
-            click.echo(f"\nImporting members from: {members_file}")
-        stats = import_members(
-            file_path=str(members_file),
-            db=db,
-        )
-        if verbose:
-            click.echo(
-                f"  Members: {stats['created']} created, {stats['updated']} updated"
-            )
-            if stats["errors"]:
-                for error in stats["errors"]:
-                    click.echo(f"  Error: {error}", err=True)
-        imported_any = True
-    elif verbose:
-        click.echo(f"\nNo members.yaml found in {seed_home}")
 
     return imported_any
 
@@ -536,83 +514,6 @@ def import_tags_cmd(
     db.dispose()
 
 
-@collector.command("import-members")
-@click.argument("file", type=click.Path(), required=False, default=None)
-@click.pass_context
-def import_members_cmd(
-    ctx: click.Context,
-    file: str | None,
-) -> None:
-    """Import network members from a YAML file.
-
-    Reads a YAML file containing member definitions and upserts them
-    into the database. Existing members (matched by name) are updated,
-    new members are created.
-
-    FILE is the path to the YAML file containing members.
-    If not provided, defaults to {SEED_HOME}/members.yaml.
-
-    Expected YAML format (list):
-
-    \b
-    - name: John Doe
-      callsign: N0CALL
-      role: Network Operator
-      description: Example member
-
-    Or with "members" key:
-
-    \b
-    members:
-      - name: John Doe
-        callsign: N0CALL
-    """
-    from pathlib import Path
-
-    configure_logging(level=ctx.obj["log_level"])
-
-    # Use members_file from settings if not provided
-    settings = ctx.obj["settings"]
-    members_file = file if file else settings.members_file
-
-    # Check if file exists
-    if not Path(members_file).exists():
-        click.echo(f"Members file not found: {members_file}")
-        if not file:
-            click.echo("Specify a file path or create the default members.yaml.")
-        return
-
-    click.echo(f"Importing members from: {members_file}")
-    click.echo(f"Database: {ctx.obj['database_url']}")
-
-    from meshcore_hub.common.database import DatabaseManager
-    from meshcore_hub.collector.member_import import import_members
-
-    # Initialize database (schema managed by Alembic migrations)
-    db = DatabaseManager(ctx.obj["database_url"])
-
-    # Import members
-    stats = import_members(
-        file_path=members_file,
-        db=db,
-    )
-
-    # Report results
-    click.echo("")
-    click.echo("Import complete:")
-    click.echo(f"  Total members in file: {stats['total']}")
-    click.echo(f"  Members created: {stats['created']}")
-    click.echo(f"  Members updated: {stats['updated']}")
-
-    if stats["errors"]:
-        click.echo("")
-        click.echo("Errors:")
-        for error in stats["errors"]:
-            click.echo(f"  - {error}", err=True)
-
-    db.dispose()
-
-
 @collector.command("cleanup")
 @click.option(
     "--retention-days",
@@ -702,12 +603,6 @@ def cleanup_cmd(
 
 @collector.command("truncate")
 @click.option(
-    "--members",
-    is_flag=True,
-    default=False,
-    help="Truncate members table",
-)
-@click.option(
     "--nodes",
     is_flag=True,
     default=False,
@@ -759,7 +654,6 @@ def cleanup_cmd(
 @click.pass_context
 def truncate_cmd(
     ctx: click.Context,
-    members: bool,
     nodes: bool,
     messages: bool,
     advertisements: bool,
@@ -774,9 +668,6 @@ def truncate_cmd(
     WARNING: This permanently deletes data! Use with caution.
 
     Examples:
-      # Clear members table
-      meshcore-hub collector truncate --members
-
       # Clear messages and advertisements
       meshcore-hub collector truncate --messages --advertisements
 
@@ -791,7 +682,6 @@ def truncate_cmd(
     # Determine what to truncate
     if truncate_all:
         tables_to_clear = {
-            "members": True,
             "nodes": True,
             "messages": True,
             "advertisements": True,
@@ -801,7 +691,6 @@ def truncate_cmd(
         }
     else:
         tables_to_clear = {
-            "members": members,
             "nodes": nodes,
             "messages": messages,
             "advertisements": advertisements,
@@ -848,7 +737,6 @@ def truncate_cmd(
     from meshcore_hub.common.models import (
         Advertisement,
         EventLog,
-        Member,
         Message,
         Node,
         NodeTag,
@@ -856,49 +744,38 @@ def truncate_cmd(
         TracePath,
     )
     from sqlalchemy import delete
-    from sqlalchemy.engine import CursorResult
 
     db = DatabaseManager(ctx.obj["database_url"])
 
     with db.session_scope() as session:
-        # Truncate in correct order to respect foreign keys
         cleared: list[str] = []
 
-        # Clear members (no dependencies)
-        if tables_to_clear.get("members"):
-            result: CursorResult = session.execute(delete(Member))  # type: ignore
-            cleared.append(f"members: {result.rowcount} rows")
-
-        # Clear event-specific tables first (they depend on nodes)
         if tables_to_clear.get("messages"):
-            result = session.execute(delete(Message))  # type: ignore
-            cleared.append(f"messages: {result.rowcount} rows")
+            result = session.execute(delete(Message))
+            cleared.append(f"messages: {result.rowcount} rows")  # type: ignore[attr-defined]
 
         if tables_to_clear.get("advertisements"):
-            result = session.execute(delete(Advertisement))  # type: ignore
-            cleared.append(f"advertisements: {result.rowcount} rows")
+            result = session.execute(delete(Advertisement))
+            cleared.append(f"advertisements: {result.rowcount} rows")  # type: ignore[attr-defined]
 
         if tables_to_clear.get("telemetry"):
-            result = session.execute(delete(Telemetry))  # type: ignore
-            cleared.append(f"telemetry: {result.rowcount} rows")
+            result = session.execute(delete(Telemetry))
+            cleared.append(f"telemetry: {result.rowcount} rows")  # type: ignore[attr-defined]
 
         if tables_to_clear.get("trace_paths"):
-            result = session.execute(delete(TracePath))  # type: ignore
-            cleared.append(f"trace_paths: {result.rowcount} rows")
+            result = session.execute(delete(TracePath))
+            cleared.append(f"trace_paths: {result.rowcount} rows")  # type: ignore[attr-defined]
 
         if tables_to_clear.get("event_logs"):
-            result = session.execute(delete(EventLog))  # type: ignore
-            cleared.append(f"event_logs: {result.rowcount} rows")
+            result = session.execute(delete(EventLog))
+            cleared.append(f"event_logs: {result.rowcount} rows")  # type: ignore[attr-defined]
 
-        # Clear nodes last (this will cascade delete tags and any remaining events)
         if tables_to_clear.get("nodes"):
-            # Delete tags first (they depend on nodes)
-            tag_result: CursorResult = session.execute(delete(NodeTag))  # type: ignore
-            cleared.append(f"node_tags: {tag_result.rowcount} rows (cascade)")
+            tag_result = session.execute(delete(NodeTag))
+            cleared.append(f"node_tags: {tag_result.rowcount} rows (cascade)")  # type: ignore[attr-defined]
 
-            # Delete nodes (will cascade to remaining related tables)
-            node_result: CursorResult = session.execute(delete(Node))  # type: ignore
-            cleared.append(f"nodes: {node_result.rowcount} rows")
+            node_result = session.execute(delete(Node))
+            cleared.append(f"nodes: {node_result.rowcount} rows")  # type: ignore[attr-defined]
 
     db.dispose()
 

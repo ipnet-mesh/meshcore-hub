@@ -182,13 +182,6 @@ class CollectorSettings(CommonSettings):
         return str(Path(self.effective_seed_home) / "node_tags.yaml")
 
     @property
-    def members_file(self) -> str:
-        """Get the path to members.yaml in seed_home."""
-        from pathlib import Path
-
-        return str(Path(self.effective_seed_home) / "members.yaml")
-
-    @property
     def collector_channel_keys_list(self) -> list[str]:
         """Parse configured channel keys into a normalized list."""
         if not self.collector_channel_keys:

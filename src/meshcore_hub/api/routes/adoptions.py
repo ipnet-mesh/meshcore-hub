@@ -6,32 +6,15 @@ from fastapi import APIRouter, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from meshcore_hub.api.auth import RequireOperatorOrAdmin, X_USER_NAME_HEADER
+from meshcore_hub.api.auth import RequireOperatorOrAdmin
 from meshcore_hub.api.dependencies import DbSession
-from meshcore_hub.common.models import Node, UserProfile, UserProfileNode
+from meshcore_hub.api.profile_utils import get_or_create_profile
+from meshcore_hub.common.models import Node, UserProfileNode
 from meshcore_hub.common.schemas.user_profiles import AdoptedNodeRead, NodeAdoptRequest
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-def _get_or_create_profile(
-    session: DbSession, user_id: str, request: Request
-) -> UserProfile:
-    """Get existing profile or create a new one with name from IdP."""
-    query = select(UserProfile).where(UserProfile.user_id == user_id)
-    profile = session.execute(query).scalar_one_or_none()
-    if profile:
-        return profile
-
-    idp_name = request.headers.get(X_USER_NAME_HEADER) or None
-    profile = UserProfile(user_id=user_id, name=idp_name)
-    session.add(profile)
-    session.commit()
-    session.refresh(profile)
-    logger.info("Created new user profile for user_id=%s", user_id)
-    return profile
 
 
 @router.post("", response_model=AdoptedNodeRead, status_code=201)
@@ -43,7 +26,7 @@ async def adopt_node(
 ) -> AdoptedNodeRead:
     """Adopt a node. Requires operator or admin role."""
     caller_id, _ = caller_info
-    profile = _get_or_create_profile(session, caller_id, request)
+    profile = get_or_create_profile(session, caller_id, request)
 
     public_key = adopt_request.public_key.lower()
 

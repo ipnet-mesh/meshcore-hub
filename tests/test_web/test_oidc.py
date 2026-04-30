@@ -196,25 +196,29 @@ class TestAPIProxyWriteGating:
     def test_post_blocked_for_member(
         self, client_with_oidc_member_session: TestClient
     ) -> None:
-        """Test POST blocked for member session."""
+        """Test POST to admin endpoint blocked for member session."""
         response = client_with_oidc_member_session.post(
-            "/api/v1/members", json={"name": "test"}
+            "/api/v1/nodes/some-node/tags",
+            json={"key": "test", "value": "test"},
         )
         assert response.status_code == 403
 
-    def test_post_allowed_for_admin(
+    def test_put_allowed_for_admin(
         self, client_with_oidc_admin_session: TestClient
     ) -> None:
-        """Test POST allowed for admin session."""
-        response = client_with_oidc_admin_session.post(
-            "/api/v1/members",
+        """Test PUT allowed for admin session."""
+        response = client_with_oidc_admin_session.put(
+            "/api/v1/user/profile/test-user-id",
             json={"name": "test"},
         )
         assert response.status_code != 403
 
     def test_write_blocked_when_oidc_disabled(self, client: TestClient) -> None:
         """Test write methods blocked when OIDC is disabled."""
-        response = client.post("/api/v1/members", json={"name": "test"})
+        response = client.put(
+            "/api/v1/user/profile/test-user-id",
+            json={"name": "test"},
+        )
         assert response.status_code == 403
 
     def test_read_open_when_oidc_disabled(self, client: TestClient) -> None:

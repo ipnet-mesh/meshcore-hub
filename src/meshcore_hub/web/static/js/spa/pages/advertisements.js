@@ -2,7 +2,7 @@ import { apiGet } from '../api.js';
 import {
     html, litRender, nothing, t,
     getConfig, formatDateTime, formatDateTimeShort, formatRelativeTime,
-    truncateKey, warningBadge,
+    warningBadge,
     pagination, createFilterHandler, autoSubmit, submitOnEnter, copyToClipboard, renderNodeDisplay,
     observerIcons, observerDetailRow, toggleObserverDetail, toggleCardObserverDetail
 } from '../components.js';
@@ -12,14 +12,11 @@ export async function render(container, params, router) {
     const query = params.query || {};
     const search = query.search || '';
     const public_key = query.public_key || '';
-    const member_id = query.member_id || '';
     const page = parseInt(query.page, 10) || 1;
     const limit = parseInt(query.limit, 10) || 20;
     const offset = (page - 1) * limit;
 
     const config = getConfig();
-    const features = config.features || {};
-    const showMembers = features.members !== false;
     const tz = config.timezone || '';
     const tzBadge = tz && tz !== 'UTC' ? html`<span class="text-sm opacity-60">${tz}</span>` : nothing;
     const navigate = (url) => router.navigate(url);
@@ -49,29 +46,21 @@ export async function render(container, params, router) {
 ${displayContent}`, container);
     }
 
-    // Render page header immediately (old content stays visible until data loads)
     renderPage(nothing);
 
     async function fetchAndRenderData() {
         try {
-            const requests = [
-                apiGet('/api/v1/advertisements', { limit, offset, search, public_key, member_id }),
+            const results = await Promise.all([
+                apiGet('/api/v1/advertisements', { limit, offset, search, public_key }),
                 apiGet('/api/v1/nodes', { limit: 500 }),
-            ];
-            if (showMembers) {
-                requests.push(apiGet('/api/v1/members', { limit: 100 }));
-            }
-
-            const results = await Promise.all(requests);
+            ]);
             const data = results[0];
             const nodesData = results[1];
-            const membersData = showMembers ? results[2] : null;
 
             const advertisements = data.items || [];
             const total = data.total || 0;
             const totalPages = Math.ceil(total / limit);
             const allNodes = nodesData.items || [];
-            const members = membersData?.items || [];
 
             const sortedNodes = allNodes.map(n => {
                 const tagName = n.tags?.find(t => t.key === 'name')?.value;
@@ -87,19 +76,6 @@ ${displayContent}`, container);
                     <select name="public_key" class="select select-bordered select-sm" @change=${autoSubmit}>
                         <option value="">${t('common.all_entity', { entity: t('entities.nodes') })}</option>
                         ${sortedNodes.map(n => html`<option value=${n.public_key} ?selected=${public_key === n.public_key}>${n._displayName}</option>`)}
-                    </select>
-                </div>`
-                : nothing;
-
-            const membersFilter = (showMembers && members.length > 0)
-                ? html`
-                <div class="form-control">
-                    <label class="label py-1">
-                        <span class="label-text">${t('entities.member')}</span>
-                    </label>
-                    <select name="member_id" class="select select-bordered select-sm" @change=${autoSubmit}>
-                        <option value="">${t('common.all_entity', { entity: t('entities.members') })}</option>
-                        ${members.map(m => html`<option value=${m.member_id} ?selected=${member_id === m.member_id}>${m.name}${m.callsign ? ` (${m.callsign})` : ''}</option>`)}
                     </select>
                 </div>`
                 : nothing;
@@ -136,7 +112,7 @@ ${displayContent}`, container);
                             <thead><tr><th>Observer</th><th>${t('common.snr_db')}</th><th>Received</th></tr></thead>
                             <tbody>
                                 ${ad.observers.map(o => {
-                                    const dn = o.tag_name || o.name || truncateKey(o.public_key, 12);
+                                    const dn = o.tag_name || o.name || o.public_key.slice(0, 12);
                                     const snrD = o.snr != null ? `${Number(o.snr).toFixed(1)}` : '\u2014';
                                     const timeD = formatRelativeTime(o.observed_at);
                                     return html`<tr>
@@ -189,7 +165,7 @@ ${displayContent}`, container);
                 });
 
             const paginationBlock = pagination(page, totalPages, '/advertisements', {
-                search, public_key, member_id, limit,
+                search, public_key, limit,
             });
 
             renderPage(html`
@@ -203,7 +179,6 @@ ${displayContent}`, container);
                 <input type="text" name="search" .value=${search} placeholder="${t('common.search_placeholder')}" class="input input-bordered input-sm w-80" @keydown=${submitOnEnter} />
             </div>
             ${nodesFilter}
-            ${membersFilter}
             <div class="flex gap-2 w-full sm:w-auto">
                 <button type="submit" class="btn btn-primary btn-sm">${t('common.filter')}</button>
                 <a href="/advertisements" class="btn btn-ghost btn-sm">${t('common.clear')}</a>

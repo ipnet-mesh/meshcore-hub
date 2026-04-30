@@ -336,7 +336,7 @@ services:
     command: ["db", "upgrade"]
 
   # ==========================================================================
-  # Seed Data - Import node_tags.yaml and members.yaml from SEED_HOME
+  # Seed Data - Import node_tags.yaml from SEED_HOME
   # NOTE: This is NOT run automatically. Use --profile seed to run explicitly.
   # Since tags are now managed via the admin UI, automatic seeding would
   # overwrite user changes.
@@ -357,7 +357,7 @@ services:
       - DATA_HOME=/data
       - SEED_HOME=/seed
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    # Imports both node_tags.yaml and members.yaml if they exist
+    # Imports node_tags.yaml if it exists
     command: ["collector", "seed"]
 
 # ==========================================================================

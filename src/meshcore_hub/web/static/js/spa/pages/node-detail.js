@@ -138,6 +138,41 @@ export async function render(container, params, router) {
         const flashError = (params.query && params.query.error) || '';
         const flashHtml = flashMessage ? successAlert(flashMessage) : flashError ? errorAlert(flashError) : nothing;
 
+        const infoGridHtml = adoptionHtml
+            ? html`<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <div>
+                <h3 class="font-semibold opacity-70 mb-2">${t('common.public_key')}</h3>
+                <code class="text-sm bg-base-200 p-2 rounded block break-all cursor-pointer hover:bg-base-300 select-all"
+                      @click=${(e) => copyToClipboard(e, node.public_key)}
+                      title="Click to copy">${node.public_key}</code>
+            </div>
+            <div class="flex flex-wrap gap-x-8 gap-y-2 mt-4 text-sm">
+                <div><span class="opacity-70">${t('common.first_seen_label')}</span> ${formatDateTime(node.first_seen)}</div>
+                <div><span class="opacity-70">${t('common.last_seen_label')}</span> ${formatDateTime(node.last_seen)}</div>
+                ${coordsHtml}
+            </div>
+        </div>
+    </div>
+    ${adoptionHtml}
+</div>`
+            : html`<div class="card bg-base-100 shadow-xl mb-6">
+    <div class="card-body">
+        <div>
+            <h3 class="font-semibold opacity-70 mb-2">${t('common.public_key')}</h3>
+            <code class="text-sm bg-base-200 p-2 rounded block break-all cursor-pointer hover:bg-base-300 select-all"
+                  @click=${(e) => copyToClipboard(e, node.public_key)}
+                  title="Click to copy">${node.public_key}</code>
+        </div>
+        <div class="flex flex-wrap gap-x-8 gap-y-2 mt-4 text-sm">
+            <div><span class="opacity-70">${t('common.first_seen_label')}</span> ${formatDateTime(node.first_seen)}</div>
+            <div><span class="opacity-70">${t('common.last_seen_label')}</span> ${formatDateTime(node.last_seen)}</div>
+            ${coordsHtml}
+        </div>
+    </div>
+</div>`;
+
         litRender(html`
 <div class="breadcrumbs text-sm mb-4">
     <ul>
@@ -159,21 +194,7 @@ ${heroHtml}
 
 ${flashHtml}
 
-<div class="card bg-base-100 shadow-xl mb-6">
-    <div class="card-body">
-        <div>
-            <h3 class="font-semibold opacity-70 mb-2">${t('common.public_key')}</h3>
-            <code class="text-sm bg-base-200 p-2 rounded block break-all cursor-pointer hover:bg-base-300 select-all"
-                  @click=${(e) => copyToClipboard(e, node.public_key)}
-                  title="Click to copy">${node.public_key}</code>
-        </div>
-        <div class="flex flex-wrap gap-x-8 gap-y-2 mt-4 text-sm">
-            <div><span class="opacity-70">${t('common.first_seen_label')}</span> ${formatDateTime(node.first_seen)}</div>
-            <div><span class="opacity-70">${t('common.last_seen_label')}</span> ${formatDateTime(node.last_seen)}</div>
-            ${coordsHtml}
-        </div>
-    </div>
-</div>
+${infoGridHtml}
 
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
     <div class="card bg-base-100 shadow-xl">
@@ -190,11 +211,7 @@ ${flashHtml}
             ${adminTagsHtml}
         </div>
     </div>
-</div>
-
-${adoptionHtml}`, container);
-
-        // Initialize map if coordinates exist
+</div>`, container);
         if (hasCoords && typeof L !== 'undefined') {
             const map = L.map('header-map', {
                 zoomControl: false, dragging: false, scrollWheelZoom: false,
@@ -283,7 +300,7 @@ function renderAdoptionSection(node, config) {
     if (!isOperator && !isAdmin) {
         if (node.adopted_by) {
             const ownerName = node.adopted_by.name || node.adopted_by.user_id;
-            return html`<div class="card bg-base-100 shadow-xl mt-6">
+            return html`<div class="card bg-base-100 shadow-xl h-full">
                 <div class="card-body">
                     <h2 class="card-title">${t('nodes.ownership')}</h2>
                     <p class="text-sm opacity-70">${t('nodes.adopted_by', { name: ownerName })}</p>
@@ -302,7 +319,7 @@ function renderAdoptionSection(node, config) {
             ? html`<button class="btn btn-sm btn-outline btn-error btn-release-node">${t('nodes.release')}</button>`
             : nothing;
 
-        return html`<div class="card bg-base-100 shadow-xl mt-6">
+        return html`<div class="card bg-base-100 shadow-xl h-full">
             <div class="card-body">
                 <h2 class="card-title">${t('nodes.ownership')}</h2>
                 <div class="flex items-center justify-between">
@@ -313,7 +330,7 @@ function renderAdoptionSection(node, config) {
         </div>`;
     }
 
-    return html`<div class="card bg-base-100 shadow-xl mt-6">
+    return html`<div class="card bg-base-100 shadow-xl h-full">
         <div class="card-body">
             <h2 class="card-title">${t('nodes.ownership')}</h2>
             <p class="text-sm opacity-70">${t('nodes.not_adopted')}</p>

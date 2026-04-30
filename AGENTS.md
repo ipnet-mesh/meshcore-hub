@@ -145,16 +145,14 @@ class Node(Base, UUIDMixin, TimestampMixin):
     tags: Mapped[list["NodeTag"]] = relationship(back_populates="node", cascade="all, delete-orphan")
 
 
-class Member(Base, UUIDMixin, TimestampMixin):
-    """Network member model - stores info about network operators."""
-    __tablename__ = "members"
+class UserProfile(Base, UUIDMixin, TimestampMixin):
+    """UserProfile model for authenticated OIDC users."""
+    __tablename__ = "user_profiles"
 
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    user_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     callsign: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    role: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    contact: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    public_key: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    roles: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 ```
 
 ### FastAPI Routes
@@ -266,12 +264,10 @@ meshcore-hub/
 │   │   ├── hash_utils.py     # Hash utility functions
 │   │   ├── models/           # SQLAlchemy models
 │   │   │   ├── node.py       # Node model
-│   │   │   ├── member.py     # Network member model
 │   │   │   ├── user_profile.py     # User profile model (OIDC users)
 │   │   │   ├── user_profile_node.py # User-node adoption join table
 │   │   │   └── ...
 │   │   └── schemas/          # Pydantic schemas
-│   │       ├── members.py    # Member API schemas
 │   │       ├── user_profiles.py  # User profile API schemas
 │   │       └── ...
 │   ├── collector/
@@ -281,7 +277,6 @@ meshcore-hub/
 │   │   ├── letsmesh_decoder.py     # Native Python packet decoder
 │   │   ├── letsmesh_normalizer.py  # LetsMesh upload topic normalizer
 │   │   ├── tag_import.py     # Tag import from YAML
-│   │   ├── member_import.py  # Member import from YAML
 │   │   ├── handlers/         # Event handlers
 │   │   └── webhook.py        # Webhook dispatcher
 │   ├── api/
@@ -291,8 +286,7 @@ meshcore-hub/
 │   │   ├── dependencies.py
 │   │   ├── metrics.py        # Prometheus metrics endpoint
 │   │   └── routes/           # API routes
-│   │       ├── members.py    # Member CRUD endpoints
-│   │   ├── user_profiles.py  # User profile endpoints (GET/PUT profile)
+│   │       ├── user_profiles.py  # User profile endpoints (GET/PUT profile)
 │   │   ├── adoptions.py      # Node adoption endpoints (POST adopt, DELETE release)
 │   │   └── ...
 │   └── web/
@@ -342,14 +336,12 @@ meshcore-hub/
 │       └── meshcore-hub-update@.timer    # Auto-update timer
 ├── example/
 │   ├── seed/                 # Example seed data files
-│   │   ├── node_tags.yaml    # Example node tags
-│   │   └── members.yaml      # Example network members
+│   │   └── node_tags.yaml    # Example node tags
 │   └── content/              # Example custom content
 │       ├── pages/            # Example custom pages
 │       └── media/            # Example media files
 ├── seed/                     # Seed data directory (SEED_HOME)
-│   ├── node_tags.yaml        # Node tags for import
-│   └── members.yaml          # Network members for import
+│   └── node_tags.yaml        # Node tags for import
 ├── data/                     # Runtime data (gitignored, DATA_HOME default)
 │   └── collector/            # Collector data
 │       └── meshcore.db       # SQLite database
@@ -410,7 +402,6 @@ Node tags are flexible key-value pairs that allow custom metadata to be attached
 |---------|-------------|-------|
 | `name` | Node display name | Used as the primary display name throughout the UI (overrides the advertised name) |
 | `description` | Short description | Displayed as supplementary text under the node name |
-| `member_id` | Member identifier reference | Links the node to a network member (matches `member_id` in Members table) |
 | `lat` | GPS latitude override | Overrides node-reported latitude for map display |
 | `lon` | GPS longitude override | Overrides node-reported longitude for map display |
 | `elevation` | GPS elevation override | Overrides node-reported elevation |
@@ -419,7 +410,6 @@ Node tags are flexible key-value pairs that allow custom metadata to be attached
 **Important Notes:**
 - All tags are optional - nodes can function without any tags
 - Tag keys are case-sensitive
-- The `member_id` tag should reference a valid `member_id` from the Members table
 
 ## Testing Guidelines
 
@@ -679,8 +669,7 @@ The database defaults to `sqlite:///{DATA_HOME}/collector/meshcore.db` and does 
 **Seed Data (`SEED_HOME`)** - Contains initial data files for database seeding:
 ```
 ${SEED_HOME}/
-├── node_tags.yaml    # Node tags (keyed by public_key)
-└── members.yaml      # Network members list
+└── node_tags.yaml    # Node tags (keyed by public_key)
 ```
 
 **Custom Content (`CONTENT_HOME`)** - Custom pages and media for the web dashboard. See [docs/content.md](docs/content.md) for directory structure, frontmatter fields, and setup guide.
@@ -696,9 +685,8 @@ Services automatically create their subdirectories if they don't exist.
 
 ### Seeding
 
-The database can be seeded with node tags and network members from YAML files in `SEED_HOME`:
+The database can be seeded with node tags from YAML files in `SEED_HOME`:
 - `node_tags.yaml` - Node tag definitions (keyed by public_key)
-- `members.yaml` - Network member definitions
 
 **Important:** Seeding is NOT automatic and must be run explicitly. This prevents seed files from overwriting user changes made via the admin UI.
 

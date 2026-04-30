@@ -21,7 +21,6 @@ from meshcore_hub.common.database import DatabaseManager
 from meshcore_hub.common.models import (
     Advertisement,
     Base,
-    Member,
     Message,
     Node,
     NodeTag,
@@ -285,23 +284,6 @@ def sample_trace_path(api_db_session):
 
 
 @pytest.fixture
-def sample_member(api_db_session):
-    """Create a sample member in the database."""
-    member = Member(
-        member_id="alice",
-        name="Alice Smith",
-        callsign="W1ABC",
-        role="Admin",
-        description="Network administrator",
-        contact="alice@example.com",
-    )
-    api_db_session.add(member)
-    api_db_session.commit()
-    api_db_session.refresh(member)
-    return member
-
-
-@pytest.fixture
 def receiver_node(api_db_session):
     """Create a receiver node in the database."""
     node = Node(
@@ -398,29 +380,6 @@ def sample_node_with_name_tag(api_db_session):
         node_id=node.id,
         key="name",
         value="Friendly Search Name",
-    )
-    api_db_session.add(tag)
-    api_db_session.commit()
-    api_db_session.refresh(node)
-    return node
-
-
-@pytest.fixture
-def sample_node_with_member_tag(api_db_session):
-    """Create a node with a member_id tag for filter testing."""
-    node = Node(
-        public_key="member123member123member123membe",
-        name="Member Node",
-        adv_type="CHAT",
-        first_seen=datetime.now(timezone.utc),
-    )
-    api_db_session.add(node)
-    api_db_session.commit()
-
-    tag = NodeTag(
-        node_id=node.id,
-        key="member_id",
-        value="alice",
     )
     api_db_session.add(tag)
     api_db_session.commit()

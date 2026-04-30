@@ -14,12 +14,12 @@ from sqlalchemy import func, select
 from meshcore_hub.common.models import (
     Advertisement,
     EventLog,
-    Member,
     Message,
     Node,
     NodeTag,
     Telemetry,
     TracePath,
+    UserProfile,
 )
 
 logger = logging.getLogger(__name__)
@@ -270,14 +270,41 @@ def collect_metrics(session: Any) -> bytes:
     for event_type, count in event_counts:
         events_total.labels(event_type=event_type).set(count)
 
-    # -- Members total --
-    members_total = Gauge(
-        "meshcore_members_total",
-        "Total number of network members",
+    # -- User profiles total --
+    user_profiles_total = Gauge(
+        "meshcore_user_profiles_total",
+        "Total number of user profiles",
         registry=registry,
     )
-    count = session.execute(select(func.count(Member.id))).scalar() or 0
-    members_total.set(count)
+    count = session.execute(select(func.count(UserProfile.id))).scalar() or 0
+    user_profiles_total.set(count)
+
+    # -- User profiles by role --
+    user_profiles_by_role = Gauge(
+        "meshcore_user_profiles_by_role",
+        "Number of user profiles by role",
+        ["role"],
+        registry=registry,
+    )
+    role_rows = session.execute(
+        select(UserProfile.roles, func.count(UserProfile.id)).group_by(
+            UserProfile.roles
+        )
+    ).all()
+    for row_roles, _ in role_rows:
+        if row_roles:
+            for role in row_roles.split(","):
+                role = role.strip()
+                if role:
+                    role_count = (
+                        session.execute(
+                            select(func.count(UserProfile.id)).where(
+                                UserProfile.roles.contains(role)
+                            )
+                        ).scalar()
+                        or 0
+                    )
+                    user_profiles_by_role.labels(role=role).set(role_count)
 
     output: bytes = generate_latest(registry)
     return output
