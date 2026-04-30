@@ -130,7 +130,6 @@ export async function render(container, params, router) {
 
         function applyFilters() {
 
-        const isMobilePortrait
             const filteredNodes = applyFiltersCore();
             const categoryFilter = container.querySelector('#filter-category').value;
 
