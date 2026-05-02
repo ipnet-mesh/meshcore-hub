@@ -42,26 +42,17 @@ def get_session_user(request: Request) -> dict[str, Any] | None:
     return request.session.get("user")
 
 
-def get_user_roles(
-    request: Request, roles_claim: str, admin_role: str, member_role: str
-) -> tuple[bool, bool]:
-    """Extract roles from session. Returns (is_member, is_admin)."""
+def get_session_roles(request: Request, roles_claim: str) -> list[str]:
+    """Extract roles from session. Returns list of role name strings."""
     user = get_session_user(request)
     if not user:
-        return False, False
+        return []
     roles: Any = user.get(roles_claim, [])
     if isinstance(roles, str):
-        roles = [roles]
-    is_admin = admin_role in roles
-    is_member = member_role in roles
-    logger.info(
-        "OIDC roles check: roles_claim=%s, raw_roles=%s, is_member=%s, is_admin=%s",
-        roles_claim,
-        roles,
-        is_member,
-        is_admin,
-    )
-    return is_member, is_admin
+        return [roles]
+    if isinstance(roles, list):
+        return roles
+    return []
 
 
 def strip_userinfo(userinfo: dict[str, Any], roles_claim: str) -> dict[str, Any]:

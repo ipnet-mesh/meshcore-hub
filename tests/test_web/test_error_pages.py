@@ -90,7 +90,7 @@ class TestUnhandledExceptions:
 
     def test_404_api_returns_json(self, error_client: TestClient) -> None:
         """Test 404 on /api/ path returns JSON."""
-        response = error_client.get("/api/v1/nonexistent")
+        response = error_client.get("/api/v1/nodes/does_not_exist_pk")
         assert response.status_code == 404
         assert "application/json" in response.headers["content-type"]
         data = response.json()

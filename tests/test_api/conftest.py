@@ -21,12 +21,13 @@ from meshcore_hub.common.database import DatabaseManager
 from meshcore_hub.common.models import (
     Advertisement,
     Base,
-    Member,
     Message,
     Node,
     NodeTag,
     Telemetry,
     TracePath,
+    UserProfile,
+    UserProfileNode,
 )
 
 
@@ -283,23 +284,6 @@ def sample_trace_path(api_db_session):
 
 
 @pytest.fixture
-def sample_member(api_db_session):
-    """Create a sample member in the database."""
-    member = Member(
-        member_id="alice",
-        name="Alice Smith",
-        callsign="W1ABC",
-        role="Admin",
-        description="Network administrator",
-        contact="alice@example.com",
-    )
-    api_db_session.add(member)
-    api_db_session.commit()
-    api_db_session.refresh(member)
-    return member
-
-
-@pytest.fixture
 def receiver_node(api_db_session):
     """Create a receiver node in the database."""
     node = Node(
@@ -404,23 +388,27 @@ def sample_node_with_name_tag(api_db_session):
 
 
 @pytest.fixture
-def sample_node_with_member_tag(api_db_session):
-    """Create a node with a member_id tag for filter testing."""
-    node = Node(
-        public_key="member123member123member123membe",
-        name="Member Node",
-        adv_type="CHAT",
-        first_seen=datetime.now(timezone.utc),
+def sample_user_profile(api_db_session):
+    """Create a sample user profile in the database."""
+    profile = UserProfile(
+        user_id="oidc-user-123",
+        name="Test User",
+        callsign="W1TEST",
     )
-    api_db_session.add(node)
+    api_db_session.add(profile)
     api_db_session.commit()
+    api_db_session.refresh(profile)
+    return profile
 
-    tag = NodeTag(
-        node_id=node.id,
-        key="member_id",
-        value="alice",
+
+@pytest.fixture
+def sample_adopted_node(api_db_session, sample_user_profile, sample_node):
+    """Create a sample adopted node association."""
+    association = UserProfileNode(
+        user_profile_id=sample_user_profile.id,
+        node_id=sample_node.id,
     )
-    api_db_session.add(tag)
+    api_db_session.add(association)
     api_db_session.commit()
-    api_db_session.refresh(node)
-    return node
+    api_db_session.refresh(association)
+    return association

@@ -22,6 +22,21 @@ class TestListNodes:
         assert data["items"][0]["public_key"] == sample_node.public_key
         assert data["items"][0]["name"] == sample_node.name
         assert "tags" in data["items"][0]
+        assert data["items"][0]["adopted_by"] is None
+
+    def test_list_nodes_with_adopted_node(
+        self, client_no_auth, sample_node, sample_user_profile, sample_adopted_node
+    ):
+        """Test listing nodes includes adopted_by info."""
+        response = client_no_auth.get("/api/v1/nodes")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["items"]) == 1
+        adopted_by = data["items"][0]["adopted_by"]
+        assert adopted_by is not None
+        assert adopted_by["user_id"] == "oidc-user-123"
+        assert adopted_by["name"] == "Test User"
+        assert adopted_by["callsign"] == "W1TEST"
 
     def test_list_nodes_includes_tags(
         self, client_no_auth, sample_node, sample_node_tag
@@ -153,20 +168,6 @@ class TestListNodesFilters:
         assert room_node.public_key in room_keys
         assert name_only_room_node.public_key not in room_keys
 
-    def test_filter_by_member_id(self, client_no_auth, sample_node_with_member_tag):
-        """Test filtering nodes by member_id tag."""
-        # Match alice
-        response = client_no_auth.get("/api/v1/nodes?member_id=alice")
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data["items"]) == 1
-
-        # No match
-        response = client_no_auth.get("/api/v1/nodes?member_id=unknown")
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data["items"]) == 0
-
 
 class TestGetNode:
     """Tests for GET /nodes/{public_key} endpoint."""
@@ -180,6 +181,19 @@ class TestGetNode:
         assert data["name"] == sample_node.name
         assert "tags" in data
         assert data["tags"] == []
+        assert data["adopted_by"] is None
+
+    def test_get_node_with_adoption(
+        self, client_no_auth, sample_node, sample_user_profile, sample_adopted_node
+    ):
+        """Test getting a node shows adopted_by info."""
+        response = client_no_auth.get(f"/api/v1/nodes/{sample_node.public_key}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["adopted_by"] is not None
+        assert data["adopted_by"]["user_id"] == "oidc-user-123"
+        assert data["adopted_by"]["name"] == "Test User"
+        assert data["adopted_by"]["callsign"] == "W1TEST"
 
     def test_get_node_with_tags(self, client_no_auth, sample_node, sample_node_tag):
         """Test getting a node includes its tags."""

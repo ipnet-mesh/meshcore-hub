@@ -56,7 +56,8 @@ class TestMetricsEndpoint:
         assert "meshcore_advertisements_total" in content
         assert "meshcore_telemetry_total" in content
         assert "meshcore_trace_paths_total" in content
-        assert "meshcore_members_total" in content
+        assert "meshcore_user_profiles_total" in content
+        assert "meshcore_user_profiles_by_role" in content
 
     def test_metrics_info_has_version(self, client_no_auth):
         """Test that meshcore_info includes version label."""
@@ -146,13 +147,6 @@ class TestMetricsData:
         response = client_no_auth.get("/metrics")
         assert response.status_code == 200
         assert "meshcore_advertisements_total 1.0" in response.text
-
-    def test_members_total_reflects_database(self, client_no_auth, sample_member):
-        """Test that members_total reflects database state."""
-        _clear_metrics_cache()
-        response = client_no_auth.get("/metrics")
-        assert response.status_code == 200
-        assert "meshcore_members_total 1.0" in response.text
 
     def test_nodes_by_type_has_labels(self, client_no_auth, sample_node):
         """Test that nodes_by_type includes adv_type labels."""

@@ -418,3 +418,30 @@ class TestMapDataInfrastructure:
         data = response.json()
 
         assert data["debug"]["infra_nodes"] == 1
+
+
+class TestMapDataAdoptedByFilter:
+    """Tests for map data adopted_by filter parameter."""
+
+    def test_map_data_accepts_adopted_by_param(
+        self, web_app: Any, mock_http_client: MockHttpClient
+    ) -> None:
+        """Test that map data endpoint accepts adopted_by query parameter."""
+        client = TestClient(web_app, raise_server_exceptions=True)
+        response = client.get("/map/data?adopted_by=some-profile-uuid")
+        assert response.status_code == 200
+        data = response.json()
+        assert "nodes" in data
+        assert "profiles" in data
+
+    def test_map_data_adopted_by_empty_returns_all(
+        self, web_app: Any, mock_http_client: MockHttpClient
+    ) -> None:
+        """Test that map data without adopted_by returns nodes normally."""
+        client = TestClient(web_app, raise_server_exceptions=True)
+        response = client.get("/map/data")
+        assert response.status_code == 200
+        data = response.json()
+        # Default mock has 2 nodes, 1 with coordinates
+        assert len(data["nodes"]) == 1
+        assert data["nodes"][0]["name"] == "Node Two"

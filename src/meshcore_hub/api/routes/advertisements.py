@@ -10,7 +10,7 @@ from sqlalchemy.orm import aliased, selectinload
 from meshcore_hub.api.auth import RequireRead
 from meshcore_hub.api.dependencies import DbSession
 from meshcore_hub.api.observer_utils import fetch_observers_for_events
-from meshcore_hub.common.models import Advertisement, Node, NodeTag
+from meshcore_hub.common.models import Advertisement, Node, NodeTag, UserProfileNode
 from meshcore_hub.common.schemas.messages import (
     AdvertisementList,
     AdvertisementRead,
@@ -50,8 +50,8 @@ async def list_advertisements(
     observed_by: Optional[str] = Query(
         None, description="Filter by receiver node public key"
     ),
-    member_id: Optional[str] = Query(
-        None, description="Filter by member_id tag value of source node"
+    adopted_by: Optional[str] = Query(
+        None, description="Filter by adopting user profile UUID"
     ),
     since: Optional[datetime] = Query(None, description="Start timestamp"),
     until: Optional[datetime] = Query(None, description="End timestamp"),
@@ -100,12 +100,11 @@ async def list_advertisements(
     if observed_by:
         query = query.where(ObserverNode.public_key == observed_by)
 
-    if member_id:
-        # Filter advertisements from nodes that have a member_id tag with the specified value
+    if adopted_by:
         query = query.where(
             SourceNode.id.in_(
-                select(NodeTag.node_id).where(
-                    NodeTag.key == "member_id", NodeTag.value == member_id
+                select(UserProfileNode.node_id).where(
+                    UserProfileNode.user_profile_id == adopted_by
                 )
             )
         )

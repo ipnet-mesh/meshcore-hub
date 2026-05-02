@@ -2,9 +2,63 @@
 
 This guide covers upgrading from a previous MeshCore Hub release to the current version. Check the relevant version section below before upgrading.
 
+## v0.11.0
+
+This release removes the `Member` model/table entirely, replacing it with `UserProfile`-backed data. The members system is now driven by OIDC user profiles with roles instead of manually seeded entries.
+
+### Overview of Changes
+
+| Area | Before | After |
+|------|--------|-------|
+| Network Members | `members` table + CRUD API + YAML seed | Removed — replaced by `UserProfile` roles |
+| Member model | `Member` SQLAlchemy model | Deleted (table dropped) |
+| Member API | `GET/POST/PUT/DELETE /api/v1/members` | Removed — replaced by `GET /api/v1/user/profiles` |
+| Member seeding | `members.yaml` + `import-members` CLI | Removed — profiles auto-created from OIDC |
+| Node tags | `member_id` tag key | Replaced by `adopted_by` filter via `user_profile_nodes` |
+| Nodes API | `?member_id=` query param | `?adopted_by=` query param (profile UUID) |
+| Ads API | `?member_id=` query param | `?adopted_by=` query param (profile UUID) |
+| Prometheus | `meshcore_members_total` gauge | `meshcore_user_profiles_total` + `meshcore_user_profiles_by_role` |
+| Profile endpoint | `GET /api/v1/user/profile/{user_id}` | `GET /api/v1/user/profile/{profile_id}` (UUID) |
+| Profile endpoint | Owner-only GET | Public GET (owner sees `user_id`, public view omits it) |
+| New endpoint | — | `GET /api/v1/user/profiles` (list all, paginated, no `user_id`) |
+| User profiles | `roles` column missing | `roles` TEXT column added (comma-separated, parsed to list) |
+| Admin members UI | `/admin/members` admin page | Removed — Members page now reads from UserProfile |
+| Profile page | Owner-only editable | `/profile/:id` public view + `/profile` owner edit |
+| Truncate CLI | `--members` flag | Removed |
+| `collector seed` | Imports members.yaml | Removed — only imports node_tags.yaml |
+| Seed files | `members.yaml` required | `members.yaml` removed |
+
+### Migration Steps
+
+1. **Run database migration** — adds `roles` column to `user_profiles`, drops `members` table
+2. **Remove `members.yaml`** from your seed directory (no longer used)
+3. **Remove `member_id` tag keys** from `node_tags.yaml` (no longer functional — use node adoption instead)
+4. **Update Prometheus alerting rules** that reference `meshcore_members_total` to use `meshcore_user_profiles_total`
+
+### Removed Files
+
+- `seed/members.yaml`
+- `example/seed/members.yaml`
+
+### Removed CLI Commands
+
+- `meshcore-hub collector import-members`
+- `--members` flag on `meshcore-hub collector truncate`
+
+### Behavior Changes
+
+- The Members page (`/members`) now displays OIDC user profiles grouped by role instead of seeded member data
+- The `member_id` node tag is no longer used for filtering or display — use node adoption instead
+- Profile endpoints now use UUIDs instead of OIDC `user_id` strings in URLs
+- Public profile view (`/profile/{uuid}`) is accessible without authentication
+
+### Database Migration
+
+The migration adds a `roles` column (TEXT, nullable) to `user_profiles` and drops the `members` table.
+
 ## v0.10.0
 
-This release includes **breaking changes** to the admin authentication model.
+This release includes **breaking changes** to the admin authentication model, OIDC role configuration, and adds user profiles with node adoption.
 
 ### Overview of Changes
 
@@ -12,9 +66,18 @@ This release includes **breaking changes** to the admin authentication model.
 |------|--------|-------|
 | Admin auth | `WEB_ADMIN_ENABLED=true` (open access) | OIDC/OAuth2 authentication via identity provider |
 | Auth library | None | Authlib (`authlib>=1.3.0`) |
-| Admin access | Anyone with the URL | Authenticated users with `admin` role from IdP |
+| Admin access | Anyone with the URL | Authenticated users with roles from IdP |
 | Session mgmt | None | Starlette `SessionMiddleware` (signed cookies) |
-| Write gating | None (API proxy open) | POST/PUT/DELETE/PATCH require admin session when OIDC enabled |
+| Proxy gating | None (API proxy open) | Per-endpoint, per-method role-based access mapping |
+| Role config | None | `OIDC_ROLE_ADMIN`, `OIDC_ROLE_OPERATOR`, `OIDC_ROLE_MEMBER` env vars |
+| SPA config | `is_admin: bool`, `is_member: bool` | `roles: ["admin", "member"]` array + `role_names` mapping |
+| Client-side | `config.is_admin` checks | `hasRole("admin")` helper |
+| OIDC disabled | All proxy access open | Only read access to known endpoints; writes blocked |
+| User profiles | None | `user_profiles` table (auto-created on first access) |
+| Node adoption | None | `user_profile_nodes` join table (operator role required) |
+| Node cleanup | 7 days default | 30 days default |
+| API proxy | No user identity forwarding | Injects `X-User-Id` and `X-User-Roles` headers |
+| Profile page | None | `/profile` SPA page linked from auth dropdown |
 
 ### Migration Steps
 
@@ -28,7 +91,15 @@ This release includes **breaking changes** to the admin authentication model.
    OIDC_SESSION_SECRET=$(openssl rand -hex 32)
    ```
 3. **Remove `WEB_ADMIN_ENABLED`** from your `.env` (no longer used)
-4. **Configure roles** in your IdP: assign `admin` and/or `member` roles to users
+4. **Remove `OIDC_ADMIN_ROLE` and `OIDC_MEMBER_ROLE`** from your `.env` if present (renamed, see below)
+5. **Configure roles** in your IdP and set the role name env vars to match:
+   ```bash
+   # These defaults match common IdP setups — only change if your IdP uses different role names
+   OIDC_ROLE_ADMIN=admin
+   OIDC_ROLE_OPERATOR=operator
+   OIDC_ROLE_MEMBER=member
+   ```
+6. **Test admin access** — confirm that admin users can access `/admin/` and perform write operations
 
 ### Removed Variables
 
@@ -36,11 +107,78 @@ This release includes **breaking changes** to the admin authentication model.
 |----------|--------|
 | `WEB_ADMIN_ENABLED` | Replaced by `OIDC_ENABLED` |
 
+### Renamed Variables
+
+| Old Variable | New Variable | Notes |
+|--------------|-------------|-------|
+| `OIDC_ADMIN_ROLE` | `OIDC_ROLE_ADMIN` | New naming convention (`OIDC_ROLE_<NAME>`) |
+| `OIDC_MEMBER_ROLE` | `OIDC_ROLE_MEMBER` | New naming convention |
+
 ### New Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OIDC_ROLE_ADMIN` | `admin` | IdP role name granting admin access |
+| `OIDC_ROLE_OPERATOR` | `operator` | IdP role name for operator access (future use) |
+| `OIDC_ROLE_MEMBER` | `member` | IdP role name for member access |
 
 See the OIDC section in `.env.example` for the full list of environment variables.
 
+### Behavior Change: OIDC Disabled
+
+When OIDC is disabled, the web proxy now only allows GET access to known API endpoints. Write operations (POST/PUT/DELETE) are blocked, even without OIDC. If you relied on open write access through the web proxy without OIDC, use the CLI or direct API access with Bearer tokens instead.
+
 **Important for LogTo users:** You must pass `client_id` in the logout request for the post-logout redirect to work. This is handled automatically by the application. You also need to register your app's URL as a **Sign-out redirect URI** in the LogTo admin console (e.g. `https://ipnt.uk`). If the redirect still doesn't work after updating, set `OIDC_POST_LOGOUT_REDIRECT_URI` explicitly to match your registered URI.
+
+### User Profiles and Node Adoption
+
+Authenticated OIDC users now have a profile page at `/profile` (linked from the avatar dropdown menu). Profiles are auto-created on first access with blank name and callsign fields.
+
+Users with the **operator** role can adopt (claim) mesh network nodes from the node detail page. Users with the **admin** role can release any adopted node. Adopted nodes are shown as a read-only list on the profile page and display the adopting user's name on the node detail page.
+
+### New API Endpoints
+
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/api/v1/user/profile/{user_id}` | GET | Any OIDC user (own profile only) | Get-or-create profile with adopted nodes |
+| `/api/v1/user/profile/{user_id}` | PUT | Any OIDC user (own profile only) | Update name/callsign |
+| `/api/v1/adoptions` | POST | Operator or Admin | Adopt a node (auto-creates profile if needed) |
+| `/api/v1/adoptions/{public_key}` | DELETE | Operator (own node) or Admin (any) | Release a node |
+
+The `NodeRead` schema now includes an `adopted_by` field with the adopting user's `user_id`, `name`, and `callsign` (or `null` if not adopted).
+
+The web proxy injects `X-User-Id` and `X-User-Roles` headers when forwarding API requests for authenticated users, enabling the API layer to enforce per-user access control.
+
+### New Database Tables
+
+The database migration creates two new tables:
+
+**`user_profiles`**: Stores OIDC user profile data (auto-created on first access).
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | VARCHAR(36) PK | UUID |
+| `user_id` | VARCHAR(255) UNIQUE | OIDC `sub` claim |
+| `name` | VARCHAR(255) | Display name (blank initially) |
+| `callsign` | VARCHAR(20) | Radio callsign (blank initially) |
+| `created_at` | DATETIME | Auto |
+| `updated_at` | DATETIME | Auto |
+
+**`user_profile_nodes`**: Join table linking users to adopted nodes. Foreign keys have `ON DELETE CASCADE` so node cleanup automatically removes stale adoption records.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `user_profile_id` | VARCHAR(36) FK PK | References `user_profiles.id` (CASCADE) |
+| `node_id` | VARCHAR(36) FK PK UNIQUE | References `nodes.id` (CASCADE) |
+| `adopted_at` | DATETIME | When the adoption occurred |
+
+### Default Change: Node Cleanup
+
+The default value for `NODE_CLEANUP_DAYS` has changed from **7 days** to **30 days**. If you previously relied on the 7-day default, set it explicitly in your `.env`:
+
+```bash
+NODE_CLEANUP_DAYS=7
+```
 
 ## v0.9.0
 

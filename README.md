@@ -373,6 +373,7 @@ The collector automatically cleans up old event data and inactive nodes:
 | `WEB_LOCALE`               | `en`                    | Locale/language for the web dashboard (e.g., `en`, `es`, `fr`)                                                                                                                                                                               |
 | `WEB_DATETIME_LOCALE`      | `en-US`                 | Locale used for date formatting in the web dashboard (e.g., `en-US` for MM/DD/YYYY, `en-GB` for DD/MM/YYYY).                                                                                                                                 |
 | `WEB_AUTO_REFRESH_SECONDS` | `30`                    | Auto-refresh interval in seconds for list pages (0 to disable)                                                                                                                                                                               |
+| `WEB_DEBUG`                | `false`                 | Enable debug mode in the web dashboard (shows extra diagnostic info)                                                                                                                                                                          |
 | `OIDC_ENABLED`             | `false`                 | Enable OIDC authentication for the web dashboard                                                                                                                                                                                              |
 | `OIDC_CLIENT_ID`           | _(none)_                | OIDC client ID (from IdP, required when OIDC_ENABLED=true)                                                                                                                                                                                    |
 | `OIDC_CLIENT_SECRET`       | _(none)_                | OIDC client secret (from IdP, required when OIDC_ENABLED=true)                                                                                                                                                                                |
@@ -381,8 +382,9 @@ The collector automatically cleans up old event data and inactive nodes:
 | `OIDC_POST_LOGOUT_REDIRECT_URI` | _(auto-derived)_  | Post-logout redirect URI (must match Sign-out redirect URIs in IdP). Falls back to `OIDC_REDIRECT_URI` base or `request.base_url`                                                                                                           |
 | `OIDC_SCOPES`              | `openid email profile`  | OAuth scopes to request. The `openid` scope is required for ID tokens. Quotes are stripped automatically.  |
 | `OIDC_ROLES_CLAIM`         | `roles`                 | ID token claim name containing user roles                                                                                                                                                                                                     |
-| `OIDC_ADMIN_ROLE`          | `admin`                 | Role value granting admin access                                                                                                                                                                                                              |
-| `OIDC_MEMBER_ROLE`         | `member`                | Role value granting member access                                                                                                                                                                                                             |
+| `OIDC_ROLE_ADMIN`          | `admin`                 | IdP role name granting admin access                                                                                                                                                                                                           |
+| `OIDC_ROLE_OPERATOR`       | `operator`              | IdP role name for operator access (future use)                                                                                                                                                                                                |
+| `OIDC_ROLE_MEMBER`         | `member`                | IdP role name for member access                                                                                                                                                                                                               |
 | `OIDC_SESSION_SECRET`      | _(none)_                | Secret for signing session cookies (required when OIDC_ENABLED=true)                                                                                                                                                                          |
 | `OIDC_SESSION_MAX_AGE`     | `86400`                 | Session cookie lifetime in seconds (default 24 hours)                                                                                                                                                                                         |
 | `OIDC_COOKIE_SECURE`       | `false`                 | HTTPS-only session cookies (enable in production)                                                                                                                                                                                             |
@@ -417,7 +419,7 @@ Control which pages are visible in the web dashboard. Disabled features are full
 | `FEATURE_MEMBERS`        | `true`  | Enable the `/members` page                            |
 | `FEATURE_PAGES`          | `true`  | Enable custom markdown pages                          |
 
-**Dependencies:** Dashboard auto-disables when all of Nodes/Advertisements/Messages are disabled. Map auto-disables when Nodes is disabled.
+**Dependencies:** Dashboard auto-disables when all of Nodes/Advertisements/Messages are disabled. Map auto-disables when Nodes is disabled. Members auto-disables when OIDC is disabled (set via `OIDC_ENABLED`).
 
 ### Custom Content
 
@@ -425,7 +427,7 @@ The web dashboard supports custom markdown pages and media files (including cust
 
 ## Seed Data
 
-The database can be seeded with node tags and network members from YAML files. See [docs/seeding.md](docs/seeding.md) for format details, directory structure, and running the seed process.
+The database can be seeded with node tags from YAML files. See [docs/seeding.md](docs/seeding.md) for format details, directory structure, and running the seed process.
 
 ## API Documentation
 

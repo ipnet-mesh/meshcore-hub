@@ -58,7 +58,6 @@ class TestCollectorSettings:
         assert settings.seed_home == "/seed/data"
         assert settings.effective_seed_home == "/seed/data"
         assert settings.node_tags_file == "/seed/data/node_tags.yaml"
-        assert settings.members_file == "/seed/data/members.yaml"
 
     def test_collector_channel_keys_list(self) -> None:
         """Channel keys are parsed from comma/space-separated env values."""

@@ -107,11 +107,9 @@ class TestEnJsonCompleteness:
             "advertisements",
             "messages",
             "map",
-            "members",
             "not_found",
             "custom_page",
             "admin",
-            "admin_members",
             "admin_node_tags",
             "footer",
         ]

@@ -20,8 +20,7 @@ class TestOIDCSettingsValidation:
         config = _extract_config(text)
         assert config["oidc_enabled"] is False
         assert config["user"] is None
-        assert config["is_admin"] is False
-        assert config["is_member"] is False
+        assert config["roles"] == []
 
     def test_oidc_enabled_config_injection(self, client_with_oidc: TestClient) -> None:
         """Test OIDC config injection when enabled (no session)."""
@@ -30,8 +29,7 @@ class TestOIDCSettingsValidation:
         config = _extract_config(response.text)
         assert config["oidc_enabled"] is True
         assert config["user"] is None
-        assert config["is_admin"] is False
-        assert config["is_member"] is False
+        assert config["roles"] == []
 
 
 class TestAuthLogin:
@@ -141,8 +139,8 @@ class TestAuthUser:
         assert response.status_code == 200
         data = response.json()
         assert data["user"]["name"] == "Admin User"
-        assert data["is_admin"] is True
-        assert data["is_member"] is True
+        assert "admin" in data["roles"]
+        assert "member" in data["roles"]
 
     def test_user_member_session(
         self, client_with_oidc_member_session: TestClient
@@ -152,8 +150,8 @@ class TestAuthUser:
         assert response.status_code == 200
         data = response.json()
         assert data["user"]["name"] == "Member User"
-        assert data["is_admin"] is False
-        assert data["is_member"] is True
+        assert "admin" not in data["roles"]
+        assert "member" in data["roles"]
 
 
 class TestAdminRouteProtection:
@@ -174,7 +172,7 @@ class TestAdminRouteProtection:
         assert "window.__APP_CONFIG__" in response.text
         config = _extract_config(response.text)
         assert config["oidc_enabled"] is True
-        assert config["is_admin"] is False
+        assert "admin" not in config["roles"]
 
     def test_admin_session_gets_spa_shell(
         self, client_with_oidc_admin_session: TestClient
@@ -184,43 +182,48 @@ class TestAdminRouteProtection:
         assert response.status_code == 200
         config = _extract_config(response.text)
         assert config["oidc_enabled"] is True
-        assert config["is_admin"] is True
+        assert "admin" in config["roles"]
 
 
 class TestAPIProxyWriteGating:
     """Test API proxy write method gating when OIDC enabled."""
 
     def test_get_not_gated(self, client_with_oidc: TestClient) -> None:
-        """Test GET requests are not gated."""
+        """Test GET requests to open endpoints are not gated."""
         response = client_with_oidc.get("/api/v1/nodes")
         assert response.status_code != 403
 
-    def test_post_blocked_for_non_admin(
+    def test_post_blocked_for_member(
         self, client_with_oidc_member_session: TestClient
     ) -> None:
-        """Test POST blocked for member session."""
+        """Test POST to admin endpoint blocked for member session."""
         response = client_with_oidc_member_session.post(
-            "/api/v1/node-tags", json={"key": "test", "value": "test"}
+            "/api/v1/nodes/some-node/tags",
+            json={"key": "test", "value": "test"},
         )
         assert response.status_code == 403
 
-    def test_post_allowed_for_admin(
+    def test_put_allowed_for_admin(
         self, client_with_oidc_admin_session: TestClient
     ) -> None:
-        """Test POST allowed for admin session."""
-        response = client_with_oidc_admin_session.post(
-            "/api/v1/node-tags",
-            json={"key": "test", "value": "test"},
+        """Test PUT allowed for admin session."""
+        response = client_with_oidc_admin_session.put(
+            "/api/v1/user/profile/test-user-id",
+            json={"name": "test"},
         )
-        # Will get 404 from mock since we didn't set up the endpoint,
-        # but should not get 403
         assert response.status_code != 403
 
-    def test_write_not_gated_when_oidc_disabled(self, client: TestClient) -> None:
-        """Test write methods not gated when OIDC is disabled."""
-        response = client.post(
-            "/api/v1/node-tags", json={"key": "test", "value": "test"}
+    def test_write_blocked_when_oidc_disabled(self, client: TestClient) -> None:
+        """Test write methods blocked when OIDC is disabled."""
+        response = client.put(
+            "/api/v1/user/profile/test-user-id",
+            json={"name": "test"},
         )
+        assert response.status_code == 403
+
+    def test_read_open_when_oidc_disabled(self, client: TestClient) -> None:
+        """Test GET to open endpoints allowed when OIDC is disabled."""
+        response = client.get("/api/v1/nodes")
         assert response.status_code != 403
 
 
@@ -233,21 +236,13 @@ class TestBackwardCompatibility:
         config = _extract_config(response.text)
         assert "admin_enabled" not in config
         assert config["oidc_enabled"] is False
-        assert config["is_admin"] is False
+        assert config["roles"] == []
 
-    def test_admin_routes_serve_spa_shell_when_oidc_disabled(
-        self, client: TestClient
-    ) -> None:
-        """Test admin routes serve SPA shell when OIDC disabled (no redirect)."""
-        response = client.get("/admin/")
-        assert response.status_code == 200
-        assert "window.__APP_CONFIG__" in response.text
-
-    def test_footer_no_admin_link_when_oidc_disabled(self, client: TestClient) -> None:
-        """Test footer has no admin link when OIDC disabled."""
-        response = client.get("/")
-        assert response.status_code == 200
-        assert 'href="/admin/"' not in response.text
+    def test_admin_routes_blocked_when_oidc_disabled(self, client: TestClient) -> None:
+        """Test admin routes redirect to home when OIDC disabled."""
+        response = client.get("/admin/", follow_redirects=False)
+        assert response.status_code == 307
+        assert response.headers["location"] == "/"
 
 
 class TestConfigInjection:
@@ -261,8 +256,8 @@ class TestConfigInjection:
         config = _extract_config(response.text)
         assert config["oidc_enabled"] is True
         assert config["user"]["name"] == "Admin User"
-        assert config["is_admin"] is True
-        assert config["is_member"] is True
+        assert "admin" in config["roles"]
+        assert "member" in config["roles"]
 
     def test_member_session_config(
         self, client_with_oidc_member_session: TestClient
@@ -272,8 +267,8 @@ class TestConfigInjection:
         config = _extract_config(response.text)
         assert config["oidc_enabled"] is True
         assert config["user"]["name"] == "Member User"
-        assert config["is_admin"] is False
-        assert config["is_member"] is True
+        assert "admin" not in config["roles"]
+        assert "member" in config["roles"]
 
     def test_no_session_config(self, client_with_oidc: TestClient) -> None:
         """Test no session injects correct config values."""
@@ -281,8 +276,7 @@ class TestConfigInjection:
         config = _extract_config(response.text)
         assert config["oidc_enabled"] is True
         assert config["user"] is None
-        assert config["is_admin"] is False
-        assert config["is_member"] is False
+        assert config["roles"] == []
 
 
 class TestStripUserinfo:

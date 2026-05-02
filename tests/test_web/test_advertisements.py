@@ -46,11 +46,6 @@ class TestAdvertisementsPageFilters:
         response = client.get("/advertisements?search=node")
         assert response.status_code == 200
 
-    def test_advertisements_with_member_filter(self, client: TestClient) -> None:
-        """Test advertisements page with member_id filter returns SPA shell."""
-        response = client.get("/advertisements?member_id=alice")
-        assert response.status_code == 200
-
     def test_advertisements_with_public_key_filter(self, client: TestClient) -> None:
         """Test advertisements page with public_key filter returns SPA shell."""
         response = client.get(
@@ -71,7 +66,7 @@ class TestAdvertisementsPageFilters:
     def test_advertisements_with_all_filters(self, client: TestClient) -> None:
         """Test advertisements page with multiple filters returns SPA shell."""
         response = client.get(
-            "/advertisements?search=test&member_id=alice&page=1&limit=10"
+            "/advertisements?search=test&public_key=abc123&page=1&limit=10"
         )
         assert response.status_code == 200
 

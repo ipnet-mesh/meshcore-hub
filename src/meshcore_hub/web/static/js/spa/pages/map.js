@@ -1,7 +1,7 @@
 import { apiGet } from '../api.js';
 import {
     html, litRender, nothing, t,
-    typeEmoji, formatRelativeTime, escapeHtml, errorAlert,
+    getConfig, typeEmoji, formatRelativeTime, escapeHtml, errorAlert,
     timezoneIndicator,
 } from '../components.js';
 
@@ -118,20 +118,30 @@ function createPopupContent(node) {
 
 export async function render(container, params, router) {
     try {
+        const config = getConfig();
         const data = await apiGet('/map/data');
-        const allNodes = data.nodes || [];
-        const allMembers = data.members || [];
+        let allNodes = data.nodes || [];
         const mapCenter = data.center || { lat: 0, lon: 0 };
         const infraCenter = data.infra_center || null;
         const debug = data.debug || {};
+        const profiles = data.profiles || [];
 
         const isMobilePortrait = window.innerWidth < 480;
         const isMobile = window.innerWidth < 768;
         const BOUNDS_PADDING = isMobilePortrait ? [50, 50] : (isMobile ? [75, 75] : [100, 100]);
 
-        const sortedMembers = allMembers.slice().sort((a, b) => a.name.localeCompare(b.name));
+        let lastMemberFilter = '';
 
-        function applyFilters() {
+        async function applyFilters() {
+            const memberFilter = document.getElementById('member-filter')?.value || '';
+
+            if (memberFilter !== lastMemberFilter) {
+                lastMemberFilter = memberFilter;
+                const params = {};
+                if (memberFilter) params.adopted_by = memberFilter;
+                const newData = await apiGet('/map/data', params);
+                allNodes = newData.nodes || [];
+            }
             const filteredNodes = applyFiltersCore();
             const categoryFilter = container.querySelector('#filter-category').value;
 
@@ -165,8 +175,9 @@ export async function render(container, params, router) {
         function clearFiltersHandler() {
             container.querySelector('#filter-category').value = '';
             container.querySelector('#filter-type').value = '';
-            container.querySelector('#filter-member').value = '';
             container.querySelector('#show-labels').checked = false;
+            const memberEl = container.querySelector('#member-filter');
+            if (memberEl) memberEl.value = '';
             updateLabelVisibility();
             applyFilters();
         }
@@ -204,22 +215,22 @@ export async function render(container, params, router) {
                     <option value="room">${t('node_types.room')}</option>
                 </select>
             </div>
+            ${config.oidc_enabled && profiles.length > 0 ? html`
             <div class="form-control">
                 <label class="label py-1">
-                    <span class="label-text">${t('entities.member')}</span>
+                    <span class="label-text">${t('common.filter_member_label')}</span>
                 </label>
-                <select id="filter-member" class="select select-bordered select-sm" @change=${applyFilters}>
-                    <option value="">${t('common.all_entity', { entity: t('entities.members') })}</option>
-                    ${sortedMembers
-                        .filter(m => m.member_id)
-                        .map(m => {
-                            const label = m.callsign
-                                ? m.name + ' (' + m.callsign + ')'
-                                : m.name;
-                            return html`<option value=${m.member_id}>${label}</option>`;
-                        })}
+                <select id="member-filter" class="select select-bordered select-sm" @change=${applyFilters}>
+                    <option value="">${t('common.all_members')}</option>
+                    ${profiles.sort((a, b) => {
+                        const na = a.name || a.callsign || '';
+                        const nb = b.name || b.callsign || '';
+                        return na.localeCompare(nb);
+                    }).map(p => html`
+                    <option value=${p.id}>${p.callsign ? p.name + ' (' + p.callsign + ')' : (p.name || p.callsign || p.id)}</option>`)}
                 </select>
             </div>
+            ` : nothing}
             <div class="form-control">
                 <label class="label cursor-pointer gap-2 py-1">
                     <span class="label-text">${t('map.show_labels')}</span>
@@ -270,13 +281,11 @@ export async function render(container, params, router) {
         function applyFiltersCore() {
             const categoryFilter = container.querySelector('#filter-category').value;
             const typeFilter = container.querySelector('#filter-type').value;
-            const memberFilter = container.querySelector('#filter-member').value;
 
             const filteredNodes = allNodes.filter(node => {
                 if (categoryFilter === 'infra' && !node.is_infra) return false;
                 const nodeType = normalizeType(node.adv_type);
                 if (typeFilter && nodeType !== typeFilter) return false;
-                if (memberFilter && node.member_id !== memberFilter) return false;
                 return true;
             });
 

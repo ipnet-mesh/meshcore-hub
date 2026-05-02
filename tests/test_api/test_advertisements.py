@@ -214,33 +214,6 @@ class TestListAdvertisementsFilters:
         data = response.json()
         assert len(data["items"]) == 1
 
-    def test_filter_by_member_id(
-        self, client_no_auth, api_db_session, sample_node_with_member_tag
-    ):
-        """Test filtering advertisements by member_id tag."""
-        # Create an advertisement for the node with member tag
-        advert = Advertisement(
-            public_key=sample_node_with_member_tag.public_key,
-            name="Member Node Ad",
-            adv_type="CHAT",
-            received_at=datetime.now(timezone.utc),
-            node_id=sample_node_with_member_tag.id,
-        )
-        api_db_session.add(advert)
-        api_db_session.commit()
-
-        # Filter by member_id
-        response = client_no_auth.get("/api/v1/advertisements?member_id=alice")
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data["items"]) == 1
-
-        # No match
-        response = client_no_auth.get("/api/v1/advertisements?member_id=unknown")
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data["items"]) == 0
-
     def test_filter_by_since(self, client_no_auth, api_db_session):
         """Test filtering advertisements by since timestamp."""
         now = datetime.now(timezone.utc)

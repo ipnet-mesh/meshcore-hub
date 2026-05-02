@@ -8,7 +8,8 @@ from meshcore_hub.common.models.advertisement import Advertisement
 from meshcore_hub.common.models.trace_path import TracePath
 from meshcore_hub.common.models.telemetry import Telemetry
 from meshcore_hub.common.models.event_log import EventLog
-from meshcore_hub.common.models.member import Member
+from meshcore_hub.common.models.user_profile import UserProfile
+from meshcore_hub.common.models.user_profile_node import UserProfileNode
 from meshcore_hub.common.models.event_observer import EventObserver, add_event_observer
 
 __all__ = [
@@ -21,7 +22,8 @@ __all__ = [
     "TracePath",
     "Telemetry",
     "EventLog",
-    "Member",
+    "UserProfile",
+    "UserProfileNode",
     "EventObserver",
     "add_event_observer",
 ]
