@@ -80,6 +80,8 @@
         "view_details": "View Details",
         "all_types": "All Types",
         "all_channels": "All Channels",
+        "all_members": "All Members",
+        "filter_member_label": "Member",
         "node_type": "Node Type",
         "show": "Show",
         "search_placeholder": "Search by name, ID, or public key...",

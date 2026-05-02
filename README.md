@@ -419,7 +419,7 @@ Control which pages are visible in the web dashboard. Disabled features are full
 | `FEATURE_MEMBERS`        | `true`  | Enable the `/members` page                            |
 | `FEATURE_PAGES`          | `true`  | Enable custom markdown pages                          |
 
-**Dependencies:** Dashboard auto-disables when all of Nodes/Advertisements/Messages are disabled. Map auto-disables when Nodes is disabled.
+**Dependencies:** Dashboard auto-disables when all of Nodes/Advertisements/Messages are disabled. Map auto-disables when Nodes is disabled. Members auto-disables when OIDC is disabled (set via `OIDC_ENABLED`).
 
 ### Custom Content
 

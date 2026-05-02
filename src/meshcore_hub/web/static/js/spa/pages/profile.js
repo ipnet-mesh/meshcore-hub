@@ -19,6 +19,12 @@ function renderAdoptedNode(node) {
     </a>`;
 }
 
+function renderMemberSince(profile) {
+    return profile.created_at
+        ? html`<p class="text-sm opacity-60 mt-2">${t('user_profile.member_since', { date: formatDateTime(profile.created_at, { year: 'numeric', month: 'long', day: 'numeric' }) })}</p>`
+        : nothing;
+}
+
 function renderRoleBadges(roles) {
     if (!roles || roles.length === 0) return nothing;
     return html`<div class="flex gap-2 mt-2">${roles.map(role => html`<span class="badge badge-primary badge-sm">${role}</span>`)}</div>`;
@@ -32,10 +38,6 @@ function hasOperatorOrAdmin(roles, config) {
 }
 
 function renderProfileDetails(profile, config) {
-    const memberSince = profile.created_at
-        ? html`<p class="text-sm opacity-60 mt-2">${t('user_profile.member_since', { date: formatDateTime(profile.created_at, { year: 'numeric', month: 'long', day: 'numeric' }) })}</p>`
-        : nothing;
-
     const adoptedSection = hasOperatorOrAdmin(profile.roles, config)
         ? html`<div class="card bg-base-100 shadow-xl mt-6">
             <div class="card-body">
@@ -47,7 +49,7 @@ function renderProfileDetails(profile, config) {
         </div>`
         : nothing;
 
-    return html`${memberSince}${adoptedSection}`;
+    return html`${renderMemberSince(profile)}${adoptedSection}`;
 }
 
 function renderPublicProfile(profile, config, target) {
@@ -115,23 +117,23 @@ ${flashHtml}
                 <h2 class="card-title">${t('user_profile.your_profile')}</h2>
                 ${renderRoleBadges(profile.roles)}
                 <form id="profile-form" class="py-4 space-y-4">
-                    <div class="form-control">
-                        <label class="label"><span class="label-text">${t('user_profile.name_label')}</span></label>
-                        <input type="text" name="name" class="input input-bordered"
+                    <label class="flex items-center gap-3 py-1">
+                        <span class="text-sm font-medium shrink-0 w-24">${t('user_profile.name_label')}</span>
+                        <input type="text" name="name" class="input input-bordered flex-1"
                                value=${profile.name || ''}
                                placeholder=${t('user_profile.name_placeholder')} maxlength="255" />
-                    </div>
-                    <div class="form-control">
-                        <label class="label"><span class="label-text">${t('user_profile.callsign_label')}</span></label>
-                        <input type="text" name="callsign" class="input input-bordered"
+                    </label>
+                    <label class="flex items-center gap-3 py-1">
+                        <span class="text-sm font-medium shrink-0 w-24">${t('user_profile.callsign_label')}</span>
+                        <input type="text" name="callsign" class="input input-bordered flex-1"
                                value=${profile.callsign || ''}
                                placeholder=${t('user_profile.callsign_placeholder')} maxlength="20" />
-                    </div>
+                    </label>
                     <button type="submit" class="btn btn-primary btn-sm">${t('user_profile.save_profile')}</button>
                 </form>
+                ${renderMemberSince(profile)}
             </div>
         </div>
-        ${renderProfileDetails(profile, config)}
     </div>
 
     ${hasOperatorOrAdmin(profile.roles, config) ? html`

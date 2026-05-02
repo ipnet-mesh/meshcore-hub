@@ -13,7 +13,7 @@ class TestFeatureFlagsConfig:
     """Test feature flags in config."""
 
     def test_all_features_enabled_by_default(self, client: TestClient) -> None:
-        """All features should be enabled by default in config JSON."""
+        """All non-OIDC features should be enabled by default in config JSON."""
         response = client.get("/")
         assert response.status_code == 200
         html = response.text
@@ -22,7 +22,10 @@ class TestFeatureFlagsConfig:
         end = html.index(";", start)
         config = json.loads(html[start:end])
         features = config["features"]
-        assert all(features.values()), "All features should be enabled by default"
+        non_oidc_features = {k: v for k, v in features.items() if k != "members"}
+        assert all(
+            non_oidc_features.values()
+        ), "All non-OIDC features should be enabled by default"
 
     def test_features_dict_has_all_keys(self, client: TestClient) -> None:
         """Features dict should have all 7 expected keys."""
@@ -66,7 +69,6 @@ class TestFeatureFlagsNav:
         assert 'href="/advertisements"' in html
         assert 'href="/messages"' in html
         assert 'href="/map"' in html
-        assert 'href="/members"' in html
 
     def test_disabled_features_hide_nav_links(
         self, client_no_features: TestClient
@@ -128,7 +130,7 @@ class TestFeatureFlagsSEO:
     """Test feature flags affect SEO endpoints."""
 
     def test_sitemap_includes_all_when_enabled(self, client: TestClient) -> None:
-        """Sitemap should include all pages when all features are enabled."""
+        """Sitemap should include all feature-enabled pages."""
         response = client.get("/sitemap.xml")
         assert response.status_code == 200
         content = response.text
@@ -136,7 +138,6 @@ class TestFeatureFlagsSEO:
         assert "/nodes" in content
         assert "/advertisements" in content
         assert "/map" in content
-        assert "/members" in content
 
     def test_sitemap_excludes_disabled_features(
         self, client_no_features: TestClient

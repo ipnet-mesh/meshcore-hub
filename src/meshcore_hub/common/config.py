@@ -392,6 +392,7 @@ class WebSettings(CommonSettings):
         Automatic dependencies:
         - Dashboard requires at least one of nodes/advertisements/messages.
         - Map requires nodes (map displays node locations).
+        - Members requires OIDC to be enabled (honours OIDC_ENABLED).
         """
         has_dashboard_content = (
             self.feature_nodes or self.feature_advertisements or self.feature_messages
@@ -402,7 +403,7 @@ class WebSettings(CommonSettings):
             "advertisements": self.feature_advertisements,
             "messages": self.feature_messages,
             "map": self.feature_map and self.feature_nodes,
-            "members": self.feature_members,
+            "members": self.feature_members and self.oidc_enabled,
             "pages": self.feature_pages,
         }
 

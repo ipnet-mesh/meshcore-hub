@@ -12,6 +12,7 @@ export async function render(container, params, router) {
     const query = params.query || {};
     const search = query.search || '';
     const adv_type = query.adv_type || '';
+    const adopted_by = query.adopted_by || '';
     const page = parseInt(query.page, 10) || 1;
     const limit = parseInt(query.limit, 10) || 20;
     const offset = (page - 1) * limit;
@@ -50,7 +51,15 @@ ${displayContent}`, container);
 
     async function fetchAndRenderData() {
         try {
-            const data = await apiGet('/api/v1/nodes', { limit, offset, search, adv_type });
+            const apiParams = { limit, offset, search, adv_type };
+            if (adopted_by) apiParams.adopted_by = adopted_by;
+            const fetches = [apiGet('/api/v1/nodes', apiParams)];
+            if (config.oidc_enabled) {
+                fetches.push(apiGet('/api/v1/user/profiles', { limit: 500 }));
+            }
+            const results = await Promise.all(fetches);
+            const data = results[0];
+            const profiles = config.oidc_enabled ? (results[1]?.items || []) : [];
 
             const nodes = data.items || [];
             const total = data.total || 0;
@@ -110,7 +119,7 @@ ${displayContent}`, container);
                 });
 
             const paginationBlock = pagination(page, totalPages, '/nodes', {
-                search, adv_type, limit,
+                search, adv_type, adopted_by, limit,
             });
 
             renderPage(html`
@@ -135,6 +144,24 @@ ${displayContent}`, container);
                     <option value="room" ?selected=${adv_type === 'room'}>${t('node_types.room')}</option>
                 </select>
             </div>
+            ${config.oidc_enabled && profiles.length > 0 ? html`
+            <div class="form-control max-w-56">
+                <label class="label py-1">
+                    <span class="label-text">${t('common.filter_member_label')}</span>
+                </label>
+                <select name="adopted_by" class="select select-bordered select-sm" @change=${autoSubmit}>
+                    <option value="" ?selected=${!adopted_by}>${t('common.all_members')}</option>
+                    ${profiles.sort((a, b) => {
+                        const na = a.name || a.callsign || '';
+                        const nb = b.name || b.callsign || '';
+                        return na.localeCompare(nb);
+                    }).map(p => html`
+                    <option value=${p.id} ?selected=${adopted_by === p.id}>
+                        ${p.callsign ? p.name + ' (' + p.callsign + ')' : (p.name || p.callsign || p.user_id || p.id)}
+                    </option>`)}
+                </select>
+            </div>
+            ` : nothing}
             <div class="flex gap-2 w-full sm:w-auto">
                 <button type="submit" class="btn btn-primary btn-sm">${t('common.filter')}</button>
                 <a href="/nodes" class="btn btn-ghost btn-sm">${t('common.clear')}</a>

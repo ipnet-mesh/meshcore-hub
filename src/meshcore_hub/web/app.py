@@ -11,7 +11,7 @@ from typing import Any, AsyncGenerator
 from zoneinfo import ZoneInfo
 
 import httpx
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Query, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -439,6 +439,7 @@ def create_app(
     # Store feature flags with automatic dependencies:
     # - Dashboard requires at least one of nodes/advertisements/messages
     # - Map requires nodes (map displays node locations)
+    # - Members requires OIDC to be enabled
     effective_features = features if features is not None else settings.features
     overrides: dict[str, bool] = {}
     has_dashboard_content = (
@@ -450,6 +451,8 @@ def create_app(
         overrides["dashboard"] = False
     if not effective_features.get("nodes", True):
         overrides["map"] = False
+    if not settings.oidc_enabled:
+        overrides["members"] = False
     if overrides:
         effective_features = {**effective_features, **overrides}
     app.state.features = effective_features
@@ -640,7 +643,12 @@ def create_app(
 
     # --- Map Data Endpoint (server-side aggregation) ---
     @app.get("/map/data", tags=["Map"])
-    async def map_data(request: Request) -> JSONResponse:
+    async def map_data(
+        request: Request,
+        adopted_by: str | None = Query(
+            None, description="Filter by adopting user profile UUID"
+        ),
+    ) -> JSONResponse:
         """Return node location data as JSON for the map."""
         if not request.app.state.features.get("map", True):
             return JSONResponse({"detail": "Map feature is disabled"}, status_code=404)
@@ -664,8 +672,11 @@ def create_app(
                     }
 
             # Fetch all nodes from API
+            nodes_params: dict[str, str | int] = {"limit": 500}
+            if adopted_by:
+                nodes_params["adopted_by"] = adopted_by
             response = await request.app.state.http_client.get(
-                "/api/v1/nodes", params={"limit": 500}
+                "/api/v1/nodes", params=nodes_params
             )
             if response.status_code == 200:
                 data = response.json()
@@ -712,14 +723,12 @@ def create_app(
                     )
                     public_key = node.get("public_key")
 
-                    adopted_by = node.get("adopted_by")
+                    adopted_info = node.get("adopted_by")
                     owner = None
-                    if adopted_by and adopted_by.get("user_id"):
-                        pass
-                    if adopted_by:
+                    if adopted_info:
                         owner = {
-                            "name": adopted_by.get("name"),
-                            "callsign": adopted_by.get("callsign"),
+                            "name": adopted_info.get("name"),
+                            "callsign": adopted_info.get("callsign"),
                         }
 
                     nodes_with_location.append(
