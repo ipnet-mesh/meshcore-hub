@@ -1,7 +1,7 @@
 import { apiGet } from '../api.js';
 import {
     html, litRender, nothing,
-    getConfig, errorAlert, pageColors, t,
+    getConfig, errorAlert, pageColors, renderStatCard, t,
 } from '../components.js';
 import {
     iconDashboard, iconNodes, iconAdvertisements, iconMessages, iconMap,
@@ -27,6 +27,110 @@ function renderRadioConfig(rc) {
             </div>`);
 }
 
+function renderHeroSection({ networkName, logoUrl, logoInvertLight, networkCity, networkCountry, networkWelcomeText, features, customPages }) {
+    const cityCountry = (networkCity && networkCountry)
+        ? html`<p class="text-lg sm:text-2xl opacity-70 mt-2">${networkCity}, ${networkCountry}</p>`
+        : nothing;
+
+    const welcomeText = networkWelcomeText
+        ? html`<p class="py-4 max-w-[70%]">${networkWelcomeText}</p>`
+        : html`<p class="py-4 max-w-[70%]">
+            ${t('home.welcome_default', { network_name: networkName })}
+        </p>`;
+
+    const customPageButtons = features.pages !== false
+        ? customPages.slice(0, 3).map(page => html`
+            <a href="${page.url}" class="btn btn-outline">
+                ${iconPage('h-5 w-5 mr-2')}
+                ${page.title}
+            </a>`)
+        : [];
+
+    return html`
+        <div class="flex flex-col items-center text-center">
+            <div class="flex flex-col sm:flex-row items-center gap-4 sm:gap-8 mb-4">
+                <img src="${logoUrl}" alt="${networkName}" class="theme-logo ${logoInvertLight ? 'theme-logo--invert-light' : ''} h-24 w-24 sm:h-36 sm:w-36" />
+                <div class="flex flex-col justify-center">
+                    <h1 class="hero-title text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight">${networkName}</h1>
+                    ${cityCountry}
+                </div>
+            </div>
+            ${welcomeText}
+            <div class="flex-1"></div>
+            <div class="flex flex-wrap justify-center gap-3 mt-auto">
+                ${features.dashboard !== false ? html`
+                <a href="/dashboard" class="btn btn-outline btn-info">
+                    ${iconDashboard('h-5 w-5 mr-2')}
+                    ${t('entities.dashboard')}
+                </a>` : nothing}
+                ${features.nodes !== false ? html`
+                <a href="/nodes" class="btn btn-outline btn-primary">
+                    ${iconNodes('h-5 w-5 mr-2')}
+                    ${t('entities.nodes')}
+                </a>` : nothing}
+                ${features.advertisements !== false ? html`
+                <a href="/advertisements" class="btn btn-outline btn-secondary">
+                    ${iconAdvertisements('h-5 w-5 mr-2')}
+                    ${t('entities.advertisements')}
+                </a>` : nothing}
+                ${features.messages !== false ? html`
+                <a href="/messages" class="btn btn-outline btn-accent">
+                    ${iconMessages('h-5 w-5 mr-2')}
+                    ${t('entities.messages')}
+                </a>` : nothing}
+                ${features.map !== false ? html`
+                <a href="/map" class="btn btn-outline btn-warning">
+                    ${iconMap('h-5 w-5 mr-2')}
+                    ${t('entities.map')}
+                </a>` : nothing}
+                ${customPageButtons}
+            </div>
+        </div>`;
+}
+
+function renderStatsPanel({ features, stats }) {
+    return html`
+        <div class="flex flex-col gap-4">
+            ${features.nodes !== false ? renderStatCard({
+                icon: iconNodes('h-8 w-8'),
+                color: pageColors.nodes,
+                title: t('common.total_entity', { entity: t('entities.nodes') }),
+                value: stats.total_nodes,
+                description: t('home.all_discovered_nodes'),
+            }) : nothing}
+            ${features.advertisements !== false ? renderStatCard({
+                icon: iconAdvertisements('h-8 w-8'),
+                color: pageColors.adverts,
+                title: t('entities.advertisements'),
+                value: stats.advertisements_7d,
+                description: t('time.last_7_days'),
+            }) : nothing}
+            ${features.messages !== false ? renderStatCard({
+                icon: iconMessages('h-8 w-8'),
+                color: pageColors.messages,
+                title: t('entities.messages'),
+                value: stats.messages_7d,
+                description: t('time.last_7_days'),
+            }) : nothing}
+        </div>`;
+}
+
+function renderActivityChartCard({ showAdvertSeries, showMessageSeries }) {
+    return html`
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title">
+                    ${iconChart('h-6 w-6')}
+                    ${t('home.network_activity')}
+                </h2>
+                <p class="text-sm opacity-70 mb-2">${t('time.activity_per_day_last_7_days')}</p>
+                <div class="h-48">
+                    <canvas id="activityChart"></canvas>
+                </div>
+            </div>
+        </div>`;
+}
+
 export async function render(container, params, router) {
     try {
         const config = getConfig();
@@ -43,103 +147,29 @@ export async function render(container, params, router) {
             apiGet('/api/v1/dashboard/message-activity', { days: 7 }),
         ]);
 
-        const cityCountry = (config.network_city && config.network_country)
-            ? html`<p class="text-lg sm:text-2xl opacity-70 mt-2">${config.network_city}, ${config.network_country}</p>`
-            : nothing;
-
-        const welcomeText = config.network_welcome_text
-            ? html`<p class="py-4 max-w-[70%]">${config.network_welcome_text}</p>`
-            : html`<p class="py-4 max-w-[70%]">
-                ${t('home.welcome_default', { network_name: networkName })}
-            </p>`;
-
-        const customPageButtons = features.pages !== false
-            ? customPages.slice(0, 3).map(page => html`
-                <a href="${page.url}" class="btn btn-outline">
-                    ${iconPage('h-5 w-5 mr-2')}
-                    ${page.title}
-                </a>`)
-            : [];
-
         const showStats = features.nodes !== false || features.advertisements !== false || features.messages !== false;
         const showAdvertSeries = features.advertisements !== false;
         const showMessageSeries = features.messages !== false;
         const showActivityChart = showAdvertSeries || showMessageSeries;
 
+        const heroSection = renderHeroSection({
+            networkName, logoUrl, logoInvertLight,
+            networkCity: config.network_city,
+            networkCountry: config.network_country,
+            networkWelcomeText: config.network_welcome_text,
+            features, customPages,
+        });
+
+        const statsPanel = renderStatsPanel({ features, stats });
+
+        const activityChartCard = renderActivityChartCard({ showAdvertSeries, showMessageSeries });
+
         litRender(html`
 <div class="${showStats ? 'grid grid-cols-1 lg:grid-cols-3 gap-6' : ''} bg-base-100 rounded-box shadow-xl p-6">
-    <div class="${showStats ? 'lg:col-span-2' : ''} flex flex-col items-center text-center">
-        <div class="flex flex-col sm:flex-row items-center gap-4 sm:gap-8 mb-4">
-            <img src="${logoUrl}" alt="${networkName}" class="theme-logo ${logoInvertLight ? 'theme-logo--invert-light' : ''} h-24 w-24 sm:h-36 sm:w-36" />
-            <div class="flex flex-col justify-center">
-                <h1 class="hero-title text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight">${networkName}</h1>
-                ${cityCountry}
-            </div>
-        </div>
-        ${welcomeText}
-        <div class="flex-1"></div>
-        <div class="flex flex-wrap justify-center gap-3 mt-auto">
-            ${features.dashboard !== false ? html`
-            <a href="/dashboard" class="btn btn-outline btn-info">
-                ${iconDashboard('h-5 w-5 mr-2')}
-                ${t('entities.dashboard')}
-            </a>` : nothing}
-            ${features.nodes !== false ? html`
-            <a href="/nodes" class="btn btn-outline btn-primary">
-                ${iconNodes('h-5 w-5 mr-2')}
-                ${t('entities.nodes')}
-            </a>` : nothing}
-            ${features.advertisements !== false ? html`
-            <a href="/advertisements" class="btn btn-outline btn-secondary">
-                ${iconAdvertisements('h-5 w-5 mr-2')}
-                ${t('entities.advertisements')}
-            </a>` : nothing}
-            ${features.messages !== false ? html`
-            <a href="/messages" class="btn btn-outline btn-accent">
-                ${iconMessages('h-5 w-5 mr-2')}
-                ${t('entities.messages')}
-            </a>` : nothing}
-            ${features.map !== false ? html`
-            <a href="/map" class="btn btn-outline btn-warning">
-                ${iconMap('h-5 w-5 mr-2')}
-                ${t('entities.map')}
-            </a>` : nothing}
-            ${customPageButtons}
-        </div>
+    <div class="${showStats ? 'lg:col-span-2' : ''}">
+        ${heroSection}
     </div>
-
-    ${showStats ? html`
-    <div class="flex flex-col gap-4">
-        ${features.nodes !== false ? html`
-        <div class="stat bg-base-200 rounded-box shadow panel-glow" style="--panel-color: ${pageColors.nodes}">
-            <div class="stat-figure" style="color: ${pageColors.nodes}">
-                ${iconNodes('h-8 w-8')}
-            </div>
-            <div class="stat-title">${t('common.total_entity', { entity: t('entities.nodes') })}</div>
-            <div class="stat-value" style="color: ${pageColors.nodes}">${stats.total_nodes}</div>
-            <div class="stat-desc">${t('home.all_discovered_nodes')}</div>
-        </div>` : nothing}
-
-        ${features.advertisements !== false ? html`
-        <div class="stat bg-base-200 rounded-box shadow panel-glow" style="--panel-color: ${pageColors.adverts}">
-            <div class="stat-figure" style="color: ${pageColors.adverts}">
-                ${iconAdvertisements('h-8 w-8')}
-            </div>
-            <div class="stat-title">${t('entities.advertisements')}</div>
-            <div class="stat-value" style="color: ${pageColors.adverts}">${stats.advertisements_7d}</div>
-            <div class="stat-desc">${t('time.last_7_days')}</div>
-        </div>` : nothing}
-
-        ${features.messages !== false ? html`
-        <div class="stat bg-base-200 rounded-box shadow panel-glow" style="--panel-color: ${pageColors.messages}">
-            <div class="stat-figure" style="color: ${pageColors.messages}">
-                ${iconMessages('h-8 w-8')}
-            </div>
-            <div class="stat-title">${t('entities.messages')}</div>
-            <div class="stat-value" style="color: ${pageColors.messages}">${stats.messages_7d}</div>
-            <div class="stat-desc">${t('time.last_7_days')}</div>
-        </div>` : nothing}
-    </div>` : nothing}
+    ${showStats ? statsPanel : nothing}
 </div>
 
 <div class="grid grid-cols-1 md:grid-cols-2 ${showActivityChart ? 'lg:grid-cols-3' : ''} gap-6 mt-6">
@@ -175,19 +205,7 @@ export async function render(container, params, router) {
         </div>
     </div>
 
-    ${showActivityChart ? html`
-    <div class="card bg-base-100 shadow-xl">
-        <div class="card-body">
-            <h2 class="card-title">
-                ${iconChart('h-6 w-6')}
-                ${t('home.network_activity')}
-            </h2>
-            <p class="text-sm opacity-70 mb-2">${t('time.activity_per_day_last_7_days')}</p>
-            <div class="h-48">
-                <canvas id="activityChart"></canvas>
-            </div>
-        </div>
-    </div>` : nothing}
+    ${showActivityChart ? activityChartCard : nothing}
 </div>`, container);
 
         let chart = null;

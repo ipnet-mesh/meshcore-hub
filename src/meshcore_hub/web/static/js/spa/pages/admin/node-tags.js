@@ -4,7 +4,148 @@ import {
     getConfig, hasRole, typeEmoji, formatDateTimeShort, errorAlert,
     successAlert, truncateKey, t, escapeHtml,
 } from '../../components.js';
-import { iconTag, iconLock } from '../../icons.js';
+import { iconTag, iconLock, iconAlert, iconInfo } from '../../icons.js';
+
+function renderEditModal() {
+    return html`
+<dialog id="editModal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg">${t('common.edit_entity', { entity: t('entities.tag') })}</h3>
+        <form id="edit-tag-form" class="py-4">
+            <div class="form-control mb-4">
+                <label class="label"><span class="label-text">${t('common.key')}</span></label>
+                <input type="text" id="editKeyDisplay" class="input input-bordered" disabled>
+            </div>
+            <div class="form-control mb-4">
+                <label class="label"><span class="label-text">${t('common.value')}</span></label>
+                <input type="text" id="editValue" class="input input-bordered">
+            </div>
+            <div class="form-control mb-4">
+                <label class="label"><span class="label-text">${t('common.type')}</span></label>
+                <select id="editValueType" class="select select-bordered w-full">
+                    <option value="string">string</option>
+                    <option value="number">number</option>
+                    <option value="boolean">boolean</option>
+                </select>
+            </div>
+            <div class="modal-action">
+                <button type="button" class="btn" id="editCancel">${t('common.cancel')}</button>
+                <button type="submit" class="btn btn-primary">${t('common.save_changes')}</button>
+            </div>
+        </form>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>${t('common.close')}</button></form>
+</dialog>`;
+}
+
+function renderMoveModal(otherNodes) {
+    return html`
+<dialog id="moveModal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg">${t('common.move_entity_to_another_node', { entity: t('entities.tag') })}</h3>
+        <form id="move-tag-form" class="py-4">
+            <div class="form-control mb-4">
+                <label class="label"><span class="label-text">${t('admin_node_tags.tag_key')}</span></label>
+                <input type="text" id="moveKeyDisplay" class="input input-bordered" disabled>
+            </div>
+            <div class="form-control mb-4">
+                <label class="label"><span class="label-text">${t('admin_node_tags.destination_node')}</span></label>
+                <select id="moveDestination" class="select select-bordered w-full" required>
+                    <option value="">${t('map.select_destination_node')}</option>
+                    ${otherNodes.map(n => {
+                        const name = n.name || t('common.unnamed');
+                        const keyPreview = n.public_key.slice(0, 8) + '...' + n.public_key.slice(-4);
+                        return html`<option value=${n.public_key}>${name} (${keyPreview})</option>`;
+                    })}
+                </select>
+            </div>
+            <div class="alert alert-warning mb-4">
+                ${iconAlert('stroke-current shrink-0 h-6 w-6')}
+                <span>${t('admin_node_tags.move_warning')}</span>
+            </div>
+            <div class="modal-action">
+                <button type="button" class="btn" id="moveCancel">${t('common.cancel')}</button>
+                <button type="submit" class="btn btn-warning">${t('common.move_entity', { entity: t('entities.tag') })}</button>
+            </div>
+        </form>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>${t('common.close')}</button></form>
+</dialog>`;
+}
+
+function renderDeleteModal() {
+    return html`
+<dialog id="deleteModal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg">${t('common.delete_entity', { entity: t('entities.tag') })}</h3>
+        <div class="py-4">
+            <p class="py-4" id="delete_tag_confirm_message"></p>
+            <div class="alert alert-error mb-4">
+                ${iconAlert('stroke-current shrink-0 h-6 w-6')}
+                <span>${t('common.cannot_be_undone')}</span>
+            </div>
+            <div class="modal-action">
+                <button type="button" class="btn" id="deleteCancel">${t('common.cancel')}</button>
+                <button type="button" class="btn btn-error" id="deleteConfirm">${t('common.delete')}</button>
+            </div>
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>${t('common.close')}</button></form>
+</dialog>`;
+}
+
+function renderCopyAllModal(otherNodes, tags, nodeName) {
+    return html`
+<dialog id="copyAllModal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg">${t('common.copy_all_entity_to_another_node', { entity: t('entities.tags') })}</h3>
+        <form id="copy-all-form" class="py-4">
+            <p class="mb-4">${unsafeHTML(t('common.copy_all_entity_description', { count: tags.length, entity: t('entities.tags').toLowerCase(), name: escapeHtml(nodeName) }))}</p>
+            <div class="form-control mb-4">
+                <label class="label"><span class="label-text">${t('admin_node_tags.destination_node')}</span></label>
+                <select id="copyAllDestination" class="select select-bordered w-full" required>
+                    <option value="">${t('map.select_destination_node')}</option>
+                    ${otherNodes.map(n => {
+                        const name = n.name || t('common.unnamed');
+                        const keyPreview = n.public_key.slice(0, 8) + '...' + n.public_key.slice(-4);
+                        return html`<option value=${n.public_key}>${name} (${keyPreview})</option>`;
+                    })}
+                </select>
+            </div>
+            <div class="alert alert-info mb-4">
+                ${iconInfo('stroke-current shrink-0 h-6 w-6')}
+                <span>${t('admin_node_tags.copy_all_info')}</span>
+            </div>
+            <div class="modal-action">
+                <button type="button" class="btn" id="copyAllCancel">${t('common.cancel')}</button>
+                <button type="submit" class="btn btn-primary">${t('common.copy_entity', { entity: t('entities.tags') })}</button>
+            </div>
+        </form>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>${t('common.close')}</button></form>
+</dialog>`;
+}
+
+function renderDeleteAllModal(tags, nodeName) {
+    return html`
+<dialog id="deleteAllModal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg">${t('common.delete_all_entity', { entity: t('entities.tags') })}</h3>
+        <div class="py-4">
+            <p class="mb-4">${unsafeHTML(t('common.delete_all_entity_confirm', { count: tags.length, entity: t('entities.tags').toLowerCase(), name: escapeHtml(nodeName) }))}</p>
+            <div class="alert alert-error mb-4">
+                ${iconAlert('stroke-current shrink-0 h-6 w-6')}
+                <span>${t('admin_node_tags.delete_all_warning')}</span>
+            </div>
+            <div class="modal-action">
+                <button type="button" class="btn" id="deleteAllCancel">${t('common.cancel')}</button>
+                <button type="button" class="btn btn-error" id="deleteAllConfirm">${t('common.delete_all_entity', { entity: t('entities.tags') })}</button>
+            </div>
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>${t('common.close')}</button></form>
+</dialog>`;
+}
 
 export async function render(container, params, router) {
     try {
@@ -146,137 +287,15 @@ export async function render(container, params, router) {
     </div>
 </div>
 
-<dialog id="editModal" class="modal">
-    <div class="modal-box">
-        <h3 class="font-bold text-lg">${t('common.edit_entity', { entity: t('entities.tag') })}</h3>
-        <form id="edit-tag-form" class="py-4">
-            <div class="form-control mb-4">
-                <label class="label"><span class="label-text">${t('common.key')}</span></label>
-                <input type="text" id="editKeyDisplay" class="input input-bordered" disabled>
-            </div>
-            <div class="form-control mb-4">
-                <label class="label"><span class="label-text">${t('common.value')}</span></label>
-                <input type="text" id="editValue" class="input input-bordered">
-            </div>
-            <div class="form-control mb-4">
-                <label class="label"><span class="label-text">${t('common.type')}</span></label>
-                <select id="editValueType" class="select select-bordered w-full">
-                    <option value="string">string</option>
-                    <option value="number">number</option>
-                    <option value="boolean">boolean</option>
-                </select>
-            </div>
-            <div class="modal-action">
-                <button type="button" class="btn" id="editCancel">${t('common.cancel')}</button>
-                <button type="submit" class="btn btn-primary">${t('common.save_changes')}</button>
-            </div>
-        </form>
-    </div>
-    <form method="dialog" class="modal-backdrop"><button>${t('common.close')}</button></form>
-</dialog>
-
-<dialog id="moveModal" class="modal">
-    <div class="modal-box">
-        <h3 class="font-bold text-lg">${t('common.move_entity_to_another_node', { entity: t('entities.tag') })}</h3>
-        <form id="move-tag-form" class="py-4">
-            <div class="form-control mb-4">
-                <label class="label"><span class="label-text">${t('admin_node_tags.tag_key')}</span></label>
-                <input type="text" id="moveKeyDisplay" class="input input-bordered" disabled>
-            </div>
-            <div class="form-control mb-4">
-                <label class="label"><span class="label-text">${t('admin_node_tags.destination_node')}</span></label>
-                <select id="moveDestination" class="select select-bordered w-full" required>
-                    <option value="">${t('map.select_destination_node')}</option>
-                    ${otherNodes.map(n => {
-                        const name = n.name || t('common.unnamed');
-                        const keyPreview = n.public_key.slice(0, 8) + '...' + n.public_key.slice(-4);
-                        return html`<option value=${n.public_key}>${name} (${keyPreview})</option>`;
-                    })}
-                </select>
-            </div>
-            <div class="alert alert-warning mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                <span>${t('admin_node_tags.move_warning')}</span>
-            </div>
-            <div class="modal-action">
-                <button type="button" class="btn" id="moveCancel">${t('common.cancel')}</button>
-                <button type="submit" class="btn btn-warning">${t('common.move_entity', { entity: t('entities.tag') })}</button>
-            </div>
-        </form>
-    </div>
-    <form method="dialog" class="modal-backdrop"><button>${t('common.close')}</button></form>
-</dialog>
-
-<dialog id="deleteModal" class="modal">
-    <div class="modal-box">
-        <h3 class="font-bold text-lg">${t('common.delete_entity', { entity: t('entities.tag') })}</h3>
-        <div class="py-4">
-            <p class="py-4" id="delete_tag_confirm_message"></p>
-            <div class="alert alert-error mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                <span>${t('common.cannot_be_undone')}</span>
-            </div>
-            <div class="modal-action">
-                <button type="button" class="btn" id="deleteCancel">${t('common.cancel')}</button>
-                <button type="button" class="btn btn-error" id="deleteConfirm">${t('common.delete')}</button>
-            </div>
-        </div>
-    </div>
-    <form method="dialog" class="modal-backdrop"><button>${t('common.close')}</button></form>
-</dialog>
-
-<dialog id="copyAllModal" class="modal">
-    <div class="modal-box">
-        <h3 class="font-bold text-lg">${t('common.copy_all_entity_to_another_node', { entity: t('entities.tags') })}</h3>
-        <form id="copy-all-form" class="py-4">
-            <!-- unsafeHTML needed for translation HTML tags; nodeName is pre-escaped -->
-            <p class="mb-4">${unsafeHTML(t('common.copy_all_entity_description', { count: tags.length, entity: t('entities.tags').toLowerCase(), name: escapeHtml(nodeName) }))}</p>
-            <div class="form-control mb-4">
-                <label class="label"><span class="label-text">${t('admin_node_tags.destination_node')}</span></label>
-                <select id="copyAllDestination" class="select select-bordered w-full" required>
-                    <option value="">${t('map.select_destination_node')}</option>
-                    ${otherNodes.map(n => {
-                        const name = n.name || t('common.unnamed');
-                        const keyPreview = n.public_key.slice(0, 8) + '...' + n.public_key.slice(-4);
-                        return html`<option value=${n.public_key}>${name} (${keyPreview})</option>`;
-                    })}
-                </select>
-            </div>
-            <div class="alert alert-info mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                <span>${t('admin_node_tags.copy_all_info')}</span>
-            </div>
-            <div class="modal-action">
-                <button type="button" class="btn" id="copyAllCancel">${t('common.cancel')}</button>
-                <button type="submit" class="btn btn-primary">${t('common.copy_entity', { entity: t('entities.tags') })}</button>
-            </div>
-        </form>
-    </div>
-    <form method="dialog" class="modal-backdrop"><button>${t('common.close')}</button></form>
-</dialog>
-
-<dialog id="deleteAllModal" class="modal">
-    <div class="modal-box">
-        <h3 class="font-bold text-lg">${t('common.delete_all_entity', { entity: t('entities.tags') })}</h3>
-        <div class="py-4">
-            <!-- unsafeHTML needed for translation HTML tags; nodeName is pre-escaped -->
-            <p class="mb-4">${unsafeHTML(t('common.delete_all_entity_confirm', { count: tags.length, entity: t('entities.tags').toLowerCase(), name: escapeHtml(nodeName) }))}</p>
-            <div class="alert alert-error mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                <span>${t('admin_node_tags.delete_all_warning')}</span>
-            </div>
-            <div class="modal-action">
-                <button type="button" class="btn" id="deleteAllCancel">${t('common.cancel')}</button>
-                <button type="button" class="btn btn-error" id="deleteAllConfirm">${t('common.delete_all_entity', { entity: t('entities.tags') })}</button>
-            </div>
-        </div>
-    </div>
-    <form method="dialog" class="modal-backdrop"><button>${t('common.close')}</button></form>
-</dialog>`;
+${renderEditModal()}
+${renderMoveModal(otherNodes)}
+${renderDeleteModal()}
+${renderCopyAllModal(otherNodes, tags, nodeName)}
+${renderDeleteAllModal(tags, nodeName)}`;
         } else if (selectedPublicKey && !selectedNode) {
             contentHtml = html`
 <div class="alert alert-warning">
-    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+    ${iconAlert('stroke-current shrink-0 h-6 w-6')}
     <span>Node not found: ${selectedPublicKey}</span>
 </div>`;
         } else {

@@ -4,7 +4,7 @@ import {
     getConfig, formatDateTime, formatDateTimeShort,
     warningBadge,
     pagination,
-    createFilterHandler, autoSubmit, submitOnEnter, copyToClipboard, renderNodeDisplay, t
+    renderFilterCard, autoSubmit, submitOnEnter, copyToClipboard, renderNodeDisplay, t
 } from '../components.js';
 import { createAutoRefresh } from '../auto-refresh.js';
 
@@ -122,16 +122,15 @@ ${displayContent}`, container);
                 search, adv_type, adopted_by, limit,
             });
 
-            renderPage(html`
-<div class="card shadow mb-6 panel-solid" style="--panel-color: var(--color-neutral)">
-    <div class="card-body py-4">
-        <form method="GET" action="/nodes" class="flex gap-4 flex-wrap items-end" @submit=${createFilterHandler('/nodes', navigate)}>
+            const filterFields = [
+                () => html`
             <div class="form-control">
                 <label class="label py-1">
                     <span class="label-text">${t('common.search')}</span>
                 </label>
                 <input type="text" name="search" .value=${search} placeholder="${t('common.search_placeholder')}" class="input input-bordered input-sm w-80" @keydown=${submitOnEnter} />
-            </div>
+            </div>`,
+                () => html`
             <div class="form-control">
                 <label class="label py-1">
                     <span class="label-text">${t('common.type')}</span>
@@ -143,8 +142,10 @@ ${displayContent}`, container);
                     <option value="companion" ?selected=${adv_type === 'companion'}>${t('node_types.companion')}</option>
                     <option value="room" ?selected=${adv_type === 'room'}>${t('node_types.room')}</option>
                 </select>
-            </div>
-            ${config.oidc_enabled && profiles.length > 0 ? html`
+            </div>`,
+            ];
+            if (config.oidc_enabled && profiles.length > 0) {
+                filterFields.push(() => html`
             <div class="form-control max-w-56">
                 <label class="label py-1">
                     <span class="label-text">${t('common.filter_member_label')}</span>
@@ -160,15 +161,16 @@ ${displayContent}`, container);
                         ${p.callsign ? p.name + ' (' + p.callsign + ')' : (p.name || p.callsign || p.user_id || p.id)}
                     </option>`)}
                 </select>
-            </div>
-            ` : nothing}
-            <div class="flex gap-2 w-full sm:w-auto">
-                <button type="submit" class="btn btn-primary btn-sm">${t('common.filter')}</button>
-                <a href="/nodes" class="btn btn-ghost btn-sm">${t('common.clear')}</a>
-            </div>
-        </form>
-    </div>
-</div>
+            </div>`);
+            }
+
+            const filterCard = renderFilterCard({
+                fields: filterFields,
+                basePath: '/nodes',
+                navigate,
+            });
+
+            renderPage(html`${filterCard}
 
 <div class="lg:hidden space-y-3">
     ${mobileCards}
