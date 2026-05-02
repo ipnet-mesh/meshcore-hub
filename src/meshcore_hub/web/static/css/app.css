@@ -91,6 +91,10 @@
 #app .btn-outline:hover {
     color: #fff !important;
 }
+.btn-hero-members {
+    --btn-color: var(--color-members);
+    --btn-border-color: var(--color-members);
+}
 
 /* ==========================================================================
    Panel Glow

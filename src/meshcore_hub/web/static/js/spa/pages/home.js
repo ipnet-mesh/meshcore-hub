@@ -4,7 +4,7 @@ import {
     getConfig, errorAlert, pageColors, renderStatCard, t,
 } from '../components.js';
 import {
-    iconDashboard, iconNodes, iconAdvertisements, iconMessages, iconMap,
+    iconDashboard, iconNodes, iconAdvertisements, iconMessages, iconMembers, iconMap,
     iconPage, iconInfo, iconChart, iconGlobe, iconGithub,
 } from '../icons.js';
 
@@ -77,6 +77,11 @@ function renderHeroSection({ networkName, logoUrl, logoInvertLight, networkCity,
                 <a href="/messages" class="btn btn-outline btn-accent">
                     ${iconMessages('h-5 w-5 mr-2')}
                     ${t('entities.messages')}
+                </a>` : nothing}
+                ${features.members !== false ? html`
+                <a href="/members" class="btn btn-outline btn-hero-members">
+                    ${iconMembers('h-5 w-5 mr-2')}
+                    ${t('entities.members')}
                 </a>` : nothing}
                 ${features.map !== false ? html`
                 <a href="/map" class="btn btn-outline btn-warning">
