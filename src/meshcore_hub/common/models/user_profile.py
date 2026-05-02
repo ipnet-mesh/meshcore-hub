@@ -23,6 +23,8 @@ class UserProfile(Base, UUIDMixin, TimestampMixin):
         name: User's display name or preferred name (blank initially)
         callsign: Amateur radio callsign (blank initially)
         roles: Comma-separated OIDC roles string (updated on each auth)
+        description: User-defined short description/bio
+        url: Personal website or profile link
         created_at: Record creation timestamp
         updated_at: Record update timestamp
     """
@@ -47,6 +49,14 @@ class UserProfile(Base, UUIDMixin, TimestampMixin):
         Text,
         nullable=True,
         default=None,
+    )
+    description: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+    url: Mapped[Optional[str]] = mapped_column(
+        String(2048),
+        nullable=True,
     )
 
     node_associations: Mapped[list["UserProfileNode"]] = relationship(

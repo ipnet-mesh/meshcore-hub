@@ -66,6 +66,8 @@ function renderPublicProfile(profile, config, target) {
         <h2 class="card-title">${profile.name || t('common.unnamed')}</h2>
         ${profile.callsign ? html`<span class="badge badge-neutral">${profile.callsign}</span>` : nothing}
         ${renderRoleBadges(profile.roles)}
+        ${profile.description ? html`<p class="text-sm opacity-80 mt-2">${profile.description}</p>` : nothing}
+        ${profile.url ? html`<a href="${profile.url}" target="_blank" rel="noopener noreferrer" class="link link-primary text-sm mt-1 inline-block">${profile.url}</a>` : nothing}
         ${renderProfileDetails(profile, config)}
     </div>
 </div>`, target);
@@ -129,6 +131,18 @@ ${flashHtml}
                                value=${profile.callsign || ''}
                                placeholder=${t('user_profile.callsign_placeholder')} maxlength="20" />
                     </label>
+                    <label class="flex items-center gap-3 py-1">
+                        <span class="text-sm font-medium shrink-0 w-24">${t('user_profile.description_label')}</span>
+                        <input type="text" name="description" class="input input-bordered flex-1"
+                               value=${profile.description || ''}
+                               placeholder=${t('user_profile.description_placeholder')} maxlength="500" />
+                    </label>
+                    <label class="flex items-center gap-3 py-1">
+                        <span class="text-sm font-medium shrink-0 w-24">${t('user_profile.url_label')}</span>
+                        <input type="url" name="url" class="input input-bordered flex-1"
+                               value=${profile.url || ''}
+                               placeholder=${t('user_profile.url_placeholder')} maxlength="2048" />
+                    </label>
                     <button type="submit" class="btn btn-primary btn-sm">${t('user_profile.save_profile')}</button>
                 </form>
                 ${renderMemberSince(profile)}
@@ -157,6 +171,8 @@ ${flashHtml}
             const body = {
                 name: form.name.value.trim() || null,
                 callsign: form.callsign.value.trim() || null,
+                description: form.description.value.trim() || null,
+                url: form.url.value.trim() || null,
             };
             try {
                 await apiPut(profilePath, body);

@@ -216,6 +216,101 @@ class TestUpdateProfile:
         assert data["callsign"] == "G1NEW"
         assert data["name"] == sample_user_profile.name
 
+    def test_update_profile_description(self, client_no_auth, sample_user_profile):
+        """Test updating profile description."""
+        response = client_no_auth.put(
+            f"/api/v1/user/profile/{sample_user_profile.id}",
+            json={"description": "Operator of IP2 repeaters"},
+            headers=USER_HEADERS,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["description"] == "Operator of IP2 repeaters"
+
+    def test_update_profile_url(self, client_no_auth, sample_user_profile):
+        """Test updating profile url."""
+        response = client_no_auth.put(
+            f"/api/v1/user/profile/{sample_user_profile.id}",
+            json={"url": "https://qrz.com/db/W1TEST"},
+            headers=USER_HEADERS,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["url"] == "https://qrz.com/db/W1TEST"
+
+    def test_update_profile_url_rejects_invalid(
+        self, client_no_auth, sample_user_profile
+    ):
+        """Test that invalid URLs are rejected."""
+        response = client_no_auth.put(
+            f"/api/v1/user/profile/{sample_user_profile.id}",
+            json={"url": "not-a-valid-url"},
+            headers=USER_HEADERS,
+        )
+        assert response.status_code == 422
+
+    def test_update_profile_clear_callsign(self, client_no_auth, sample_user_profile):
+        """Test clearing callsign via explicit null."""
+        response = client_no_auth.put(
+            f"/api/v1/user/profile/{sample_user_profile.id}",
+            json={"callsign": None},
+            headers=USER_HEADERS,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["callsign"] is None
+
+    def test_update_profile_clear_description(
+        self, client_no_auth, sample_user_profile
+    ):
+        """Test clearing description via explicit null."""
+        # First set a description
+        client_no_auth.put(
+            f"/api/v1/user/profile/{sample_user_profile.id}",
+            json={"description": "Initial description"},
+            headers=USER_HEADERS,
+        )
+        # Then clear it
+        response = client_no_auth.put(
+            f"/api/v1/user/profile/{sample_user_profile.id}",
+            json={"description": None},
+            headers=USER_HEADERS,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["description"] is None
+
+    def test_update_profile_clear_url(self, client_no_auth, sample_user_profile):
+        """Test clearing url via explicit null."""
+        # First set a url
+        client_no_auth.put(
+            f"/api/v1/user/profile/{sample_user_profile.id}",
+            json={"url": "https://qrz.com/db/W1TEST"},
+            headers=USER_HEADERS,
+        )
+        # Then clear it
+        response = client_no_auth.put(
+            f"/api/v1/user/profile/{sample_user_profile.id}",
+            json={"url": None},
+            headers=USER_HEADERS,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["url"] is None
+
+    def test_update_profile_name_cannot_be_cleared(
+        self, client_no_auth, sample_user_profile
+    ):
+        """Test that name cannot be cleared (set by IdP on login)."""
+        response = client_no_auth.put(
+            f"/api/v1/user/profile/{sample_user_profile.id}",
+            json={"name": None},
+            headers=USER_HEADERS,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == sample_user_profile.name
+
     def test_update_profile_rejects_wrong_user(
         self, client_no_auth, sample_user_profile
     ):
