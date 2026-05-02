@@ -63,8 +63,10 @@ function renderPublicProfile(profile, config, target) {
 
 <div class="card bg-base-100 shadow-xl">
     <div class="card-body">
-        <h2 class="card-title">${profile.name || t('common.unnamed')}</h2>
-        ${profile.callsign ? html`<span class="badge badge-neutral">${profile.callsign}</span>` : nothing}
+        <h2 class="card-title">
+            ${profile.name || t('common.unnamed')}
+            ${profile.callsign ? html`<span class="badge badge-neutral badge-sm">${profile.callsign}</span>` : nothing}
+        </h2>
         ${renderRoleBadges(profile.roles)}
         ${profile.description ? html`<p class="text-sm opacity-80 mt-2">${profile.description}</p>` : nothing}
         ${profile.url ? html`<a href="${profile.url}" target="_blank" rel="noopener noreferrer" class="link link-primary text-sm mt-1 inline-block">${profile.url}</a>` : nothing}
