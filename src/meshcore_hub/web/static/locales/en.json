@@ -155,6 +155,7 @@
         "adopt": "Adopt",
         "release": "Release",
         "adopted_by": "Adopted by {{name}}",
+        "adopted_by_prefix": "Adopted by",
         "not_adopted": "This node has not been adopted by any operator.",
         "adopt_success": "Node adopted successfully",
         "release_success": "Node released successfully",

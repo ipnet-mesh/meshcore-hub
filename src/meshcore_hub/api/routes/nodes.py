@@ -22,6 +22,7 @@ def _get_adopted_by(node: Node) -> Optional[AdoptedByUser]:
             user_id=profile.user_id,
             name=profile.name,
             callsign=profile.callsign,
+            profile_id=profile.id,
         )
     return None
 

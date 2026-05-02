@@ -303,7 +303,10 @@ function renderAdoptionSection(node, config) {
             return html`<div class="card bg-base-100 shadow-xl h-full">
                 <div class="card-body">
                     <h2 class="card-title">${t('nodes.ownership')}</h2>
-                    <p class="text-sm opacity-70">${t('nodes.adopted_by', { name: ownerName })}</p>
+                    <p class="text-sm opacity-70">
+                        ${t('nodes.adopted_by_prefix')}
+                        <a href="/profile/${node.adopted_by.profile_id}" class="link link-hover text-primary">${ownerName}</a>
+                    </p>
                 </div>
             </div>`;
         }
@@ -323,7 +326,10 @@ function renderAdoptionSection(node, config) {
             <div class="card-body">
                 <h2 class="card-title">${t('nodes.ownership')}</h2>
                 <div class="flex items-center justify-between">
-                    <p class="text-sm opacity-70">${t('nodes.adopted_by', { name: ownerName })}</p>
+                    <p class="text-sm opacity-70">
+                        ${t('nodes.adopted_by_prefix')}
+                        <a href="/profile/${node.adopted_by.profile_id}" class="link link-hover text-primary">${ownerName}</a>
+                    </p>
                     ${releaseBtnHtml}
                 </div>
             </div>

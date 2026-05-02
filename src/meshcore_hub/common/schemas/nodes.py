@@ -78,6 +78,7 @@ class AdoptedByUser(BaseModel):
     user_id: str = Field(..., description="OIDC subject identifier")
     name: Optional[str] = Field(default=None, description="User display name")
     callsign: Optional[str] = Field(default=None, description="Amateur radio callsign")
+    profile_id: str = Field(..., description="User profile UUID for profile links")
 
     class Config:
         from_attributes = True
