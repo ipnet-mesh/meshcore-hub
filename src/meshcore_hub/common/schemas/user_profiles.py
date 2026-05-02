@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import AnyUrl, BaseModel, Field
 
 
 class UserProfileRead(BaseModel):
@@ -14,6 +14,14 @@ class UserProfileRead(BaseModel):
     name: Optional[str] = Field(default=None, description="User's display name")
     callsign: Optional[str] = Field(default=None, description="Amateur radio callsign")
     roles: list[str] = Field(default_factory=list, description="User roles")
+    description: Optional[str] = Field(
+        default=None, max_length=500, description="User's short description/bio"
+    )
+    url: Optional[str] = Field(
+        default=None,
+        max_length=2048,
+        description="User's personal website or profile link",
+    )
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
@@ -29,6 +37,8 @@ class UserProfileRead(BaseModel):
                 "name": obj.name,  # type: ignore[attr-defined]
                 "callsign": obj.callsign,  # type: ignore[attr-defined]
                 "roles": obj.role_list,
+                "description": obj.description,  # type: ignore[attr-defined]
+                "url": obj.url,  # type: ignore[attr-defined]
                 "created_at": obj.created_at,  # type: ignore[attr-defined]
                 "updated_at": obj.updated_at,  # type: ignore[attr-defined]
             }
@@ -43,6 +53,14 @@ class UserProfilePublic(BaseModel):
     name: Optional[str] = Field(default=None, description="User's display name")
     callsign: Optional[str] = Field(default=None, description="Amateur radio callsign")
     roles: list[str] = Field(default_factory=list, description="User roles")
+    description: Optional[str] = Field(
+        default=None, max_length=500, description="User's short description/bio"
+    )
+    url: Optional[str] = Field(
+        default=None,
+        max_length=2048,
+        description="User's personal website or profile link",
+    )
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
@@ -69,6 +87,14 @@ class UserProfileListItem(BaseModel):
     name: Optional[str] = Field(default=None, description="User's display name")
     callsign: Optional[str] = Field(default=None, description="Amateur radio callsign")
     roles: list[str] = Field(default_factory=list, description="User roles")
+    description: Optional[str] = Field(
+        default=None, max_length=500, description="User's short description/bio"
+    )
+    url: Optional[str] = Field(
+        default=None,
+        max_length=2048,
+        description="User's personal website or profile link",
+    )
     node_count: int = Field(default=0, description="Number of adopted nodes")
     adopted_nodes: list[AdoptedNodeRead] = Field(
         default_factory=list,
@@ -98,6 +124,16 @@ class UserProfileUpdate(BaseModel):
         default=None,
         max_length=20,
         description="Amateur radio callsign",
+    )
+    description: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="User's short description/bio",
+    )
+    url: Optional[AnyUrl] = Field(
+        default=None,
+        max_length=2048,
+        description="User's personal website or profile link",
     )
 
 

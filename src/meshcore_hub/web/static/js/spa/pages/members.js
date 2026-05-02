@@ -24,6 +24,14 @@ function renderProfileTile(profile) {
         })}</div>`
         : nothing;
 
+    const descriptionText = profile.description
+        ? html`<p class="text-sm opacity-70 mt-1 truncate">${profile.description}</p>`
+        : nothing;
+
+    const urlLink = profile.url
+        ? html`<a href="${profile.url}" target="_blank" rel="noopener noreferrer" class="link link-primary text-xs mt-1 inline-block truncate">${profile.url}</a>`
+        : nothing;
+
     return html`<a href="/profile/${profile.id}" class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow">
         <div class="card-body">
             <h2 class="card-title">
@@ -31,6 +39,8 @@ function renderProfileTile(profile) {
                 ${callsignBadge}
             </h2>
             ${roleBadges}
+            ${descriptionText}
+            ${urlLink}
             ${nodeCountLabel}
             ${nodeBadges}
         </div>

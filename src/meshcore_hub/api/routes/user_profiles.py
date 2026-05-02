@@ -3,6 +3,7 @@
 import logging
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
+from pydantic import AnyUrl
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
@@ -83,6 +84,8 @@ async def list_profiles(
                 name=profile.name,
                 callsign=profile.callsign,
                 roles=profile.role_list,
+                description=profile.description,
+                url=profile.url,
                 node_count=len(profile.node_associations),
                 adopted_nodes=adopted_nodes,
             )
@@ -115,6 +118,8 @@ async def get_my_profile(
         name=profile.name,
         callsign=profile.callsign,
         roles=profile.role_list,
+        description=profile.description,
+        url=profile.url,
         created_at=profile.created_at,
         updated_at=profile.updated_at,
         nodes=_build_adopted_nodes(profile),
@@ -146,6 +151,8 @@ async def get_profile(
                 name=profile.name,
                 callsign=profile.callsign,
                 roles=profile.role_list,
+                description=profile.description,
+                url=profile.url,
                 created_at=profile.created_at,
                 updated_at=profile.updated_at,
                 nodes=_build_adopted_nodes(profile),
@@ -164,6 +171,8 @@ async def get_profile(
         name=public_profile.name,
         callsign=public_profile.callsign,
         roles=public_profile.role_list,
+        description=public_profile.description,
+        url=public_profile.url,
         created_at=public_profile.created_at,
         updated_at=public_profile.updated_at,
         nodes=_build_adopted_nodes(public_profile),
@@ -195,8 +204,12 @@ async def update_profile(
 
     if profile_update.name is not None:
         profile.name = profile_update.name
-    if profile_update.callsign is not None:
-        profile.callsign = profile_update.callsign
+
+    update_data = profile_update.model_dump(exclude_unset=True, exclude={"name"})
+    for field, value in update_data.items():
+        if isinstance(value, AnyUrl):
+            value = str(value)
+        setattr(profile, field, value)
 
     session.commit()
     session.refresh(profile)
