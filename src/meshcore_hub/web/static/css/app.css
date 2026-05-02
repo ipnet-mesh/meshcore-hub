@@ -94,7 +94,6 @@
 .btn-hero-members {
     --btn-color: var(--color-members);
     --btn-border-color: var(--color-members);
-    --btn-bg: transparent;
 }
 
 /* ==========================================================================
