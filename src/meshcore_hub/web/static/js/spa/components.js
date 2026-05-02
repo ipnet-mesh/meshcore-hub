@@ -8,7 +8,7 @@ import { html, nothing } from 'lit-html';
 import { render } from 'lit-html';
 import { unsafeHTML } from 'lit-html/directives/unsafe-html.js';
 import { t } from './i18n.js';
-import { iconAlert } from './icons.js';
+import { iconAlert, iconError, iconInfo, iconSuccess, iconUser, iconSettings, iconLogout } from './icons.js';
 
 // Re-export lit-html utilities for page modules
 export { html, nothing, unsafeHTML };
@@ -368,7 +368,7 @@ export function loading() {
  */
 export function errorAlert(message) {
     return html`<div role="alert" class="alert alert-error mb-4">
-        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        ${iconError('stroke-current shrink-0 h-6 w-6')}
         <span>${message}</span>
     </div>`;
 }
@@ -380,7 +380,7 @@ export function errorAlert(message) {
  */
 export function infoAlert(message) {
     return html`<div role="alert" class="alert alert-info mb-4">
-        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        ${iconInfo('stroke-current shrink-0 h-6 w-6')}
         <span>${message}</span>
     </div>`;
 }
@@ -392,7 +392,7 @@ export function infoAlert(message) {
  */
 export function successAlert(message) {
     return html`<div role="alert" class="alert alert-success mb-4">
-        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        ${iconSuccess('stroke-current shrink-0 h-6 w-6')}
         <span>${message}</span>
     </div>`;
 }
@@ -592,59 +592,45 @@ export function submitOnEnter(e) {
  * @param {HTMLElement} container - The #auth-section element
  * @param {Object} config - App configuration object
  */
-function _svgUser() {
-    return '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>';
-}
-
-function _svgSettings() {
-    return '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>';
-}
-
-function _svgLogout() {
-    return '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" /></svg>';
-}
-
 export function renderAuthSection(container, config) {
     if (!container) return;
     if (!config.oidc_enabled) {
-        container.innerHTML = '';
+        render(nothing, container);
         return;
     }
 
     const user = config.user;
     if (!user) {
-        container.innerHTML = `
+        render(html`
             <a href="/auth/login" class="btn btn-sm btn-outline">${t('auth.login')}</a>
-        `;
+        `, container);
         return;
     }
 
     const displayName = user.name || user.email || 'User';
     const initials = displayName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
     const pictureHtml = user.picture
-        ? `<img src="${user.picture}" alt="${displayName}" class="w-8 h-8 rounded-full" />`
-        : `<span class="text-sm font-bold">${initials}</span>`;
+        ? html`<img src=${user.picture} alt=${displayName} class="w-8 h-8 rounded-full" />`
+        : html`<span class="text-sm font-bold">${initials}</span>`;
 
-    const roleBadges = (config.roles || [])
-        .map(r => {
-            const key = `auth.role_${r}`;
-            const label = t(key);
-            const name = label !== key ? label : r;
-            return `<span class="badge badge-primary badge-xs">${name}</span>`;
-        })
-        .join('');
+    const roleBadges = (config.roles || []).map(r => {
+        const key = `auth.role_${r}`;
+        const label = t(key);
+        const name = label !== key ? label : r;
+        return html`<span class="badge badge-primary badge-xs">${name}</span>`;
+    });
 
     const adminItem = hasRole('admin')
-        ? `<li><a href="/admin/">${_svgSettings()} ${t('entities.admin')}</a></li>`
-        : '';
+        ? html`<li><a href="/admin/">${iconSettings('h-4 w-4')} ${t('entities.admin')}</a></li>`
+        : nothing;
 
-    const profileItem = `<li><a href="/profile">${_svgUser()} ${t('links.profile')}</a></li>`;
+    const profileItem = html`<li><a href="/profile">${iconUser('h-4 w-4')} ${t('links.profile')}</a></li>`;
 
     const debugId = config.debug && user.sub
-        ? `<span class="text-xs opacity-40 font-mono">${user.sub}</span>`
-        : '';
+        ? html`<span class="text-xs opacity-40 font-mono">${user.sub}</span>`
+        : nothing;
 
-    container.innerHTML = `
+    render(html`
         <div class="dropdown dropdown-end">
             <div tabindex="0" role="button" class="btn btn-ghost btn-circle btn-sm avatar">
                 ${pictureHtml}
@@ -654,14 +640,58 @@ export function renderAuthSection(container, config) {
                     <div class="flex flex-col gap-1">
                         <span class="font-medium">${displayName}</span>
                         ${debugId}
-                        ${roleBadges ? `<div class="flex flex-wrap gap-1">${roleBadges}</div>` : ''}
+                        ${roleBadges.length > 0 ? html`<div class="flex flex-wrap gap-1">${roleBadges}</div>` : nothing}
                     </div>
                 </li>
                 <hr class="my-1 opacity-20">
                 ${adminItem}
                 ${profileItem}
-                <li><a href="/auth/logout">${_svgLogout()} ${t('auth.logout')}</a></li>
+                <li><a href="/auth/logout">${iconLogout('h-4 w-4')} ${t('auth.logout')}</a></li>
             </ul>
         </div>
+    `, container);
+}
+
+/**
+ * Render a filter card with configurable form fields, submit, and clear buttons.
+ * @param {Array<Function>} options.fields - Array of render functions returning lit-html form controls
+ * @param {string} options.basePath - Base URL path for the page (e.g., '/nodes')
+ * @param {Function} options.navigate - Router navigate function
+ * @param {string} [options.submitLabel] - Text for submit button (default: translated "Filter")
+ * @param {string} [options.clearLabel] - Text for clear button (default: translated "Clear")
+ * @returns {TemplateResult}
+ */
+export function renderFilterCard({ fields, basePath, navigate, submitLabel, clearLabel }) {
+    return html`
+        <div class="card shadow mb-6 panel-solid" style="--panel-color: var(--color-neutral)">
+            <div class="card-body py-4">
+                <form method="GET" action=${basePath} class="flex gap-4 flex-wrap items-end" @submit=${createFilterHandler(basePath, navigate)}>
+                    ${fields.map(f => f())}
+                    <div class="flex gap-2 w-full sm:w-auto">
+                        <button type="submit" class="btn btn-primary btn-sm">${submitLabel || t('common.filter')}</button>
+                        <a href=${basePath} class="btn btn-ghost btn-sm">${clearLabel || t('common.clear')}</a>
+                    </div>
+                </form>
+            </div>
+        </div>
     `;
+}
+
+/**
+ * Render a single stat card for dashboard/home pages.
+ * @param {TemplateResult} options.icon - lit-html icon (from icons.js)
+ * @param {string} options.color - CSS color value for glow (e.g., pageColors.dashboard)
+ * @param {string} options.title - Stat title
+ * @param {string|number} options.value - Stat value
+ * @param {string} [options.description] - Optional description
+ * @returns {TemplateResult}
+ */
+export function renderStatCard({ icon, color, title, value, description }) {
+    return html`
+        <div class="stat bg-base-200 rounded-box shadow panel-glow" style="--panel-color: ${color}">
+            <div class="stat-figure" style="color: ${color}">${icon}</div>
+            <div class="stat-title">${title}</div>
+            <div class="stat-value" style="color: ${color}">${value}</div>
+            ${description ? html`<div class="stat-desc">${description}</div>` : nothing}
+        </div>`;
 }

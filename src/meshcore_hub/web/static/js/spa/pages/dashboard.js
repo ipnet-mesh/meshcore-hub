@@ -2,7 +2,7 @@ import { apiGet } from '../api.js';
 import {
     html, litRender, nothing,
     getConfig, getChannelLabelsMap, resolveChannelLabel,
-    typeEmoji, errorAlert, pageColors, t, formatDateTime,
+    typeEmoji, errorAlert, pageColors, renderStatCard, t, formatDateTime,
 } from '../components.js';
 import {
     iconNodes, iconAdvertisements, iconMessages, iconChannel,
@@ -107,69 +107,11 @@ function gridCols(count) {
     return '';
 }
 
-export async function render(container, params, router) {
-    try {
-        const config = getConfig();
-        const channelLabels = getChannelLabelsMap(config);
-        const features = config.features || {};
-        const showNodes = features.nodes !== false;
-        const showAdverts = features.advertisements !== false;
-        const showMessages = features.messages !== false;
-
-        const [stats, advertActivity, messageActivity, nodeCount] = await Promise.all([
-            apiGet('/api/v1/dashboard/stats'),
-            apiGet('/api/v1/dashboard/activity', { days: 7 }),
-            apiGet('/api/v1/dashboard/message-activity', { days: 7 }),
-            apiGet('/api/v1/dashboard/node-count', { days: 7 }),
-        ]);
-
-        // Top section: stats + charts
-        const topCount = (showNodes ? 1 : 0) + (showAdverts ? 1 : 0) + (showMessages ? 1 : 0);
-        const topGrid = gridCols(topCount);
-
-        // Bottom section: recent adverts + recent channel messages
-        const bottomCount = (showAdverts ? 1 : 0) + (showMessages ? 1 : 0);
-        const bottomGrid = gridCols(bottomCount);
-
-        litRender(html`
-<div class="flex items-center justify-between mb-6">
-    <h1 class="text-3xl font-bold">${t('entities.dashboard')}</h1>
-</div>
-
-${topCount > 0 ? html`
-<div class="grid grid-cols-1 ${topGrid} gap-6 mb-6">
-    ${showNodes ? html`
-    <div class="stat bg-base-100 rounded-box shadow-xl panel-glow" style="--panel-color: ${pageColors.nodes}">
-        <div class="stat-figure" style="color: ${pageColors.nodes}">
-            ${iconNodes('h-8 w-8')}
-        </div>
-        <div class="stat-title">${t('common.total_entity', { entity: t('entities.nodes') })}</div>
-        <div class="stat-value" style="color: ${pageColors.nodes}">${stats.total_nodes}</div>
-        <div class="stat-desc">${t('dashboard.all_discovered_nodes')}</div>
-    </div>` : nothing}
-
-    ${showAdverts ? html`
-    <div class="stat bg-base-100 rounded-box shadow-xl panel-glow" style="--panel-color: ${pageColors.adverts}">
-        <div class="stat-figure" style="color: ${pageColors.adverts}">
-            ${iconAdvertisements('h-8 w-8')}
-        </div>
-        <div class="stat-title">${t('entities.advertisements')}</div>
-        <div class="stat-value" style="color: ${pageColors.adverts}">${stats.advertisements_7d}</div>
-        <div class="stat-desc">${t('time.last_7_days')}</div>
-    </div>` : nothing}
-
-    ${showMessages ? html`
-    <div class="stat bg-base-100 rounded-box shadow-xl panel-glow" style="--panel-color: ${pageColors.messages}">
-        <div class="stat-figure" style="color: ${pageColors.messages}">
-            ${iconMessages('h-8 w-8')}
-        </div>
-        <div class="stat-title">${t('entities.messages')}</div>
-        <div class="stat-value" style="color: ${pageColors.messages}">${stats.messages_7d}</div>
-        <div class="stat-desc">${t('time.last_7_days')}</div>
-    </div>` : nothing}
-</div>
-
-<div class="grid grid-cols-1 ${topGrid} gap-6 mb-8">
+function renderChartCards({ showNodes, showAdverts, showMessages }) {
+    const visibleCount = (showNodes ? 1 : 0) + (showAdverts ? 1 : 0) + (showMessages ? 1 : 0);
+    if (visibleCount === 0) return nothing;
+    return html`
+<div class="grid grid-cols-1 ${gridCols(visibleCount)} gap-6 mb-8">
     ${showNodes ? html`
     <div class="card bg-base-100 shadow-xl panel-glow" style="--panel-color: var(--color-neutral)">
         <div class="card-body">
@@ -211,7 +153,66 @@ ${topCount > 0 ? html`
             </div>
         </div>
     </div>` : nothing}
-</div>` : nothing}
+</div>`;
+}
+
+export async function render(container, params, router) {
+    try {
+        const config = getConfig();
+        const channelLabels = getChannelLabelsMap(config);
+        const features = config.features || {};
+        const showNodes = features.nodes !== false;
+        const showAdverts = features.advertisements !== false;
+        const showMessages = features.messages !== false;
+
+        const [stats, advertActivity, messageActivity, nodeCount] = await Promise.all([
+            apiGet('/api/v1/dashboard/stats'),
+            apiGet('/api/v1/dashboard/activity', { days: 7 }),
+            apiGet('/api/v1/dashboard/message-activity', { days: 7 }),
+            apiGet('/api/v1/dashboard/node-count', { days: 7 }),
+        ]);
+
+        // Top section: stats + charts
+        const topCount = (showNodes ? 1 : 0) + (showAdverts ? 1 : 0) + (showMessages ? 1 : 0);
+        const topGrid = gridCols(topCount);
+
+        // Bottom section: recent adverts + recent channel messages
+        const bottomCount = (showAdverts ? 1 : 0) + (showMessages ? 1 : 0);
+        const bottomGrid = gridCols(bottomCount);
+
+        litRender(html`
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-3xl font-bold">${t('entities.dashboard')}</h1>
+</div>
+
+${topCount > 0 ? html`
+<div class="grid grid-cols-1 ${topGrid} gap-6 mb-6">
+    ${showNodes ? renderStatCard({
+        icon: iconNodes('h-8 w-8'),
+        color: pageColors.nodes,
+        title: t('common.total_entity', { entity: t('entities.nodes') }),
+        value: stats.total_nodes,
+        description: t('dashboard.all_discovered_nodes'),
+    }) : nothing}
+
+    ${showAdverts ? renderStatCard({
+        icon: iconAdvertisements('h-8 w-8'),
+        color: pageColors.adverts,
+        title: t('entities.advertisements'),
+        value: stats.advertisements_7d,
+        description: t('time.last_7_days'),
+    }) : nothing}
+
+    ${showMessages ? renderStatCard({
+        icon: iconMessages('h-8 w-8'),
+        color: pageColors.messages,
+        title: t('entities.messages'),
+        value: stats.messages_7d,
+        description: t('time.last_7_days'),
+    }) : nothing}
+</div>
+
+${renderChartCards({ showNodes, showAdverts, showMessages })}` : nothing}
 
 ${bottomCount > 0 ? html`
 <div class="grid grid-cols-1 ${bottomGrid} gap-6">

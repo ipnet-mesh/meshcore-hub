@@ -5,7 +5,7 @@ import {
     getChannelLabelsMap, resolveChannelLabel,
     truncateKey, warningBadge,
     pagination, timezoneIndicator,
-    createFilterHandler, autoSubmit, submitOnEnter,
+    renderFilterCard, autoSubmit, submitOnEnter,
     observerIcons, observerDetailRow, toggleObserverDetail, toggleCardObserverDetail
 } from '../components.js';
 import { createAutoRefresh } from '../auto-refresh.js';
@@ -303,10 +303,9 @@ ${displayContent}`, container);
                 message_type, channel_idx, limit,
             });
 
-            renderPage(html`
-<div class="card shadow mb-6 panel-solid" style="--panel-color: var(--color-neutral)">
-    <div class="card-body py-4">
-        <form method="GET" action="/messages" class="flex gap-4 flex-wrap items-end" @submit=${createFilterHandler('/messages', navigate)}>
+            const filterCard = renderFilterCard({
+                fields: [
+                    () => html`
             <div class="form-control">
                 <label class="label py-1">
                     <span class="label-text">${t('common.type')}</span>
@@ -316,7 +315,8 @@ ${displayContent}`, container);
                     <option value="contact" ?selected=${message_type === 'contact'}>${t('messages.type_direct')}</option>
                     <option value="channel" ?selected=${message_type === 'channel'}>${t('messages.type_channel')}</option>
                 </select>
-            </div>
+            </div>`,
+                    () => html`
             <div class="form-control">
                 <label class="label py-1">
                     <span class="label-text">${t('entities.channel')}</span>
@@ -327,14 +327,13 @@ ${displayContent}`, container);
                         html`<option value=${idx} ?selected=${channel_idx === String(idx)}>${label}</option>`
                     )}
                 </select>
-            </div>
-            <div class="flex gap-2 w-full sm:w-auto">
-                <button type="submit" class="btn btn-primary btn-sm">${t('common.filter')}</button>
-                <a href="/messages" class="btn btn-ghost btn-sm">${t('common.clear')}</a>
-            </div>
-        </form>
-    </div>
-</div>
+            </div>`,
+                ],
+                basePath: '/messages',
+                navigate,
+            });
+
+            renderPage(html`${filterCard}
 
 <div class="lg:hidden space-y-3">
     ${mobileCards}

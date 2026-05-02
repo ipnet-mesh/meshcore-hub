@@ -3,7 +3,7 @@ import {
     html, litRender, nothing, t,
     getConfig, formatDateTime, formatDateTimeShort, formatRelativeTime,
     warningBadge,
-    pagination, createFilterHandler, autoSubmit, submitOnEnter, copyToClipboard, renderNodeDisplay,
+    pagination,     renderFilterCard, autoSubmit, submitOnEnter, copyToClipboard, renderNodeDisplay,
     observerIcons, observerDetailRow, toggleObserverDetail, toggleCardObserverDetail
 } from '../components.js';
 import { createAutoRefresh } from '../auto-refresh.js';
@@ -176,18 +176,20 @@ ${displayContent}`, container);
                 search, public_key, adopted_by, limit,
             });
 
-            renderPage(html`
-<div class="card shadow mb-6 panel-solid" style="--panel-color: var(--color-neutral)">
-    <div class="card-body py-4">
-        <form method="GET" action="/advertisements" class="flex gap-4 flex-wrap items-end" @submit=${createFilterHandler('/advertisements', navigate)}>
+            const filterFields = [
+                () => html`
             <div class="form-control">
                 <label class="label py-1">
                     <span class="label-text">${t('common.search')}</span>
                 </label>
                 <input type="text" name="search" .value=${search} placeholder="${t('common.search_placeholder')}" class="input input-bordered input-sm w-80" @keydown=${submitOnEnter} />
-            </div>
-            ${nodesFilter}
-            ${config.oidc_enabled && profiles.length > 0 ? html`
+            </div>`,
+            ];
+            if (sortedNodes.length > 0) {
+                filterFields.push(() => nodesFilter);
+            }
+            if (config.oidc_enabled && profiles.length > 0) {
+                filterFields.push(() => html`
             <div class="form-control max-w-56">
                 <label class="label py-1">
                     <span class="label-text">${t('common.filter_member_label')}</span>
@@ -203,15 +205,16 @@ ${displayContent}`, container);
                         ${p.callsign ? p.name + ' (' + p.callsign + ')' : (p.name || p.callsign || p.user_id || p.id)}
                     </option>`)}
                 </select>
-            </div>
-            ` : nothing}
-            <div class="flex gap-2 w-full sm:w-auto">
-                <button type="submit" class="btn btn-primary btn-sm">${t('common.filter')}</button>
-                <a href="/advertisements" class="btn btn-ghost btn-sm">${t('common.clear')}</a>
-            </div>
-        </form>
-    </div>
-</div>
+            </div>`);
+            }
+
+            const filterCard = renderFilterCard({
+                fields: filterFields,
+                basePath: '/advertisements',
+                navigate,
+            });
+
+            renderPage(html`${filterCard}
 
 <div class="lg:hidden space-y-3">
     ${mobileCards}
