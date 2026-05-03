@@ -12,7 +12,6 @@
         "map": "Map",
         "members": "Members",
         "member": "Member",
-        "admin": "Admin",
         "tags": "Tags",
         "tag": "Tag",
         "channel": "Channel"
@@ -102,7 +101,9 @@
         "from": "From",
         "close": "close",
         "unnamed": "Unnamed",
-        "unnamed_node": "Unnamed Node"
+        "unnamed_node": "Unnamed Node",
+        "validation_invalid_number": "Value must be a valid number",
+        "validation_invalid_boolean": "Value must be true, false, yes, no, 1, or 0"
     },
     "links": {
         "website": "Website",
@@ -191,13 +192,6 @@
     "custom_page": {
         "failed_to_load": "Failed to load page"
     },
-    "admin": {
-        "access_denied": "Access Denied",
-        "admin_not_enabled": "The admin interface is not enabled.",
-        "admin_enable_hint": "Set <code>OIDC_ENABLED=true</code> and configure your OIDC provider to enable admin features.",
-        "welcome": "Welcome to the admin panel.",
-        "tags_description": "Manage custom tags and metadata for network nodes."
-    },
     "auth": {
         "login": "Login",
         "logout": "Logout",
@@ -237,23 +231,6 @@
         "node_count": "{{count}} nodes",
         "empty_state": "No members yet",
         "empty_description": "Members will appear here once users log in and adopt nodes."
-    },
-    "admin_node_tags": {
-        "select_node": "Select Node",
-        "select_node_placeholder": "-- Select a node --",
-        "load_tags": "Load Tags",
-        "move_warning": "This will move the tag from the current node to the destination node.",
-        "copy_all": "Copy All",
-        "copy_all_info": "Tags that already exist on the destination node will be skipped. Original tags remain on this node.",
-        "delete_all": "Delete All",
-        "delete_all_warning": "All tags will be permanently deleted.",
-        "destination_node": "Destination Node",
-        "tag_key": "Tag Key",
-        "for_this_node": "for this node",
-        "empty_state_hint": "Add a new tag below.",
-        "select_a_node": "Select a Node",
-        "select_a_node_description": "Choose a node from the dropdown above to view and manage its tags.",
-        "copied_entities": "Copied {{copied}} tag(s), skipped {{skipped}}"
     },
     "footer": {
         "powered_by": "Powered by"

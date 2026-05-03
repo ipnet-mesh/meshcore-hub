@@ -313,7 +313,7 @@ meshcore-hub/
 │               ├── icons.js      # SVG icon functions (lit-html)
 │               └── pages/        # Page modules (lazy-loaded)
 │                   ├── home.js, dashboard.js, nodes.js, ...
-│                   └── admin/    # Admin page modules
+│                   └── *.js        # Page modules
 ├── tests/
 │   ├── conftest.py
 │   ├── test_common/
@@ -535,7 +535,7 @@ const emptyMsg = t('common.no_entity_found', { entity: t('entities.nodes').toLow
 
 1. **Add new keys** to `en.json` following existing patterns:
    - Use composition when possible (reference `entities.*` in `common.*` patterns)
-   - Group related keys by section (e.g., `admin_members.*`, `admin_node_tags.*`)
+    - Group related keys by section (e.g., `nodes.*`, `messages.*`)
    - Use `{{variable}}` syntax for dynamic content
 
 2. **Update `docs/i18n.md`** with:
@@ -689,7 +689,7 @@ Services automatically create their subdirectories if they don't exist.
 The database can be seeded with node tags from YAML files in `SEED_HOME`:
 - `node_tags.yaml` - Node tag definitions (keyed by public_key)
 
-**Important:** Seeding is NOT automatic and must be run explicitly. This prevents seed files from overwriting user changes made via the admin UI.
+**Important:** Seeding is NOT automatic and must be run explicitly. This prevents seed files from overwriting user changes made via the web UI.
 
 ```bash
 # Native CLI
@@ -699,7 +699,7 @@ meshcore-hub collector seed
 docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile seed up
 ```
 
-**Note:** When OIDC is enabled (`OIDC_ENABLED=true`), the admin UI requires authenticated sessions with the `admin` role. Tags should be managed through the web interface by authenticated admin users.
+**Note:** When OIDC is enabled (`OIDC_ENABLED=true`), tag editing requires authenticated sessions with the `admin` or `operator` role. Tags can be managed inline on the node detail page by authenticated admin or operator users.
 
 ### Webhook Configuration
 

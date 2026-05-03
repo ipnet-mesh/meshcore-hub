@@ -100,54 +100,111 @@ class TestReadAuthentication:
 
 
 class TestAdminAuthentication:
-    """Tests for admin-level authentication (require_admin)."""
+    """Tests for operator/admin-level authentication (RequireOperatorOrAdmin).
 
-    def test_admin_endpoints_accept_admin_key(self, client_with_auth):
-        """Test that admin endpoints accept admin key."""
+    Tag endpoints now require OIDC user identity (X-User-Id header) plus
+    API key. Plain API keys without user identity headers get 401.
+    """
+
+    def test_tag_endpoint_rejects_admin_key_without_user_identity(
+        self, client_with_auth
+    ):
+        """Test that admin key alone is rejected — OIDC user identity required."""
         response = client_with_auth.post(
             "/api/v1/nodes/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/tags",
             json={
-                "tag_key": "name",
-                "tag_value": "test-node",
+                "key": "name",
+                "value": "test-node",
             },
             headers={"Authorization": "Bearer test-admin-key"},
         )
-        assert response.status_code in (200, 201, 404, 422)
+        assert response.status_code == 401
 
-    def test_admin_endpoints_reject_read_key(self, client_with_auth):
-        """Test that admin endpoints reject read key with 403."""
+    def test_tag_endpoint_rejects_read_key_without_user_identity(
+        self, client_with_auth
+    ):
+        """Test that read key alone is rejected — OIDC user identity required."""
         response = client_with_auth.post(
             "/api/v1/nodes/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/tags",
             json={
-                "tag_key": "name",
-                "tag_value": "test-node",
+                "key": "name",
+                "value": "test-node",
             },
             headers={"Authorization": "Bearer test-read-key"},
         )
-        assert response.status_code == 403
+        assert response.status_code == 401
 
-    def test_admin_endpoints_reject_invalid_key(self, client_with_auth):
-        """Test that admin endpoints reject invalid keys with 403."""
+    def test_tag_endpoint_rejects_invalid_key(self, client_with_auth):
+        """Test that invalid keys are rejected with 401."""
         response = client_with_auth.post(
             "/api/v1/nodes/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/tags",
             json={
-                "tag_key": "name",
-                "tag_value": "test-node",
+                "key": "name",
+                "value": "test-node",
             },
             headers={"Authorization": "Bearer completely-wrong-key"},
         )
-        assert response.status_code == 403
+        assert response.status_code == 401
 
-    def test_admin_endpoints_reject_no_auth_header(self, client_with_auth):
-        """Test that admin endpoints reject missing auth header with 401."""
+    def test_tag_endpoint_rejects_no_auth_header(self, client_with_auth):
+        """Test that missing auth header is rejected with 401."""
         response = client_with_auth.post(
             "/api/v1/nodes/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/tags",
             json={
-                "tag_key": "name",
-                "tag_value": "test-node",
+                "key": "name",
+                "value": "test-node",
             },
         )
         assert response.status_code == 401
+
+    def test_tag_endpoint_rejects_admin_key_without_roles(self, client_with_auth):
+        """Test admin key + user identity but no roles header → 403."""
+        response = client_with_auth.post(
+            "/api/v1/nodes/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/tags",
+            json={
+                "key": "name",
+                "value": "test-node",
+            },
+            headers={
+                "Authorization": "Bearer test-admin-key",
+                "X-User-Id": "user-123",
+            },
+        )
+        assert response.status_code == 403
+
+    def test_tag_endpoint_accepts_admin_key_with_admin_role(self, client_with_auth):
+        """Test admin key + user identity + admin role → allowed."""
+        response = client_with_auth.post(
+            "/api/v1/nodes/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/tags",
+            json={
+                "key": "name",
+                "value": "test-node",
+            },
+            headers={
+                "Authorization": "Bearer test-admin-key",
+                "X-User-Id": "user-123",
+                "X-User-Roles": "admin",
+            },
+        )
+        assert response.status_code in (200, 201, 404, 422)
+
+    def test_tag_endpoint_operator_rejected_on_unadopted_node(
+        self, client_with_auth, sample_node
+    ):
+        """Test operator role on non-adopted node → 403 ownership check."""
+        response = client_with_auth.post(
+            f"/api/v1/nodes/{sample_node.public_key}/tags",
+            json={
+                "key": "name",
+                "value": "test-node",
+            },
+            headers={
+                "Authorization": "Bearer test-admin-key",
+                "X-User-Id": "user-123",
+                "X-User-Roles": "operator",
+            },
+        )
+        assert response.status_code == 403
 
 
 class TestMetricsAuthentication:

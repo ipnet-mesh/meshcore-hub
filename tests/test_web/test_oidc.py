@@ -155,18 +155,18 @@ class TestAuthUser:
 
 
 class TestAdminRouteProtection:
-    """Test admin route protection when OIDC is enabled."""
+    """Test admin routes serve SPA shell (admin UI removed)."""
 
-    def test_no_session_redirects_to_login(self, client_with_oidc: TestClient) -> None:
-        """Test admin route redirects to /auth/login without session."""
-        response = client_with_oidc.get("/admin/", follow_redirects=False)
-        assert response.status_code == 307
-        assert "/auth/login" in response.headers["location"]
+    def test_no_session_gets_spa_shell(self, client_with_oidc: TestClient) -> None:
+        """Test admin route returns SPA shell (client-side handles 404)."""
+        response = client_with_oidc.get("/admin/")
+        assert response.status_code == 200
+        assert "window.__APP_CONFIG__" in response.text
 
     def test_member_session_gets_spa_shell(
         self, client_with_oidc_member_session: TestClient
     ) -> None:
-        """Test member session gets SPA shell (client-side shows access denied)."""
+        """Test member session gets SPA shell."""
         response = client_with_oidc_member_session.get("/admin/")
         assert response.status_code == 200
         assert "window.__APP_CONFIG__" in response.text
@@ -238,11 +238,13 @@ class TestBackwardCompatibility:
         assert config["oidc_enabled"] is False
         assert config["roles"] == []
 
-    def test_admin_routes_blocked_when_oidc_disabled(self, client: TestClient) -> None:
-        """Test admin routes redirect to home when OIDC disabled."""
-        response = client.get("/admin/", follow_redirects=False)
-        assert response.status_code == 307
-        assert response.headers["location"] == "/"
+    def test_admin_routes_serve_spa_shell_when_oidc_disabled(
+        self, client: TestClient
+    ) -> None:
+        """Test admin routes return SPA shell when OIDC disabled (client-side 404)."""
+        response = client.get("/admin/")
+        assert response.status_code == 200
+        assert "window.__APP_CONFIG__" in response.text
 
 
 class TestConfigInjection:

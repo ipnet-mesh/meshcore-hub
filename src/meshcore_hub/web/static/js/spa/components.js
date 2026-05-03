@@ -8,7 +8,7 @@ import { html, nothing } from 'lit-html';
 import { render } from 'lit-html';
 import { unsafeHTML } from 'lit-html/directives/unsafe-html.js';
 import { t } from './i18n.js';
-import { iconAlert, iconError, iconInfo, iconSuccess, iconUser, iconSettings, iconLogout } from './icons.js';
+import { iconAlert, iconError, iconInfo, iconSuccess, iconUser, iconLogout } from './icons.js';
 
 // Re-export lit-html utilities for page modules
 export { html, nothing, unsafeHTML };
@@ -620,10 +620,6 @@ export function renderAuthSection(container, config) {
         return html`<span class="badge badge-primary badge-xs">${name}</span>`;
     });
 
-    const adminItem = hasRole('admin')
-        ? html`<li><a href="/admin/">${iconSettings('h-4 w-4')} ${t('entities.admin')}</a></li>`
-        : nothing;
-
     const profileItem = html`<li><a href="/profile">${iconUser('h-4 w-4')} ${t('links.profile')}</a></li>`;
 
     const debugId = config.debug && user.sub
@@ -644,7 +640,6 @@ export function renderAuthSection(container, config) {
                     </div>
                 </li>
                 <hr class="my-1 opacity-20">
-                ${adminItem}
                 ${profileItem}
                 <li><a href="/auth/logout">${iconLogout('h-4 w-4')} ${t('auth.logout')}</a></li>
             </ul>

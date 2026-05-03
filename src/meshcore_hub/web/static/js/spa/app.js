@@ -21,8 +21,6 @@ const pages = {
     members: () => import('./pages/members.js'),
     customPage: () => import('./pages/custom-page.js'),
     notFound: () => import('./pages/not-found.js'),
-    adminIndex: () => import('./pages/admin/index.js'),
-    adminNodeTags: () => import('./pages/admin/node-tags.js'),
     profile: () => import('./pages/profile.js'),
 };
 
@@ -87,13 +85,6 @@ if (features.pages !== false) {
     router.addRoute('/pages/:slug', pageHandler(pages.customPage));
 }
 
-// Admin routes (only register when OIDC enabled and user has admin role)
-if (hasRole('admin')) {
-    router.addRoute('/admin', pageHandler(pages.adminIndex));
-    router.addRoute('/admin/', pageHandler(pages.adminIndex));
-    router.addRoute('/admin/node-tags', pageHandler(pages.adminNodeTags));
-}
-
 // Profile route (only register when OIDC enabled)
 if (config.oidc_enabled) {
     router.addRoute('/profile', pageHandler(pages.profile));
@@ -152,9 +143,6 @@ function updatePageTitle(pathname) {
     const networkName = config.network_name || 'MeshCore Network';
     const titles = {
         '/': networkName,
-        '/admin': composePageTitle('entities.admin'),
-        '/admin/': composePageTitle('entities.admin'),
-        '/admin/node-tags': `${t('entities.tags')} - ${t('entities.admin')} - ${networkName}`,
     };
 
     // Add feature-dependent titles
