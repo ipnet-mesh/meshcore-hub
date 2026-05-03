@@ -30,7 +30,7 @@ export async function apiGet(path, params = {}) {
  */
 function checkAuthResponse(response) {
     const config = window.__APP_CONFIG__ || {};
-    if (config.oidc_enabled && (response.status === 401 || response.status === 403)) {
+    if (config.oidc_enabled && response.status === 401) {
         const next = encodeURIComponent(window.location.pathname + window.location.search);
         window.location.href = `/auth/login?next=${next}`;
     }

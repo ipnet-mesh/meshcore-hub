@@ -61,12 +61,10 @@ class TestTranslation:
     def test_interpolation_multiple(self):
         """Multiple placeholders are all replaced."""
         result = t(
-            "admin_node_tags.copied_entities",
-            copied=5,
-            skipped=2,
+            "common.entity_added_success",
+            entity="Tag",
         )
-        assert "5" in result
-        assert "2" in result
+        assert "Tag" in result
 
     def test_missing_interpolation_var(self):
         """Missing interpolation variable leaves empty string."""
@@ -109,8 +107,6 @@ class TestEnJsonCompleteness:
             "map",
             "not_found",
             "custom_page",
-            "admin",
-            "admin_node_tags",
             "footer",
         ]
         for section in required:
@@ -134,4 +130,3 @@ class TestEnJsonCompleteness:
         assert t("entities.messages") != "entities.messages"
         assert t("entities.map") != "entities.map"
         assert t("entities.members") != "entities.members"
-        assert t("entities.admin") != "entities.admin"

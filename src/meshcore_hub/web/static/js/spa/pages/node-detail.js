@@ -1,10 +1,77 @@
-import { apiGet, apiPost, apiDelete } from '../api.js';
+import { apiGet, apiPost, apiPut, apiDelete } from '../api.js';
 import {
     html, litRender, nothing,
     getConfig, hasRole, typeEmoji, formatDateTime,
     truncateKey, errorAlert, successAlert, copyToClipboard, t,
 } from '../components.js';
-import { iconError } from '../icons.js';
+import { iconError, iconPlus, iconEdit, iconTrash } from '../icons.js';
+
+let _mapInstance = null;
+
+function validateTagValue(value, type) {
+    if (!value || !type) return null;
+    if (type === 'number' && isNaN(Number(value))) {
+        return t('common.validation_invalid_number');
+    }
+    if (type === 'boolean') {
+        const normalized = value.toLowerCase().trim();
+        if (!['true', 'false', 'yes', 'no', '1', '0'].includes(normalized)) {
+            return t('common.validation_invalid_boolean');
+        }
+    }
+    return null;
+}
+
+function renderDeleteTagModal() {
+    return html`
+<dialog id="tagDeleteModal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg">${t('common.delete_entity', { entity: t('entities.tag') })}</h3>
+        <p class="py-4" id="tag-delete-msg"></p>
+        <div class="alert alert-error mb-4">
+            <span>${t('common.cannot_be_undone')}</span>
+        </div>
+        <div class="modal-action">
+            <button type="button" class="btn" id="tagDeleteCancel">${t('common.cancel')}</button>
+            <button type="button" class="btn btn-error" id="tagDeleteConfirm">${t('common.delete')}</button>
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>${t('common.close')}</button></form>
+</dialog>`;
+}
+
+function renderEditTagModal() {
+    return html`
+<dialog id="tagEditModal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg">${t('common.edit_entity', { entity: t('entities.tag') })}</h3>
+        <form id="tag-edit-form" class="py-4">
+            <div class="form-control mb-4">
+                <label class="label"><span class="label-text">${t('common.key')}</span></label>
+                <input type="text" id="tagEditKey" class="input input-bordered" disabled>
+            </div>
+            <div class="form-control mb-4">
+                <label class="label"><span class="label-text">${t('common.value')}</span></label>
+                <input type="text" id="tagEditValue" class="input input-bordered">
+                <label class="label" id="tagEditError"></label>
+            </div>
+            <div class="form-control mb-4">
+                <label class="label"><span class="label-text">${t('common.type')}</span></label>
+                <select id="tagEditType" class="select select-bordered w-full">
+                    <option value="string">string</option>
+                    <option value="number">number</option>
+                    <option value="boolean">boolean</option>
+                </select>
+            </div>
+            <div class="modal-action">
+                <button type="button" class="btn" id="tagEditCancel">${t('common.cancel')}</button>
+                <button type="submit" class="btn btn-primary">${t('common.save_changes')}</button>
+            </div>
+        </form>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>${t('common.close')}</button></form>
+</dialog>`;
+}
 
 export async function render(container, params, router) {
     const cleanupFns = [];
@@ -105,31 +172,77 @@ export async function render(container, params, router) {
             : html`<p class="opacity-70">${t('common.no_entity_recorded', { entity: t('entities.advertisements').toLowerCase() })}</p>`;
 
         const tags = node.tags || [];
-        const tagsTableHtml = tags.length > 0
-            ? html`<div class="overflow-x-auto">
-                <table class="table table-sm w-full">
-                    <thead>
-                        <tr>
-                            <th>${t('common.key')}</th>
-                            <th>${t('common.value')}</th>
-                            <th>${t('common.type')}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${tags.map(tag => html`<tr>
-                            <td class="font-mono">${tag.key}</td>
-                            <td>${tag.value || ''}</td>
-                            <td class="opacity-70">${tag.value_type || 'string'}</td>
-                        </tr>`)}
-                    </tbody>
-                </table>
-            </div>`
-            : html`<p class="opacity-70">${t('common.no_entity_defined', { entity: t('entities.tags').toLowerCase() })}</p>`;
+        const canEditTags = config.oidc_enabled && config.user && (
+            hasRole('admin') || (hasRole('operator') && node.adopted_by?.user_id === config.user.sub)
+        );
 
-        const adminTagsHtml = hasRole('admin')
-            ? html`<div class="mt-3">
-                <a href="/admin/node-tags?public_key=${node.public_key}" class="btn btn-sm btn-outline">${tags.length > 0 ? t('common.edit_entity', { entity: t('entities.tags') }) : t('common.add_entity', { entity: t('entities.tags') })}</a>
-            </div>`
+        const tagsTableHtml = canEditTags
+            ? (tags.length > 0
+                ? html`<div class="overflow-x-auto">
+                    <table class="table table-sm w-full">
+                        <thead>
+                            <tr>
+                                <th>${t('common.key')}</th>
+                                <th>${t('common.value')}</th>
+                                <th>${t('common.type')}</th>
+                                <th class="w-20">${t('common.actions')}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tags.map(tag => html`<tr>
+                                <td class="font-mono">${tag.key}</td>
+                                <td>${tag.value || ''}</td>
+                                <td class="opacity-70">${tag.value_type || 'string'}</td>
+                                <td>
+                                    <div class="flex gap-1">
+                                        <button class="btn btn-xs btn-ghost tag-edit-btn" data-key=${tag.key} data-value=${tag.value || ''} data-type=${tag.value_type || 'string'}>${iconEdit('h-4 w-4')}</button>
+                                        <button class="btn btn-xs btn-ghost tag-delete-btn" data-key=${tag.key}>${iconTrash('h-4 w-4')}</button>
+                                    </div>
+                                </td>
+                            </tr>`)}
+                        </tbody>
+                    </table>
+                </div>`
+                : html`<p class="opacity-70">${t('common.no_entity_defined', { entity: t('entities.tags').toLowerCase() })}</p>`)
+            : (tags.length > 0
+                ? html`<div class="overflow-x-auto">
+                    <table class="table table-sm w-full">
+                        <thead>
+                            <tr>
+                                <th>${t('common.key')}</th>
+                                <th>${t('common.value')}</th>
+                                <th>${t('common.type')}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tags.map(tag => html`<tr>
+                                <td class="font-mono">${tag.key}</td>
+                                <td>${tag.value || ''}</td>
+                                <td class="opacity-70">${tag.value_type || 'string'}</td>
+                            </tr>`)}
+                        </tbody>
+                    </table>
+                </div>`
+                : html`<p class="opacity-70">${t('common.no_entity_defined', { entity: t('entities.tags').toLowerCase() })}</p>`);
+
+        const addTagFormHtml = canEditTags
+            ? html`<form id="tag-add-form" class="mt-4">
+                <div class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto_auto] gap-2 items-end">
+                    <div class="form-control">
+                        <input type="text" name="key" class="input input-bordered input-sm" placeholder=${t('common.key')} required>
+                    </div>
+                    <div class="form-control">
+                        <input type="text" name="value" class="input input-bordered input-sm" placeholder=${t('common.value')}>
+                        <label class="label" id="tagAddError"></label>
+                    </div>
+                    <select name="value_type" class="select select-bordered select-sm w-28">
+                        <option value="string">string</option>
+                        <option value="number">number</option>
+                        <option value="boolean">boolean</option>
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-primary">${iconPlus('h-4 w-4')} ${t('common.add')}</button>
+                </div>
+            </form>`
             : nothing;
 
         const adoptionHtml = renderAdoptionSection(node, config);
@@ -190,9 +303,11 @@ export async function render(container, params, router) {
     </div>
 </div>
 
-${heroHtml}
-
 ${flashHtml}
+
+<div id="flash-container"></div>
+
+${heroHtml}
 
 ${infoGridHtml}
 
@@ -208,11 +323,24 @@ ${infoGridHtml}
         <div class="card-body">
             <h2 class="card-title">${t('entities.tags')}</h2>
             ${tagsTableHtml}
-            ${adminTagsHtml}
+            ${addTagFormHtml}
         </div>
     </div>
-</div>`, container);
+</div>
+
+${canEditTags ? renderDeleteTagModal() : nothing}
+${canEditTags ? renderEditTagModal() : nothing}`, container);
         if (hasCoords && typeof L !== 'undefined') {
+            const mapEl = document.getElementById('header-map');
+            if (mapEl) {
+                if (_mapInstance) {
+                    try { _mapInstance.remove(); } catch (e) { /* ignore */ }
+                    _mapInstance = null;
+                }
+                if (mapEl._leaflet_id != null) {
+                    delete mapEl._leaflet_id;
+                }
+            }
             const map = L.map('header-map', {
                 zoomControl: false, dragging: false, scrollWheelZoom: false,
                 doubleClickZoom: false, boxZoom: false, keyboard: false,
@@ -224,12 +352,13 @@ ${infoGridHtml}
             const newPoint = L.point(point.x + map.getSize().x * 0.17, point.y);
             const newLatLng = map.containerPointToLatLng(newPoint);
             map.setView(newLatLng, 14, { animate: false });
-            const icon = L.divIcon({
+            const mapIcon = L.divIcon({
                 html: '<span style="font-size: 32px; text-shadow: 0 0 3px #1a237e, 0 0 6px #1a237e, 0 1px 2px rgba(0,0,0,0.7);">' + emoji + '</span>',
                 className: '', iconSize: [32, 32], iconAnchor: [16, 16],
             });
-            L.marker([lat, lon], { icon }).addTo(map);
-            cleanupFns.push(() => map.remove());
+            L.marker([lat, lon], { icon: mapIcon }).addTo(map);
+            _mapInstance = map;
+            cleanupFns.push(() => { _mapInstance = null; try { map.remove(); } catch (e) { /* ignore */ } });
         }
 
         // Initialize QR code - wait for both DOM element and QRCode library
@@ -255,6 +384,10 @@ ${infoGridHtml}
         }
 
         // Wire up adoption buttons
+        const adoptReleaseAc = new AbortController();
+        const adoptReleaseSignal = adoptReleaseAc.signal;
+        cleanupFns.push(() => adoptReleaseAc.abort());
+
         const adoptBtn = container.querySelector('.btn-adopt-node');
         if (adoptBtn) {
             adoptBtn.addEventListener('click', async () => {
@@ -264,7 +397,7 @@ ${infoGridHtml}
                 } catch (err) {
                     router.navigate('/nodes/' + node.public_key + '?error=' + encodeURIComponent(err.message), true);
                 }
-            });
+            }, { signal: adoptReleaseSignal });
         }
 
         const releaseBtn = container.querySelector('.btn-release-node');
@@ -277,7 +410,146 @@ ${infoGridHtml}
                 } catch (err) {
                     router.navigate('/nodes/' + node.public_key + '?error=' + encodeURIComponent(err.message), true);
                 }
+            }, { signal: adoptReleaseSignal });
+        }
+
+        // Tag editor event handlers
+        if (canEditTags) {
+            const ac = new AbortController();
+            const { signal } = ac;
+            cleanupFns.push(() => ac.abort());
+
+            const refreshNode = async () => {
+                const fresh = await apiGet('/api/v1/nodes/' + node.public_key);
+                return fresh;
+            };
+
+            const showFlash = (type, message) => {
+                const flashContainer = container.querySelector('#flash-container');
+                if (!flashContainer) return;
+                litRender(type === 'success' ? successAlert(message) : errorAlert(message), flashContainer);
+                setTimeout(() => {
+                    if (flashContainer) litRender(nothing, flashContainer);
+                }, 3000);
+            };
+
+            // Add tag form
+            const addForm = container.querySelector('#tag-add-form');
+            if (addForm) {
+                addForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const formData = new FormData(addForm);
+                    const key = formData.get('key');
+                    const value = formData.get('value') || '';
+                    const valueType = formData.get('value_type');
+                    const errEl = container.querySelector('#tagAddError');
+
+                    const validationError = validateTagValue(value, valueType);
+                    if (validationError) {
+                        if (errEl) errEl.innerHTML = `<span class="label-text-alt text-error">${validationError}</span>`;
+                        return;
+                    }
+                    if (errEl) errEl.innerHTML = '';
+
+                    try {
+                        await apiPost('/api/v1/nodes/' + node.public_key + '/tags', { key, value, value_type: valueType });
+                        showFlash('success', t('common.entity_added_success', { entity: t('entities.tag') }));
+                        router.navigate('/nodes/' + node.public_key, true);
+                    } catch (err) {
+                        showFlash('error', err.message);
+                    }
+                }, { signal });
+            }
+
+            // Edit buttons
+            container.querySelectorAll('.tag-edit-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const modal = container.querySelector('#tagEditModal');
+                    const keyInput = container.querySelector('#tagEditKey');
+                    const valueInput = container.querySelector('#tagEditValue');
+                    const typeSelect = container.querySelector('#tagEditType');
+                    const errorLabel = container.querySelector('#tagEditError');
+
+                    keyInput.value = btn.dataset.key;
+                    valueInput.value = btn.dataset.value;
+                    typeSelect.value = btn.dataset.type;
+                    if (errorLabel) errorLabel.innerHTML = '';
+                    modal.showModal();
+                }, { signal });
             });
+
+            // Edit form submit
+            const editForm = container.querySelector('#tag-edit-form');
+            if (editForm) {
+                editForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const key = container.querySelector('#tagEditKey').value;
+                    const value = container.querySelector('#tagEditValue').value;
+                    const valueType = container.querySelector('#tagEditType').value;
+                    const errorLabel = container.querySelector('#tagEditError');
+
+                    const validationError = validateTagValue(value, valueType);
+                    if (validationError) {
+                        if (errorLabel) errorLabel.innerHTML = `<span class="label-text-alt text-error">${validationError}</span>`;
+                        return;
+                    }
+                    if (errorLabel) errorLabel.innerHTML = '';
+
+                    try {
+                        await apiPut('/api/v1/nodes/' + node.public_key + '/tags/' + encodeURIComponent(key), { value, value_type: valueType });
+                        container.querySelector('#tagEditModal').close();
+                        showFlash('success', t('common.entity_updated_success', { entity: t('entities.tag') }));
+                        router.navigate('/nodes/' + node.public_key, true);
+                    } catch (err) {
+                        if (errorLabel) errorLabel.innerHTML = `<span class="label-text-alt text-error">${err.message}</span>`;
+                    }
+                }, { signal });
+            }
+
+            // Edit cancel
+            const editCancel = container.querySelector('#tagEditCancel');
+            if (editCancel) {
+                editCancel.addEventListener('click', () => {
+                    container.querySelector('#tagEditModal').close();
+                }, { signal });
+            }
+
+            // Delete buttons
+            container.querySelectorAll('.tag-delete-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const modal = container.querySelector('#tagDeleteModal');
+                    const msg = container.querySelector('#tag-delete-msg');
+                    msg.textContent = t('common.delete_entity_confirm', { entity: t('entities.tag'), name: btn.dataset.key });
+                    modal._tagKey = btn.dataset.key;
+                    modal.showModal();
+                }, { signal });
+            });
+
+            // Delete confirm
+            const deleteConfirm = container.querySelector('#tagDeleteConfirm');
+            if (deleteConfirm) {
+                deleteConfirm.addEventListener('click', async () => {
+                    const modal = container.querySelector('#tagDeleteModal');
+                    const key = modal._tagKey;
+                    try {
+                        await apiDelete('/api/v1/nodes/' + node.public_key + '/tags/' + encodeURIComponent(key));
+                        modal.close();
+                        showFlash('success', t('common.entity_deleted_success', { entity: t('entities.tag') }));
+                        router.navigate('/nodes/' + node.public_key, true);
+                    } catch (err) {
+                        modal.close();
+                        showFlash('error', err.message);
+                    }
+                }, { signal });
+            }
+
+            // Delete cancel
+            const deleteCancel = container.querySelector('#tagDeleteCancel');
+            if (deleteCancel) {
+                deleteCancel.addEventListener('click', () => {
+                    container.querySelector('#tagDeleteModal').close();
+                }, { signal });
+            }
         }
 
         return () => {

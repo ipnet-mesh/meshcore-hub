@@ -402,6 +402,32 @@ def sample_user_profile(api_db_session):
 
 
 @pytest.fixture
+def sample_operator_profile(api_db_session):
+    """Create a sample operator user profile for tag editing tests."""
+    profile = UserProfile(
+        user_id="operator-123",
+        name="Test Operator",
+    )
+    api_db_session.add(profile)
+    api_db_session.commit()
+    api_db_session.refresh(profile)
+    return profile
+
+
+@pytest.fixture
+def sample_operator_adoption(api_db_session, sample_operator_profile, sample_node):
+    """Create an adoption record linking operator to the sample node."""
+    association = UserProfileNode(
+        user_profile_id=sample_operator_profile.id,
+        node_id=sample_node.id,
+    )
+    api_db_session.add(association)
+    api_db_session.commit()
+    api_db_session.refresh(association)
+    return association
+
+
+@pytest.fixture
 def sample_adopted_node(api_db_session, sample_user_profile, sample_node):
     """Create a sample adopted node association."""
     association = UserProfileNode(

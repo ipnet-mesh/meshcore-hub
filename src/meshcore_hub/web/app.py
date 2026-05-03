@@ -63,7 +63,6 @@ def _build_endpoint_access(
     Returns:
         Endpoint access mapping dict.
     """
-    admin = frozenset({role_admin})
     any_authenticated = frozenset({role_admin, role_operator, role_member})
     operator_admin = frozenset({role_admin, role_operator})
     return {
@@ -72,9 +71,9 @@ def _build_endpoint_access(
         },
         "v1/nodes/": {
             "GET": _OPEN,
-            "POST": admin,
-            "PUT": admin,
-            "DELETE": admin,
+            "POST": operator_admin,
+            "PUT": operator_admin,
+            "DELETE": operator_admin,
         },
         "v1/user/profiles": {
             "GET": _OPEN,
@@ -1037,25 +1036,6 @@ def create_app(
     @app.api_route("/{path:path}", methods=["GET"], tags=["SPA"], response_model=None)
     async def spa_catchall(request: Request, path: str = "") -> Response:
         """Serve the SPA shell for all non-API routes."""
-        # Admin route protection
-        if path.startswith("admin") and (
-            path == "admin" or path == "admin/" or path.startswith("admin/")
-        ):
-            if not request.app.state.oidc_enabled:
-                from starlette.responses import RedirectResponse
-
-                return RedirectResponse(url="/")
-            user = get_session_user(request)
-            if not user:
-                from starlette.responses import RedirectResponse
-
-                return RedirectResponse(url=f"/auth/login?next=/{path}")
-            logger.debug(
-                "Admin route access: path=%s, user=%s",
-                path,
-                user.get("name"),
-            )
-
         templates_inst: Jinja2Templates = request.app.state.templates
         features = request.app.state.features
         page_loader = request.app.state.page_loader

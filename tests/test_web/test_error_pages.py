@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from meshcore_hub.web.app import create_app
+from meshcore_hub.web import oidc as oidc_module
 
 from .conftest import ALL_FEATURES_ENABLED, MockHttpClient
 
@@ -30,11 +31,12 @@ def error_client(error_app: Any, mock_http_client: MockHttpClient) -> TestClient
     return TestClient(error_app, raise_server_exceptions=False)
 
 
-@pytest.fixture
-def oidc_broken_app(
-    mock_http_client: MockHttpClient, monkeypatch: pytest.MonkeyPatch
-) -> Any:
-    """Create a web app with OIDC enabled but broken config."""
+def _setup_oidc_broken_app(
+    mock_http_client: MockHttpClient,
+    monkeypatch: pytest.MonkeyPatch,
+    theme: str | None = None,
+) -> TestClient:
+    """Create a web app with OIDC enabled where authorize_redirect raises."""
     monkeypatch.setenv("OIDC_ENABLED", "true")
     monkeypatch.setenv("OIDC_CLIENT_ID", "broken")
     monkeypatch.setenv("OIDC_CLIENT_SECRET", "broken")
@@ -44,6 +46,8 @@ def oidc_broken_app(
     )
     monkeypatch.setenv("OIDC_SESSION_SECRET", "test-session-secret")
     monkeypatch.setenv("WEB_DATETIME_LOCALE", "en-US")
+    if theme:
+        monkeypatch.setenv("WEB_THEME", theme)
     app = create_app(
         api_url="http://localhost:8000",
         api_key="test-api-key",
@@ -51,22 +55,27 @@ def oidc_broken_app(
         features=ALL_FEATURES_ENABLED,
     )
     app.state.http_client = mock_http_client
-    return app
 
+    async def _broken_authorize_redirect(request, redirect_uri, **kwargs):
+        raise RuntimeError("OIDC provider unreachable")
 
-@pytest.fixture
-def oidc_broken_client(
-    oidc_broken_app: Any, mock_http_client: MockHttpClient
-) -> TestClient:
-    return TestClient(oidc_broken_app, raise_server_exceptions=False)
+    monkeypatch.setattr(
+        oidc_module.oauth.oidc,
+        "authorize_redirect",
+        _broken_authorize_redirect,
+    )
+    return TestClient(app, raise_server_exceptions=False)
 
 
 class TestUnhandledExceptions:
     """Test custom error page rendering for unhandled exceptions."""
 
-    def test_500_returns_html(self, oidc_broken_client: TestClient) -> None:
+    def test_500_returns_html(
+        self, mock_http_client: MockHttpClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test 500 from OIDC misconfiguration returns styled HTML."""
-        response = oidc_broken_client.get("/auth/login", follow_redirects=False)
+        client = _setup_oidc_broken_app(mock_http_client, monkeypatch)
+        response = client.get("/auth/login", follow_redirects=False)
         assert response.status_code == 500
         assert "text/html" in response.headers["content-type"]
         assert "500" in response.text
@@ -74,17 +83,21 @@ class TestUnhandledExceptions:
         assert "Go Home" in response.text
 
     def test_500_html_has_no_js_dependency(
-        self, oidc_broken_client: TestClient
+        self, mock_http_client: MockHttpClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Test error page is self-contained (no JS dependencies)."""
-        response = oidc_broken_client.get("/auth/login", follow_redirects=False)
+        client = _setup_oidc_broken_app(mock_http_client, monkeypatch)
+        response = client.get("/auth/login", follow_redirects=False)
         assert response.status_code == 500
         assert "<style>" in response.text
         assert "window.__APP_CONFIG__" not in response.text
 
-    def test_500_html_shows_network_name(self, oidc_broken_client: TestClient) -> None:
+    def test_500_html_shows_network_name(
+        self, mock_http_client: MockHttpClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test error page includes the network name."""
-        response = oidc_broken_client.get("/auth/login", follow_redirects=False)
+        client = _setup_oidc_broken_app(mock_http_client, monkeypatch)
+        response = client.get("/auth/login", follow_redirects=False)
         assert response.status_code == 500
         assert "Test Network" in response.text
 
@@ -100,9 +113,12 @@ class TestUnhandledExceptions:
 class TestErrorPageTheme:
     """Test error page respects theme setting."""
 
-    def test_dark_theme(self, oidc_broken_client: TestClient) -> None:
+    def test_dark_theme(
+        self, mock_http_client: MockHttpClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test error page uses dark theme by default."""
-        response = oidc_broken_client.get("/auth/login", follow_redirects=False)
+        client = _setup_oidc_broken_app(mock_http_client, monkeypatch)
+        response = client.get("/auth/login", follow_redirects=False)
         assert response.status_code == 500
         assert 'data-theme="dark"' in response.text
 
@@ -110,24 +126,7 @@ class TestErrorPageTheme:
         self, mock_http_client: MockHttpClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Test error page uses light theme when configured."""
-        monkeypatch.setenv("OIDC_ENABLED", "true")
-        monkeypatch.setenv("OIDC_CLIENT_ID", "broken")
-        monkeypatch.setenv("OIDC_CLIENT_SECRET", "broken")
-        monkeypatch.setenv(
-            "OIDC_DISCOVERY_URL",
-            "https://nonexistent.example.com/.well-known/openid-configuration",
-        )
-        monkeypatch.setenv("OIDC_SESSION_SECRET", "test-session-secret")
-        monkeypatch.setenv("WEB_THEME", "light")
-        monkeypatch.setenv("WEB_DATETIME_LOCALE", "en-US")
-        app = create_app(
-            api_url="http://localhost:8000",
-            api_key="test-api-key",
-            network_name="Test Network",
-            features=ALL_FEATURES_ENABLED,
-        )
-        app.state.http_client = mock_http_client
-        client = TestClient(app, raise_server_exceptions=False)
+        client = _setup_oidc_broken_app(mock_http_client, monkeypatch, theme="light")
         response = client.get("/auth/login", follow_redirects=False)
         assert response.status_code == 500
         assert 'data-theme="light"' in response.text

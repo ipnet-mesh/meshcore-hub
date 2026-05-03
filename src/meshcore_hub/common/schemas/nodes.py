@@ -38,25 +38,44 @@ class NodeTagUpdate(BaseModel):
     )
 
 
-class NodeTagMove(BaseModel):
-    """Schema for moving a node tag to a different node."""
+def validate_and_coerce_tag_value(value: str | None, value_type: str) -> str | None:
+    """Validate and coerce a tag value based on its declared type.
 
-    new_public_key: str = Field(
-        ...,
-        min_length=64,
-        max_length=64,
-        description="Public key of the destination node",
-    )
+    Args:
+        value: The tag value string (may be None or empty).
+        value_type: One of "string", "number", "boolean".
 
+    Returns:
+        The coerced value string, or None if input was None.
 
-class NodeTagsCopyResult(BaseModel):
-    """Schema for bulk copy tags result."""
+    Raises:
+        ValueError: If the value does not conform to the declared type.
+    """
+    if value is None or value == "":
+        return value
 
-    copied: int = Field(..., description="Number of tags copied")
-    skipped: int = Field(..., description="Number of tags skipped (already exist)")
-    skipped_keys: list[str] = Field(
-        default_factory=list, description="Keys of skipped tags"
-    )
+    if value_type == "number":
+        try:
+            float(value)
+        except (ValueError, TypeError):
+            raise ValueError(
+                f"Invalid number value: '{value}'. Must be a valid number."
+            )
+        return value
+
+    if value_type == "boolean":
+        normalized = value.lower().strip()
+        if normalized in ("true", "yes", "1"):
+            return "true"
+        elif normalized in ("false", "no", "0"):
+            return "false"
+        else:
+            raise ValueError(
+                f"Invalid boolean value: '{value}'. "
+                "Expected: true, false, yes, no, 1, or 0."
+            )
+
+    return value
 
 
 class NodeTagRead(BaseModel):
