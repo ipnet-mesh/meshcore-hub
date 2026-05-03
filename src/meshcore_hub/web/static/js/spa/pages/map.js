@@ -22,8 +22,8 @@ function getNodesWithinRadius(nodes, anchorLat, anchorLon, radiusKm) {
     return nodes.filter(n => getDistanceKm(anchorLat, anchorLon, n.lat, n.lon) <= radiusKm);
 }
 
-function getAnchorPoint(nodes, infraCenter) {
-    if (infraCenter) return infraCenter;
+function getAnchorPoint(nodes, adoptedCenter) {
+    if (adoptedCenter) return adoptedCenter;
     if (nodes.length === 0) return { lat: 0, lon: 0 };
     return {
         lat: nodes.reduce((sum, n) => sum + n.lat, 0) / nodes.length,
@@ -44,14 +44,14 @@ function getTypeDisplay(node) {
 }
 
 // Leaflet DivIcon requires plain HTML strings, so keep escapeHtml here
-function createNodeIcon(node) {
+function createNodeIcon(node, oidcEnabled) {
     const displayName = node.name || '';
     const relativeTime = formatRelativeTime(node.last_seen);
     const timeDisplay = relativeTime ? ' (' + relativeTime + ')' : '';
 
-    const iconHtml = node.is_infra
-        ? '<div style="width: 12px; height: 12px; background: #ef4444; border: 2px solid #b91c1c; border-radius: 50%; box-shadow: 0 0 4px rgba(239,68,68,0.6), 0 1px 2px rgba(0,0,0,0.5);"></div>'
-        : '<div style="width: 12px; height: 12px; background: #3b82f6; border: 2px solid #1e40af; border-radius: 50%; box-shadow: 0 0 4px rgba(59,130,246,0.6), 0 1px 2px rgba(0,0,0,0.5);"></div>';
+    const iconHtml = (oidcEnabled && node.is_adopted)
+        ? '<div style="width: 12px; height: 12px; background: #3b82f6; border: 2px solid #1e40af; border-radius: 50%; box-shadow: 0 0 4px rgba(59,130,246,0.6), 0 1px 2px rgba(0,0,0,0.5);"></div>'
+        : '<div style="width: 12px; height: 12px; background: #22c55e; border: 2px solid #15803d; border-radius: 50%; box-shadow: 0 0 4px rgba(34,197,94,0.6), 0 1px 2px rgba(0,0,0,0.5);"></div>';
 
     return L.divIcon({
         className: 'custom-div-icon',
@@ -66,7 +66,7 @@ function createNodeIcon(node) {
 }
 
 // Leaflet popup requires plain HTML strings, so keep escapeHtml here
-function createPopupContent(node) {
+function createPopupContent(node, oidcEnabled) {
     let ownerHtml = '';
     if (node.owner) {
         const ownerDisplay = node.owner.callsign
@@ -84,10 +84,10 @@ function createPopupContent(node) {
     const nodeTypeEmoji = typeEmoji(node.adv_type);
 
     let infraIndicatorHtml = '';
-    if (typeof node.is_infra !== 'undefined') {
-        const dotColor = node.is_infra ? '#ef4444' : '#3b82f6';
-        const borderColor = node.is_infra ? '#b91c1c' : '#1e40af';
-        const title = node.is_infra ? ((window.t && window.t('map.infrastructure')) || 'Infrastructure') : ((window.t && window.t('map.public')) || 'Public');
+    if (oidcEnabled && typeof node.is_adopted !== 'undefined') {
+        const dotColor = node.is_adopted ? '#3b82f6' : '#22c55e';
+        const borderColor = node.is_adopted ? '#1e40af' : '#15803d';
+        const title = node.is_adopted ? ((window.t && window.t('map.infrastructure')) || 'Infrastructure') : ((window.t && window.t('map.public')) || 'Public');
         infraIndicatorHtml = ' <span style="display: inline-block; width: 10px; height: 10px; background: ' + dotColor + '; border: 2px solid ' + borderColor + '; border-radius: 50%; vertical-align: middle;" title="' + title + '"></span>';
     }
 
@@ -122,7 +122,7 @@ export async function render(container, params, router) {
         const data = await apiGet('/map/data');
         let allNodes = data.nodes || [];
         const mapCenter = data.center || { lat: 0, lon: 0 };
-        const infraCenter = data.infra_center || null;
+        const adoptedCenter = data.adopted_center || null;
         const debug = data.debug || {};
         const profiles = data.profiles || [];
 
@@ -149,7 +149,7 @@ export async function render(container, params, router) {
                 let nodesToFit = filteredNodes;
 
                 if (categoryFilter !== 'infra') {
-                    const anchor = getAnchorPoint(filteredNodes, infraCenter);
+                    const anchor = getAnchorPoint(filteredNodes, adoptedCenter);
                     const nearbyNodes = getNodesWithinRadius(filteredNodes, anchor.lat, anchor.lon, MAX_BOUNDS_RADIUS_KM);
                     if (nearbyNodes.length > 0) {
                         nodesToFit = nearbyNodes;
@@ -201,7 +201,7 @@ export async function render(container, params, router) {
                 </label>
                 <select id="filter-category" class="select select-bordered select-sm" @change=${applyFilters}>
                     <option value="">${t('common.all_entity', { entity: t('entities.nodes') })}</option>
-                    <option value="infra">${t('map.infrastructure_only')}</option>
+                    ${config.oidc_enabled ? html`<option value="infra">${t('map.infrastructure_only')}</option>` : nothing}
                 </select>
             </div>
             <div class="form-control">
@@ -248,17 +248,19 @@ export async function render(container, params, router) {
     </div>
 </div>
 
+${config.oidc_enabled ? html`
 <div class="mt-4 flex flex-wrap gap-4 items-center text-sm">
     <span class="opacity-70">${t('map.legend')}</span>
     <div class="flex items-center gap-1">
-        <div style="width: 10px; height: 10px; background: #ef4444; border: 2px solid #b91c1c; border-radius: 50%;"></div>
+        <div style="width: 10px; height: 10px; background: #3b82f6; border: 2px solid #1e40af; border-radius: 50%;"></div>
         <span>${t('map.infrastructure')}</span>
     </div>
     <div class="flex items-center gap-1">
-        <div style="width: 10px; height: 10px; background: #3b82f6; border: 2px solid #1e40af; border-radius: 50%;"></div>
+        <div style="width: 10px; height: 10px; background: #22c55e; border: 2px solid #15803d; border-radius: 50%;"></div>
         <span>${t('map.public')}</span>
     </div>
 </div>
+` : nothing}
 
 <div class="mt-2 text-sm opacity-70">
     <p>${t('map.gps_description')}</p>
@@ -283,7 +285,7 @@ export async function render(container, params, router) {
             const typeFilter = container.querySelector('#filter-type').value;
 
             const filteredNodes = allNodes.filter(node => {
-                if (categoryFilter === 'infra' && !node.is_infra) return false;
+                if (categoryFilter === 'infra' && !node.is_adopted) return false;
                 const nodeType = normalizeType(node.adv_type);
                 if (typeFilter && nodeType !== typeFilter) return false;
                 return true;
@@ -292,8 +294,8 @@ export async function render(container, params, router) {
             clearMarkers();
 
             filteredNodes.forEach(node => {
-                const marker = L.marker([node.lat, node.lon], { icon: createNodeIcon(node) }).addTo(map);
-                marker.bindPopup(createPopupContent(node));
+                const marker = L.marker([node.lat, node.lon], { icon: createNodeIcon(node, config.oidc_enabled) }).addTo(map);
+                marker.bindPopup(createPopupContent(node, config.oidc_enabled));
                 markers.push(marker);
             });
 
@@ -327,12 +329,20 @@ export async function render(container, params, router) {
             return () => map.remove();
         }
 
-        const infraNodes = allNodes.filter(n => n.is_infra);
-        if (infraNodes.length > 0) {
-            const bounds = L.latLngBounds(infraNodes.map(n => [n.lat, n.lon]));
-            map.fitBounds(bounds, { padding: BOUNDS_PADDING });
+        if (config.oidc_enabled) {
+            const adoptedNodes = allNodes.filter(n => n.is_adopted);
+            if (adoptedNodes.length > 0) {
+                const bounds = L.latLngBounds(adoptedNodes.map(n => [n.lat, n.lon]));
+                map.fitBounds(bounds, { padding: BOUNDS_PADDING });
+            } else if (allNodes.length > 0) {
+                const anchor = getAnchorPoint(allNodes, adoptedCenter);
+                const nearbyNodes = getNodesWithinRadius(allNodes, anchor.lat, anchor.lon, MAX_BOUNDS_RADIUS_KM);
+                const nodesToFit = nearbyNodes.length > 0 ? nearbyNodes : allNodes;
+                const bounds = L.latLngBounds(nodesToFit.map(n => [n.lat, n.lon]));
+                map.fitBounds(bounds, { padding: BOUNDS_PADDING });
+            }
         } else if (allNodes.length > 0) {
-            const anchor = getAnchorPoint(allNodes, infraCenter);
+            const anchor = getAnchorPoint(allNodes, null);
             const nearbyNodes = getNodesWithinRadius(allNodes, anchor.lat, anchor.lon, MAX_BOUNDS_RADIUS_KM);
             const nodesToFit = nearbyNodes.length > 0 ? nearbyNodes : allNodes;
             const bounds = L.latLngBounds(nodesToFit.map(n => [n.lat, n.lon]));

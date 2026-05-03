@@ -405,7 +405,8 @@ Node tags are flexible key-value pairs that allow custom metadata to be attached
 | `lat` | GPS latitude override | Overrides node-reported latitude for map display |
 | `lon` | GPS longitude override | Overrides node-reported longitude for map display |
 | `elevation` | GPS elevation override | Overrides node-reported elevation |
-| `role` | Node role/purpose | Used for website presentation and filtering (e.g., "gateway", "repeater", "sensor") |
+
+**Infrastructure status** is determined by node adoption (records in `user_profile_nodes`), not by tags. When OIDC is enabled, adopted nodes are highlighted on the map with distinct icons and a legend. The `role` tag is still read and displayed in map popups for informational purposes but does not drive infrastructure logic.
 
 **Important Notes:**
 - All tags are optional - nodes can function without any tags

@@ -40,7 +40,6 @@ Tags are keyed by public key in YAML format:
 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef:
   name: Gateway Node
   description: Main network gateway
-  role: gateway
   lat: 37.7749
   lon: -122.4194
 

@@ -13,7 +13,7 @@ from meshcore_hub.api.dependencies import (
     get_db_session,
     get_mqtt_client,
 )
-from meshcore_hub.common.models import Node, NodeTag
+from meshcore_hub.common.models import Node, UserProfile, UserProfileNode
 
 
 def _make_basic_auth(username: str, password: str) -> str:
@@ -58,6 +58,7 @@ class TestMetricsEndpoint:
         assert "meshcore_trace_paths_total" in content
         assert "meshcore_user_profiles_total" in content
         assert "meshcore_user_profiles_by_role" in content
+        assert "meshcore_nodes_adopted" in content
 
     def test_metrics_info_has_version(self, client_no_auth):
         """Test that meshcore_info includes version label."""
@@ -171,8 +172,8 @@ class TestMetricsData:
         assert response.status_code == 200
         assert "meshcore_trace_paths_total 1.0" in response.text
 
-    def test_node_last_seen_timestamp_present(self, api_db_session, client_no_auth):
-        """Test that node_last_seen_timestamp is present for nodes with last_seen."""
+    def test_node_last_seen_timestamp_no_adoption(self, api_db_session, client_no_auth):
+        """Test that node_last_seen_timestamp includes adopted=false for unadopted nodes."""
         seen_at = datetime(2025, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
         node = Node(
             public_key="lastseen1234lastseen1234lastseen",
@@ -187,30 +188,49 @@ class TestMetricsData:
         _clear_metrics_cache()
         response = client_no_auth.get("/metrics")
         assert response.status_code == 200
-        # Labels are sorted alphabetically by prometheus_client
         assert (
             "meshcore_node_last_seen_timestamp_seconds"
-            '{adv_type="REPEATER",'
+            '{adopted="false",'
+            'adv_type="REPEATER",'
             'node_name="Seen Node",'
-            'public_key="lastseen1234lastseen1234lastseen",'
-            'role=""}'
+            'public_key="lastseen1234lastseen1234lastseen"}'
         ) in response.text
 
-    def test_node_last_seen_timestamp_with_role(self, api_db_session, client_no_auth):
-        """Test that node_last_seen_timestamp includes role label from node tags."""
+    def test_node_last_seen_timestamp_with_adoption(
+        self, api_db_session, client_no_auth
+    ):
+        """Test that node_last_seen_timestamp includes adopted label from adoption."""
         seen_at = datetime(2025, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
-        node = Node(
-            public_key="rolenode1234rolenode1234rolenode",
-            name="Infra Node",
+
+        profile = UserProfile(
+            user_id="auth0|test123",
+            name="Test Operator",
+        )
+        api_db_session.add(profile)
+        api_db_session.flush()
+
+        adopted_node = Node(
+            public_key="adopted1234adopted1234adopted12",
+            name="Adopted Node",
             adv_type="REPEATER",
             first_seen=seen_at,
             last_seen=seen_at,
         )
-        api_db_session.add(node)
+        unadopted_node = Node(
+            public_key="unadopted1234unadopted1234unad",
+            name="Unadopted Node",
+            adv_type="CLIENT",
+            first_seen=seen_at,
+            last_seen=seen_at,
+        )
+        api_db_session.add_all([adopted_node, unadopted_node])
         api_db_session.flush()
 
-        tag = NodeTag(node_id=node.id, key="role", value="infra")
-        api_db_session.add(tag)
+        adoption = UserProfileNode(
+            user_profile_id=profile.id,
+            node_id=adopted_node.id,
+        )
+        api_db_session.add(adoption)
         api_db_session.commit()
 
         _clear_metrics_cache()
@@ -218,10 +238,17 @@ class TestMetricsData:
         assert response.status_code == 200
         assert (
             "meshcore_node_last_seen_timestamp_seconds"
-            '{adv_type="REPEATER",'
-            'node_name="Infra Node",'
-            'public_key="rolenode1234rolenode1234rolenode",'
-            'role="infra"}'
+            '{adopted="true",'
+            'adv_type="REPEATER",'
+            'node_name="Adopted Node",'
+            'public_key="adopted1234adopted1234adopted12"}'
+        ) in response.text
+        assert (
+            "meshcore_node_last_seen_timestamp_seconds"
+            '{adopted="false",'
+            'adv_type="CLIENT",'
+            'node_name="Unadopted Node",'
+            'public_key="unadopted1234unadopted1234unad"}'
         ) in response.text
 
     def test_node_last_seen_timestamp_skips_null(self, api_db_session, client_no_auth):
@@ -288,6 +315,36 @@ class TestMetricsData:
         response = client_no_auth.get("/metrics")
         assert response.status_code == 200
         assert "meshcore_nodes_with_location 1.0" in response.text
+
+    def test_nodes_adopted_metric(self, api_db_session, client_no_auth):
+        """Test that meshcore_nodes_adopted gauge reflects adopted node count."""
+        seen_at = datetime(2025, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+
+        profile = UserProfile(user_id="auth0|metric_test", name="Metric Op")
+        api_db_session.add(profile)
+        api_db_session.flush()
+
+        node1 = Node(
+            public_key="adopted_metric_0000000000000000",
+            first_seen=seen_at,
+            last_seen=seen_at,
+        )
+        node2 = Node(
+            public_key="unadopted_metric_00000000000000",
+            first_seen=seen_at,
+            last_seen=seen_at,
+        )
+        api_db_session.add_all([node1, node2])
+        api_db_session.flush()
+
+        adoption = UserProfileNode(user_profile_id=profile.id, node_id=node1.id)
+        api_db_session.add(adoption)
+        api_db_session.commit()
+
+        _clear_metrics_cache()
+        response = client_no_auth.get("/metrics")
+        assert response.status_code == 200
+        assert "meshcore_nodes_adopted 1.0" in response.text
 
 
 class TestMetricsDisabled:
