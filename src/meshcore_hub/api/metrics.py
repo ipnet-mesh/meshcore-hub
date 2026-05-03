@@ -16,10 +16,10 @@ from meshcore_hub.common.models import (
     EventLog,
     Message,
     Node,
-    NodeTag,
     Telemetry,
     TracePath,
     UserProfile,
+    UserProfileNode,
 )
 
 logger = logging.getLogger(__name__)
@@ -144,35 +144,42 @@ def collect_metrics(session: Any) -> bytes:
     )
     nodes_with_location.set(count)
 
+    # -- Nodes adopted --
+    nodes_adopted = Gauge(
+        "meshcore_nodes_adopted",
+        "Number of adopted nodes (nodes with an adoption record)",
+        registry=registry,
+    )
+    adopted_count = (
+        session.execute(select(func.count(UserProfileNode.node_id))).scalar() or 0
+    )
+    nodes_adopted.set(adopted_count)
+
     # -- Node last seen timestamp --
     node_last_seen = Gauge(
         "meshcore_node_last_seen_timestamp_seconds",
         "Unix timestamp of when the node was last seen",
-        ["public_key", "node_name", "adv_type", "role"],
+        ["public_key", "node_name", "adv_type", "adopted"],
         registry=registry,
     )
-    role_subq = (
-        select(NodeTag.node_id, NodeTag.value.label("role"))
-        .where(NodeTag.key == "role")
-        .subquery()
-    )
+    adopted_subq = select(UserProfileNode.node_id).subquery()
     nodes_with_last_seen = session.execute(
         select(
             Node.public_key,
             Node.name,
             Node.adv_type,
             Node.last_seen,
-            role_subq.c.role,
+            adopted_subq.c.node_id.isnot(None).label("is_adopted"),
         )
-        .outerjoin(role_subq, Node.id == role_subq.c.node_id)
+        .outerjoin(adopted_subq, Node.id == adopted_subq.c.node_id)
         .where(Node.last_seen.isnot(None))
     ).all()
-    for public_key, name, adv_type, last_seen, role in nodes_with_last_seen:
+    for public_key, name, adv_type, last_seen, is_adopted in nodes_with_last_seen:
         node_last_seen.labels(
             public_key=public_key,
             node_name=name or "",
             adv_type=adv_type or "unknown",
-            role=role or "",
+            adopted="true" if is_adopted else "false",
         ).set(last_seen.timestamp())
 
     # -- Messages total by type --

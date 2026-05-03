@@ -2,6 +2,80 @@
 
 This guide covers upgrading from a previous MeshCore Hub release to the current version. Check the relevant version section below before upgrading.
 
+## v0.12.0
+
+This release replaces the `role=infra` NodeTag convention with the existing `UserProfileNode` adoption model as the source of truth for infrastructure status.
+
+### Overview of Changes
+
+| Area | Before | After |
+|------|--------|-------|
+| Infrastructure detection | `role=infra` NodeTag | `user_profile_nodes` adoption records |
+| Map API field | `infra_center` | `adopted_center` |
+| Map API field | `is_infra` (on node objects) | `is_adopted` |
+| Debug field | `infra_nodes` | `adopted_nodes` |
+| Prometheus label | `role="infra"` / `role=""` | `adopted="true"` / `adopted="false"` |
+| Prometheus metric | — | `meshcore_nodes_adopted` (new gauge) |
+| Map icon colors | Red (infra) / Blue (normal) | Blue (adopted) / Green (normal) |
+| Alert rule | `role="infra"` selector | `adopted="true"` selector |
+| OIDC-disabled map | Red/blue icon split | All green icons, no legend, no infra filter |
+
+### Migration Steps
+
+1. **Run database migration** — removes obsolete `role=infra` and `member_id` tags from `node_tags` table
+2. **Update Prometheus alerting rules** that reference `role="infra"` to use `adopted="true"` (see `etc/prometheus/alerts.yml`)
+3. **Update Grafana dashboards** that query `meshcore_node_last_seen_timestamp_seconds{role="infra"}` to use `adopted="true"`
+
+### Database Migration
+
+The Alembic migration automatically:
+- Deletes all `node_tags` rows where `key = "role"` AND `value = "infra"`
+- Deletes all `node_tags` rows where `key = "member_id"`
+- Other `role` tag values (e.g., `role=gateway`) are preserved
+- The downgrade is intentionally empty (obsolete tags should not be restored)
+
+### Map API Response Change
+
+The `/map/data` response changes:
+
+```diff
+{
+  "nodes": [...],
+  "profiles": [...],
+  "center": {...},
+- "infra_center": {"lat": 40.0, "lon": -74.0},
++ "adopted_center": {"lat": 40.0, "lon": -74.0},
+  "debug": {
+    "total_nodes": 10,
+    "nodes_with_coords": 8,
+-   "infra_nodes": 3,
++   "adopted_nodes": 3,
+    "error": null
+  }
+}
+```
+
+Node objects within `nodes` array change:
+
+```diff
+{
+  "public_key": "...",
+  "name": "...",
+- "is_infra": true,
++ "is_adopted": true,
+  "owner": {...},
+  ...
+}
+```
+
+### OIDC-Disabled Deployments
+
+When `OIDC_ENABLED=false`:
+- `adopted_center` is always `null` (no adoption records exist)
+- All nodes have `is_adopted: false`
+- The map shows no "Infrastructure Only" filter, no legend, no indicator dots — all nodes render as green markers
+- `meshcore_nodes_adopted` gauge reads `0.0`
+
 ## v0.11.0
 
 This release removes the `Member` model/table entirely, replacing it with `UserProfile`-backed data. The members system is now driven by OIDC user profiles with roles instead of manually seeded entries.

@@ -275,13 +275,13 @@ class TestMapDataFiltering:
         assert data["nodes"][0]["lon"] == -74.0060
 
 
-class TestMapDataInfrastructure:
-    """Tests for infrastructure node handling in map data."""
+class TestMapDataAdoptedNodes:
+    """Tests for adopted node handling in map data."""
 
-    def test_map_data_includes_infra_center(
+    def test_map_data_includes_adopted_center(
         self, web_app: Any, mock_http_client: MockHttpClient
     ) -> None:
-        """Test that map data includes infrastructure center when infra nodes exist."""
+        """Test that map data includes adopted center when adopted nodes exist."""
         mock_http_client.set_response(
             "GET",
             "/api/v1/nodes",
@@ -291,10 +291,16 @@ class TestMapDataInfrastructure:
                     {
                         "id": "node-1",
                         "public_key": "abc123",
-                        "name": "Infra Node",
+                        "name": "Adopted Node",
                         "lat": 40.0,
                         "lon": -74.0,
-                        "tags": [{"key": "role", "value": "infra"}],
+                        "tags": [],
+                        "adopted_by": {
+                            "user_id": "user-1",
+                            "name": "Operator",
+                            "callsign": "W1ABC",
+                            "profile_id": "profile-1",
+                        },
                     },
                     {
                         "id": "node-2",
@@ -314,15 +320,14 @@ class TestMapDataInfrastructure:
         response = client.get("/map/data")
         data = response.json()
 
-        # Should have infra_center based on infra node only
-        assert data["infra_center"] is not None
-        assert data["infra_center"]["lat"] == 40.0
-        assert data["infra_center"]["lon"] == -74.0
+        assert data["adopted_center"] is not None
+        assert data["adopted_center"]["lat"] == 40.0
+        assert data["adopted_center"]["lon"] == -74.0
 
-    def test_map_data_infra_center_null_when_no_infra(
+    def test_map_data_adopted_center_null_when_no_adopted(
         self, web_app: Any, mock_http_client: MockHttpClient
     ) -> None:
-        """Test that infra_center is null when no infrastructure nodes exist."""
+        """Test that adopted_center is null when no adopted nodes exist."""
         mock_http_client.set_response(
             "GET",
             "/api/v1/nodes",
@@ -347,12 +352,12 @@ class TestMapDataInfrastructure:
         response = client.get("/map/data")
         data = response.json()
 
-        assert data["infra_center"] is None
+        assert data["adopted_center"] is None
 
-    def test_map_data_sets_is_infra_flag(
+    def test_map_data_sets_is_adopted_flag(
         self, web_app: Any, mock_http_client: MockHttpClient
     ) -> None:
-        """Test that nodes have correct is_infra flag based on role tag."""
+        """Test that nodes have correct is_adopted flag based on adoption."""
         mock_http_client.set_response(
             "GET",
             "/api/v1/nodes",
@@ -362,10 +367,16 @@ class TestMapDataInfrastructure:
                     {
                         "id": "node-1",
                         "public_key": "abc123",
-                        "name": "Infra Node",
+                        "name": "Adopted Node",
                         "lat": 40.0,
                         "lon": -74.0,
-                        "tags": [{"key": "role", "value": "infra"}],
+                        "tags": [],
+                        "adopted_by": {
+                            "user_id": "user-1",
+                            "name": "Operator",
+                            "callsign": "W1ABC",
+                            "profile_id": "profile-1",
+                        },
                     },
                     {
                         "id": "node-2",
@@ -373,7 +384,7 @@ class TestMapDataInfrastructure:
                         "name": "Regular Node",
                         "lat": 41.0,
                         "lon": -75.0,
-                        "tags": [{"key": "role", "value": "other"}],
+                        "tags": [],
                     },
                 ],
                 "total": 2,
@@ -386,13 +397,13 @@ class TestMapDataInfrastructure:
         data = response.json()
 
         nodes_by_name = {n["name"]: n for n in data["nodes"]}
-        assert nodes_by_name["Infra Node"]["is_infra"] is True
-        assert nodes_by_name["Regular Node"]["is_infra"] is False
+        assert nodes_by_name["Adopted Node"]["is_adopted"] is True
+        assert nodes_by_name["Regular Node"]["is_adopted"] is False
 
-    def test_map_data_debug_includes_infra_count(
+    def test_map_data_debug_includes_adopted_count(
         self, web_app: Any, mock_http_client: MockHttpClient
     ) -> None:
-        """Test that debug info includes infrastructure node count."""
+        """Test that debug info includes adopted node count."""
         mock_http_client.set_response(
             "GET",
             "/api/v1/nodes",
@@ -402,10 +413,16 @@ class TestMapDataInfrastructure:
                     {
                         "id": "node-1",
                         "public_key": "abc123",
-                        "name": "Infra Node",
+                        "name": "Adopted Node",
                         "lat": 40.0,
                         "lon": -74.0,
-                        "tags": [{"key": "role", "value": "infra"}],
+                        "tags": [],
+                        "adopted_by": {
+                            "user_id": "user-1",
+                            "name": "Operator",
+                            "callsign": "W1ABC",
+                            "profile_id": "profile-1",
+                        },
                     },
                 ],
                 "total": 1,
@@ -417,7 +434,7 @@ class TestMapDataInfrastructure:
         response = client.get("/map/data")
         data = response.json()
 
-        assert data["debug"]["infra_nodes"] == 1
+        assert data["debug"]["adopted_nodes"] == 1
 
 
 class TestMapDataAdoptedByFilter:

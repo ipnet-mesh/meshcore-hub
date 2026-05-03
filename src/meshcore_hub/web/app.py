@@ -740,7 +740,7 @@ def create_app(
                             "lon": lon,
                             "last_seen": node.get("last_seen"),
                             "role": role,
-                            "is_infra": role == "infra",
+                            "is_adopted": adopted_info is not None,
                             "owner": owner,
                         }
                     )
@@ -751,8 +751,8 @@ def create_app(
             error = str(e)
             logger.warning(f"Failed to fetch nodes for map: {e}")
 
-        infra_nodes = [n for n in nodes_with_location if n.get("is_infra")]
-        infra_count = len(infra_nodes)
+        adopted_nodes = [n for n in nodes_with_location if n.get("is_adopted")]
+        adopted_count = len(adopted_nodes)
 
         center_lat = 0.0
         center_lon = 0.0
@@ -764,11 +764,11 @@ def create_app(
                 nodes_with_location
             )
 
-        infra_center: dict[str, float] | None = None
-        if infra_nodes:
-            infra_center = {
-                "lat": sum(n["lat"] for n in infra_nodes) / len(infra_nodes),
-                "lon": sum(n["lon"] for n in infra_nodes) / len(infra_nodes),
+        adopted_center: dict[str, float] | None = None
+        if adopted_nodes:
+            adopted_center = {
+                "lat": sum(n["lat"] for n in adopted_nodes) / len(adopted_nodes),
+                "lon": sum(n["lon"] for n in adopted_nodes) / len(adopted_nodes),
             }
 
         return JSONResponse(
@@ -776,11 +776,11 @@ def create_app(
                 "nodes": nodes_with_location,
                 "profiles": list(profiles_by_id.values()),
                 "center": {"lat": center_lat, "lon": center_lon},
-                "infra_center": infra_center,
+                "adopted_center": adopted_center,
                 "debug": {
                     "total_nodes": total_nodes,
                     "nodes_with_coords": nodes_with_coords,
-                    "infra_nodes": infra_count,
+                    "adopted_nodes": adopted_count,
                     "error": error,
                 },
             }
