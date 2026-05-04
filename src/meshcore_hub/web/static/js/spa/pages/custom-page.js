@@ -12,7 +12,7 @@ export async function render(container, params, router) {
         litRender(html`
 <div class="max-w-4xl mx-auto">
     <div class="card bg-base-100 shadow-xl">
-        <div class="card-body prose prose-lg max-w-none">
+        <div class="card-body prose prose-lg max-w-none overflow-x-auto">
             ${unsafeHTML(page.content_html)}
         </div>
     </div>

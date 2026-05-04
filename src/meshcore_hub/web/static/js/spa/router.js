@@ -122,6 +122,9 @@ export class Router {
             if (loader) loader.classList.add('hidden');
         }
 
+        // Reset focus to dismiss any open dropdown after navigation
+        document.activeElement?.blur();
+
         // Scroll to top on navigation
         window.scrollTo(0, 0);
     }
