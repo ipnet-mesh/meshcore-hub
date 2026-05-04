@@ -2,7 +2,7 @@ import { apiGet } from '../api.js';
 import { html, litRender, nothing, t, errorAlert, getConfig } from '../components.js';
 import { iconAntenna, iconUsers } from '../icons.js';
 
-function renderProfileTile(profile) {
+function renderProfileTile(profile, router) {
     const callsignBadge = profile.callsign
         ? html`<span class="badge badge-neutral badge-sm">${profile.callsign}</span>`
         : nothing;
@@ -20,7 +20,12 @@ function renderProfileTile(profile) {
     const nodeBadges = profile.adopted_nodes && profile.adopted_nodes.length > 0
         ? html`<div class="flex flex-wrap gap-1 mt-2">${profile.adopted_nodes.map(node => {
             const label = node.name || node.public_key.slice(0, 12) + '...';
-            return html`<a href="/nodes/${node.public_key}" class="badge badge-outline badge-sm hover:badge-ghost transition-colors">${label}</a>`;
+            const handleClick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                router.navigate('/nodes/' + node.public_key);
+            };
+            return html`<span class="badge badge-secondary badge-sm cursor-pointer" @click=${handleClick}>${label}</span>`;
         })}</div>`
         : nothing;
 
@@ -29,7 +34,7 @@ function renderProfileTile(profile) {
         : nothing;
 
     const urlLink = profile.url
-        ? html`<a href="${profile.url}" target="_blank" rel="noopener noreferrer" class="link link-primary text-xs mt-1 inline-block truncate">${profile.url}</a>`
+        ? html`<span class="link link-accent text-xs mt-1 inline-block truncate cursor-pointer" @click=${(e) => { e.preventDefault(); e.stopPropagation(); window.open(profile.url, '_blank', 'noopener,noreferrer'); }}>${profile.url}</span>`
         : nothing;
 
     return html`<a href="/profile/${profile.id}" class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow">
@@ -47,14 +52,14 @@ function renderProfileTile(profile) {
     </a>`;
 }
 
-function renderGroup(title, profiles, icon) {
+function renderGroup(title, profiles, icon, router) {
     if (profiles.length === 0) return nothing;
     return html`
 <h2 class="text-2xl font-bold mt-8 mb-4 flex items-center gap-2">
     ${icon}${title}
 </h2>
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-    ${profiles.sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(renderProfileTile)}
+    ${profiles.sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(p => renderProfileTile(p, router))}
 </div>`;
 }
 
@@ -92,8 +97,8 @@ export async function render(container, params, router) {
     <span class="badge badge-lg">${t('common.count_entity', { count: profiles.length, entity: t('entities.members').toLowerCase() })}</span>
 </div>
 
-${renderGroup(t('members_page.operators'), operators, html`<span class="text-primary">${iconAntenna('h-6 w-6')}</span>`)}
-${renderGroup(t('members_page.members'), members, html`<span class="text-secondary">${iconUsers('h-6 w-6')}</span>`)}
+${renderGroup(t('members_page.operators'), operators, html`<span class="text-primary">${iconAntenna('h-6 w-6')}</span>`, router)}
+${renderGroup(t('members_page.members'), members, html`<span class="text-secondary">${iconUsers('h-6 w-6')}</span>`, router)}
 `, container);
 
     } catch (e) {

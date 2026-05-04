@@ -25,6 +25,7 @@ function formatTimeOnly(isoString) {
 
 function formatTimeShort(isoString) {
     return formatDateTime(isoString, {
+        month: 'short', day: 'numeric',
         hour: '2-digit', minute: '2-digit',
         hour12: false,
     });

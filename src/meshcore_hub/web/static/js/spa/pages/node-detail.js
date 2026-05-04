@@ -44,12 +44,9 @@ function renderEditTagModal() {
     return html`
 <dialog id="tagEditModal" class="modal">
     <div class="modal-box">
-        <h3 class="font-bold text-lg">${t('common.edit_entity', { entity: t('entities.tag') })}</h3>
+        <h3 class="font-bold text-lg">${t('common.edit_entity', { entity: t('entities.tag') })}: <span id="tagEditKeyDisplay" class="font-mono text-base font-normal"></span></h3>
         <form id="tag-edit-form" class="py-4">
-            <div class="form-control mb-4">
-                <label class="label"><span class="label-text">${t('common.key')}</span></label>
-                <input type="text" id="tagEditKey" class="input input-bordered" disabled>
-            </div>
+            <input type="hidden" id="tagEditKey">
             <div class="form-control mb-4">
                 <label class="label"><span class="label-text">${t('common.value')}</span></label>
                 <input type="text" id="tagEditValue" class="input input-bordered">
@@ -154,11 +151,11 @@ export async function render(container, params, router) {
                                 ? html`<span class="opacity-50">-</span>`
                                 : recvName
                                     ? html`<a href="/nodes/${adv.observed_by}" class="link link-hover">
-                                        <div class="font-medium text-sm">${recvName}</div>
-                                        <div class="text-xs font-mono opacity-70">${adv.observed_by.slice(0, 16)}...</div>
+                                        <div class="font-medium text-sm truncate max-w-[8rem]">${recvName}</div>
+                                        <div class="text-xs font-mono opacity-70 hidden sm:block">${adv.observed_by.slice(0, 16)}...</div>
                                     </a>`
                                     : html`<a href="/nodes/${adv.observed_by}" class="link link-hover">
-                                        <span class="font-mono text-xs">${adv.observed_by.slice(0, 16)}...</span>
+                                        <span class="font-mono text-xs">${adv.observed_by.slice(0, 12)}...</span>
                                     </a>`;
                             return html`<tr>
                                 <td class="text-xs whitespace-nowrap">${formatDateTime(adv.received_at)}</td>
@@ -184,15 +181,15 @@ export async function render(container, params, router) {
                             <tr>
                                 <th>${t('common.key')}</th>
                                 <th>${t('common.value')}</th>
-                                <th>${t('common.type')}</th>
-                                <th class="w-20">${t('common.actions')}</th>
+                                <th class="hidden sm:table-cell">${t('common.type')}</th>
+                                <th class="w-16">${t('common.actions')}</th>
                             </tr>
                         </thead>
                         <tbody>
                             ${tags.map(tag => html`<tr>
-                                <td class="font-mono">${tag.key}</td>
-                                <td>${tag.value || ''}</td>
-                                <td class="opacity-70">${tag.value_type || 'string'}</td>
+                                <td class="font-mono min-w-0 truncate max-w-[8rem]">${tag.key}</td>
+                                <td class="min-w-0 truncate max-w-[12rem]">${tag.value || ''}</td>
+                                <td class="hidden sm:table-cell opacity-70">${tag.value_type || 'string'}</td>
                                 <td>
                                     <div class="flex gap-1">
                                         <button class="btn btn-xs btn-ghost tag-edit-btn" data-key=${tag.key} data-value=${tag.value || ''} data-type=${tag.value_type || 'string'}>${iconEdit('h-4 w-4')}</button>
@@ -454,6 +451,7 @@ ${canEditTags ? renderEditTagModal() : nothing}`, container);
                     try {
                         await apiPost('/api/v1/nodes/' + node.public_key + '/tags', { key, value, value_type: valueType });
                         showFlash('success', t('common.entity_added_success', { entity: t('entities.tag') }));
+                        addForm.reset();
                         router.navigate('/nodes/' + node.public_key, true);
                     } catch (err) {
                         showFlash('error', err.message);
@@ -466,11 +464,13 @@ ${canEditTags ? renderEditTagModal() : nothing}`, container);
                 btn.addEventListener('click', () => {
                     const modal = container.querySelector('#tagEditModal');
                     const keyInput = container.querySelector('#tagEditKey');
+                    const keyDisplay = container.querySelector('#tagEditKeyDisplay');
                     const valueInput = container.querySelector('#tagEditValue');
                     const typeSelect = container.querySelector('#tagEditType');
                     const errorLabel = container.querySelector('#tagEditError');
 
                     keyInput.value = btn.dataset.key;
+                    if (keyDisplay) keyDisplay.textContent = btn.dataset.key;
                     valueInput.value = btn.dataset.value;
                     typeSelect.value = btn.dataset.type;
                     if (errorLabel) errorLabel.innerHTML = '';
@@ -519,7 +519,7 @@ ${canEditTags ? renderEditTagModal() : nothing}`, container);
                 btn.addEventListener('click', () => {
                     const modal = container.querySelector('#tagDeleteModal');
                     const msg = container.querySelector('#tag-delete-msg');
-                    msg.textContent = t('common.delete_entity_confirm', { entity: t('entities.tag'), name: btn.dataset.key });
+                        msg.innerHTML = t('common.delete_entity_confirm', { entity: t('entities.tag'), name: btn.dataset.key });
                     modal._tagKey = btn.dataset.key;
                     modal.showModal();
                 }, { signal });

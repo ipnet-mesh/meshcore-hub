@@ -256,10 +256,17 @@
     font-style: italic;
 }
 
+.prose {
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+
 .prose table {
     width: 100%;
     margin-bottom: 1rem;
     border-collapse: collapse;
+    display: block;
+    overflow-x: auto;
 }
 
 .prose th,
