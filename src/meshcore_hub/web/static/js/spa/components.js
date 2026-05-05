@@ -421,7 +421,10 @@ export function pagination(page, totalPages, basePath, params = {}) {
 
     const queryParts = [];
     for (const [k, v] of Object.entries(params)) {
-        if (k !== 'page' && v !== null && v !== undefined && v !== '') {
+        if (k === 'page' || v === null || v === undefined || v === '') continue;
+        if (Array.isArray(v)) {
+            v.forEach(item => queryParts.push(`${encodeURIComponent(k)}=${encodeURIComponent(item)}`));
+        } else {
             queryParts.push(`${encodeURIComponent(k)}=${encodeURIComponent(v)}`);
         }
     }
@@ -557,8 +560,11 @@ export function createFilterHandler(basePath, navigate) {
         e.preventDefault();
         const formData = new FormData(e.target);
         const params = new URLSearchParams();
-        for (const [k, v] of formData.entries()) {
-            if (v) params.set(k, v);
+        const keys = new Set(formData.keys());
+        for (const k of keys) {
+            for (const v of formData.getAll(k)) {
+                if (v) params.append(k, v);
+            }
         }
         const queryStr = params.toString();
         navigate(queryStr ? `${basePath}?${queryStr}` : basePath);
@@ -654,21 +660,41 @@ export function renderAuthSection(container, config) {
  * @param {Function} options.navigate - Router navigate function
  * @param {string} [options.submitLabel] - Text for submit button (default: translated "Filter")
  * @param {string} [options.clearLabel] - Text for clear button (default: translated "Clear")
+ * @param {boolean} [options.collapsible=false] - Wrap in DaisyUI collapsible <details>
+ * @param {boolean} [options.defaultOpen=false] - Start expanded when collapsible
  * @returns {TemplateResult}
  */
-export function renderFilterCard({ fields, basePath, navigate, submitLabel, clearLabel }) {
-    return html`
-        <div class="card shadow mb-6 panel-solid" style="--panel-color: var(--color-neutral)">
-            <div class="card-body py-4">
-                <form method="GET" action=${basePath} class="flex gap-4 flex-wrap items-end" @submit=${createFilterHandler(basePath, navigate)}>
-                    ${fields.map(f => f())}
-                    <div class="flex gap-2 w-full sm:w-auto">
-                        <button type="submit" class="btn btn-primary btn-sm">${submitLabel || t('common.filter')}</button>
-                        <a href=${basePath} class="btn btn-ghost btn-sm">${clearLabel || t('common.clear')}</a>
-                    </div>
-                </form>
+export function renderFilterCard({ fields, basePath, navigate, submitLabel, clearLabel, collapsible = false, defaultOpen = false }) {
+    const formBody = html`
+        <form method="GET" action=${basePath} class="flex flex-col gap-4" @submit=${createFilterHandler(basePath, navigate)}>
+            <div class="flex gap-4 flex-wrap items-start">
+                ${fields.map(f => f())}
             </div>
-        </div>
+            <div class="flex gap-2">
+                <button type="submit" class="btn btn-primary btn-sm">${submitLabel || t('common.filter')}</button>
+                <a href=${basePath} class="btn btn-ghost btn-sm">${clearLabel || t('common.clear')}</a>
+            </div>
+        </form>
+    `;
+
+    if (!collapsible) {
+        return html`
+            <div class="card shadow mb-6 panel-solid" style="--panel-color: var(--color-neutral)">
+                <div class="card-body py-4">${formBody}</div>
+            </div>
+        `;
+    }
+
+    return html`
+        <details class="collapse collapse-arrow bg-base-200 border-2 border-base-content/25 rounded-box mb-6"
+                 ?open=${defaultOpen}>
+            <summary class="collapse-title text-sm font-medium cursor-pointer">
+                ${t('common.filters')}
+            </summary>
+            <div class="collapse-content pt-4">
+                ${formBody}
+            </div>
+        </details>
     `;
 }
 

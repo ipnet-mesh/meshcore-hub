@@ -11,7 +11,9 @@ import { createAutoRefresh } from '../auto-refresh.js';
 export async function render(container, params, router) {
     const query = params.query || {};
     const search = query.search || '';
-    const public_key = query.public_key || '';
+    const observed_by = query.observed_by
+        ? (Array.isArray(query.observed_by) ? query.observed_by : [query.observed_by])
+        : [];
     const adopted_by = query.adopted_by || '';
     const page = parseInt(query.page, 10) || 1;
     const limit = parseInt(query.limit, 10) || 20;
@@ -51,11 +53,12 @@ ${displayContent}`, container);
 
     async function fetchAndRenderData() {
         try {
-            const apiParams = { limit, offset, search, public_key };
+            const apiParams = { limit, offset, search };
+            if (observed_by.length > 0) apiParams.observed_by = observed_by;
             if (adopted_by) apiParams.adopted_by = adopted_by;
             const fetches = [
                 apiGet('/api/v1/advertisements', apiParams),
-                apiGet('/api/v1/nodes', { limit: 500 }),
+                apiGet('/api/v1/nodes', { limit: 500, observer: true }),
             ];
             if (config.oidc_enabled) {
                 fetches.push(apiGet('/api/v1/user/profiles', { limit: 500 }));
@@ -77,13 +80,18 @@ ${displayContent}`, container);
 
             const nodesFilter = sortedNodes.length > 0
                 ? html`
-                <div class="form-control">
-                    <label class="label py-1">
-                        <span class="label-text">${t('entities.node')}</span>
+                <div class="flex flex-col gap-1">
+                    <label class="flex items-center py-1">
+                        <span class="opacity-80 text-sm">${t('common.filter_observer_label')}</span>
                     </label>
-                    <select name="public_key" class="select select-bordered select-sm" @change=${autoSubmit}>
-                        <option value="">${t('common.all_entity', { entity: t('entities.nodes') })}</option>
-                        ${sortedNodes.map(n => html`<option value=${n.public_key} ?selected=${public_key === n.public_key}>${n._displayName}</option>`)}
+                    <select name="observed_by" multiple size="2"
+                            class="select select-bordered select-sm w-full max-w-xs">
+                        ${sortedNodes.map(n => html`
+                            <option value=${n.public_key}
+                                    ?selected=${observed_by.includes(n.public_key)}>
+                                ${n._displayName}
+                            </option>
+                        `)}
                     </select>
                 </div>`
                 : nothing;
@@ -173,26 +181,23 @@ ${displayContent}`, container);
                 });
 
             const paginationBlock = pagination(page, totalPages, '/advertisements', {
-                search, public_key, adopted_by, limit,
+                search, observed_by, adopted_by, limit,
             });
 
             const filterFields = [
                 () => html`
-            <div class="form-control">
-                <label class="label py-1">
-                    <span class="label-text">${t('common.search')}</span>
+            <div class="flex flex-col gap-1">
+                <label class="flex items-center py-1">
+                    <span class="opacity-80 text-sm">${t('common.search')}</span>
                 </label>
                 <input type="text" name="search" .value=${search} placeholder="${t('common.search_placeholder')}" class="input input-bordered input-sm w-80" @keydown=${submitOnEnter} />
             </div>`,
             ];
-            if (sortedNodes.length > 0) {
-                filterFields.push(() => nodesFilter);
-            }
             if (config.oidc_enabled && profiles.length > 0) {
                 filterFields.push(() => html`
-            <div class="form-control max-w-56">
-                <label class="label py-1">
-                    <span class="label-text">${t('common.filter_member_label')}</span>
+            <div class="flex flex-col gap-1 max-w-56">
+                <label class="flex items-center py-1">
+                    <span class="opacity-80 text-sm">${t('common.filter_member_label')}</span>
                 </label>
                 <select name="adopted_by" class="select select-bordered select-sm" @change=${autoSubmit}>
                     <option value="" ?selected=${!adopted_by}>${t('common.all_members')}</option>
@@ -207,11 +212,20 @@ ${displayContent}`, container);
                 </select>
             </div>`);
             }
+            if (sortedNodes.length > 0) {
+                filterFields.push(() => nodesFilter);
+            }
+
+            const hasActiveFilters = search !== '' || observed_by.length > 0 || (config.oidc_enabled && adopted_by !== '');
+            const existingDetails = container.querySelector('details.collapse');
+            const isFilterOpen = existingDetails ? existingDetails.open : hasActiveFilters;
 
             const filterCard = renderFilterCard({
                 fields: filterFields,
                 basePath: '/advertisements',
                 navigate,
+                collapsible: true,
+                defaultOpen: isFilterOpen,
             });
 
             renderPage(html`${filterCard}

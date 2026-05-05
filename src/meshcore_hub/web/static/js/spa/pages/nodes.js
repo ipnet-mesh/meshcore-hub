@@ -124,16 +124,16 @@ ${displayContent}`, container);
 
             const filterFields = [
                 () => html`
-            <div class="form-control">
-                <label class="label py-1">
-                    <span class="label-text">${t('common.search')}</span>
+            <div class="flex flex-col gap-1">
+                <label class="flex items-center py-1">
+                    <span class="opacity-80 text-sm">${t('common.search')}</span>
                 </label>
                 <input type="text" name="search" .value=${search} placeholder="${t('common.search_placeholder')}" class="input input-bordered input-sm w-80" @keydown=${submitOnEnter} />
             </div>`,
                 () => html`
-            <div class="form-control">
-                <label class="label py-1">
-                    <span class="label-text">${t('common.type')}</span>
+            <div class="flex flex-col gap-1">
+                <label class="flex items-center py-1">
+                    <span class="opacity-80 text-sm">${t('common.type')}</span>
                 </label>
                 <select name="adv_type" class="select select-bordered select-sm" @change=${autoSubmit}>
                     <option value="">${t('common.all_types')}</option>
@@ -146,9 +146,9 @@ ${displayContent}`, container);
             ];
             if (config.oidc_enabled && profiles.length > 0) {
                 filterFields.push(() => html`
-            <div class="form-control max-w-56">
-                <label class="label py-1">
-                    <span class="label-text">${t('common.filter_member_label')}</span>
+            <div class="flex flex-col gap-1 max-w-56">
+                <label class="flex items-center py-1">
+                    <span class="opacity-80 text-sm">${t('common.filter_member_label')}</span>
                 </label>
                 <select name="adopted_by" class="select select-bordered select-sm" @change=${autoSubmit}>
                     <option value="" ?selected=${!adopted_by}>${t('common.all_members')}</option>
@@ -164,10 +164,16 @@ ${displayContent}`, container);
             </div>`);
             }
 
+            const hasActiveFilters = search !== '' || adv_type !== '' || (config.oidc_enabled && adopted_by !== '');
+            const existingDetails = container.querySelector('details.collapse');
+            const isFilterOpen = existingDetails ? existingDetails.open : hasActiveFilters;
+
             const filterCard = renderFilterCard({
                 fields: filterFields,
                 basePath: '/nodes',
                 navigate,
+                collapsible: true,
+                defaultOpen: isFilterOpen,
             });
 
             renderPage(html`${filterCard}

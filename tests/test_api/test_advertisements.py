@@ -84,22 +84,6 @@ class TestListAdvertisements:
         assert len(data["items"]) == 1
         assert data["items"][0]["node_tag_name"] == "Friendly Search Name"
 
-    def test_list_advertisements_filter_by_public_key(
-        self, client_no_auth, sample_advertisement
-    ):
-        """Test filtering advertisements by public key."""
-        response = client_no_auth.get(
-            f"/api/v1/advertisements?public_key={sample_advertisement.public_key}"
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data["items"]) == 1
-
-        response = client_no_auth.get("/api/v1/advertisements?public_key=nonexistent")
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data["items"]) == 0
-
 
 class TestGetAdvertisement:
     """Tests for GET /advertisements/{id} endpoint."""
@@ -199,20 +183,71 @@ class TestListAdvertisementsFilters:
         data = response.json()
         assert len(data["items"]) == 1
 
-    def test_filter_by_observed_by(
+    def test_list_advertisements_filter_by_observed_by_single(
         self,
         client_no_auth,
         sample_advertisement,
         sample_advertisement_with_receiver,
         receiver_node,
     ):
-        """Test filtering advertisements by receiver node."""
+        """Test filtering advertisements by a single receiver node."""
         response = client_no_auth.get(
             f"/api/v1/advertisements?observed_by={receiver_node.public_key}"
         )
         assert response.status_code == 200
         data = response.json()
         assert len(data["items"]) == 1
+
+    def test_list_advertisements_filter_by_observed_by_multiple(
+        self,
+        client_no_auth,
+        api_db_session,
+        receiver_node,
+    ):
+        """Test filtering advertisements by multiple receiver nodes."""
+        # Create second receiver node
+        second_receiver = receiver_node.__class__(
+            public_key="2nd1232nd1232nd1232nd1232nd1232n",
+            name="SecondObserver",
+            first_seen=datetime.now(timezone.utc),
+        )
+        api_db_session.add(second_receiver)
+        api_db_session.commit()
+
+        # Create two advertisements, each observed by a different receiver
+        ad1 = Advertisement(
+            public_key="ad1pubad1pubad1pubad1pubad1pubad",
+            name="AD1",
+            adv_type="CLIENT",
+            received_at=datetime.now(timezone.utc),
+            observer_node_id=receiver_node.id,
+        )
+        ad2 = Advertisement(
+            public_key="ad2pubad2pubad2pubad2pubad2pubad",
+            name="AD2",
+            adv_type="CLIENT",
+            received_at=datetime.now(timezone.utc),
+            observer_node_id=second_receiver.id,
+        )
+        api_db_session.add_all([ad1, ad2])
+        api_db_session.commit()
+
+        # Filter by both receivers
+        response = client_no_auth.get(
+            f"/api/v1/advertisements?observed_by={receiver_node.public_key}&observed_by={second_receiver.public_key}"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["items"]) == 2
+
+        # Filter by just the first receiver
+        response = client_no_auth.get(
+            f"/api/v1/advertisements?observed_by={receiver_node.public_key}"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["items"]) == 1
+        assert data["items"][0]["name"] == "AD1"
 
     def test_filter_by_since(self, client_no_auth, api_db_session):
         """Test filtering advertisements by since timestamp."""

@@ -97,7 +97,15 @@ export class Router {
         }
 
         const pathname = window.location.pathname;
-        const query = Object.fromEntries(new URLSearchParams(window.location.search));
+        const sp = new URLSearchParams(window.location.search);
+        const query = {};
+        for (const [k, v] of sp.entries()) {
+            if (k in query) {
+                query[k] = Array.isArray(query[k]) ? [...query[k], v] : [query[k], v];
+            } else {
+                query[k] = v;
+            }
+        }
 
         // Notify navigation listener
         if (this._onNavigate) {
