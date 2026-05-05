@@ -168,6 +168,44 @@ class TestListNodesFilters:
         assert room_node.public_key in room_keys
         assert name_only_room_node.public_key not in room_keys
 
+    def test_filter_by_observer_true(
+        self, client_no_auth, api_db_session, receiver_node
+    ):
+        """Test filtering nodes that have observed events."""
+        from datetime import datetime, timezone
+
+        from meshcore_hub.common.models import Advertisement, Message
+
+        # This node has observed an ad and a message
+        advert = Advertisement(
+            public_key="obsflt1obsflt1obsflt1obsflt1ob",
+            name="ObservedAd",
+            adv_type="CLIENT",
+            received_at=datetime.now(timezone.utc),
+            observer_node_id=receiver_node.id,
+        )
+        msg = Message(
+            message_type="channel",
+            channel_idx=1,
+            text="Observed msg",
+            received_at=datetime.now(timezone.utc),
+            observer_node_id=receiver_node.id,
+        )
+        api_db_session.add_all([advert, msg])
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/nodes?observer=true")
+        assert response.status_code == 200
+        data = response.json()
+        observer_keys = {item["public_key"] for item in data["items"]}
+        assert receiver_node.public_key in observer_keys
+
+        response = client_no_auth.get("/api/v1/nodes?observer=false")
+        assert response.status_code == 200
+        data = response.json()
+        non_observer_keys = {item["public_key"] for item in data["items"]}
+        assert receiver_node.public_key not in non_observer_keys
+
 
 class TestGetNode:
     """Tests for GET /nodes/{public_key} endpoint."""

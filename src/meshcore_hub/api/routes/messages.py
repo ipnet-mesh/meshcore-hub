@@ -33,8 +33,8 @@ async def list_messages(
     message_type: Optional[str] = Query(None, description="Filter by message type"),
     pubkey_prefix: Optional[str] = Query(None, description="Filter by sender prefix"),
     channel_idx: Optional[int] = Query(None, description="Filter by channel"),
-    observed_by: Optional[str] = Query(
-        None, description="Filter by receiver node public key"
+    observed_by: Optional[list[str]] = Query(
+        None, description="Filter by receiver node public keys"
     ),
     since: Optional[datetime] = Query(None, description="Start timestamp"),
     until: Optional[datetime] = Query(None, description="End timestamp"),
@@ -64,7 +64,7 @@ async def list_messages(
         query = query.where(Message.channel_idx == channel_idx)
 
     if observed_by:
-        query = query.where(ObserverNode.public_key == observed_by)
+        query = query.where(ObserverNode.public_key.in_(observed_by))
 
     if since:
         query = query.where(Message.received_at >= since)

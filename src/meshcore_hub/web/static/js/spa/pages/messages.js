@@ -14,6 +14,9 @@ export async function render(container, params, router) {
     const query = params.query || {};
     const message_type = query.message_type || '';
     const channel_idx = query.channel_idx || '';
+    const observed_by = query.observed_by
+        ? (Array.isArray(query.observed_by) ? query.observed_by : [query.observed_by])
+        : [];
     const page = parseInt(query.page, 10) || 1;
     const limit = parseInt(query.limit, 10) || 50;
     const offset = (page - 1) * limit;
@@ -199,8 +202,19 @@ ${displayContent}`, container);
 
     async function fetchAndRenderData() {
         try {
-            const data = await apiGet('/api/v1/messages', { limit, offset, message_type, channel_idx });
+            const apiParams = { limit, offset, message_type, channel_idx };
+            if (observed_by.length > 0) apiParams.observed_by = observed_by;
+            const [data, nodesData] = await Promise.all([
+                apiGet('/api/v1/messages', apiParams),
+                apiGet('/api/v1/nodes', { limit: 500, observer: true }),
+            ]);
             const messages = dedupeBySignature(data.items || []);
+            const allNodes = nodesData.items || [];
+
+            const sortedNodes = allNodes.map(n => {
+                const tagName = n.tags?.find(t => t.key === 'name')?.value;
+                return { ...n, _sortName: (tagName || n.name || '').toLowerCase(), _displayName: tagName || n.name || n.public_key.slice(0, 12) + '...' };
+            }).sort((a, b) => a._sortName.localeCompare(b._sortName));
             const total = data.total || 0;
             const totalPages = Math.ceil(total / limit);
 
@@ -300,15 +314,32 @@ ${displayContent}`, container);
                 });
 
             const paginationBlock = pagination(page, totalPages, '/messages', {
-                message_type, channel_idx, limit,
+                message_type, channel_idx, observed_by, limit,
             });
 
-            const filterCard = renderFilterCard({
-                fields: [
-                    () => html`
-            <div class="form-control">
-                <label class="label py-1">
-                    <span class="label-text">${t('common.type')}</span>
+            const observerFilter = sortedNodes.length > 0
+                ? html`
+                <div class="flex flex-col gap-1">
+                    <label class="flex items-center py-1">
+                        <span class="opacity-80 text-sm">${t('common.filter_observer_label')}</span>
+                    </label>
+                    <select name="observed_by" multiple size="3"
+                            class="select select-bordered select-sm w-full max-w-xs">
+                        ${sortedNodes.map(n => html`
+                            <option value=${n.public_key}
+                                    ?selected=${observed_by.includes(n.public_key)}>
+                                ${n._displayName}
+                            </option>
+                        `)}
+                    </select>
+                </div>`
+                : nothing;
+
+            const filterFields = [
+                () => html`
+            <div class="flex flex-col gap-1">
+                <label class="flex items-center py-1">
+                    <span class="opacity-80 text-sm">${t('common.type')}</span>
                 </label>
                 <select name="message_type" class="select select-bordered select-sm" @change=${autoSubmit}>
                     <option value="">${t('common.all_types')}</option>
@@ -316,10 +347,10 @@ ${displayContent}`, container);
                     <option value="channel" ?selected=${message_type === 'channel'}>${t('messages.type_channel')}</option>
                 </select>
             </div>`,
-                    () => html`
-            <div class="form-control">
-                <label class="label py-1">
-                    <span class="label-text">${t('entities.channel')}</span>
+                () => html`
+            <div class="flex flex-col gap-1">
+                <label class="flex items-center py-1">
+                    <span class="opacity-80 text-sm">${t('entities.channel')}</span>
                 </label>
                 <select name="channel_idx" class="select select-bordered select-sm" @change=${autoSubmit}>
                     <option value="">${t('common.all_channels')}</option>
@@ -328,9 +359,21 @@ ${displayContent}`, container);
                     )}
                 </select>
             </div>`,
-                ],
+            ];
+            if (sortedNodes.length > 0) {
+                filterFields.push(() => observerFilter);
+            }
+
+            const hasActiveFilters = message_type !== '' || channel_idx !== '' || observed_by.length > 0;
+            const existingDetails = container.querySelector('details.collapse');
+            const isFilterOpen = existingDetails ? existingDetails.open : hasActiveFilters;
+
+            const filterCard = renderFilterCard({
+                fields: filterFields,
                 basePath: '/messages',
                 navigate,
+                collapsible: true,
+                defaultOpen: isFilterOpen,
             });
 
             renderPage(html`${filterCard}

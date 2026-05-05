@@ -14,7 +14,11 @@ export async function apiGet(path, params = {}) {
     const url = new URL(path, window.location.origin);
     for (const [k, v] of Object.entries(params)) {
         if (v !== null && v !== undefined && v !== '') {
-            url.searchParams.set(k, String(v));
+            if (Array.isArray(v)) {
+                v.forEach(item => url.searchParams.append(k, String(item)));
+            } else {
+                url.searchParams.set(k, String(v));
+            }
         }
     }
     const response = await fetch(url);

@@ -8,7 +8,16 @@ from sqlalchemy.orm import selectinload
 
 from meshcore_hub.api.auth import RequireRead
 from meshcore_hub.api.dependencies import DbSession
-from meshcore_hub.common.models import Node, NodeTag, UserProfileNode
+from meshcore_hub.common.models import (
+    Advertisement,
+    EventObserver,
+    Message,
+    Node,
+    NodeTag,
+    Telemetry,
+    TracePath,
+    UserProfileNode,
+)
 from meshcore_hub.common.schemas.nodes import AdoptedByUser, NodeList, NodeRead
 
 router = APIRouter()
@@ -46,6 +55,9 @@ async def list_nodes(
         None, description="Filter by adopting user profile UUID"
     ),
     role: Optional[str] = Query(None, description="Filter by role tag value"),
+    observer: Optional[bool] = Query(
+        None, description="Filter to nodes that have observed events"
+    ),
     limit: int = Query(50, ge=1, le=500, description="Page size"),
     offset: int = Query(0, ge=0, description="Page offset"),
 ) -> NodeList:
@@ -127,6 +139,58 @@ async def list_nodes(
                 )
             )
         )
+
+    if observer is not None:
+        if observer:
+            query = query.where(
+                or_(
+                    Node.id.in_(
+                        select(Advertisement.observer_node_id).where(
+                            Advertisement.observer_node_id.is_not(None)
+                        )
+                    ),
+                    Node.id.in_(
+                        select(Message.observer_node_id).where(
+                            Message.observer_node_id.is_not(None)
+                        )
+                    ),
+                    Node.id.in_(
+                        select(Telemetry.observer_node_id).where(
+                            Telemetry.observer_node_id.is_not(None)
+                        )
+                    ),
+                    Node.id.in_(
+                        select(TracePath.observer_node_id).where(
+                            TracePath.observer_node_id.is_not(None)
+                        )
+                    ),
+                    Node.id.in_(select(EventObserver.observer_node_id)),
+                )
+            )
+        else:
+            query = query.where(
+                ~Node.id.in_(
+                    select(Advertisement.observer_node_id).where(
+                        Advertisement.observer_node_id.is_not(None)
+                    )
+                ),
+                ~Node.id.in_(
+                    select(Message.observer_node_id).where(
+                        Message.observer_node_id.is_not(None)
+                    )
+                ),
+                ~Node.id.in_(
+                    select(Telemetry.observer_node_id).where(
+                        Telemetry.observer_node_id.is_not(None)
+                    )
+                ),
+                ~Node.id.in_(
+                    select(TracePath.observer_node_id).where(
+                        TracePath.observer_node_id.is_not(None)
+                    )
+                ),
+                ~Node.id.in_(select(EventObserver.observer_node_id)),
+            )
 
     # Get total count
     count_query = select(func.count()).select_from(query.subquery())

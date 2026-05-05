@@ -46,9 +46,8 @@ async def list_advertisements(
     search: Optional[str] = Query(
         None, description="Search in name tag, node name, or public key"
     ),
-    public_key: Optional[str] = Query(None, description="Filter by public key"),
-    observed_by: Optional[str] = Query(
-        None, description="Filter by receiver node public key"
+    observed_by: Optional[list[str]] = Query(
+        None, description="Filter by receiver node public keys"
     ),
     adopted_by: Optional[str] = Query(
         None, description="Filter by adopting user profile UUID"
@@ -94,11 +93,8 @@ async def list_advertisements(
             )
         )
 
-    if public_key:
-        query = query.where(Advertisement.public_key == public_key)
-
     if observed_by:
-        query = query.where(ObserverNode.public_key == observed_by)
+        query = query.where(ObserverNode.public_key.in_(observed_by))
 
     if adopted_by:
         query = query.where(

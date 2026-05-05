@@ -216,14 +216,14 @@ class TestListMessagesFilters:
         data = response.json()
         assert len(data["items"]) == 0
 
-    def test_filter_by_observed_by(
+    def test_filter_by_observed_by_single(
         self,
         client_no_auth,
         sample_message,
         sample_message_with_receiver,
         receiver_node,
     ):
-        """Test filtering messages by receiver node."""
+        """Test filtering messages by a single receiver node."""
         response = client_no_auth.get(
             f"/api/v1/messages?observed_by={receiver_node.public_key}"
         )
@@ -231,6 +231,57 @@ class TestListMessagesFilters:
         data = response.json()
         assert len(data["items"]) == 1
         assert data["items"][0]["text"] == sample_message_with_receiver.text
+
+    def test_filter_by_observed_by_multiple(
+        self,
+        client_no_auth,
+        api_db_session,
+        receiver_node,
+    ):
+        """Test filtering messages by multiple receiver nodes."""
+        # Create second receiver node
+        second_receiver = Node(
+            public_key="2ndmsg2ndmsg2ndmsg2ndmsg2ndmsg2n",
+            name="SecondMsgObserver",
+            first_seen=datetime.now(timezone.utc),
+        )
+        api_db_session.add(second_receiver)
+        api_db_session.commit()
+
+        # Create two messages, each observed by a different receiver
+        msg1 = Message(
+            message_type="channel",
+            channel_idx=1,
+            text="Msg from receiver A",
+            received_at=datetime.now(timezone.utc),
+            observer_node_id=receiver_node.id,
+        )
+        msg2 = Message(
+            message_type="channel",
+            channel_idx=2,
+            text="Msg from receiver B",
+            received_at=datetime.now(timezone.utc),
+            observer_node_id=second_receiver.id,
+        )
+        api_db_session.add_all([msg1, msg2])
+        api_db_session.commit()
+
+        # Filter by both receivers
+        response = client_no_auth.get(
+            f"/api/v1/messages?observed_by={receiver_node.public_key}&observed_by={second_receiver.public_key}"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["items"]) == 2
+
+        # Filter by just the first receiver
+        response = client_no_auth.get(
+            f"/api/v1/messages?observed_by={receiver_node.public_key}"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["items"]) == 1
+        assert data["items"][0]["text"] == "Msg from receiver A"
 
     def test_filter_by_since(self, client_no_auth, api_db_session):
         """Test filtering messages by since timestamp."""
