@@ -348,7 +348,7 @@ The collector automatically cleans up old event data and inactive nodes:
 | `DATA_RETENTION_DAYS`           | `30`    | Days to retain event data                |
 | `DATA_RETENTION_INTERVAL_HOURS` | `24`    | Hours between cleanup runs               |
 | `NODE_CLEANUP_ENABLED`          | `true`  | Enable removal of inactive nodes         |
-| `NODE_CLEANUP_DAYS`             | `7`     | Remove nodes not seen for this many days |
+| `NODE_CLEANUP_DAYS`             | `30`    | Remove nodes not seen for this many days |
 
 ### API Settings
 

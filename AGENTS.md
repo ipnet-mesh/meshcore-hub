@@ -649,6 +649,8 @@ Key variables:
 - `OIDC_SESSION_MAX_AGE` - Session lifetime in seconds (default: `86400`)
 - `OIDC_COOKIE_SECURE` - HTTPS-only cookies (default: `false`)
 - `WEB_THEME` - Default theme for the web dashboard (default: `dark`, options: `dark`, `light`). Users can override via the theme toggle in the navbar, which persists their preference in browser localStorage.
+- `WEB_LOCALE` - Locale/language for the web dashboard (default: `en`)
+- `WEB_DATETIME_LOCALE` - Locale for date/time formatting (default: `en-US`)
 - `WEB_AUTO_REFRESH_SECONDS` - Auto-refresh interval in seconds for list pages (default: `30`, `0` to disable)
 - `WEB_DEBUG` - Enable debug mode in the web dashboard (default: `false`)
 - `TZ` - Timezone for web dashboard date/time display (default: `UTC`, e.g., `America/New_York`, `Europe/London`)
