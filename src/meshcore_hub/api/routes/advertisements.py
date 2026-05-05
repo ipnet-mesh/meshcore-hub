@@ -18,6 +18,8 @@ from meshcore_hub.common.schemas.messages import (
 
 router = APIRouter()
 
+VALID_AD_SORT_COLUMNS = {"time", "node_name", "public_key"}
+
 
 def _get_tag_name(node: Optional[Node]) -> Optional[str]:
     """Extract name tag from a node's tags."""
@@ -54,6 +56,8 @@ async def list_advertisements(
     ),
     since: Optional[datetime] = Query(None, description="Start timestamp"),
     until: Optional[datetime] = Query(None, description="End timestamp"),
+    sort: Optional[str] = Query(None, description="Sort column"),
+    order: Optional[str] = Query(None, description="Sort direction: asc or desc"),
     limit: int = Query(50, ge=1, le=100, description="Page size"),
     offset: int = Query(0, ge=0, description="Page offset"),
 ) -> AdvertisementList:
@@ -115,8 +119,39 @@ async def list_advertisements(
     count_query = select(func.count()).select_from(query.subquery())
     total = session.execute(count_query).scalar() or 0
 
+    # Resolve sort column and direction
+    sort = sort if sort in VALID_AD_SORT_COLUMNS else "time"
+    order = order if order in ("asc", "desc") else "desc"
+
+    SourceNodeNameTag = aliased(NodeTag)
+    name_tag_subq = (
+        select(SourceNodeNameTag.value)
+        .where(
+            SourceNodeNameTag.node_id == SourceNode.id,
+            SourceNodeNameTag.key == "name",
+        )
+        .correlate(SourceNode)
+        .scalar_subquery()
+    )
+
+    if sort == "node_name":
+        _col = func.coalesce(name_tag_subq, SourceNode.name, Advertisement.public_key)
+        query = query.order_by(_col.desc() if order == "desc" else _col.asc())
+    elif sort == "public_key":
+        query = query.order_by(
+            Advertisement.public_key.desc()
+            if order == "desc"
+            else Advertisement.public_key.asc()
+        )
+    else:
+        query = query.order_by(
+            Advertisement.received_at.desc()
+            if order == "desc"
+            else Advertisement.received_at.asc()
+        )
+
     # Apply pagination
-    query = query.order_by(Advertisement.received_at.desc()).offset(offset).limit(limit)
+    query = query.offset(offset).limit(limit)
 
     # Execute
     results = session.execute(query).all()

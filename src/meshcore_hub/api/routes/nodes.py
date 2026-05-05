@@ -43,6 +43,9 @@ def _node_to_read(node: Node) -> NodeRead:
     return node_read
 
 
+VALID_NODE_SORT_COLUMNS = {"name", "public_key", "last_seen"}
+
+
 @router.get("", response_model=NodeList)
 async def list_nodes(
     _: RequireRead,
@@ -58,6 +61,8 @@ async def list_nodes(
     observer: Optional[bool] = Query(
         None, description="Filter to nodes that have observed events"
     ),
+    sort: Optional[str] = Query(None, description="Sort column"),
+    order: Optional[str] = Query(None, description="Sort direction: asc or desc"),
     limit: int = Query(50, ge=1, le=500, description="Page size"),
     offset: int = Query(0, ge=0, description="Page offset"),
 ) -> NodeList:
@@ -196,8 +201,34 @@ async def list_nodes(
     count_query = select(func.count()).select_from(query.subquery())
     total = session.execute(count_query).scalar() or 0
 
-    # Apply pagination and ordering
-    query = query.order_by(Node.last_seen.desc()).offset(offset).limit(limit)
+    # Resolve sort column and direction
+    sort = sort if sort in VALID_NODE_SORT_COLUMNS else "name"
+    order = order if order in ("asc", "desc") else ("asc" if sort == "name" else "desc")
+
+    name_tag_subq = (
+        select(NodeTag.value)
+        .where(NodeTag.node_id == Node.id, NodeTag.key == "name")
+        .correlate(Node)
+        .scalar_subquery()
+    )
+
+    if sort == "name":
+        _col = func.coalesce(name_tag_subq, Node.name, Node.public_key)
+        query = query.order_by(_col.desc() if order == "desc" else _col.asc())
+    elif sort == "public_key":
+        query = query.order_by(
+            Node.public_key.desc() if order == "desc" else Node.public_key.asc()
+        )
+    elif sort == "last_seen":
+        query = query.order_by(
+            Node.last_seen.desc() if order == "desc" else Node.last_seen.asc()
+        )
+    else:
+        _col = func.coalesce(name_tag_subq, Node.name, Node.public_key)
+        query = query.order_by(_col.desc() if order == "desc" else _col.asc())
+
+    # Apply pagination
+    query = query.offset(offset).limit(limit)
 
     # Execute
     nodes = session.execute(query).scalars().all()

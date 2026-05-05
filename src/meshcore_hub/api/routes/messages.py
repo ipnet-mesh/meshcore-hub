@@ -15,6 +15,8 @@ from meshcore_hub.common.schemas.messages import MessageList, MessageRead
 
 router = APIRouter()
 
+VALID_MSG_SORT_COLUMNS = {"time", "type", "from", "message"}
+
 
 def _get_tag_name(node: Optional[Node]) -> Optional[str]:
     """Extract name tag from a node's tags."""
@@ -39,6 +41,8 @@ async def list_messages(
     since: Optional[datetime] = Query(None, description="Start timestamp"),
     until: Optional[datetime] = Query(None, description="End timestamp"),
     search: Optional[str] = Query(None, description="Search in message text"),
+    sort: Optional[str] = Query(None, description="Sort column"),
+    order: Optional[str] = Query(None, description="Sort direction: asc or desc"),
     limit: int = Query(50, ge=1, le=100, description="Page size"),
     offset: int = Query(0, ge=0, description="Page offset"),
 ) -> MessageList:
@@ -79,8 +83,33 @@ async def list_messages(
     count_query = select(func.count()).select_from(query.subquery())
     total = session.execute(count_query).scalar() or 0
 
+    # Resolve sort column and direction
+    sort = sort if sort in VALID_MSG_SORT_COLUMNS else "time"
+    order = order if order in ("asc", "desc") else "desc"
+
+    if sort == "type":
+        query = query.order_by(
+            Message.message_type.desc()
+            if order == "desc"
+            else Message.message_type.asc()
+        )
+    elif sort == "from":
+        query = query.order_by(
+            Message.pubkey_prefix.desc()
+            if order == "desc"
+            else Message.pubkey_prefix.asc()
+        )
+    elif sort == "message":
+        query = query.order_by(
+            Message.text.desc() if order == "desc" else Message.text.asc()
+        )
+    else:
+        query = query.order_by(
+            Message.received_at.desc() if order == "desc" else Message.received_at.asc()
+        )
+
     # Apply pagination
-    query = query.order_by(Message.received_at.desc()).offset(offset).limit(limit)
+    query = query.offset(offset).limit(limit)
 
     # Execute
     results = session.execute(query).all()
