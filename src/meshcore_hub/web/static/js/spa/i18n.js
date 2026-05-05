@@ -20,7 +20,9 @@ let _locale = 'en';
  */
 export async function loadLocale(locale) {
     try {
-        const res = await fetch(`/static/locales/${locale}.json`);
+        const config = window.__APP_CONFIG__ || {};
+        const v = config.locale_version || '';
+        const res = await fetch(`/static/locales/${locale}.json${v ? '?v=' + v : ''}`);
         if (res.ok) {
             _translations = await res.json();
             _locale = locale;

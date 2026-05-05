@@ -86,4 +86,6 @@ class TestHomePage:
     def test_home_contains_spa_app_script(self, client: TestClient) -> None:
         """Test that home page includes the SPA application script."""
         response = client.get("/")
-        assert "/static/js/spa/app.js" in response.text
+        has_bundled = "/static/dist/" in response.text
+        has_fallback = "/static/js/spa/app.js" in response.text
+        assert has_bundled or has_fallback

@@ -41,20 +41,10 @@
     <link rel="stylesheet" href="/static/css/tailwind.css?v={{ version }}" />
 
     <!-- Leaflet CSS for maps -->
-    <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css" />
+    <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css?v={{ vendor_hashes['leaflet.css'] }}" />
 
     <!-- Custom application styles -->
     <link rel="stylesheet" href="/static/css/app.css?v={{ version }}">
-
-    <!-- Import map for ES module dependencies -->
-    <script type="importmap">
-    {
-        "imports": {
-            "lit-html": "/static/vendor/lit-html/lit-html.js",
-            "lit-html/": "/static/vendor/lit-html/"
-        }
-    }
-    </script>
 </head>
 <body class="min-h-screen bg-base-200 flex flex-col">
     <!-- Navbar -->
@@ -174,13 +164,13 @@
     </footer>
 
     <!-- Leaflet JS for maps -->
-    <script src="/static/vendor/leaflet/leaflet.js"></script>
+    <script src="/static/vendor/leaflet/leaflet.js?v={{ vendor_hashes['leaflet.js'] }}"></script>
 
     <!-- Chart.js for charts -->
-    <script src="/static/vendor/chart.js/chart.umd.min.js"></script>
+    <script src="/static/vendor/chart.js/chart.umd.min.js?v={{ vendor_hashes['chart.umd.min.js'] }}"></script>
 
     <!-- QR Code library -->
-    <script src="/static/vendor/qrcodejs/qrcode.min.js"></script>
+    <script src="/static/vendor/qrcodejs/qrcode.min.js?v={{ vendor_hashes['qrcode.min.js'] }}"></script>
 
     <!-- Chart helper functions -->
     <script src="/static/js/charts.js?v={{ version }}"></script>
@@ -207,6 +197,10 @@
     </script>
 
     <!-- SPA Application (ES Module) -->
+    {% if asset_app_js %}
+    <script type="module" src="/static/dist/{{ asset_app_js }}"></script>
+    {% else %}
     <script type="module" src="/static/js/spa/app.js?v={{ version }}"></script>
+    {% endif %}
 </body>
 </html>

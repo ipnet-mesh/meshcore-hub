@@ -50,6 +50,10 @@ class CacheControlMiddleware(BaseHTTPMiddleware):
         elif path.startswith("/static/") and "v=" in query_params:
             response.headers["cache-control"] = "public, max-age=31536000, immutable"
 
+        # Static dist/ files use content-hashed filenames — immutable
+        elif path.startswith("/static/dist/"):
+            response.headers["cache-control"] = "public, max-age=31536000, immutable"
+
         # Static files without version - short cache as fallback
         elif path.startswith("/static/"):
             response.headers["cache-control"] = "public, max-age=3600"

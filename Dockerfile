@@ -47,6 +47,7 @@ COPY alembic.ini ./
 # Overlay built frontend assets onto source tree
 COPY --from=frontend /app/src/meshcore_hub/web/static/vendor ./src/meshcore_hub/web/static/vendor
 COPY --from=frontend /app/src/meshcore_hub/web/static/css/tailwind.css ./src/meshcore_hub/web/static/css/tailwind.css
+COPY --from=frontend /app/src/meshcore_hub/web/static/dist ./src/meshcore_hub/web/static/dist
 
 # Build argument for version (set via CI or manually)
 ARG BUILD_VERSION=dev

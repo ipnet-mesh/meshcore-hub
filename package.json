@@ -4,6 +4,9 @@
   "scripts": {
     "build": "node build.js"
   },
+  "devDependencies": {
+    "esbuild": "^0.25"
+  },
   "dependencies": {
     "@tailwindcss/cli": "^4",
     "chart.js": "^4",

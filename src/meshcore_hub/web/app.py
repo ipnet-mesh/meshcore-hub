@@ -41,6 +41,23 @@ TEMPLATES_DIR = PACKAGE_DIR / "templates"
 STATIC_DIR = PACKAGE_DIR / "static"
 
 
+def _load_asset_manifest() -> dict[str, Any]:
+    """Load the esbuild asset manifest from dist/assets.json.
+
+    Returns:
+        Manifest dict with entry names, vendor hashes, and locale version.
+        Returns empty dict if manifest is missing or invalid.
+    """
+    manifest_path = STATIC_DIR / "dist" / "assets.json"
+    if not manifest_path.exists():
+        return {}
+    try:
+        data: dict[str, Any] = json.loads(manifest_path.read_text())
+        return data
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
 # Per-endpoint, per-method role access mapping for the API proxy.
 # Key: URL path prefix (after /api/), Value: {method -> allowed roles}.
 # _OPEN = unconditional access (OIDC on or off, anonymous OK).
@@ -271,6 +288,7 @@ def _build_config_json(app: FastAPI, request: Request) -> str:
         "channel_labels": app.state.channel_labels,
         "logo_invert_light": app.state.logo_invert_light,
         "debug": app.state.web_debug,
+        "locale_version": getattr(app.state, "locale_version", ""),
     }
 
     role_names = {
@@ -534,6 +552,13 @@ def create_app(
     page_loader = PageLoader(settings.effective_pages_home)
     page_loader.load_pages()
     app.state.page_loader = page_loader
+
+    # Load esbuild asset manifest for cache-busted filenames
+    manifest = _load_asset_manifest()
+    app.state.asset_manifest = manifest
+    app.state.asset_app_js = manifest.get("app.js", "")
+    app.state.vendor_hashes = manifest.get("vendor", {})
+    app.state.locale_version = manifest.get("locale_version", "")
 
     # Check for custom logo and store media path
     media_home = Path(settings.effective_media_home)
@@ -1065,6 +1090,8 @@ def create_app(
                 "version": __version__,
                 "default_theme": request.app.state.web_theme,
                 "config_json": config_json,
+                "asset_app_js": request.app.state.asset_app_js,
+                "vendor_hashes": request.app.state.vendor_hashes,
             },
         )
 
