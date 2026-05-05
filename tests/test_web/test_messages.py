@@ -31,7 +31,9 @@ class TestMessagesPage:
     def test_messages_contains_spa_script(self, client: TestClient) -> None:
         """Test that messages page includes SPA application script."""
         response = client.get("/messages")
-        assert "/static/js/spa/app.js" in response.text
+        has_bundled = "/static/dist/" in response.text
+        has_fallback = "/static/js/spa/app.js" in response.text
+        assert has_bundled or has_fallback
 
 
 class TestMessagesPageFilters:

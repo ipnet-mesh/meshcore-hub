@@ -224,4 +224,5 @@ meshcore.db
 # Frontend build artifacts
 node_modules/
 src/meshcore_hub/web/static/vendor/
+src/meshcore_hub/web/static/dist/
 src/meshcore_hub/web/static/css/tailwind.css

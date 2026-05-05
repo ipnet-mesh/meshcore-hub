@@ -31,7 +31,9 @@ class TestAdvertisementsPage:
     def test_advertisements_contains_spa_script(self, client: TestClient) -> None:
         """Test that advertisements page includes SPA application script."""
         response = client.get("/advertisements")
-        assert "/static/js/spa/app.js" in response.text
+        has_bundled = "/static/dist/" in response.text
+        has_fallback = "/static/js/spa/app.js" in response.text
+        assert has_bundled or has_fallback
 
 
 class TestAdvertisementsPageFilters:

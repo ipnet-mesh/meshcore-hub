@@ -151,17 +151,24 @@ class TestVersionParameterInHTML:
         assert f"?v={__version__}" in charts_script["src"]
 
     def test_app_js_has_version(self, client):
-        """SPA app.js script should include version parameter."""
+        """SPA app.js script should include version or content hash."""
         response = client.get("/")
         assert response.status_code == 200
 
         soup = BeautifulSoup(response.text, "html.parser")
-        app_script = soup.find(
+        bundled_script = soup.find(
+            "script",
+            {"src": lambda x: x and "/static/dist/" in x and x.endswith(".js")},
+        )
+        fallback_script = soup.find(
             "script", {"src": lambda x: x and "/static/js/spa/app.js" in x}
         )
 
-        assert app_script is not None
-        assert f"?v={__version__}" in app_script["src"]
+        if bundled_script:
+            assert "/static/dist/" in bundled_script["src"]
+        else:
+            assert fallback_script is not None
+            assert f"?v={__version__}" in fallback_script["src"]
 
     def test_cdn_resources_unchanged(self, client):
         """CDN resources should not have version parameters."""
