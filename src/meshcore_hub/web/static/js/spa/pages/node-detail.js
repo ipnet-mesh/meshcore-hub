@@ -47,13 +47,13 @@ function renderEditTagModal() {
         <h3 class="font-bold text-lg">${t('common.edit_entity', { entity: t('entities.tag') })}: <span id="tagEditKeyDisplay" class="font-mono text-base font-normal"></span></h3>
         <form id="tag-edit-form" class="py-4">
             <input type="hidden" id="tagEditKey">
-            <div class="form-control mb-4">
-                <label class="label"><span class="label-text">${t('common.value')}</span></label>
-                <input type="text" id="tagEditValue" class="input input-bordered">
-                <label class="label" id="tagEditError"></label>
+            <div class="fieldset mb-4">
+                <label class="fieldset-label">${t('common.value')}</label>
+                <input type="text" id="tagEditValue" class="input input-bordered w-full">
+                <div class="hidden text-xs text-error" id="tagEditError"></div>
             </div>
-            <div class="form-control mb-4">
-                <label class="label"><span class="label-text">${t('common.type')}</span></label>
+            <div class="fieldset mb-4">
+                <label class="fieldset-label">${t('common.type')}</label>
                 <select id="tagEditType" class="select select-bordered w-full">
                     <option value="string">string</option>
                     <option value="number">number</option>
@@ -225,12 +225,12 @@ export async function render(container, params, router) {
         const addTagFormHtml = canEditTags
             ? html`<form id="tag-add-form" class="mt-4">
                 <div class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto_auto] gap-2 items-end">
-                    <div class="form-control">
-                        <input type="text" name="key" class="input input-bordered input-sm" placeholder=${t('common.key')} required>
+                    <div class="fieldset">
+                        <input type="text" name="key" class="input input-bordered input-sm w-full" placeholder=${t('common.key')} required>
                     </div>
-                    <div class="form-control">
-                        <input type="text" name="value" class="input input-bordered input-sm" placeholder=${t('common.value')}>
-                        <label class="label" id="tagAddError"></label>
+                    <div class="fieldset">
+                        <input type="text" name="value" class="input input-bordered input-sm w-full" placeholder=${t('common.value')}>
+                        <div class="hidden text-xs text-error" id="tagAddError"></div>
                     </div>
                     <select name="value_type" class="select select-bordered select-sm w-28">
                         <option value="string">string</option>
@@ -443,10 +443,10 @@ ${canEditTags ? renderEditTagModal() : nothing}`, container);
 
                     const validationError = validateTagValue(value, valueType);
                     if (validationError) {
-                        if (errEl) errEl.innerHTML = `<span class="label-text-alt text-error">${validationError}</span>`;
+                        if (errEl) { errEl.textContent = validationError; errEl.classList.remove('hidden'); }
                         return;
                     }
-                    if (errEl) errEl.innerHTML = '';
+                    if (errEl) { errEl.textContent = ''; errEl.classList.add('hidden'); }
 
                     try {
                         await apiPost('/api/v1/nodes/' + node.public_key + '/tags', { key, value, value_type: valueType });
@@ -473,7 +473,7 @@ ${canEditTags ? renderEditTagModal() : nothing}`, container);
                     if (keyDisplay) keyDisplay.textContent = btn.dataset.key;
                     valueInput.value = btn.dataset.value;
                     typeSelect.value = btn.dataset.type;
-                    if (errorLabel) errorLabel.innerHTML = '';
+                    if (errorLabel) { errorLabel.textContent = ''; errorLabel.classList.add('hidden'); }
                     modal.showModal();
                 }, { signal });
             });
@@ -490,10 +490,10 @@ ${canEditTags ? renderEditTagModal() : nothing}`, container);
 
                     const validationError = validateTagValue(value, valueType);
                     if (validationError) {
-                        if (errorLabel) errorLabel.innerHTML = `<span class="label-text-alt text-error">${validationError}</span>`;
+                        if (errorLabel) { errorLabel.textContent = validationError; errorLabel.classList.remove('hidden'); }
                         return;
                     }
-                    if (errorLabel) errorLabel.innerHTML = '';
+                    if (errorLabel) { errorLabel.textContent = ''; errorLabel.classList.add('hidden'); }
 
                     try {
                         await apiPut('/api/v1/nodes/' + node.public_key + '/tags/' + encodeURIComponent(key), { value, value_type: valueType });
@@ -501,7 +501,7 @@ ${canEditTags ? renderEditTagModal() : nothing}`, container);
                         showFlash('success', t('common.entity_updated_success', { entity: t('entities.tag') }));
                         router.navigate('/nodes/' + node.public_key, true);
                     } catch (err) {
-                        if (errorLabel) errorLabel.innerHTML = `<span class="label-text-alt text-error">${err.message}</span>`;
+                        if (errorLabel) { errorLabel.textContent = err.message; errorLabel.classList.remove('hidden'); }
                     }
                 }, { signal });
             }
