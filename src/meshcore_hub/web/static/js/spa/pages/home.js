@@ -27,6 +27,25 @@ function renderRadioConfig(rc) {
             </div>`);
 }
 
+function renderNavCard({ href, icon, label, colorVar }) {
+    return html`
+        <a href="${href}" class="w-28 h-28 sm:w-32 sm:h-32
+            border border-base-content/20 rounded-box
+            hover:scale-105 hover:border-base-content/40
+            transition-all duration-200 ease-out
+            flex flex-col items-center justify-center gap-2
+            bg-base-200/50 hover:bg-base-200
+            group">
+            <span class="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center"
+                  style="${colorVar ? `color: var(${colorVar})` : ''}">
+                ${icon}
+            </span>
+            <span class="text-xs sm:text-sm font-medium text-base-content">
+                ${label}
+            </span>
+        </a>`;
+}
+
 function renderHeroSection({ networkName, logoUrl, logoInvertLight, networkCity, networkCountry, networkWelcomeText, features, customPages }) {
     const cityCountry = (networkCity && networkCountry)
         ? html`<p class="text-lg sm:text-2xl opacity-70 mt-2">${networkCity}, ${networkCountry}</p>`
@@ -37,14 +56,6 @@ function renderHeroSection({ networkName, logoUrl, logoInvertLight, networkCity,
         : html`<p class="py-4 max-w-[70%]">
             ${t('home.welcome_default', { network_name: networkName })}
         </p>`;
-
-    const customPageButtons = features.pages !== false
-        ? customPages.slice(0, 3).map(page => html`
-            <a href="${page.url}" class="btn btn-outline">
-                ${iconPage('h-5 w-5 mr-2')}
-                ${page.title}
-            </a>`)
-        : [];
 
     return html`
         <div class="flex flex-col items-center text-center">
@@ -57,39 +68,52 @@ function renderHeroSection({ networkName, logoUrl, logoInvertLight, networkCity,
             </div>
             ${welcomeText}
             <div class="flex-1"></div>
-            <div class="flex flex-wrap justify-center gap-3 mt-auto">
-                ${features.dashboard !== false ? html`
-                <a href="/dashboard" class="btn btn-outline btn-info">
-                    ${iconDashboard('h-5 w-5 mr-2')}
-                    ${t('entities.dashboard')}
-                </a>` : nothing}
-                ${features.nodes !== false ? html`
-                <a href="/nodes" class="btn btn-outline btn-primary">
-                    ${iconNodes('h-5 w-5 mr-2')}
-                    ${t('entities.nodes')}
-                </a>` : nothing}
-                ${features.advertisements !== false ? html`
-                <a href="/advertisements" class="btn btn-outline btn-secondary">
-                    ${iconAdvertisements('h-5 w-5 mr-2')}
-                    ${t('entities.advertisements')}
-                </a>` : nothing}
-                ${features.messages !== false ? html`
-                <a href="/messages" class="btn btn-outline btn-accent">
-                    ${iconMessages('h-5 w-5 mr-2')}
-                    ${t('entities.messages')}
-                </a>` : nothing}
-                ${features.members !== false ? html`
-                <a href="/members" class="btn btn-outline btn-hero-members">
-                    ${iconMembers('h-5 w-5 mr-2')}
-                    ${t('entities.members')}
-                </a>` : nothing}
-                ${features.map !== false ? html`
-                <a href="/map" class="btn btn-outline btn-warning">
-                    ${iconMap('h-5 w-5 mr-2')}
-                    ${t('entities.map')}
-                </a>` : nothing}
-                ${customPageButtons}
+            <div class="flex flex-wrap justify-center gap-3 sm:gap-4 mt-auto">
+                ${features.dashboard !== false ? renderNavCard({
+                    href: '/dashboard',
+                    icon: iconDashboard('w-full h-full'),
+                    label: t('entities.dashboard'),
+                    colorVar: '--color-dashboard',
+                }) : nothing}
+                ${features.nodes !== false ? renderNavCard({
+                    href: '/nodes',
+                    icon: iconNodes('w-full h-full'),
+                    label: t('entities.nodes'),
+                    colorVar: '--color-nodes',
+                }) : nothing}
+                ${features.advertisements !== false ? renderNavCard({
+                    href: '/advertisements',
+                    icon: iconAdvertisements('w-full h-full'),
+                    label: t('entities.advertisements'),
+                    colorVar: '--color-adverts',
+                }) : nothing}
+                ${features.messages !== false ? renderNavCard({
+                    href: '/messages',
+                    icon: iconMessages('w-full h-full'),
+                    label: t('entities.messages'),
+                    colorVar: '--color-messages',
+                }) : nothing}
+                ${features.members !== false ? renderNavCard({
+                    href: '/members',
+                    icon: iconMembers('w-full h-full'),
+                    label: t('entities.members'),
+                    colorVar: '--color-members',
+                }) : nothing}
+                ${features.map !== false ? renderNavCard({
+                    href: '/map',
+                    icon: iconMap('w-full h-full'),
+                    label: t('entities.map'),
+                    colorVar: '--color-map',
+                }) : nothing}
             </div>
+            ${features.pages !== false && customPages.length > 0 ? html`
+            <div class="flex flex-wrap justify-center gap-3 mt-4">
+                ${customPages.slice(0, 3).map(page => html`
+                <a href="${page.url}" class="btn btn-outline border-base-content/20">
+                    ${iconPage('h-5 w-5 mr-2')}
+                    ${page.title}
+                </a>`)}
+            </div>` : nothing}
         </div>`;
 }
 

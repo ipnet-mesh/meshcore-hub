@@ -84,18 +84,6 @@
     color: inherit !important;
 }
 
-/* Homepage hero buttons: slightly thicker outline, white text on hover */
-#app .btn-outline {
-    border-width: 2px;
-}
-#app .btn-outline:hover {
-    color: #fff !important;
-}
-.btn-hero-members {
-    --btn-color: var(--color-members);
-    --btn-border-color: var(--color-members);
-}
-
 /* ==========================================================================
    Panel Glow
    Radial color glow from bottom-right corner.

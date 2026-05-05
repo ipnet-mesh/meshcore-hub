@@ -195,19 +195,15 @@ export async function render(container, params, router) {
 <div class="card shadow mb-6 panel-solid" style="--panel-color: var(--color-neutral)">
     <div class="card-body py-4">
         <div class="flex gap-4 flex-wrap items-end">
-            <div class="form-control">
-                <label class="label py-1">
-                    <span class="label-text">${t('common.show')}</span>
-                </label>
+            <div class="fieldset">
+                <label class="fieldset-label">${t('common.show')}</label>
                 <select id="filter-category" class="select select-bordered select-sm" @change=${applyFilters}>
                     <option value="">${t('common.all_entity', { entity: t('entities.nodes') })}</option>
                     ${config.oidc_enabled ? html`<option value="infra">${t('map.infrastructure_only')}</option>` : nothing}
                 </select>
             </div>
-            <div class="form-control">
-                <label class="label py-1">
-                    <span class="label-text">${t('common.node_type')}</span>
-                </label>
+            <div class="fieldset">
+                <label class="fieldset-label">${t('common.node_type')}</label>
                 <select id="filter-type" class="select select-bordered select-sm" @change=${applyFilters}>
                     <option value="">${t('common.all_types')}</option>
                     <option value="chat">${t('node_types.chat')}</option>
@@ -216,10 +212,8 @@ export async function render(container, params, router) {
                 </select>
             </div>
             ${config.oidc_enabled && profiles.length > 0 ? html`
-            <div class="form-control">
-                <label class="label py-1">
-                    <span class="label-text">${t('common.filter_member_label')}</span>
-                </label>
+            <div class="fieldset">
+                <label class="fieldset-label">${t('common.filter_member_label')}</label>
                 <select id="member-filter" class="select select-bordered select-sm" @change=${applyFilters}>
                     <option value="">${t('common.all_members')}</option>
                     ${profiles.sort((a, b) => {
@@ -231,9 +225,9 @@ export async function render(container, params, router) {
                 </select>
             </div>
             ` : nothing}
-            <div class="form-control">
-                <label class="label cursor-pointer gap-2 py-1">
-                    <span class="label-text">${t('map.show_labels')}</span>
+            <div class="fieldset">
+                <label class="fieldset-label cursor-pointer gap-2">
+                    <span>${t('map.show_labels')}</span>
                     <input type="checkbox" id="show-labels" class="checkbox checkbox-sm" @change=${updateLabelVisibility}>
                 </label>
             </div>
