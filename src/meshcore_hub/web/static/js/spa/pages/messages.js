@@ -4,7 +4,7 @@ import {
     getConfig, formatDateTime, formatDateTimeShort, formatRelativeTime,
     getChannelLabelsMap, resolveChannelLabel,
     truncateKey, warningBadge,
-    pagination, sortableTableHeader, timezoneIndicator,
+    pagination, sortableTableHeader, mobileSortSelect, timezoneIndicator,
     renderFilterCard, autoSubmit, submitOnEnter,
     observerIcons, observerDetailRow, toggleObserverDetail, toggleCardObserverDetail
 } from '../components.js';
@@ -385,6 +385,22 @@ ${displayContent}`, container);
             });
 
             renderPage(html`${filterCard}
+
+${mobileSortSelect({
+    currentSort: sort, currentOrder: order,
+    navigate, basePath: '/messages',
+    params: headerParams,
+    options: [
+        { value: 'time:desc', label: t('messages.sort.newest') },
+        { value: 'time:asc', label: t('messages.sort.oldest') },
+        { value: 'type:asc', label: t('messages.sort.type_az') },
+        { value: 'type:desc', label: t('messages.sort.type_za') },
+        { value: 'from:asc', label: t('messages.sort.from_az') },
+        { value: 'from:desc', label: t('messages.sort.from_za') },
+        { value: 'message:asc', label: t('messages.sort.message_az') },
+        { value: 'message:desc', label: t('messages.sort.message_za') },
+    ],
+})}
 
 <div class="lg:hidden space-y-3">
     ${mobileCards}

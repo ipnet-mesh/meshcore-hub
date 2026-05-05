@@ -58,6 +58,30 @@ export function sortableTableHeader(label, { sortKey, currentSort, currentOrder,
     </th>`;
 }
 
+export function mobileSortSelect({ currentSort, currentOrder, navigate, basePath, params, options }) {
+    const currentValue = `${currentSort}:${currentOrder}`;
+
+    const sortOptions = options.map(opt =>
+        html`<option value=${opt.value} ?selected=${opt.value === currentValue}>${opt.label}</option>`
+    );
+
+    const onChange = (e) => {
+        const [sort, order] = e.target.value.split(':');
+        const url = buildSortUrl(basePath, params, sort, order);
+        navigate(url);
+    };
+
+    return html`<div class="lg:hidden mb-5">
+        <div class="flex items-center gap-2">
+            <span class="text-xs opacity-60">${t('common.sort_by')}</span>
+            <select class="select select-sm select-bordered flex-1"
+                    @change=${onChange}>
+                ${sortOptions}
+            </select>
+        </div>
+    </div>`;
+}
+
 /**
  * Get app config from the embedded window object.
  * @returns {Object} App configuration

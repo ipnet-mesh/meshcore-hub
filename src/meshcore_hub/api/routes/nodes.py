@@ -202,8 +202,8 @@ async def list_nodes(
     total = session.execute(count_query).scalar() or 0
 
     # Resolve sort column and direction
-    sort = sort if sort in VALID_NODE_SORT_COLUMNS else "name"
-    order = order if order in ("asc", "desc") else ("asc" if sort == "name" else "desc")
+    sort = sort if sort in VALID_NODE_SORT_COLUMNS else "last_seen"
+    order = order if order in ("asc", "desc") else "desc"
 
     name_tag_subq = (
         select(NodeTag.value)
