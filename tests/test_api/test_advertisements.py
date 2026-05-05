@@ -292,3 +292,190 @@ class TestListAdvertisementsFilters:
         assert response.status_code == 200
         data = response.json()
         assert len(data["items"]) == 1
+
+
+class TestAdvertisementSort:
+    """Tests for advertisement list sort parameters."""
+
+    def test_sort_by_time_default(self, client_no_auth, api_db_session):
+        """Default sort is received_at DESC."""
+        now = datetime.now(timezone.utc)
+        ad_old = Advertisement(
+            public_key="aa" * 16,
+            name="Old",
+            adv_type="CLIENT",
+            received_at=now - timedelta(hours=1),
+        )
+        ad_new = Advertisement(
+            public_key="bb" * 16,
+            name="New",
+            adv_type="CLIENT",
+            received_at=now,
+        )
+        api_db_session.add_all([ad_old, ad_new])
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/advertisements")
+        assert response.status_code == 200
+        items = response.json()["items"]
+        assert items[0]["name"] == "New"
+        assert items[1]["name"] == "Old"
+
+    def test_sort_by_time_asc(self, client_no_auth, api_db_session):
+        """sort=time&order=asc returns oldest first."""
+        now = datetime.now(timezone.utc)
+        ad_old = Advertisement(
+            public_key="aa" * 16,
+            name="Old",
+            adv_type="CLIENT",
+            received_at=now - timedelta(hours=1),
+        )
+        ad_new = Advertisement(
+            public_key="bb" * 16,
+            name="New",
+            adv_type="CLIENT",
+            received_at=now,
+        )
+        api_db_session.add_all([ad_old, ad_new])
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/advertisements?sort=time&order=asc")
+        assert response.status_code == 200
+        items = response.json()["items"]
+        assert items[0]["name"] == "Old"
+        assert items[1]["name"] == "New"
+
+    def test_sort_by_node_name(self, client_no_auth, api_db_session):
+        """sort=node_name sorts by display name (COALESCE)."""
+        from meshcore_hub.common.models import Node
+
+        now = datetime.now(timezone.utc)
+        node_b = Node(
+            public_key="aa" * 16,
+            name="Bravo",
+            first_seen=now,
+        )
+        node_a = Node(
+            public_key="bb" * 16,
+            name="Alpha",
+            first_seen=now,
+        )
+        api_db_session.add_all([node_b, node_a])
+        api_db_session.commit()
+
+        ad_b = Advertisement(
+            public_key="aa" * 16,
+            name="AdBravo",
+            adv_type="CLIENT",
+            received_at=now,
+            node_id=node_b.id,
+        )
+        ad_a = Advertisement(
+            public_key="bb" * 16,
+            name="AdAlpha",
+            adv_type="CLIENT",
+            received_at=now,
+            node_id=node_a.id,
+        )
+        api_db_session.add_all([ad_b, ad_a])
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/advertisements?sort=node_name&order=asc")
+        assert response.status_code == 200
+        items = response.json()["items"]
+        assert items[0]["node_name"] == "Alpha"
+        assert items[1]["node_name"] == "Bravo"
+
+    def test_sort_by_node_name_tag_priority(self, client_no_auth, api_db_session):
+        """Name tag takes priority over SourceNode.name in sort."""
+        from meshcore_hub.common.models import Node, NodeTag
+
+        now = datetime.now(timezone.utc)
+        node_b = Node(
+            public_key="aa" * 16,
+            name="Alpha",
+            first_seen=now,
+        )
+        node_a = Node(
+            public_key="bb" * 16,
+            name="Bravo",
+            first_seen=now,
+        )
+        api_db_session.add_all([node_b, node_a])
+        api_db_session.commit()
+
+        tag_b = NodeTag(node_id=node_b.id, key="name", value="Zebra")
+        tag_a = NodeTag(node_id=node_a.id, key="name", value="Aardvark")
+        api_db_session.add_all([tag_b, tag_a])
+        api_db_session.commit()
+
+        ad_b = Advertisement(
+            public_key="aa" * 16,
+            name="AdB",
+            adv_type="CLIENT",
+            received_at=now,
+            node_id=node_b.id,
+        )
+        ad_a = Advertisement(
+            public_key="bb" * 16,
+            name="AdA",
+            adv_type="CLIENT",
+            received_at=now,
+            node_id=node_a.id,
+        )
+        api_db_session.add_all([ad_b, ad_a])
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/advertisements?sort=node_name&order=asc")
+        assert response.status_code == 200
+        items = response.json()["items"]
+        assert items[0]["node_name"] == "Bravo"
+        assert items[1]["node_name"] == "Alpha"
+
+    def test_sort_by_public_key(self, client_no_auth, api_db_session):
+        """sort=public_key orders by public_key."""
+        now = datetime.now(timezone.utc)
+        ad_b = Advertisement(
+            public_key="bb" * 16,
+            name="Bravo",
+            adv_type="CLIENT",
+            received_at=now,
+        )
+        ad_a = Advertisement(
+            public_key="aa" * 16,
+            name="Alpha",
+            adv_type="CLIENT",
+            received_at=now,
+        )
+        api_db_session.add_all([ad_b, ad_a])
+        api_db_session.commit()
+
+        response = client_no_auth.get(
+            "/api/v1/advertisements?sort=public_key&order=asc"
+        )
+        assert response.status_code == 200
+        items = response.json()["items"]
+        assert items[0]["public_key"] == "aa" * 16
+
+    def test_sort_invalid_ignored(self, client_no_auth, api_db_session):
+        """Invalid sort value falls back to default (time desc)."""
+        now = datetime.now(timezone.utc)
+        ad_old = Advertisement(
+            public_key="aa" * 16,
+            name="Old",
+            adv_type="CLIENT",
+            received_at=now - timedelta(hours=1),
+        )
+        ad_new = Advertisement(
+            public_key="bb" * 16,
+            name="New",
+            adv_type="CLIENT",
+            received_at=now,
+        )
+        api_db_session.add_all([ad_old, ad_new])
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/advertisements?sort=invalid_column")
+        assert response.status_code == 200
+        items = response.json()["items"]
+        assert items[0]["name"] == "New"

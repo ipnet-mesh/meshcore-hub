@@ -3,7 +3,7 @@ import {
     html, litRender, nothing,
     getConfig, formatDateTime, formatDateTimeShort,
     warningBadge,
-    pagination,
+    pagination, sortableTableHeader,
     renderFilterCard, autoSubmit, submitOnEnter, copyToClipboard, renderNodeDisplay, t
 } from '../components.js';
 import { createAutoRefresh } from '../auto-refresh.js';
@@ -16,6 +16,8 @@ export async function render(container, params, router) {
     const page = parseInt(query.page, 10) || 1;
     const limit = parseInt(query.limit, 10) || 20;
     const offset = (page - 1) * limit;
+    const sort = query.sort || 'name';
+    const order = query.order || 'asc';
 
     const config = getConfig();
     const tz = config.timezone || '';
@@ -51,7 +53,7 @@ ${displayContent}`, container);
 
     async function fetchAndRenderData() {
         try {
-            const apiParams = { limit, offset, search, adv_type };
+            const apiParams = { limit, offset, search, adv_type, sort, order };
             if (adopted_by) apiParams.adopted_by = adopted_by;
             const fetches = [apiGet('/api/v1/nodes', apiParams)];
             if (config.oidc_enabled) {
@@ -119,7 +121,7 @@ ${displayContent}`, container);
                 });
 
             const paginationBlock = pagination(page, totalPages, '/nodes', {
-                search, adv_type, adopted_by, limit,
+                search, adv_type, adopted_by, limit, sort, order,
             });
 
             const filterFields = [
@@ -176,6 +178,12 @@ ${displayContent}`, container);
                 defaultOpen: isFilterOpen,
             });
 
+            const headerParams = { search, adv_type, adopted_by, limit };
+            const sortable = (label, sortKey) => sortableTableHeader(label, {
+                sortKey, currentSort: sort, currentOrder: order,
+                navigate, basePath: '/nodes', params: headerParams,
+            });
+
             renderPage(html`${filterCard}
 
 <div class="lg:hidden space-y-3">
@@ -186,9 +194,9 @@ ${displayContent}`, container);
     <table class="table table-zebra">
         <thead>
             <tr>
-                <th>${t('entities.node')}</th>
-                <th>${t('common.public_key')}</th>
-                <th>${t('common.last_seen')}</th>
+                ${sortable(t('entities.node'), 'name')}
+                ${sortable(t('common.public_key'), 'public_key')}
+                ${sortable(t('common.last_seen'), 'last_seen')}
             </tr>
         </thead>
         <tbody>

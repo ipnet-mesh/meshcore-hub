@@ -15,6 +15,49 @@ export { html, nothing, unsafeHTML };
 export { render as litRender } from 'lit-html';
 export { t } from './i18n.js';
 
+function buildSortUrl(basePath, params, nextSort, nextOrder) {
+    const sp = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+        if (value !== null && value !== undefined && value !== '') {
+            if (Array.isArray(value)) {
+                value.forEach(item => sp.append(key, String(item)));
+            } else {
+                sp.set(key, String(value));
+            }
+        }
+    }
+    if (nextSort && nextOrder) {
+        sp.set('sort', nextSort);
+        sp.set('order', nextOrder);
+    }
+    const qs = sp.toString();
+    return qs ? `${basePath}?${qs}` : basePath;
+}
+
+export function sortableTableHeader(label, { sortKey, currentSort, currentOrder, navigate, basePath, params }) {
+    let indicator = '';
+    let nextOrder;
+
+    if (currentSort !== sortKey) {
+        nextOrder = 'asc';
+    } else if (currentOrder === 'asc') {
+        nextOrder = 'desc';
+        indicator = ' \u25B4';
+    } else {
+        nextOrder = 'asc';
+        indicator = ' \u25BE';
+    }
+
+    const url = buildSortUrl(basePath, params, sortKey, nextOrder);
+
+    return html`<th>
+        <a href=${url} class="link link-hover inline-flex items-center gap-1 no-underline"
+           @click=${(e) => { e.preventDefault(); e.stopPropagation(); navigate(url); }}>
+            ${label}<span class="text-xs opacity-50">${indicator}</span>
+        </a>
+    </th>`;
+}
+
 /**
  * Get app config from the embedded window object.
  * @returns {Object} App configuration

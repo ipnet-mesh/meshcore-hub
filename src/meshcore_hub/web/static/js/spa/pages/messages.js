@@ -4,7 +4,7 @@ import {
     getConfig, formatDateTime, formatDateTimeShort, formatRelativeTime,
     getChannelLabelsMap, resolveChannelLabel,
     truncateKey, warningBadge,
-    pagination, timezoneIndicator,
+    pagination, sortableTableHeader, timezoneIndicator,
     renderFilterCard, autoSubmit, submitOnEnter,
     observerIcons, observerDetailRow, toggleObserverDetail, toggleCardObserverDetail
 } from '../components.js';
@@ -20,6 +20,8 @@ export async function render(container, params, router) {
     const page = parseInt(query.page, 10) || 1;
     const limit = parseInt(query.limit, 10) || 50;
     const offset = (page - 1) * limit;
+    const sort = query.sort || 'time';
+    const order = query.order || 'desc';
 
     const config = getConfig();
     const channelLabels = getChannelLabelsMap(config);
@@ -202,7 +204,7 @@ ${displayContent}`, container);
 
     async function fetchAndRenderData() {
         try {
-            const apiParams = { limit, offset, message_type, channel_idx };
+            const apiParams = { limit, offset, message_type, channel_idx, sort, order };
             if (observed_by.length > 0) apiParams.observed_by = observed_by;
             const [data, nodesData] = await Promise.all([
                 apiGet('/api/v1/messages', apiParams),
@@ -314,7 +316,7 @@ ${displayContent}`, container);
                 });
 
             const paginationBlock = pagination(page, totalPages, '/messages', {
-                message_type, channel_idx, observed_by, limit,
+                message_type, channel_idx, observed_by, limit, sort, order,
             });
 
             const observerFilter = sortedNodes.length > 0
@@ -376,6 +378,12 @@ ${displayContent}`, container);
                 defaultOpen: isFilterOpen,
             });
 
+            const headerParams = { message_type, channel_idx, observed_by, limit };
+            const sortable = (label, sortKey) => sortableTableHeader(label, {
+                sortKey, currentSort: sort, currentOrder: order,
+                navigate, basePath: '/messages', params: headerParams,
+            });
+
             renderPage(html`${filterCard}
 
 <div class="lg:hidden space-y-3">
@@ -386,10 +394,10 @@ ${displayContent}`, container);
     <table class="table table-zebra">
         <thead>
             <tr>
-                <th>${t('common.type')}</th>
-                <th>${t('common.time')}</th>
-                <th>${t('common.from')}</th>
-                <th>${t('entities.message')}</th>
+                ${sortable(t('common.type'), 'type')}
+                ${sortable(t('common.time'), 'time')}
+                ${sortable(t('common.from'), 'from')}
+                ${sortable(t('entities.message'), 'message')}
                 <th>${t('common.observers')}</th>
             </tr>
         </thead>

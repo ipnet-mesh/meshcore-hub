@@ -347,3 +347,121 @@ class TestListMessagesFilters:
         assert response.status_code == 200
         data = response.json()
         assert len(data["items"]) == 0
+
+
+class TestMessageSort:
+    """Tests for message list sort parameters."""
+
+    def test_sort_by_time_default(self, client_no_auth, api_db_session):
+        """Default sort is received_at DESC."""
+        now = datetime.now(timezone.utc)
+        msg_old = Message(
+            message_type="direct",
+            pubkey_prefix="aa",
+            text="Old msg",
+            received_at=now - timedelta(hours=1),
+        )
+        msg_new = Message(
+            message_type="direct",
+            pubkey_prefix="bb",
+            text="New msg",
+            received_at=now,
+        )
+        api_db_session.add_all([msg_old, msg_new])
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/messages")
+        assert response.status_code == 200
+        items = response.json()["items"]
+        assert items[0]["text"] == "New msg"
+        assert items[1]["text"] == "Old msg"
+
+    def test_sort_by_type(self, client_no_auth, api_db_session):
+        """sort=type&order=asc sorts by message_type."""
+        now = datetime.now(timezone.utc)
+        msg_ch = Message(
+            message_type="channel",
+            channel_idx=1,
+            text="Channel msg",
+            received_at=now,
+        )
+        msg_ct = Message(
+            message_type="contact",
+            text="Contact msg",
+            received_at=now,
+        )
+        api_db_session.add_all([msg_ch, msg_ct])
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/messages?sort=type&order=asc")
+        assert response.status_code == 200
+        items = response.json()["items"]
+        assert items[0]["message_type"] == "channel"
+        assert items[1]["message_type"] == "contact"
+
+    def test_sort_by_from(self, client_no_auth, api_db_session):
+        """sort=from&order=asc sorts by pubkey_prefix."""
+        now = datetime.now(timezone.utc)
+        msg_b = Message(
+            message_type="direct",
+            pubkey_prefix="bb_prefix",
+            text="From B",
+            received_at=now,
+        )
+        msg_a = Message(
+            message_type="direct",
+            pubkey_prefix="aa_prefix",
+            text="From A",
+            received_at=now,
+        )
+        api_db_session.add_all([msg_b, msg_a])
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/messages?sort=from&order=asc")
+        assert response.status_code == 200
+        items = response.json()["items"]
+        assert items[0]["text"] == "From A"
+        assert items[1]["text"] == "From B"
+
+    def test_sort_by_message(self, client_no_auth, api_db_session):
+        """sort=message&order=asc sorts by text."""
+        now = datetime.now(timezone.utc)
+        msg_b = Message(
+            message_type="direct",
+            text="Zebra message",
+            received_at=now,
+        )
+        msg_a = Message(
+            message_type="direct",
+            text="Alpha message",
+            received_at=now,
+        )
+        api_db_session.add_all([msg_b, msg_a])
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/messages?sort=message&order=asc")
+        assert response.status_code == 200
+        items = response.json()["items"]
+        assert items[0]["text"] == "Alpha message"
+        assert items[1]["text"] == "Zebra message"
+
+    def test_sort_invalid_ignored(self, client_no_auth, api_db_session):
+        """Invalid sort value falls back to default (time desc)."""
+        now = datetime.now(timezone.utc)
+        msg_old = Message(
+            message_type="direct",
+            text="Old",
+            received_at=now - timedelta(hours=1),
+        )
+        msg_new = Message(
+            message_type="direct",
+            text="New",
+            received_at=now,
+        )
+        api_db_session.add_all([msg_old, msg_new])
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/messages?sort=invalid_column")
+        assert response.status_code == 200
+        items = response.json()["items"]
+        assert items[0]["text"] == "New"
