@@ -5,7 +5,7 @@
     "build": "node build.js"
   },
   "devDependencies": {
-    "esbuild": "^0.25"
+    "esbuild": "^0.28.0"
   },
   "dependencies": {
     "@tailwindcss/cli": "^4",
