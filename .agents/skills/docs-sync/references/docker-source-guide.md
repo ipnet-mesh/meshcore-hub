@@ -158,7 +158,7 @@ Complete list from `docker-compose.yml` collector `environment:` block:
 | `DATA_RETENTION_DAYS` | `30` | Retention |
 | `DATA_RETENTION_INTERVAL_HOURS` | `24` | Retention |
 | `NODE_CLEANUP_ENABLED` | `true` | Node Cleanup |
-| `NODE_CLEANUP_DAYS` | `7` | Node Cleanup |
+| `NODE_CLEANUP_DAYS` | `30` | Node Cleanup |
 
 ### API Service Env Vars
 
@@ -198,6 +198,7 @@ Complete list from `docker-compose.yml` collector `environment:` block:
 | `OIDC_CLIENT_SECRET` | (empty) | Auth |
 | `OIDC_DISCOVERY_URL` | (empty) | Auth |
 | `OIDC_REDIRECT_URI` | (empty) | Auth |
+| `OIDC_POST_LOGOUT_REDIRECT_URI` | (empty) | Auth |
 | `OIDC_SCOPES` | `openid email profile` | Auth |
 | `OIDC_ROLES_CLAIM` | `roles` | Auth |
 | `OIDC_ROLE_ADMIN` | `admin` | Auth |
@@ -206,6 +207,9 @@ Complete list from `docker-compose.yml` collector `environment:` block:
 | `OIDC_SESSION_SECRET` | (empty) | Auth |
 | `OIDC_SESSION_MAX_AGE` | `86400` | Auth |
 | `OIDC_COOKIE_SECURE` | `false` | Auth |
+| `WEB_AUTO_REFRESH_SECONDS` | `30` | Display |
+| `WEB_DEBUG` | `false` | Display |
+| `NETWORK_DOMAIN` | (empty) | Network |
 | `NETWORK_NAME` | `MeshCore Network` | Network |
 | `NETWORK_CITY` | (empty) | Network |
 | `NETWORK_COUNTRY` | (empty) | Network |
