@@ -469,35 +469,36 @@ class TestNodeTags:
 class TestNodeSort:
     """Tests for node list sort parameters."""
 
-    def test_sort_by_name_default(self, client_no_auth, api_db_session):
-        """Default sort (no params) returns nodes alpha by display name."""
-        from datetime import datetime, timezone
+    def test_sort_by_last_seen_default(self, client_no_auth, api_db_session):
+        """Default sort (no params) returns nodes by last_seen descending."""
+        from datetime import datetime, timezone, timedelta
 
         from meshcore_hub.common.models import Node
 
-        node_b = Node(
-            public_key="bb" * 32,
-            name="Bravo",
-            adv_type="CLIENT",
-            first_seen=datetime.now(timezone.utc),
-            last_seen=datetime.now(timezone.utc),
-        )
+        now = datetime.now(timezone.utc)
         node_a = Node(
             public_key="aa" * 32,
             name="Alpha",
             adv_type="CLIENT",
-            first_seen=datetime.now(timezone.utc),
-            last_seen=datetime.now(timezone.utc),
+            first_seen=now,
+            last_seen=now,
         )
-        api_db_session.add_all([node_b, node_a])
+        node_b = Node(
+            public_key="bb" * 32,
+            name="Bravo",
+            adv_type="CLIENT",
+            first_seen=now,
+            last_seen=now + timedelta(hours=1),
+        )
+        api_db_session.add_all([node_a, node_b])
         api_db_session.commit()
 
         response = client_no_auth.get("/api/v1/nodes")
         assert response.status_code == 200
         items = response.json()["items"]
         assert len(items) == 2
-        assert items[0]["name"] == "Alpha"
-        assert items[1]["name"] == "Bravo"
+        assert items[0]["name"] == "Bravo"
+        assert items[1]["name"] == "Alpha"
 
     def test_sort_by_name_asc(self, client_no_auth, api_db_session):
         """Explicit sort=name&order=asc."""
@@ -641,30 +642,34 @@ class TestNodeSort:
         assert items[1]["name"] == "Alpha"
 
     def test_sort_invalid_ignored(self, client_no_auth, api_db_session):
-        """Invalid sort value falls back to default (name alpha)."""
-        from datetime import datetime, timezone
+        """Invalid sort value falls back to default (last_seen desc)."""
+        from datetime import datetime, timezone, timedelta
 
         from meshcore_hub.common.models import Node
 
-        node_b = Node(
-            public_key="bb" * 32,
-            name="Bravo",
-            adv_type="CLIENT",
-            first_seen=datetime.now(timezone.utc),
-        )
+        now = datetime.now(timezone.utc)
         node_a = Node(
             public_key="aa" * 32,
             name="Alpha",
             adv_type="CLIENT",
-            first_seen=datetime.now(timezone.utc),
+            first_seen=now,
+            last_seen=now,
         )
-        api_db_session.add_all([node_b, node_a])
+        node_b = Node(
+            public_key="bb" * 32,
+            name="Bravo",
+            adv_type="CLIENT",
+            first_seen=now,
+            last_seen=now + timedelta(hours=1),
+        )
+        api_db_session.add_all([node_a, node_b])
         api_db_session.commit()
 
         response = client_no_auth.get("/api/v1/nodes?sort=invalid_column")
         assert response.status_code == 200
         items = response.json()["items"]
-        assert items[0]["name"] == "Alpha"
+        assert items[0]["name"] == "Bravo"
+        assert items[1]["name"] == "Alpha"
 
     def test_sort_nodes_with_null_name(self, client_no_auth, api_db_session):
         """Nodes with name=NULL sort by public_key via COALESCE fallback."""

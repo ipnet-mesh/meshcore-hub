@@ -3,7 +3,7 @@ import {
     html, litRender, nothing, t,
     getConfig, formatDateTime, formatDateTimeShort, formatRelativeTime,
     warningBadge,
-    pagination, sortableTableHeader,
+    pagination, sortableTableHeader, mobileSortSelect,
     renderFilterCard, autoSubmit, submitOnEnter, copyToClipboard, renderNodeDisplay,
     observerIcons, observerDetailRow, toggleObserverDetail, toggleCardObserverDetail
 } from '../components.js';
@@ -238,6 +238,20 @@ ${displayContent}`, container);
             });
 
             renderPage(html`${filterCard}
+
+${mobileSortSelect({
+    currentSort: sort, currentOrder: order,
+    navigate, basePath: '/advertisements',
+    params: headerParams,
+    options: [
+        { value: 'time:desc', label: t('advertisements.sort.newest') },
+        { value: 'time:asc', label: t('advertisements.sort.oldest') },
+        { value: 'node_name:asc', label: t('advertisements.sort.node_az') },
+        { value: 'node_name:desc', label: t('advertisements.sort.node_za') },
+        { value: 'public_key:asc', label: t('advertisements.sort.key_asc') },
+        { value: 'public_key:desc', label: t('advertisements.sort.key_desc') },
+    ],
+})}
 
 <div class="lg:hidden space-y-3">
     ${mobileCards}

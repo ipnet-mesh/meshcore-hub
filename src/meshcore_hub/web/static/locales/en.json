@@ -105,7 +105,8 @@
         "unnamed": "Unnamed",
         "unnamed_node": "Unnamed Node",
         "validation_invalid_number": "Value must be a valid number",
-        "validation_invalid_boolean": "Value must be true, false, yes, no, 1, or 0"
+        "validation_invalid_boolean": "Value must be true, false, yes, no, 1, or 0",
+        "sort_by": "Sort by"
     },
     "links": {
         "website": "Website",
@@ -162,14 +163,41 @@
         "not_adopted": "This node has not been adopted by any operator.",
         "adopt_success": "Node adopted successfully",
         "release_success": "Node released successfully",
-        "release_confirm": "Are you sure you want to release this node?"
+        "release_confirm": "Are you sure you want to release this node?",
+        "sort": {
+            "last_seen_newest": "Last Seen (newest)",
+            "last_seen_oldest": "Last Seen (oldest)",
+            "name_az": "Name (A\u2013Z)",
+            "name_za": "Name (Z\u2013A)",
+            "key_asc": "Public Key (ascending)",
+            "key_desc": "Public Key (descending)"
+        }
     },
-    "advertisements": {},
+    "advertisements": {
+        "sort": {
+            "newest": "Time (newest)",
+            "oldest": "Time (oldest)",
+            "node_az": "Node (A\u2013Z)",
+            "node_za": "Node (Z\u2013A)",
+            "key_asc": "Public Key (ascending)",
+            "key_desc": "Public Key (descending)"
+        }
+    },
     "messages": {
         "type_direct": "Direct",
         "type_channel": "Channel",
         "type_contact": "Contact",
-        "type_public": "Public"
+        "type_public": "Public",
+        "sort": {
+            "newest": "Time (newest)",
+            "oldest": "Time (oldest)",
+            "type_az": "Type (A\u2013Z)",
+            "type_za": "Type (Z\u2013A)",
+            "from_az": "From (A\u2013Z)",
+            "from_za": "From (Z\u2013A)",
+            "message_az": "Message (A\u2013Z)",
+            "message_za": "Message (Z\u2013A)"
+        }
     },
     "map": {
         "show_labels": "Show Labels",

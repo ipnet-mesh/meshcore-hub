@@ -3,7 +3,7 @@ import {
     html, litRender, nothing,
     getConfig, formatDateTime, formatDateTimeShort,
     warningBadge,
-    pagination, sortableTableHeader,
+    pagination, sortableTableHeader, mobileSortSelect,
     renderFilterCard, autoSubmit, submitOnEnter, copyToClipboard, renderNodeDisplay, t
 } from '../components.js';
 import { createAutoRefresh } from '../auto-refresh.js';
@@ -16,8 +16,8 @@ export async function render(container, params, router) {
     const page = parseInt(query.page, 10) || 1;
     const limit = parseInt(query.limit, 10) || 20;
     const offset = (page - 1) * limit;
-    const sort = query.sort || 'name';
-    const order = query.order || 'asc';
+    const sort = query.sort || 'last_seen';
+    const order = query.order || 'desc';
 
     const config = getConfig();
     const tz = config.timezone || '';
@@ -185,6 +185,20 @@ ${displayContent}`, container);
             });
 
             renderPage(html`${filterCard}
+
+${mobileSortSelect({
+    currentSort: sort, currentOrder: order,
+    navigate, basePath: '/nodes',
+    params: headerParams,
+    options: [
+        { value: 'last_seen:desc', label: t('nodes.sort.last_seen_newest') },
+        { value: 'last_seen:asc', label: t('nodes.sort.last_seen_oldest') },
+        { value: 'name:asc', label: t('nodes.sort.name_az') },
+        { value: 'name:desc', label: t('nodes.sort.name_za') },
+        { value: 'public_key:asc', label: t('nodes.sort.key_asc') },
+        { value: 'public_key:desc', label: t('nodes.sort.key_desc') },
+    ],
+})}
 
 <div class="lg:hidden space-y-3">
     ${mobileCards}
