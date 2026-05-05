@@ -385,3 +385,16 @@
     margin: 0;
     font-size: 0.8rem;
 }
+
+/* ==========================================================================
+   Mobile Dropdown Tap Targets
+   Larger touch targets and text for mobile dropdown menus.
+   ========================================================================== */
+
+@media (max-width: 1023px) {
+    .navbar .dropdown .menu li > a {
+        padding-top: 0.625rem;
+        padding-bottom: 0.625rem;
+        font-size: 0.9375rem;
+    }
+}

@@ -693,7 +693,7 @@ export function renderAuthSection(container, config) {
         return html`<span class="badge badge-primary badge-xs">${name}</span>`;
     });
 
-    const profileItem = html`<li><a href="/profile">${iconUser('h-4 w-4')} ${t('links.profile')}</a></li>`;
+    const profileItem = html`<li><a href="/profile">${iconUser('h-5 w-5')} ${t('links.profile')}</a></li>`;
 
     const debugId = config.debug && user.sub
         ? html`<span class="text-xs opacity-40 font-mono">${user.sub}</span>`
@@ -704,7 +704,7 @@ export function renderAuthSection(container, config) {
             <div tabindex="0" role="button" class="btn btn-ghost btn-circle btn-sm avatar">
                 ${pictureHtml}
             </div>
-            <ul tabindex="0" class="dropdown-content menu menu-sm z-[1] p-2 shadow bg-base-100 rounded-box w-52 mt-3">
+            <ul tabindex="0" class="dropdown-content menu z-[1] p-2 shadow bg-base-100 rounded-box w-56 mt-3">
                 <li class="menu-title">
                     <div class="flex flex-col gap-1">
                         <span class="font-medium">${displayName}</span>
@@ -714,7 +714,7 @@ export function renderAuthSection(container, config) {
                 </li>
                 <hr class="my-1 opacity-20">
                 ${profileItem}
-                <li><a href="/auth/logout">${iconLogout('h-4 w-4')} ${t('auth.logout')}</a></li>
+                <li><a href="/auth/logout">${iconLogout('h-5 w-5')} ${t('auth.logout')}</a></li>
             </ul>
         </div>
     `, container);

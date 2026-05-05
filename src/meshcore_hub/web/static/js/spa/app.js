@@ -6,8 +6,9 @@
  */
 
 import { Router } from './router.js';
-import { getConfig, hasRole, renderAuthSection } from './components.js';
+import { html, litRender, getConfig, hasRole, renderAuthSection } from './components.js';
 import { loadLocale, t } from './i18n.js';
+import { iconHome, iconDashboard, iconNodes, iconAdvertisements, iconMessages, iconMap, iconMembers, iconPage } from './icons.js';
 
 // Page modules (lazy-loaded)
 const pages = {
@@ -172,6 +173,50 @@ router.onNavigate((pathname) => {
     updatePageTitle(pathname);
 });
 
+/**
+ * Render the mobile navigation dropdown.
+ * Populates the #mobile-nav container with nav items based on config features.
+ * @param {Object} config - App configuration object
+ */
+function renderMobileNav(config) {
+    const container = document.getElementById('mobile-nav');
+    if (!container) return;
+
+    const features = config.features || {};
+    const customPages = config.custom_pages || [];
+
+    const items = [];
+
+    items.push(html`<li><a href="/" data-nav-link>${iconHome('h-5 w-5')} ${t('entities.home')}</a></li>`);
+
+    if (features.dashboard !== false) {
+        items.push(html`<li><a href="/dashboard" data-nav-link>${iconDashboard('h-5 w-5 nav-icon-dashboard')} ${t('entities.dashboard')}</a></li>`);
+    }
+    if (features.nodes !== false) {
+        items.push(html`<li><a href="/nodes" data-nav-link>${iconNodes('h-5 w-5 nav-icon-nodes')} ${t('entities.nodes')}</a></li>`);
+    }
+    if (features.advertisements !== false) {
+        items.push(html`<li><a href="/advertisements" data-nav-link>${iconAdvertisements('h-5 w-5 nav-icon-adverts')} ${t('entities.advertisements')}</a></li>`);
+    }
+    if (features.messages !== false) {
+        items.push(html`<li><a href="/messages" data-nav-link>${iconMessages('h-5 w-5 nav-icon-messages')} ${t('entities.messages')}</a></li>`);
+    }
+    if (features.map !== false) {
+        items.push(html`<li><a href="/map" data-nav-link>${iconMap('h-5 w-5 nav-icon-map')} ${t('entities.map')}</a></li>`);
+    }
+    if (features.members !== false) {
+        items.push(html`<li><a href="/members" data-nav-link>${iconMembers('h-5 w-5 nav-icon-members')} ${t('entities.members')}</a></li>`);
+    }
+
+    if (features.pages !== false && customPages.length > 0) {
+        for (const page of customPages) {
+            items.push(html`<li><a href=${page.url} data-nav-link>${iconPage('h-5 w-5')} ${page.title}</a></li>`);
+        }
+    }
+
+    litRender(html`${items}`, container);
+}
+
 // Load locale then start the router
 const locale = localStorage.getItem('meshcore-locale') || config.locale || 'en';
 await loadLocale(locale);
@@ -179,5 +224,8 @@ await loadLocale(locale);
 // Render auth section in navbar (after translations are loaded)
 const authSection = document.getElementById('auth-section');
 renderAuthSection(authSection, config);
+
+// Render mobile nav (after translations are loaded)
+renderMobileNav(config);
 
 router.start();
