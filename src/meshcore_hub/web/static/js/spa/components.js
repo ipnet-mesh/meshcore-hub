@@ -704,7 +704,7 @@ export function renderAuthSection(container, config) {
             <div tabindex="0" role="button" class="btn btn-ghost btn-circle btn-sm avatar">
                 ${pictureHtml}
             </div>
-            <ul tabindex="0" class="dropdown-content menu z-[1] p-2 shadow bg-base-100 rounded-box w-56 mt-3">
+            <ul tabindex="0" class="dropdown-content menu z-50 p-2 shadow bg-base-100 rounded-box w-56 mt-3">
                 <li class="menu-title">
                     <div class="flex flex-col gap-1">
                         <span class="font-medium">${displayName}</span>
