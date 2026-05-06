@@ -5,7 +5,7 @@ import {
 } from '../components.js';
 import {
     iconDashboard, iconNodes, iconAdvertisements, iconMessages, iconMembers, iconMap,
-    iconPage, iconInfo, iconChart, iconGlobe, iconGithub,
+    iconPage, iconInfo, iconChart, iconAntenna, iconUsers,
     iconSettings, iconFrequency, iconBandwidth, iconSpreadingFactor, iconCodingRate, iconTxPower,
 } from '../icons.js';
 
@@ -166,6 +166,33 @@ function renderActivityChartCard({ showAdvertSeries, showMessageSeries }) {
         </div>`;
 }
 
+function renderMembersPanel({ features, stats }) {
+    if (features.members === false) return nothing;
+    return html`
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title">
+                    ${iconMembers('h-6 w-6')}
+                    ${t('entities.members')}
+                </h2>
+                <div class="grid grid-cols-1 gap-4 mt-2">
+                    ${renderStatCard({
+                        icon: iconAntenna('h-6 w-6'),
+                        color: pageColors.members,
+                        title: t('members_page.operators'),
+                        value: stats.total_operators ?? 0,
+                    })}
+                    ${renderStatCard({
+                        icon: iconUsers('h-6 w-6'),
+                        color: pageColors.members,
+                        title: t('members_page.members'),
+                        value: stats.total_members ?? 0,
+                    })}
+                </div>
+            </div>
+        </div>`;
+}
+
 export async function render(container, params, router) {
     try {
         const config = getConfig();
@@ -186,6 +213,7 @@ export async function render(container, params, router) {
         const showAdvertSeries = features.advertisements !== false;
         const showMessageSeries = features.messages !== false;
         const showActivityChart = showAdvertSeries || showMessageSeries;
+        const showMembersPanel = features.members !== false;
 
         const heroSection = renderHeroSection({
             networkName, logoUrl, logoInvertLight,
@@ -207,7 +235,7 @@ export async function render(container, params, router) {
     ${showStats ? statsPanel : nothing}
 </div>
 
-<div class="grid grid-cols-1 md:grid-cols-2 ${showActivityChart ? 'lg:grid-cols-3' : ''} gap-6 mt-6">
+<div class="grid grid-cols-1 md:grid-cols-2 ${showMembersPanel && showActivityChart ? 'lg:grid-cols-3' : ''} gap-6 mt-6">
     <div class="card bg-base-100 shadow-xl">
         <div class="card-body">
             <h2 class="card-title">
@@ -220,25 +248,7 @@ export async function render(container, params, router) {
         </div>
     </div>
 
-    <div class="card bg-base-100 shadow-xl">
-        <div class="card-body flex flex-col items-center justify-center">
-            <p class="text-sm opacity-70 mb-4 text-center">${t('home.meshcore_attribution')}</p>
-            <a href="https://meshcore.io/" target="_blank" rel="noopener noreferrer" class="hover:opacity-80 transition-opacity">
-                <img src="/static/img/meshcore.svg" alt="MeshCore" class="theme-logo theme-logo--invert-light h-8" />
-            </a>
-            <p class="text-xs opacity-50 mt-4 text-center">Off-Grid, Open-Source Encrypted Messaging</p>
-            <div class="flex gap-2 mt-4">
-                <a href="https://meshcore.io/" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">
-                    ${iconGlobe('h-4 w-4 mr-1')}
-                    ${t('links.website')}
-                </a>
-                <a href="https://github.com/meshcore-dev/MeshCore" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">
-                    ${iconGithub('h-4 w-4 mr-1')}
-                    ${t('links.github')}
-                </a>
-            </div>
-        </div>
-    </div>
+    ${renderMembersPanel({ features, stats })}
 
     ${showActivityChart ? activityChartCard : nothing}
 </div>`, container);

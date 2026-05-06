@@ -7,7 +7,13 @@ from sqlalchemy import func, select
 
 from meshcore_hub.api.auth import RequireRead
 from meshcore_hub.api.dependencies import DbSession
-from meshcore_hub.common.models import Advertisement, Message, Node, NodeTag
+from meshcore_hub.common.models import (
+    Advertisement,
+    Message,
+    Node,
+    NodeTag,
+    UserProfile,
+)
 from meshcore_hub.common.schemas.messages import (
     ChannelMessage,
     DailyActivity,
@@ -200,6 +206,33 @@ async def get_stats(
             for m in channel_msgs
         ]
 
+    from meshcore_hub.common.config import get_web_settings
+
+    web_settings = get_web_settings()
+    operator_role = web_settings.oidc_role_operator
+    member_role = web_settings.oidc_role_member
+
+    total_operators = (
+        session.execute(
+            select(func.count())
+            .select_from(UserProfile)
+            .where(UserProfile.roles.contains(operator_role))
+        ).scalar()
+        or 0
+    )
+
+    total_members = (
+        session.execute(
+            select(func.count())
+            .select_from(UserProfile)
+            .where(
+                UserProfile.roles.contains(member_role),
+                ~UserProfile.roles.contains(operator_role),
+            )
+        ).scalar()
+        or 0
+    )
+
     return DashboardStats(
         total_nodes=total_nodes,
         active_nodes=active_nodes,
@@ -212,6 +245,8 @@ async def get_stats(
         recent_advertisements=recent_advertisements,
         channel_message_counts=channel_message_counts,
         channel_messages=channel_messages,
+        total_operators=total_operators,
+        total_members=total_members,
     )
 
 

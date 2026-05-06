@@ -267,6 +267,10 @@ class DashboardStats(BaseModel):
         default_factory=dict,
         description="Recent messages per channel (up to 5 each)",
     )
+    total_operators: int = Field(default=0, description="Number of operator-role users")
+    total_members: int = Field(
+        default=0, description="Number of member-role users (excluding operators)"
+    )
 
 
 class DailyActivityPoint(BaseModel):

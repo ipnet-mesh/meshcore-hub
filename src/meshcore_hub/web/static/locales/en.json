@@ -141,7 +141,6 @@
         "all_discovered_nodes": "All discovered nodes",
         "network_info": "Network Info",
         "network_activity": "Network Activity",
-        "meshcore_attribution": "Our local off-grid mesh network is made possible by",
         "frequency": "Frequency",
         "bandwidth": "Bandwidth",
         "spreading_factor": "Spreading Factor",
