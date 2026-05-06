@@ -225,10 +225,7 @@ async def get_stats(
         session.execute(
             select(func.count())
             .select_from(UserProfile)
-            .where(
-                UserProfile.roles.contains(member_role),
-                ~UserProfile.roles.contains(operator_role),
-            )
+            .where(UserProfile.roles.contains(member_role))
         ).scalar()
         or 0
     )
