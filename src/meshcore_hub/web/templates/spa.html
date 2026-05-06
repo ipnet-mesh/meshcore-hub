@@ -110,14 +110,29 @@
     </main>
 
     <!-- Footer -->
-    <footer class="footer footer-center p-4 bg-base-100 text-base-content mt-auto">
-        <aside>
+    <footer class="footer p-4 bg-base-100 text-base-content mt-auto">
+        <!-- Left: MeshCore branding (stacks on top on mobile) -->
+        <div class="flex flex-col items-center gap-1 order-2 lg:order-1">
+            <a href="https://meshcore.io/" target="_blank" rel="noopener noreferrer" class="hover:opacity-80 transition-opacity flex mb-1">
+                <img src="/static/img/meshcore.svg" alt="MeshCore" class="theme-logo theme-logo--invert-light h-4" />
+            </a>
+            <span class="text-xs opacity-50">Off-Grid, Open-Source Encrypted Messaging</span>
+            <p class="text-sm opacity-70">
+                <a href="https://meshcore.io/" target="_blank" rel="noopener noreferrer" class="link link-hover">{{ t('links.website') }}</a>
+                <span> | </span>
+                <a href="https://github.com/meshcore-dev/MeshCore" target="_blank" rel="noopener noreferrer" class="link link-hover">{{ t('links.github') }}</a>
+            </p>
+        </div>
+
+        <!-- Right: Network info + Hub attribution -->
+        <div class="flex flex-col items-center gap-1 order-1 lg:order-2">
             <p>
                 {{ network_name }}
                 {% if network_city and network_country %}
-                - {{ network_city }}, {{ network_country }}
+                | {{ network_city }}, {{ network_country }}
                 {% endif %}
             </p>
+            <p class="text-xs opacity-50">{{ t('footer.powered_by') }} <a href="https://github.com/ipnet-mesh/meshcore-hub" target="_blank" rel="noopener noreferrer" class="link link-hover">MeshCore Hub</a> {{ version }}</p>
             <p class="text-sm opacity-70">
                 {% if network_contact_email %}
                 <a href="mailto:{{ network_contact_email }}" class="link link-hover">{{ network_contact_email }}</a>
@@ -135,8 +150,7 @@
                 <a href="{{ network_contact_youtube }}" target="_blank" rel="noopener noreferrer" class="link link-hover">{{ t('links.youtube') }}</a>
                 {% endif %}
             </p>
-            <p class="text-xs opacity-50 mt-2">{{ t('footer.powered_by') }} <a href="https://github.com/ipnet-mesh/meshcore-hub" target="_blank" rel="noopener noreferrer" class="link link-hover">MeshCore Hub</a> {{ version }}</p>
-        </aside>
+        </div>
     </footer>
 
     <!-- Leaflet JS for maps -->
