@@ -133,3 +133,23 @@ export function iconPause(cls = 'w-4 h-4') {
 export function iconPlay(cls = 'w-4 h-4') {
     return html`<svg xmlns="http://www.w3.org/2000/svg" class=${cls} viewBox="0 0 20 20" fill="currentColor"><path d="M6.3 2.84A1.5 1.5 0 0 0 4 4.11v11.78a1.5 1.5 0 0 0 2.3 1.27l9.344-5.891a1.5 1.5 0 0 0 0-2.538L6.3 2.84Z" /></svg>`;
 }
+
+export function iconFrequency(cls = 'h-5 w-5') {
+    return html`<svg xmlns="http://www.w3.org/2000/svg" class=${cls} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2 12C3.333 4 6.667 4 8 12c1.333 8 4.667 8 6 0 1.333-8 4.667-8 6 0" /></svg>`;
+}
+
+export function iconBandwidth(cls = 'h-5 w-5') {
+    return html`<svg xmlns="http://www.w3.org/2000/svg" class=${cls} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" /></svg>`;
+}
+
+export function iconSpreadingFactor(cls = 'h-5 w-5') {
+    return html`<svg xmlns="http://www.w3.org/2000/svg" class=${cls} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" /></svg>`;
+}
+
+export function iconCodingRate(cls = 'h-5 w-5') {
+    return html`<svg xmlns="http://www.w3.org/2000/svg" class=${cls} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg>`;
+}
+
+export function iconTxPower(cls = 'h-5 w-5') {
+    return html`<svg xmlns="http://www.w3.org/2000/svg" class=${cls} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" /></svg>`;
+}
