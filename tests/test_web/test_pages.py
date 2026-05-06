@@ -313,6 +313,60 @@ def hello():
             assert "<pre>" in pages[0].content_html
             assert "def hello():" in pages[0].content_html
 
+    def test_markdown_nested_unordered_list(self) -> None:
+        """Test that nested unordered lists produce nested <ul> elements."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            (Path(tmpdir) / "nested.md").write_text("""---
+title: Nested
+---
+
+- Item 1
+    - Sub item A
+    - Sub item B
+        - Deep item
+- Item 2
+""")
+
+            loader = PageLoader(tmpdir)
+            loader.load_pages()
+
+            pages = loader.get_menu_pages()
+            assert len(pages) == 1
+            html = pages[0].content_html
+            assert "<ul>" in html
+            assert "<li>Item 1" in html
+            assert "<li>Sub item A" in html
+            assert "<li>Deep item" in html
+            outer_ul = html.index("<ul>")
+            inner_ul = html.index("<ul>", outer_ul + 1)
+            assert inner_ul > outer_ul
+
+    def test_markdown_nested_ordered_list(self) -> None:
+        """Test that nested ordered lists produce nested <ol> elements."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            (Path(tmpdir) / "nested-ol.md").write_text("""---
+title: Nested OL
+---
+
+1. First
+    1. Sub first
+    2. Sub second
+2. Second
+""")
+
+            loader = PageLoader(tmpdir)
+            loader.load_pages()
+
+            pages = loader.get_menu_pages()
+            assert len(pages) == 1
+            html = pages[0].content_html
+            assert "<ol>" in html
+            assert "<li>First" in html
+            assert "<li>Sub first" in html
+            outer_ol = html.index("<ol>")
+            inner_ol = html.index("<ol>", outer_ol + 1)
+            assert inner_ol > outer_ol
+
 
 class TestPagesRoute:
     """Tests for the custom pages routes (SPA).

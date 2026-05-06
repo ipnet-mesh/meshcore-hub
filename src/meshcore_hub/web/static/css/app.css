@@ -214,6 +214,13 @@
     margin-bottom: 0.25rem;
 }
 
+.prose ul ul { list-style-type: circle; }
+.prose ul ul ul { list-style-type: square; }
+.prose ol ol { list-style-type: lower-alpha; }
+.prose ol ol ol { list-style-type: lower-roman; }
+.prose ul ul, .prose ul ol,
+.prose ol ul, .prose ol ol { margin-top: 0.25rem; margin-bottom: 0; }
+
 .prose a {
     color: var(--color-primary);
     text-decoration: underline;
@@ -253,6 +260,10 @@
 .prose {
     overflow-wrap: break-word;
     word-break: break-word;
+}
+
+.prose > :first-child {
+    margin-top: 0;
 }
 
 .prose table {
