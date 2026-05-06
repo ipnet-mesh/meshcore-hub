@@ -6,25 +6,31 @@ import {
 import {
     iconDashboard, iconNodes, iconAdvertisements, iconMessages, iconMembers, iconMap,
     iconPage, iconInfo, iconChart, iconGlobe, iconGithub,
+    iconSettings, iconFrequency, iconBandwidth, iconSpreadingFactor, iconCodingRate, iconTxPower,
 } from '../icons.js';
 
-function renderRadioConfig(rc) {
+function renderRadioTiles(rc) {
     if (!rc) return nothing;
-    const fields = [
-        [t('links.profile'), rc.profile],
-        [t('home.frequency'), rc.frequency],
-        [t('home.bandwidth'), rc.bandwidth],
-        [t('home.spreading_factor'), rc.spreading_factor],
-        [t('home.coding_rate'), rc.coding_rate],
-        [t('home.tx_power'), rc.tx_power],
+    const tiles = [
+        { icon: iconSettings, label: t('links.profile'), value: rc.profile },
+        { icon: iconFrequency, label: t('home.frequency'), value: rc.frequency },
+        { icon: iconBandwidth, label: t('home.bandwidth'), value: rc.bandwidth },
+        { icon: iconSpreadingFactor, label: t('home.spreading_factor'), value: rc.spreading_factor },
+        { icon: iconCodingRate, label: t('home.coding_rate'), value: rc.coding_rate },
+        { icon: iconTxPower, label: t('home.tx_power'), value: rc.tx_power },
     ];
-    return fields
-        .filter(([, v]) => v)
-        .map(([label, value]) => html`
-            <div class="flex justify-between">
-                <span class="opacity-70">${label}:</span>
-                <span class="font-mono">${String(value)}</span>
-            </div>`);
+    const visible = tiles.filter(t => t.value);
+    if (visible.length === 0) return nothing;
+    return html`
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+            ${visible.map(({ icon, label, value }) => html`
+            <div class="flex flex-col items-center justify-center gap-1.5 p-3
+                        border border-base-content/10 rounded-box text-center">
+                <span class="radio-tile-icon w-6 h-6">${icon('w-full h-full')}</span>
+                <span class="text-xs opacity-70 leading-tight">${label}</span>
+                <span class="text-sm font-semibold leading-tight">${String(value)}</span>
+            </div>`)}
+        </div>`;
 }
 
 function renderNavCard({ href, icon, label, colorVar }) {
@@ -208,8 +214,8 @@ export async function render(container, params, router) {
                 ${iconInfo('h-6 w-6')}
                 ${t('home.network_info')}
             </h2>
-            <div class="space-y-2">
-                ${renderRadioConfig(rc)}
+            <div class="mt-2">
+                ${renderRadioTiles(rc)}
             </div>
         </div>
     </div>
