@@ -77,6 +77,24 @@ Markdown content here (include your own heading)...
 
 The markdown content is rendered as-is, so include your own `# Heading` if desired.
 
+### Supported Markdown Features
+
+Pages are rendered with [Python-Markdown](https://python-markdown.github.io/) with the following extensions enabled:
+
+| Feature | Syntax | Notes |
+|---------|--------|-------|
+| Headings | `# H1` through `### H3` | Rendered with `.prose` styling |
+| Bold / Italic | `**bold**`, `*italic*` | Standard Markdown |
+| Links | `[text](url)` | Relative paths supported |
+| Unordered lists | `- item` or `* item` | Nested lists supported (3 levels) |
+| Ordered lists | `1. item` | Nested lists supported (3 levels) |
+| Tables | Pipe-delimited (`\| Header \|`) | Auto-generated `<thead>`/`<tbody>` |
+| Fenced code blocks | ` ``` ` with optional language | Syntax highlighting via `codehilite` extension |
+| Inline code | `` `code` `` | Styled with monospace font |
+| Blockquotes | `> quote` | Left border styling |
+| Images | `![alt](/media/image.png)` | Use absolute paths to `/media/` |
+| Table of contents | `[TOC]` marker | Auto-generated from headings |
+
 ## Docker Configuration
 
 With Docker, mount the content directory as a read-only volume. This is already configured in `docker-compose.yml`:

@@ -67,19 +67,6 @@ function createNodeIcon(node, oidcEnabled) {
 
 // Leaflet popup requires plain HTML strings, so keep escapeHtml here
 function createPopupContent(node, oidcEnabled) {
-    let ownerHtml = '';
-    if (node.owner) {
-        const ownerDisplay = node.owner.callsign
-            ? escapeHtml(node.owner.name) + ' (' + escapeHtml(node.owner.callsign) + ')'
-            : escapeHtml(node.owner.name);
-        ownerHtml = '<p><span class="opacity-70">' + ((window.t && window.t('map.owner')) || 'Owner:') + '</span> ' + ownerDisplay + '</p>';
-    }
-
-    let roleHtml = '';
-    if (node.role) {
-        roleHtml = '<p><span class="opacity-70">' + ((window.t && window.t('map.role')) || 'Role:') + '</span> <span class="badge badge-xs badge-ghost">' + escapeHtml(node.role) + '</span></p>';
-    }
-
     const typeDisplay = getTypeDisplay(node);
     const nodeTypeEmoji = typeEmoji(node.adv_type);
 
@@ -91,27 +78,39 @@ function createPopupContent(node, oidcEnabled) {
         infraIndicatorHtml = ' <span style="display: inline-block; width: 10px; height: 10px; background: ' + dotColor + '; border: 2px solid ' + borderColor + '; border-radius: 50%; vertical-align: middle;" title="' + title + '"></span>';
     }
 
-    const lastSeenLabel = (window.t && window.t('common.last_seen_label')) || 'Last seen:';
-    const lastSeenHtml = node.last_seen
-        ? '<p><span class="opacity-70">' + lastSeenLabel + '</span> ' + node.last_seen.substring(0, 19).replace('T', ' ') + '</p>'
-        : '';
-
     const typeLabel = (window.t && window.t('common.type')) || 'Type:';
     const keyLabel = (window.t && window.t('common.key')) || 'Key:';
     const locationLabel = (window.t && window.t('common.location')) || 'Location:';
+    const lastSeenLabel = (window.t && window.t('common.last_seen_label')) || 'Last seen:';
     const unknownLabel = (window.t && window.t('node_types.unknown')) || 'Unknown';
     const viewDetailsLabel = (window.t && window.t('common.view_details')) || 'View Details';
 
+    let rows = '';
+    rows += '<div class="opacity-70">' + typeLabel + '</div><div>' + escapeHtml(typeDisplay) + '</div>';
+
+    if (node.role) {
+        const roleLabel = (window.t && window.t('map.role')) || 'Role:';
+        rows += '<div class="opacity-70">' + roleLabel + '</div><div><span class="badge badge-xs badge-ghost">' + escapeHtml(node.role) + '</span></div>';
+    }
+
+    if (node.owner) {
+        const ownerLabel = (window.t && window.t('map.owner')) || 'Owner:';
+        const ownerDisplay = node.owner.callsign
+            ? escapeHtml(node.owner.name) + ' (' + escapeHtml(node.owner.callsign) + ')'
+            : escapeHtml(node.owner.name);
+        rows += '<div class="opacity-70">' + ownerLabel + '</div><div>' + ownerDisplay + '</div>';
+    }
+
+    rows += '<div class="opacity-70">' + keyLabel + '</div><div><code class="text-xs">' + escapeHtml(node.public_key.substring(0, 16)) + '...</code></div>';
+    rows += '<div class="opacity-70">' + locationLabel + '</div><div>' + node.lat.toFixed(4) + ', ' + node.lon.toFixed(4) + '</div>';
+
+    if (node.last_seen) {
+        rows += '<div class="opacity-70">' + lastSeenLabel + '</div><div>' + node.last_seen.substring(0, 19).replace('T', ' ') + '</div>';
+    }
+
     return '<div class="p-2">' +
         '<h3 class="font-bold text-lg mb-2">' + nodeTypeEmoji + ' ' + escapeHtml(node.name || unknownLabel) + infraIndicatorHtml + '</h3>' +
-        '<div class="space-y-1 text-sm">' +
-        '<p><span class="opacity-70">' + typeLabel + '</span> ' + escapeHtml(typeDisplay) + '</p>' +
-        roleHtml +
-        ownerHtml +
-        '<p><span class="opacity-70">' + keyLabel + '</span> <code class="text-xs">' + escapeHtml(node.public_key.substring(0, 16)) + '...</code></p>' +
-        '<p><span class="opacity-70">' + locationLabel + '</span> ' + node.lat.toFixed(4) + ', ' + node.lon.toFixed(4) + '</p>' +
-        lastSeenHtml +
-        '</div>' +
+        '<div class="text-sm grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">' + rows + '</div>' +
         '<a href="/nodes/' + encodeURIComponent(node.public_key) + '" class="btn btn-outline btn-xs mt-3">' + viewDetailsLabel + '</a>' +
         '</div>';
 }
@@ -182,6 +181,9 @@ export async function render(container, params, router) {
             applyFilters();
         }
 
+        const existingDetails = container.querySelector('details.collapse');
+        const isFilterOpen = existingDetails ? existingDetails.open : false;
+
         litRender(html`
 <div class="flex items-center justify-between mb-6">
     <h1 class="text-3xl font-bold">${t('entities.map')}</h1>
@@ -192,8 +194,12 @@ export async function render(container, params, router) {
     </div>
 </div>
 
-<div class="card shadow mb-6 panel-solid" style="--panel-color: var(--color-neutral)">
-    <div class="card-body py-4">
+<details class="collapse collapse-arrow bg-base-200 border-2 border-base-content/25 rounded-box mb-6"
+         ?open=${isFilterOpen}>
+    <summary class="collapse-title text-sm font-medium cursor-pointer">
+        ${t('common.filters')}
+    </summary>
+    <div class="collapse-content pt-4">
         <div class="flex gap-4 flex-wrap items-end">
             <div class="fieldset">
                 <label class="fieldset-label">${t('common.show')}</label>
@@ -234,7 +240,7 @@ export async function render(container, params, router) {
             <button id="clear-filters" class="btn btn-ghost btn-sm" @click=${clearFiltersHandler}>${t('common.clear_filters')}</button>
         </div>
     </div>
-</div>
+</details>
 
 <div class="card bg-base-100 shadow-xl">
     <div class="card-body p-2">
