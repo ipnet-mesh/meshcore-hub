@@ -75,7 +75,7 @@ class CollectorSettings(CommonSettings):
         description="SQLAlchemy database URL (default: sqlite:///{data_home}/collector/meshcore.db)",
     )
 
-    # Seed home directory - contains initial data files (node_tags.yaml, members.yaml)
+    # Seed home directory - contains initial data files (node_tags.yaml)
     seed_home: str = Field(
         default="./seed",
         description="Directory containing seed data files (default: ./seed)",

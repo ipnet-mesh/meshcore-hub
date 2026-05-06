@@ -165,10 +165,8 @@
         "select_destination_node": "-- Selecteer bestemmingsknooppunt --"
     },
     "members": {
-        "empty_state_description": "Om netwerkleden weer te geven, maak een members.yaml bestand aan in je seed-directory.",
-        "members_file_format": "Members bestandsformaat",
-        "members_file_description": "Maak een YAML-bestand aan op <code>$SEED_HOME/members.yaml</code> met de volgende structuur:",
-        "members_import_instructions": "Voer <code>meshcore-hub collector seed</code> uit om leden te importeren.<br/>Om knooppunten aan leden te koppelen, voeg een <code>member_id</code> label toe aan knooppunten in <code>node_tags.yaml</code>."
+        "empty_state_description": "Nog geen leden.",
+        "empty_description": "Leden verschijnen hier zodra gebruikers inloggen en knooppunten adopteren."
     },
     "not_found": {
         "description": "De pagina die u zoekt bestaat niet of is verplaatst."
