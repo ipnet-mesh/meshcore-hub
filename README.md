@@ -316,8 +316,8 @@ All components are configured via environment variables. Create a `.env` file or
 | `MQTT_PASSWORD`  | _(none)_     | MQTT password (optional)                                    |
 | `MQTT_PREFIX`    | `meshcore`   | Topic prefix for all MQTT messages                          |
 | `MQTT_TLS`       | `false`      | Enable TLS/SSL for MQTT connection                          |
-| `MQTT_TRANSPORT` | `websockets` | MQTT transport (`tcp` or `websockets`)                      |
-| `MQTT_WS_PATH`   | `/`          | MQTT WebSocket path (used when `MQTT_TRANSPORT=websockets`) |
+
+> **Note:** `MQTT_PREFIX` also accepts the legacy alias `MQTT_TOPIC_PREFIX` for backward compatibility.
 
 ### Collector Settings
 
@@ -360,6 +360,7 @@ The collector automatically cleans up old event data and inactive nodes:
 | `API_ADMIN_KEY`     | _(none)_  | Admin API key                                           |
 | `METRICS_ENABLED`   | `true`    | Enable Prometheus metrics endpoint at `/metrics`        |
 | `METRICS_CACHE_TTL` | `60`      | Seconds to cache metrics output (reduces database load) |
+| `CORS_ORIGINS`      | _(none)_  | Comma-separated list of allowed CORS origins for the API (optional, only needed when the web dashboard runs on a different origin) |
 
 ### Web Dashboard Settings
 
@@ -564,8 +565,7 @@ meshcore-hub/
 ├── etc/                    # Configuration files (MQTT, Prometheus, Alertmanager)
 ├── example/                # Example files for reference
 │   ├── seed/               # Example seed data files
-│   │   ├── node_tags.yaml  # Example node tags
-│   │   └── members.yaml    # Example network members
+│   │   └── node_tags.yaml  # Example node tags
 │   └── content/            # Example custom content
 │       ├── pages/          # Example custom pages
 │       │   └── join.md     # Example join page

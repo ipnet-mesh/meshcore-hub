@@ -54,7 +54,7 @@ For each variable in each table:
 ### File Paths
 
 - [ ] `src/meshcore_hub/` structure matches actual layout
-- [ ] Seed data directory structure (`node_tags.yaml`, `members.yaml`) documented in `docs/seeding.md`
+- [ ] Seed data directory structure (`node_tags.yaml`) documented in `docs/seeding.md`
 - [ ] Custom content directory structure (`pages/`, `media/`) documented in `docs/content.md`
 - [ ] Webhook configuration documented in `docs/webhooks.md`
 - [ ] Translation files location (`src/meshcore_hub/web/static/locales/`) documented

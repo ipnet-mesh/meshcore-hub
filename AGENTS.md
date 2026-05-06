@@ -183,7 +183,7 @@ async def list_nodes(
 
 ```python
 import click
-from meshcore_hub.common.config import Settings
+from meshcore_hub.common.config import CommonSettings
 
 @click.group()
 @click.pass_context
@@ -305,6 +305,7 @@ meshcore-hub/
 │           │   ├── leaflet/       # Leaflet map library
 │           │   ├── chart.js/      # Chart.js library
 │           │   └── qrcodejs/      # QR code library
+│           ├── locales/           # Translation files (en.json, nl.json)
 │           └── js/spa/       # SPA frontend (ES modules)
 │               ├── app.js        # Entry point, route registration
 │               ├── router.js     # Client-side History API router
@@ -356,6 +357,7 @@ meshcore-hub/
 │   ├── images/              # Screenshots and images
 │   ├── hosting/             # Reverse proxy hosting guides
 │   ├── content.md           # Custom content setup guide
+│   ├── auth.md              # OIDC authentication setup and configuration
 │   ├── i18n.md              # Translation reference guide
 │   ├── letsmesh.md          # LetsMesh packet decoding details
 │   ├── seeding.md           # Seed data format and import guide
@@ -626,6 +628,8 @@ Key variables:
 - `DATA_HOME` - Base directory for runtime data (default: `./data`)
 - `SEED_HOME` - Directory containing seed data files (default: `./seed`)
 - `CONTENT_HOME` - Directory containing custom content (pages, media) (default: `./content`)
+- `DATABASE_URL` - SQLAlchemy database URL (default: computed from `DATA_HOME`)
+- `LOG_LEVEL` - Logging verbosity (default: `INFO`)
 - `MQTT_HOST`, `MQTT_PORT`, `MQTT_PREFIX` - MQTT broker connection
 - `MQTT_USERNAME`, `MQTT_PASSWORD` - MQTT subscriber authentication credentials
 - `MQTT_TRANSPORT` - MQTT transport protocol (default: `websockets`)
@@ -633,7 +637,16 @@ Key variables:
 - `MQTT_TLS` - Enable TLS/SSL for MQTT (default: `false`, set `true` for `wss://`)
 - `COLLECTOR_CHANNEL_KEYS` - Additional decoder channel keys for decrypting GroupText packets
 - `COLLECTOR_INCLUDE_TEST_CHANNEL` - Include built-in 'test' channel messages (default: `false`)
+- `API_HOST` - API server bind address (default: `0.0.0.0`)
+- `API_PORT` - API server port (default: `8000`)
 - `API_READ_KEY`, `API_ADMIN_KEY` - API authentication keys
+- `CORS_ORIGINS` - Comma-separated list of allowed CORS origins for the API (optional)
+- `METRICS_ENABLED` - Enable Prometheus metrics endpoint at /metrics (default: `true`)
+- `METRICS_CACHE_TTL` - Seconds to cache metrics output (default: `60`)
+- `WEB_HOST` - Web server bind address (default: `0.0.0.0`)
+- `WEB_PORT` - Web server port (default: `8080`)
+- `API_BASE_URL` - API server base URL for the web dashboard (default: `http://localhost:8000`)
+- `API_KEY` - API key for web dashboard queries (optional)
 - `OIDC_ENABLED` - Enable OIDC authentication (default: `false`)
 - `OIDC_CLIENT_ID` - OIDC client ID (required if OIDC_ENABLED=true)
 - `OIDC_CLIENT_SECRET` - OIDC client secret (required if OIDC_ENABLED=true)
@@ -657,9 +670,14 @@ Key variables:
 - `FEATURE_DASHBOARD`, `FEATURE_NODES`, `FEATURE_ADVERTISEMENTS`, `FEATURE_MESSAGES`, `FEATURE_MAP`, `FEATURE_MEMBERS`, `FEATURE_PAGES` - Feature flags to enable/disable specific web dashboard pages (default: all `true`). Dependencies: Dashboard auto-disables when all of Nodes/Advertisements/Messages are disabled. Map auto-disables when Nodes is disabled.
 - `NETWORK_DOMAIN` - Network domain name (default: none)
 - `NETWORK_NAME` - Network display name (default: `MeshCore Network`)
-- `METRICS_ENABLED` - Enable Prometheus metrics endpoint at /metrics (default: `true`)
-- `METRICS_CACHE_TTL` - Seconds to cache metrics output (default: `60`)
-- `LOG_LEVEL` - Logging verbosity
+- `NETWORK_CITY` - Network city location (default: none)
+- `NETWORK_COUNTRY` - Network country code, ISO 3166-1 alpha-2 (default: none)
+- `NETWORK_RADIO_CONFIG` - Radio config, comma-delimited: profile,freq,bw,sf,cr,power (default: none)
+- `NETWORK_WELCOME_TEXT` - Custom welcome text for homepage (default: none)
+- `NETWORK_CONTACT_EMAIL` - Contact email address (default: none)
+- `NETWORK_CONTACT_DISCORD` - Discord server link (default: none)
+- `NETWORK_CONTACT_GITHUB` - GitHub repository URL (default: none)
+- `NETWORK_CONTACT_YOUTUBE` - YouTube channel URL (default: none)
 
 Infrastructure passthrough variables (consumed by Docker Compose or MQTT broker, not Hub Python):
 - `COMPOSE_PROJECT_NAME` - Docker Compose project prefix for containers and volumes (default: `hub`)
