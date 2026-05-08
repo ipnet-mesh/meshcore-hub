@@ -211,24 +211,29 @@ async def get_stats(
     web_settings = get_web_settings()
     operator_role = web_settings.oidc_role_operator
     member_role = web_settings.oidc_role_member
+    test_role = web_settings.oidc_role_test
 
-    total_operators = (
-        session.execute(
-            select(func.count())
-            .select_from(UserProfile)
-            .where(UserProfile.roles.contains(operator_role))
-        ).scalar()
-        or 0
+    total_operators_query = (
+        select(func.count())
+        .select_from(UserProfile)
+        .where(UserProfile.roles.contains(operator_role))
     )
+    if test_role:
+        total_operators_query = total_operators_query.where(
+            ~UserProfile.roles.contains(test_role)
+        )
+    total_operators = session.execute(total_operators_query).scalar() or 0
 
-    total_members = (
-        session.execute(
-            select(func.count())
-            .select_from(UserProfile)
-            .where(UserProfile.roles.contains(member_role))
-        ).scalar()
-        or 0
+    total_members_query = (
+        select(func.count())
+        .select_from(UserProfile)
+        .where(UserProfile.roles.contains(member_role))
     )
+    if test_role:
+        total_members_query = total_members_query.where(
+            ~UserProfile.roles.contains(test_role)
+        )
+    total_members = session.execute(total_members_query).scalar() or 0
 
     return DashboardStats(
         total_nodes=total_nodes,

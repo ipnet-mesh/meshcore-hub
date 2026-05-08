@@ -311,6 +311,10 @@ class WebSettings(CommonSettings):
     oidc_role_member: str = Field(
         default="member", description="IdP role name for member access"
     )
+    oidc_role_test: str = Field(
+        default="test",
+        description="IdP role name for test users (excluded from public views)",
+    )
     oidc_session_secret: Optional[str] = Field(
         default=None, description="Secret key for signing session cookies"
     )

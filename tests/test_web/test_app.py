@@ -149,6 +149,25 @@ class TestConfigJsonXssEscaping:
         assert parsed["network_name"] == "Test Network"
         assert parsed["network_city"] == "Test City"
 
+    def test_build_config_json_includes_test_role_name(self, web_app: Any) -> None:
+        """_build_config_json includes role_names.test in the config."""
+        from starlette.requests import Request
+
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/",
+            "query_string": b"",
+            "headers": [],
+        }
+        request = Request(scope)
+
+        result = _build_config_json(web_app, request)
+        parsed = json.loads(result)
+        assert "role_names" in parsed
+        assert "test" in parsed["role_names"]
+        assert parsed["role_names"]["test"] == "test"
+
 
 class TestCheckApiAccess:
     """Unit tests for check_api_access with _OPEN, _AUTHENTICATED, and role-based levels."""

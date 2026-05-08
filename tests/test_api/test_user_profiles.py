@@ -1,5 +1,11 @@
 """Tests for user profile API routes."""
 
+from unittest.mock import patch
+
+import pytest
+
+from meshcore_hub.common.models import UserProfile
+
 TEST_USER_ID = "oidc-user-123"
 OTHER_USER_ID = "oidc-user-456"
 USER_HEADERS = {"X-User-Id": TEST_USER_ID, "X-User-Roles": "operator"}
@@ -351,3 +357,100 @@ class TestUpdateProfile:
         assert response.status_code == 200
         data = response.json()
         assert data["callsign"] == "NR1"
+
+
+class TestListProfilesExcludeTest:
+    """Tests for exclude_test query parameter on GET /user/profiles."""
+
+    @pytest.fixture
+    def profiles_with_test_role(self, api_db_session):
+        """Create profiles including some with the test role."""
+        profiles = []
+        for user_id, name, roles in [
+            ("real-op", "Real Operator", "operator"),
+            ("real-mem", "Real Member", "member"),
+            ("test-op", "Test Operator", "operator,test"),
+            ("test-mem", "Test Member", "member,test"),
+        ]:
+            p = UserProfile(user_id=user_id, name=name, roles=roles)
+            api_db_session.add(p)
+            profiles.append(p)
+        api_db_session.commit()
+        return profiles
+
+    def test_exclude_test_true_filters_test_users(
+        self, client_no_auth, profiles_with_test_role
+    ):
+        """Test that exclude_test=true (default) filters test users."""
+        with patch(
+            "meshcore_hub.api.routes.user_profiles.get_web_settings"
+        ) as mock_settings:
+            settings = mock_settings.return_value
+            settings.oidc_role_test = "test"
+
+            response = client_no_auth.get(
+                "/api/v1/user/profiles?exclude_test=true",
+                headers=USER_HEADERS,
+            )
+            assert response.status_code == 200
+            data = response.json()
+            names = [item["name"] for item in data["items"]]
+            assert "Real Operator" in names
+            assert "Real Member" in names
+            assert "Test Operator" not in names
+            assert "Test Member" not in names
+            assert data["total"] == 2
+
+    def test_exclude_test_default_is_true(
+        self, client_no_auth, profiles_with_test_role
+    ):
+        """Test that exclude_test defaults to true."""
+        with patch(
+            "meshcore_hub.api.routes.user_profiles.get_web_settings"
+        ) as mock_settings:
+            settings = mock_settings.return_value
+            settings.oidc_role_test = "test"
+
+            response = client_no_auth.get(
+                "/api/v1/user/profiles",
+                headers=USER_HEADERS,
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert data["total"] == 2
+
+    def test_exclude_test_false_includes_test_users(
+        self, client_no_auth, profiles_with_test_role
+    ):
+        """Test that exclude_test=false includes test users."""
+        with patch(
+            "meshcore_hub.api.routes.user_profiles.get_web_settings"
+        ) as mock_settings:
+            settings = mock_settings.return_value
+            settings.oidc_role_test = "test"
+
+            response = client_no_auth.get(
+                "/api/v1/user/profiles?exclude_test=false",
+                headers=USER_HEADERS,
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert data["total"] == 4
+
+    def test_empty_test_role_does_not_filter(
+        self, client_no_auth, profiles_with_test_role
+    ):
+        """Test that an empty test role does not filter any users."""
+        with patch(
+            "meshcore_hub.api.routes.user_profiles.get_web_settings"
+        ) as mock_settings:
+            settings = mock_settings.return_value
+            settings.oidc_role_test = ""
+
+            response = client_no_auth.get(
+                "/api/v1/user/profiles?exclude_test=true",
+                headers=USER_HEADERS,
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert data["total"] == 4

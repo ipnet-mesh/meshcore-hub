@@ -1,10 +1,12 @@
 """Tests for dashboard API routes."""
 
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 import pytest
 
 from meshcore_hub.common.models import Advertisement, Message, Node
+from meshcore_hub.common.models import UserProfile
 
 
 class TestDashboardStats:
@@ -282,3 +284,70 @@ class TestNodeCountHistory:
         # At least one day should have a count > 0 (cumulative)
         # The last day should have count >= 1
         assert data["data"][-1]["count"] >= 1
+
+
+class TestDashboardTestUserExclusion:
+    """Tests for test user exclusion from dashboard stats."""
+
+    @pytest.fixture
+    def profiles_with_roles(self, api_db_session):
+        """Create profiles with various role combinations."""
+        profiles = []
+        for user_id, name, roles in [
+            ("op-1", "Operator One", "operator"),
+            ("op-2", "Operator Two", "operator,member"),
+            ("mem-1", "Member One", "member"),
+            ("test-1", "Test Operator", "operator,test"),
+            ("test-2", "Test Member", "member,test"),
+            ("test-3", "Test Both", "operator,member,test"),
+            ("none-1", "No Roles", ""),
+        ]:
+            p = UserProfile(user_id=user_id, name=name, roles=roles)
+            api_db_session.add(p)
+            profiles.append((user_id, roles))
+        api_db_session.commit()
+        return profiles
+
+    def test_test_users_excluded_from_operator_count(
+        self, client_no_auth, profiles_with_roles
+    ):
+        """Test that users with the test role are excluded from operator count."""
+        with patch("meshcore_hub.common.config.get_web_settings") as mock_settings:
+            settings = mock_settings.return_value
+            settings.oidc_role_operator = "operator"
+            settings.oidc_role_member = "member"
+            settings.oidc_role_test = "test"
+
+            response = client_no_auth.get("/api/v1/dashboard/stats")
+            assert response.status_code == 200
+            data = response.json()
+            assert data["total_operators"] == 2
+            assert data["total_members"] == 2
+
+    def test_empty_test_role_excludes_no_one(self, client_no_auth, profiles_with_roles):
+        """Test that an empty test role does not filter any users."""
+        with patch("meshcore_hub.common.config.get_web_settings") as mock_settings:
+            settings = mock_settings.return_value
+            settings.oidc_role_operator = "operator"
+            settings.oidc_role_member = "member"
+            settings.oidc_role_test = ""
+
+            response = client_no_auth.get("/api/v1/dashboard/stats")
+            assert response.status_code == 200
+            data = response.json()
+            assert data["total_operators"] == 4
+            assert data["total_members"] == 4
+
+    def test_no_profiles(self, client_no_auth):
+        """Test stats with no profiles returns zero counts."""
+        with patch("meshcore_hub.common.config.get_web_settings") as mock_settings:
+            settings = mock_settings.return_value
+            settings.oidc_role_operator = "operator"
+            settings.oidc_role_member = "member"
+            settings.oidc_role_test = "test"
+
+            response = client_no_auth.get("/api/v1/dashboard/stats")
+            assert response.status_code == 200
+            data = response.json()
+            assert data["total_operators"] == 0
+            assert data["total_members"] == 0

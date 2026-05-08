@@ -4,12 +4,13 @@ import logging
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import AnyUrl
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
 from meshcore_hub.api.auth import RequireRead, RequireUserOwner, X_USER_ID_HEADER
 from meshcore_hub.api.dependencies import DbSession
 from meshcore_hub.api.profile_utils import get_or_create_profile
+from meshcore_hub.common.config import get_web_settings
 from meshcore_hub.common.models import UserProfile
 from meshcore_hub.common.models.user_profile_node import UserProfileNode
 from meshcore_hub.common.schemas.user_profiles import (
@@ -46,11 +47,24 @@ def _build_adopted_nodes(profile: UserProfile) -> list[AdoptedNodeRead]:
 async def list_profiles(
     _: RequireRead,
     session: DbSession,
+    exclude_test: bool = Query(
+        default=True, description="Exclude test users from results"
+    ),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> UserProfileList:
     """List all user profiles with node counts. No user_id exposed."""
+    web_settings = get_web_settings()
+    test_role = web_settings.oidc_role_test
+
     count_query = select(func.count(UserProfile.id))
+    if exclude_test and test_role:
+        count_query = count_query.where(
+            or_(
+                UserProfile.roles.is_(None),
+                ~UserProfile.roles.contains(test_role),
+            )
+        )
     total = session.execute(count_query).scalar() or 0
 
     query = (
@@ -64,6 +78,13 @@ async def list_profiles(
         .offset(offset)
         .limit(limit)
     )
+    if exclude_test and test_role:
+        query = query.where(
+            or_(
+                UserProfile.roles.is_(None),
+                ~UserProfile.roles.contains(test_role),
+            )
+        )
     profiles = session.execute(query).scalars().all()
 
     items = []
