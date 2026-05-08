@@ -310,6 +310,7 @@ def _build_config_json(app: FastAPI, request: Request) -> str:
         "admin": app.state.oidc_role_admin,
         "operator": app.state.oidc_role_operator,
         "member": app.state.oidc_role_member,
+        "test": app.state.oidc_role_test,
     }
 
     if getattr(app.state, "oidc_enabled", False):
@@ -418,11 +419,13 @@ def create_app(
         app.state.oidc_role_admin = settings.oidc_role_admin
         app.state.oidc_role_operator = settings.oidc_role_operator
         app.state.oidc_role_member = settings.oidc_role_member
+        app.state.oidc_role_test = settings.oidc_role_test
     else:
         app.state.oidc_enabled = False
         app.state.oidc_role_admin = settings.oidc_role_admin
         app.state.oidc_role_operator = settings.oidc_role_operator
         app.state.oidc_role_member = settings.oidc_role_member
+        app.state.oidc_role_test = settings.oidc_role_test
 
     app.state.endpoint_access = _build_endpoint_access(
         role_admin=settings.oidc_role_admin,

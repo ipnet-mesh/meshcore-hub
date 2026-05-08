@@ -658,6 +658,7 @@ Key variables:
 - `OIDC_ROLE_ADMIN` - IdP role name for admin access (default: `admin`)
 - `OIDC_ROLE_OPERATOR` - IdP role name for operator access (default: `operator`)
 - `OIDC_ROLE_MEMBER` - IdP role name for member access (default: `member`)
+- `OIDC_ROLE_TEST` - IdP role name for test users, excluded from public views (default: `test`)
 - `OIDC_SESSION_SECRET` - Secret for signing session cookies (required if OIDC_ENABLED=true)
 - `OIDC_SESSION_MAX_AGE` - Session lifetime in seconds (default: `86400`)
 - `OIDC_COOKIE_SECURE` - HTTPS-only cookies (default: `false`)

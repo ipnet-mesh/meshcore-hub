@@ -69,9 +69,12 @@ export async function render(container, params, router) {
         const roleNames = config.role_names || {};
         const operatorRole = roleNames.operator || 'operator';
         const memberRole = roleNames.member || 'member';
+        const testRole = roleNames.test || 'test';
 
         const resp = await apiGet('/api/v1/user/profiles', { limit: 500 });
-        const profiles = resp.items || [];
+        const allProfiles = resp.items || [];
+
+        const profiles = allProfiles.filter(p => !p.roles || !p.roles.includes(testRole));
 
         if (profiles.length === 0) {
             litRender(html`
