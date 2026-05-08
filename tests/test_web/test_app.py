@@ -1,4 +1,4 @@
-"""Tests for web app: config JSON escaping."""
+"""Tests for web app: config JSON escaping, API access control."""
 
 import json
 from typing import Any
@@ -6,7 +6,13 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from meshcore_hub.web.app import _build_config_json, create_app
+from meshcore_hub.web.app import (
+    _AUTHENTICATED,
+    _OPEN,
+    _build_config_json,
+    check_api_access,
+    create_app,
+)
 
 from .conftest import ALL_FEATURES_ENABLED, MockHttpClient
 
@@ -142,3 +148,100 @@ class TestConfigJsonXssEscaping:
         parsed = json.loads(result)
         assert parsed["network_name"] == "Test Network"
         assert parsed["network_city"] == "Test City"
+
+
+class TestCheckApiAccess:
+    """Unit tests for check_api_access with _OPEN, _AUTHENTICATED, and role-based levels."""
+
+    def test_open_allows_anonymous(self) -> None:
+        mapping = {"v1/nodes": {"GET": _OPEN}}
+        assert check_api_access("v1/nodes", "GET", False, frozenset(), mapping=mapping)
+
+    def test_authenticated_requires_oidc_session(self) -> None:
+        mapping = {"v1/user/profile": {"PUT": _AUTHENTICATED}}
+        assert check_api_access(
+            "v1/user/profile",
+            "PUT",
+            True,
+            frozenset(),
+            user_id="user-1",
+            mapping=mapping,
+        )
+
+    def test_authenticated_rejects_no_session(self) -> None:
+        mapping = {"v1/user/profile": {"PUT": _AUTHENTICATED}}
+        assert not check_api_access(
+            "v1/user/profile",
+            "PUT",
+            True,
+            frozenset(),
+            user_id=None,
+            mapping=mapping,
+        )
+
+    def test_authenticated_rejects_oidc_disabled(self) -> None:
+        mapping = {"v1/user/profile": {"PUT": _AUTHENTICATED}}
+        assert not check_api_access(
+            "v1/user/profile",
+            "PUT",
+            False,
+            frozenset(),
+            user_id="user-1",
+            mapping=mapping,
+        )
+
+    def test_authenticated_ignores_roles(self) -> None:
+        mapping = {"v1/user/profile": {"PUT": _AUTHENTICATED}}
+        assert check_api_access(
+            "v1/user/profile",
+            "PUT",
+            True,
+            frozenset(),
+            user_id="user-1",
+            mapping=mapping,
+        )
+
+    def test_role_required_denies_roleless(self) -> None:
+        roles = frozenset({"admin", "operator"})
+        mapping = {"v1/adoptions": {"POST": roles}}
+        assert not check_api_access(
+            "v1/adoptions",
+            "POST",
+            True,
+            frozenset(),
+            user_id="user-1",
+            mapping=mapping,
+        )
+
+    def test_role_required_allows_matching_role(self) -> None:
+        roles = frozenset({"admin", "operator"})
+        mapping = {"v1/adoptions": {"POST": roles}}
+        assert check_api_access(
+            "v1/adoptions",
+            "POST",
+            True,
+            frozenset({"operator"}),
+            user_id="user-1",
+            mapping=mapping,
+        )
+
+
+class TestRolelessUserProfileUpdate:
+    """Integration test: role-less OIDC user can PUT their own profile through the proxy."""
+
+    def test_roleless_user_can_update_profile(
+        self,
+        client_with_oidc_no_roles_session: TestClient,
+        mock_http_client: MockHttpClient,
+    ) -> None:
+        mock_http_client.set_response(
+            "PUT",
+            "/api/v1/user/profile/noroles-1",
+            200,
+            {"id": "profile-1", "name": "No Roles User", "callsign": None},
+        )
+        response = client_with_oidc_no_roles_session.put(
+            "/api/v1/user/profile/noroles-1",
+            json={"callsign": "NR1"},
+        )
+        assert response.status_code == 200
