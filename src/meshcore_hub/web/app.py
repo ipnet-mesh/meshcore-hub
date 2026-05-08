@@ -61,8 +61,10 @@ def _load_asset_manifest() -> dict[str, Any]:
 # Per-endpoint, per-method role access mapping for the API proxy.
 # Key: URL path prefix (after /api/), Value: {method -> allowed roles}.
 # _OPEN = unconditional access (OIDC on or off, anonymous OK).
+# _AUTHENTICATED = any logged-in user with a valid OIDC session (no specific role needed).
 # Method not listed = denied. No prefix match = denied.
 _OPEN: frozenset[str] = frozenset()
+_AUTHENTICATED: frozenset[str] = frozenset({"__any_authenticated__"})
 
 
 def _build_endpoint_access(
@@ -72,6 +74,11 @@ def _build_endpoint_access(
 ) -> dict[str, dict[str, frozenset[str]]]:
     """Build the per-endpoint access mapping using configured role names.
 
+    Uses three access levels:
+      - _OPEN: unconditional access, anonymous OK.
+      - _AUTHENTICATED: any logged-in OIDC user (regardless of roles).
+      - Specific roles: requires OIDC with one of the listed roles.
+
     Args:
         role_admin: The IdP role name that grants admin access.
         role_operator: The IdP role name that grants operator access.
@@ -80,7 +87,6 @@ def _build_endpoint_access(
     Returns:
         Endpoint access mapping dict.
     """
-    any_authenticated = frozenset({role_admin, role_operator, role_member})
     operator_admin = frozenset({role_admin, role_operator})
     return {
         "v1/nodes": {
@@ -116,7 +122,7 @@ def _build_endpoint_access(
         },
         "v1/user/profile": {
             "GET": _OPEN,
-            "PUT": any_authenticated,
+            "PUT": _AUTHENTICATED,
         },
     }
 
@@ -126,20 +132,29 @@ def check_api_access(
     method: str,
     oidc_enabled: bool,
     user_roles: frozenset[str],
-    mapping: dict[str, dict[str, frozenset[str]]],
+    user_id: str | None = None,
+    mapping: dict[str, dict[str, frozenset[str]]] | None = None,
 ) -> bool:
-    """Check if user has required role for the given API path + method.
+    """Check if user has required access for the given API path + method.
+
+    Three access levels defined by the mapping value:
+      - _OPEN (empty frozenset): unconditional access, anonymous OK.
+      - _AUTHENTICATED (sentinel frozenset): any logged-in OIDC user.
+      - Specific roles: requires OIDC enabled + user has at least one matching role.
 
     Longest prefix wins. Method must be explicitly listed.
-    _OPEN means unconditional access. Specific roles require OIDC on + role match.
     """
+    if mapping is None:
+        return False
     for prefix in sorted(mapping, key=len, reverse=True):
         if path.startswith(prefix):
             required = mapping[prefix].get(method)
             if required is None:
                 return False
             if not required:
-                return True
+                return True  # _OPEN
+            if required is _AUTHENTICATED:  # any logged-in user
+                return oidc_enabled and bool(user_id)
             if not oidc_enabled:
                 return False
             return bool(user_roles & required)
@@ -586,7 +601,10 @@ def create_app(
         """Proxy API requests to the backend API server."""
         oidc_enabled = getattr(request.app.state, "oidc_enabled", False)
         user_roles: frozenset[str] = frozenset()
+        user_id: str | None = None
         if oidc_enabled:
+            user = get_session_user(request)
+            user_id = user.get("sub") if user else None
             roles_claim = getattr(request.app.state, "oidc_roles_claim", "roles")
             user_roles = frozenset(get_session_roles(request, roles_claim))
         if not check_api_access(
@@ -594,7 +612,8 @@ def create_app(
             request.method,
             oidc_enabled,
             user_roles,
-            request.app.state.endpoint_access,
+            user_id=user_id,
+            mapping=request.app.state.endpoint_access,
         ):
             return JSONResponse(
                 {"detail": "Access denied", "code": "AUTH_REQUIRED"},

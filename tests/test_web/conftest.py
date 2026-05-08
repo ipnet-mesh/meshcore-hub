@@ -394,6 +394,14 @@ MEMBER_USER = {
     "roles": ["member"],
 }
 
+NO_ROLES_USER: dict[str, Any] = {
+    "sub": "noroles-1",
+    "name": "No Roles User",
+    "email": "noroles@example.com",
+    "picture": None,
+    "roles": [],
+}
+
 
 @pytest.fixture
 def client_with_oidc(
@@ -426,6 +434,19 @@ def client_with_oidc_member_session(
     with (
         patch("meshcore_hub.web.app.get_session_user", return_value=MEMBER_USER),
         patch("meshcore_hub.web.oidc.get_session_user", return_value=MEMBER_USER),
+    ):
+        yield TestClient(web_app_with_oidc, raise_server_exceptions=True)
+
+
+@pytest.fixture
+def client_with_oidc_no_roles_session(
+    web_app_with_oidc: Any, mock_http_client: MockHttpClient
+) -> Generator[TestClient, None, None]:
+    """Create a test client with OIDC enabled and a session with NO roles."""
+    web_app_with_oidc.state.http_client = mock_http_client
+    with (
+        patch("meshcore_hub.web.app.get_session_user", return_value=NO_ROLES_USER),
+        patch("meshcore_hub.web.oidc.get_session_user", return_value=NO_ROLES_USER),
     ):
         yield TestClient(web_app_with_oidc, raise_server_exceptions=True)
 

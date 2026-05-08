@@ -340,3 +340,14 @@ class TestUpdateProfile:
             headers=USER_HEADERS,
         )
         assert response.status_code == 404
+
+    def test_update_profile_with_no_roles(self, client_no_auth, sample_user_profile):
+        """Test that profile update works without any roles (regression guard)."""
+        response = client_no_auth.put(
+            f"/api/v1/user/profile/{sample_user_profile.id}",
+            json={"callsign": "NR1"},
+            headers=NO_ROLES_HEADERS,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["callsign"] == "NR1"
