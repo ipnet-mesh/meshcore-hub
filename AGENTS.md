@@ -675,6 +675,7 @@ Key variables:
 - `NETWORK_COUNTRY` - Network country code, ISO 3166-1 alpha-2 (default: none)
 - `NETWORK_RADIO_CONFIG` - Radio config, comma-delimited: profile,freq,bw,sf,cr,power (default: none)
 - `NETWORK_WELCOME_TEXT` - Custom welcome text for homepage (default: none)
+- `NETWORK_ANNOUNCEMENT` - Markdown announcement text for flash banner, shown on all pages when set (default: none)
 - `NETWORK_CONTACT_EMAIL` - Contact email address (default: none)
 - `NETWORK_CONTACT_DISCORD` - Discord server link (default: none)
 - `NETWORK_CONTACT_GITHUB` - GitHub repository URL (default: none)

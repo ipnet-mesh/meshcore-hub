@@ -101,3 +101,9 @@ class TestWebSettings:
         settings = WebSettings(_env_file=None, data_home="/custom/data")
 
         assert settings.web_data_dir == "/custom/data/web"
+
+    def test_network_announcement_default_none(self) -> None:
+        """Test that network_announcement defaults to None."""
+        settings = WebSettings(_env_file=None)
+
+        assert settings.network_announcement is None

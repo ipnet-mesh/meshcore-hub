@@ -363,6 +363,10 @@ class WebSettings(CommonSettings):
     network_welcome_text: Optional[str] = Field(
         default=None, description="Welcome text for homepage"
     )
+    network_announcement: Optional[str] = Field(
+        default=None,
+        description="Markdown announcement text for flash banner (empty = no banner)",
+    )
 
     # Feature flags (control which pages are visible in the web dashboard)
     feature_dashboard: bool = Field(

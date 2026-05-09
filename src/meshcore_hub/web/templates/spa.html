@@ -105,6 +105,18 @@
         </div>
     </div>
 
+    {% if network_announcement %}
+    <div id="flash-banner" class="alert alert-warning rounded-none py-2 px-4 text-center text-sm">
+        <div class="flash-banner-content">{{ network_announcement | safe }}</div>
+        <button aria-label="Dismiss" onclick="document.getElementById('flash-banner').style.display='none'; sessionStorage.setItem('flash-banner-dismissed','1')" class="btn btn-ghost btn-xs">&times;</button>
+    </div>
+    <script>
+        if (sessionStorage.getItem('flash-banner-dismissed') === '1') {
+            document.getElementById('flash-banner').style.display = 'none';
+        }
+    </script>
+    {% endif %}
+
     <!-- Main Content -->
     <main class="container mx-auto px-4 py-6 flex-1" id="app">
     </main>

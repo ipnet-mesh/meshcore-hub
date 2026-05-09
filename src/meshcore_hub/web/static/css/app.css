@@ -433,3 +433,44 @@ footer.footer {
         gap: 3rem;
     }
 }
+
+/* ==========================================================================
+   Flash Banner
+   ========================================================================== */
+
+#flash-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.flash-banner-content {
+    display: inline;
+}
+
+.flash-banner-content a {
+    text-decoration: underline;
+    font-weight: 600;
+}
+
+.flash-banner-content a:hover {
+    opacity: 0.8;
+}
+
+.flash-banner-content code {
+    font-size: 0.875rem;
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    background: oklch(var(--b3) / 0.5);
+}
+
+.flash-banner-content p {
+    display: inline;
+    margin: 0;
+}
+
+.flash-banner-content p + p {
+    display: block;
+    margin-top: 0.25rem;
+}

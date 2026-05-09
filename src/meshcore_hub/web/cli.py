@@ -103,6 +103,13 @@ import click
     help="Welcome text for homepage",
 )
 @click.option(
+    "--network-announcement",
+    type=str,
+    default=None,
+    envvar="NETWORK_ANNOUNCEMENT",
+    help="Markdown announcement text for flash banner",
+)
+@click.option(
     "--reload",
     is_flag=True,
     default=False,
@@ -125,6 +132,7 @@ def web(
     network_contact_github: str | None,
     network_contact_youtube: str | None,
     network_welcome_text: str | None,
+    network_announcement: str | None,
     reload: bool,
 ) -> None:
     """Run the web dashboard.
@@ -218,6 +226,7 @@ def web(
             network_contact_github=network_contact_github,
             network_contact_youtube=network_contact_youtube,
             network_welcome_text=network_welcome_text,
+            network_announcement=network_announcement,
         )
 
         click.echo("\nStarting web dashboard...")
