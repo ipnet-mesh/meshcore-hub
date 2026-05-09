@@ -245,6 +245,124 @@ class TestCheckApiAccess:
         )
 
 
+class TestFlashBannerVisibility:
+    """Tests for the network announcement flash banner visibility."""
+
+    def test_banner_present_when_announcement_set(
+        self, mock_http_client: MockHttpClient
+    ) -> None:
+        """Banner HTML is present when network_announcement is set."""
+        app = create_app(
+            api_url="http://localhost:8000",
+            api_key="test-api-key",
+            network_announcement="Scheduled maintenance at 22:00",
+            features=ALL_FEATURES_ENABLED,
+        )
+        app.state.http_client = mock_http_client
+        client = TestClient(app, raise_server_exceptions=True)
+
+        response = client.get("/")
+        assert response.status_code == 200
+        html = response.text
+        assert 'id="flash-banner"' in html
+        assert "Scheduled maintenance at 22:00" in html
+
+    def test_banner_absent_when_announcement_none(self, client: TestClient) -> None:
+        """Banner HTML is absent when network_announcement is not set."""
+        response = client.get("/")
+        assert response.status_code == 200
+        html = response.text
+        assert 'id="flash-banner"' not in html
+
+    def test_banner_absent_for_empty_string(
+        self, mock_http_client: MockHttpClient
+    ) -> None:
+        """Banner is not shown when announcement is an empty string."""
+        app = create_app(
+            api_url="http://localhost:8000",
+            api_key="test-api-key",
+            network_announcement="",
+            features=ALL_FEATURES_ENABLED,
+        )
+        app.state.http_client = mock_http_client
+        client = TestClient(app, raise_server_exceptions=True)
+
+        response = client.get("/")
+        assert response.status_code == 200
+        assert 'id="flash-banner"' not in response.text
+
+    def test_banner_absent_for_whitespace_only(
+        self, mock_http_client: MockHttpClient
+    ) -> None:
+        """Banner is not shown when announcement is whitespace-only."""
+        app = create_app(
+            api_url="http://localhost:8000",
+            api_key="test-api-key",
+            network_announcement="   ",
+            features=ALL_FEATURES_ENABLED,
+        )
+        app.state.http_client = mock_http_client
+        client = TestClient(app, raise_server_exceptions=True)
+
+        response = client.get("/")
+        assert response.status_code == 200
+        assert 'id="flash-banner"' not in response.text
+
+
+class TestFlashBannerMarkdown:
+    """Tests for Markdown rendering in the flash banner."""
+
+    def test_bold_rendered(self, mock_http_client: MockHttpClient) -> None:
+        """Markdown bold is rendered to <strong>."""
+        app = create_app(
+            api_url="http://localhost:8000",
+            api_key="test-api-key",
+            network_announcement="**important**",
+            features=ALL_FEATURES_ENABLED,
+        )
+        app.state.http_client = mock_http_client
+        client = TestClient(app, raise_server_exceptions=True)
+
+        response = client.get("/")
+        assert response.status_code == 200
+        assert "<strong>important</strong>" in response.text
+
+    def test_link_rendered(self, mock_http_client: MockHttpClient) -> None:
+        """Markdown link is rendered to <a> tag."""
+        app = create_app(
+            api_url="http://localhost:8000",
+            api_key="test-api-key",
+            network_announcement="[click here](https://example.com)",
+            features=ALL_FEATURES_ENABLED,
+        )
+        app.state.http_client = mock_http_client
+        client = TestClient(app, raise_server_exceptions=True)
+
+        response = client.get("/")
+        assert response.status_code == 200
+        assert '<a href="https://example.com">click here</a>' in response.text
+
+    def test_raw_html_passed_through(self, mock_http_client: MockHttpClient) -> None:
+        """Raw HTML in announcement is passed through by the Markdown library.
+
+        This is safe because the announcement source is an operator-controlled
+        environment variable, not user input — same trust model as custom pages
+        in pages.py.
+        """
+        app = create_app(
+            api_url="http://localhost:8000",
+            api_key="test-api-key",
+            network_announcement="<b>bold</b>",
+            features=ALL_FEATURES_ENABLED,
+        )
+        app.state.http_client = mock_http_client
+        client = TestClient(app, raise_server_exceptions=True)
+
+        response = client.get("/")
+        assert response.status_code == 200
+        assert "<b>bold</b>" in response.text
+
+
 class TestRolelessUserProfileUpdate:
     """Integration test: role-less OIDC user can PUT their own profile through the proxy."""
 

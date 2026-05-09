@@ -349,6 +349,7 @@ def create_app(
     network_contact_github: str | None = None,
     network_contact_youtube: str | None = None,
     network_welcome_text: str | None = None,
+    network_announcement: str | None = None,
     features: dict[str, bool] | None = None,
 ) -> FastAPI:
     """Create and configure the web dashboard application.
@@ -368,6 +369,7 @@ def create_app(
         network_contact_github: GitHub repository URL
         network_contact_youtube: YouTube channel URL
         network_welcome_text: Welcome text for homepage
+        network_announcement: Markdown announcement text for flash banner
         features: Feature flags dict (default: all enabled from settings)
 
     Returns:
@@ -470,6 +472,13 @@ def create_app(
     app.state.network_welcome_text = (
         network_welcome_text or settings.network_welcome_text
     )
+    raw_announcement = network_announcement or settings.network_announcement
+    if raw_announcement:
+        import markdown
+
+        app.state.network_announcement = markdown.markdown(raw_announcement)
+    else:
+        app.state.network_announcement = None
 
     # Store feature flags with automatic dependencies:
     # - Dashboard requires at least one of nodes/advertisements/messages
@@ -1104,6 +1113,7 @@ def create_app(
                 "network_contact_github": request.app.state.network_contact_github,
                 "network_contact_youtube": request.app.state.network_contact_youtube,
                 "network_welcome_text": request.app.state.network_welcome_text,
+                "network_announcement": request.app.state.network_announcement,
                 "oidc_enabled": request.app.state.oidc_enabled,
                 "features": features,
                 "custom_pages": custom_pages,
