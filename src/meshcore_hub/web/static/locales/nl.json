@@ -96,7 +96,9 @@
         "from": "Van",
         "close": "sluiten",
         "unnamed": "Naamloos",
-        "unnamed_node": "Naamloos knooppunt"
+        "unnamed_node": "Naamloos knooppunt",
+        "all_operators": "Alle Operators",
+        "filter_operator_label": "Operator"
     },
     "links": {
         "website": "Website",

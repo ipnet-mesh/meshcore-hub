@@ -97,7 +97,7 @@ export async function render(container, params, router) {
         litRender(html`
 <div class="flex items-center justify-between mb-6">
     <h1 class="text-3xl font-bold">${t('entities.members')}</h1>
-    <span class="badge badge-lg">${t('common.count_entity', { count: profiles.length, entity: t('entities.members').toLowerCase() })}</span>
+    <span class="badge badge-lg">${t('common.count_entity', { count: operators.length + members.length, entity: t('entities.members').toLowerCase() })}</span>
 </div>
 
 ${renderGroup(t('members_page.operators'), operators, html`<span class="text-primary">${iconAntenna('h-6 w-6')}</span>`, router)}

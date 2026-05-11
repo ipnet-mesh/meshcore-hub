@@ -472,7 +472,11 @@ def create_app(
     app.state.network_welcome_text = (
         network_welcome_text or settings.network_welcome_text
     )
-    raw_announcement = network_announcement or settings.network_announcement
+    raw_announcement = (
+        network_announcement
+        if network_announcement is not None
+        else settings.network_announcement
+    )
     if raw_announcement:
         import markdown
 
@@ -724,6 +728,7 @@ def create_app(
                         "id": profile.get("id"),
                         "name": profile.get("name"),
                         "callsign": profile.get("callsign"),
+                        "roles": profile.get("roles", []),
                     }
 
             # Fetch all nodes from API
