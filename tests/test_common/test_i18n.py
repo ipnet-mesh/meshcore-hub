@@ -121,6 +121,11 @@ class TestEnJsonCompleteness:
         assert t("common.no_entity_yet", entity="test") == "No test yet"
         assert t("common.page_not_found") == "Page not found"
 
+    def test_common_operator_filter_keys(self):
+        """Test that operator filter keys exist and resolve correctly."""
+        assert t("common.all_operators") == "All Operators"
+        assert t("common.filter_operator_label") == "Operator"
+
     def test_entity_keys(self):
         """Entity keys are all present."""
         assert t("entities.home") != "entities.home"

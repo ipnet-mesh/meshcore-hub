@@ -124,6 +124,8 @@ export async function render(container, params, router) {
         const adoptedCenter = data.adopted_center || null;
         const debug = data.debug || {};
         const profiles = data.profiles || [];
+        const operatorRole = config.role_names?.operator || 'operator';
+        const operatorProfiles = profiles.filter(p => p.roles && p.roles.includes(operatorRole));
 
         const isMobilePortrait = window.innerWidth < 480;
         const isMobile = window.innerWidth < 768;
@@ -217,12 +219,12 @@ export async function render(container, params, router) {
                     <option value="room">${t('node_types.room')}</option>
                 </select>
             </div>
-            ${config.oidc_enabled && profiles.length > 0 ? html`
+            ${config.oidc_enabled && operatorProfiles.length > 0 ? html`
             <div class="fieldset">
-                <label class="fieldset-label">${t('common.filter_member_label')}</label>
+                <label class="fieldset-label">${t('common.filter_operator_label')}</label>
                 <select id="member-filter" class="select select-bordered select-sm" @change=${applyFilters}>
-                    <option value="">${t('common.all_members')}</option>
-                    ${profiles.sort((a, b) => {
+                    <option value="">${t('common.all_operators')}</option>
+                    ${operatorProfiles.sort((a, b) => {
                         const na = a.name || a.callsign || '';
                         const nb = b.name || b.callsign || '';
                         return na.localeCompare(nb);

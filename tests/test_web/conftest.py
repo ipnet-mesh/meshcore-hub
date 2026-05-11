@@ -322,6 +322,7 @@ def web_app(mock_http_client: MockHttpClient, monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setenv("WEB_DATETIME_LOCALE", "en-US")
     monkeypatch.setenv("COLLECTOR_INCLUDE_TEST_CHANNEL", "true")
     monkeypatch.setenv("OIDC_ENABLED", "false")
+    monkeypatch.setenv("NETWORK_ANNOUNCEMENT", "")
     app = create_app(
         api_url="http://localhost:8000",
         api_key="test-api-key",
@@ -366,6 +367,7 @@ def web_app_with_oidc(
     monkeypatch.setenv("OIDC_SESSION_SECRET", "test-session-secret")
     monkeypatch.setenv("WEB_DATETIME_LOCALE", "en-US")
     monkeypatch.setenv("COLLECTOR_INCLUDE_TEST_CHANNEL", "true")
+    monkeypatch.setenv("NETWORK_ANNOUNCEMENT", "")
 
     app = create_app(
         api_url="http://localhost:8000",

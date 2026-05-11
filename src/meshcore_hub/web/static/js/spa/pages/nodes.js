@@ -61,7 +61,10 @@ ${displayContent}`, container);
             }
             const results = await Promise.all(fetches);
             const data = results[0];
-            const profiles = config.oidc_enabled ? (results[1]?.items || []) : [];
+            const operatorRole = config.role_names?.operator || 'operator';
+            const profiles = config.oidc_enabled
+                ? (results[1]?.items || []).filter(p => p.roles && p.roles.includes(operatorRole))
+                : [];
 
             const nodes = data.items || [];
             const total = data.total || 0;
@@ -150,10 +153,10 @@ ${displayContent}`, container);
                 filterFields.push(() => html`
             <div class="flex flex-col gap-1 max-w-56">
                 <label class="flex items-center py-1">
-                    <span class="opacity-80 text-sm">${t('common.filter_member_label')}</span>
+                    <span class="opacity-80 text-sm">${t('common.filter_operator_label')}</span>
                 </label>
                 <select name="adopted_by" class="select select-bordered select-sm" @change=${autoSubmit}>
-                    <option value="" ?selected=${!adopted_by}>${t('common.all_members')}</option>
+                    <option value="" ?selected=${!adopted_by}>${t('common.all_operators')}</option>
                     ${profiles.sort((a, b) => {
                         const na = a.name || a.callsign || '';
                         const nb = b.name || b.callsign || '';
