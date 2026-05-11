@@ -12,14 +12,6 @@ Python 3.14+ platform for managing and orchestrating MeshCore mesh networks.
 
 ![MeshCore Hub Web Dashboard](docs/images/web.png)
 
-## MeshCore Hub Networks
-
-Local mesh communities that are using MeshCore Hub:
-
-[IPNet (Ipswich, UK)](https://ipnt.uk/) | [CumbriaCQ MeshCore (Cumbria, UK)](https://meshcore.cumbriacq.com/) | [Skynet (Wales, UK)](https://skynet.cyberdyne-systems.wales/)
-
-[MeshCore Iasi (Romania)](https://meshcore-iasi.ro/)
-
 ## Overview
 
 MeshCore Hub provides a complete solution for monitoring, collecting, and interacting with MeshCore mesh networks. Data ingestion is handled by [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture), which observes MeshCore RF traffic and publishes decoded packets to MQTT. It consists of multiple components that work together:
@@ -29,6 +21,15 @@ MeshCore Hub provides a complete solution for monitoring, collecting, and intera
 | **Collector**     | Subscribes to MQTT events and persists them to a database    |
 | **API**           | REST API for querying data                                   |
 | **Web Dashboard** | Single Page Application (SPA) for visualizing network status |
+
+## MeshCore Hub Networks
+
+Local mesh communities that are using MeshCore Hub:
+
+- [IPNet (Ipswich, UK)](https://ipnt.uk/)
+- [CumbriaCQ MeshCore (Cumbria, UK)](https://meshcore.cumbriacq.com/)
+- [Skynet (Wales, UK)](https://skynet.cyberdyne-systems.wales/)
+- [MeshCore Iasi (Romania)](https://meshcore-iasi.ro/)
 
 ## Architecture
 
