@@ -12,10 +12,11 @@ Python 3.14+ platform for managing and orchestrating MeshCore mesh networks.
 
 ![MeshCore Hub Web Dashboard](docs/images/web.png)
 
-> [!IMPORTANT]
-> **Help Translate MeshCore Hub** 🌍
->
-> We need volunteers to translate the web dashboard! Currently only English is available. Check out the [Translation Guide](docs/i18n.md) to contribute a language pack. Partial translations welcome!
+## MeshCore Hub Networks
+
+Local mesh communities that are using MeshCore Hub:
+
+[IPNet (Ipswich, UK)](https://ipnt.uk/) | [CumbriaCQ MeshCore (Cumbria, UK)](https://meshcore.cumbriacq.com/) | [Skynet (Wales, UK)](https://skynet.cyberdyne-systems.wales/) | [MeshCore Iasi (Romania)](https://meshcore-iasi.ro/)
 
 ## Overview
 
@@ -618,6 +619,11 @@ meshcore-hub/
 5. Commit your changes (`git commit -m 'Add amazing feature'`)
 6. Push to the branch (`git push origin feature/amazing-feature`)
 7. Open a Pull Request
+
+> [!IMPORTANT]
+> **Help Translate MeshCore Hub** 🌍
+>
+> We need volunteers to translate the web dashboard! Currently only English is available. Check out the [Translation Guide](docs/i18n.md) to contribute a language pack. Partial translations welcome!
 
 ## License
 
