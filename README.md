@@ -16,7 +16,9 @@ Python 3.14+ platform for managing and orchestrating MeshCore mesh networks.
 
 Local mesh communities that are using MeshCore Hub:
 
-[IPNet (Ipswich, UK)](https://ipnt.uk/) | [CumbriaCQ MeshCore (Cumbria, UK)](https://meshcore.cumbriacq.com/) | [Skynet (Wales, UK)](https://skynet.cyberdyne-systems.wales/) | [MeshCore Iasi (Romania)](https://meshcore-iasi.ro/)
+[IPNet (Ipswich, UK)](https://ipnt.uk/) | [CumbriaCQ MeshCore (Cumbria, UK)](https://meshcore.cumbriacq.com/) | [Skynet (Wales, UK)](https://skynet.cyberdyne-systems.wales/)
+
+[MeshCore Iasi (Romania)](https://meshcore-iasi.ro/)
 
 ## Overview
 
