@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event as sa_event
 from sqlalchemy.orm import sessionmaker
 
 from meshcore_hub.api.app import create_app
@@ -50,6 +50,13 @@ def api_db_engine(test_db_path):
         db_url,
         connect_args={"check_same_thread": False},
     )
+
+    @sa_event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_connection: object, connection_record: object) -> None:
+        cursor = dbapi_connection.cursor()  # type: ignore[attr-defined]
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
     Base.metadata.create_all(engine)
     yield engine
     Base.metadata.drop_all(engine)

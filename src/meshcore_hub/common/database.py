@@ -113,6 +113,18 @@ class DatabaseManager:
         # Create async engine for async operations
         async_url = database_url.replace("sqlite://", "sqlite+aiosqlite://")
         self.async_engine = create_async_engine(async_url, echo=echo)
+
+        # Enable foreign keys for async SQLite engine
+        if database_url.startswith("sqlite"):
+
+            @event.listens_for(self.async_engine.sync_engine, "connect")
+            def set_sqlite_pragma_async(
+                dbapi_connection: object, connection_record: object
+            ) -> None:
+                cursor = dbapi_connection.cursor()  # type: ignore[attr-defined]
+                cursor.execute("PRAGMA foreign_keys=ON")
+                cursor.close()
+
         from sqlalchemy.ext.asyncio import async_sessionmaker
 
         self.async_session_factory = async_sessionmaker(

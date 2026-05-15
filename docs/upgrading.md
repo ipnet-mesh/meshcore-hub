@@ -2,6 +2,33 @@
 
 This guide covers upgrading from a previous MeshCore Hub release to the current version. Check the relevant version section below before upgrading.
 
+## v0.11.0
+
+### Async SQLite Foreign Key Fix
+
+The async SQLAlchemy engine now enables `PRAGMA foreign_keys=ON` for SQLite databases, matching the behavior of the sync engine. Previously, cascade deletes (`ondelete="CASCADE"`) were silently ignored when the collector deleted inactive nodes via the async engine, leaving orphaned rows in `user_profile_nodes`, `event_observers`, and `node_tags`.
+
+**This is an automatic fix** — no configuration changes are required. The orphaned rows that may have accumulated in existing databases can be cleaned up with:
+
+```bash
+# Dry run to preview
+meshcore-hub collector cleanup --node-cleanup --dry-run
+
+# Live cleanup
+meshcore-hub collector cleanup --node-cleanup
+```
+
+The collector's scheduled cleanup cycle now also runs orphan cleanup automatically after node deletion when `NODE_CLEANUP_ENABLED=true`.
+
+### CLI Changes
+
+The `meshcore-hub collector cleanup` command now accepts:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--node-cleanup` | `false` | Also delete inactive nodes and orphaned relations |
+| `--node-cleanup-days` | `30` | Inactivity threshold for node deletion |
+
 ## v0.10.0
 
 This release introduces OIDC authentication, user profiles with node adoption, removes the Members system, replaces `role=infra` tags with adoption-based infrastructure detection, and replaces the admin tag editor with an inline editor on the node detail page.
