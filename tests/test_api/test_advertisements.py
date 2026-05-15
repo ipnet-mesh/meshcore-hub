@@ -293,6 +293,52 @@ class TestListAdvertisementsFilters:
         data = response.json()
         assert len(data["items"]) == 1
 
+    def test_filter_by_public_key(self, client_no_auth, api_db_session):
+        """Test filtering advertisements by source public_key."""
+        now = datetime.now(timezone.utc)
+        ad_a = Advertisement(
+            public_key="pka" * 11,
+            name="AdAlpha",
+            adv_type="CLIENT",
+            received_at=now,
+        )
+        ad_b = Advertisement(
+            public_key="pkb" * 11,
+            name="AdBeta",
+            adv_type="CLIENT",
+            received_at=now,
+        )
+        api_db_session.add_all([ad_a, ad_b])
+        api_db_session.commit()
+
+        response = client_no_auth.get(
+            f"/api/v1/advertisements?public_key={ad_a.public_key}"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 1
+        assert data["items"][0]["public_key"] == ad_a.public_key
+
+    def test_filter_by_public_key_no_match(self, client_no_auth, api_db_session):
+        """Test filtering by public_key with no matching ads returns empty."""
+        now = datetime.now(timezone.utc)
+        ad = Advertisement(
+            public_key="pkx" * 11,
+            name="AdX",
+            adv_type="CLIENT",
+            received_at=now,
+        )
+        api_db_session.add(ad)
+        api_db_session.commit()
+
+        response = client_no_auth.get(
+            "/api/v1/advertisements?public_key=nonexistent0000000000000000000"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 0
+        assert data["items"] == []
+
 
 class TestAdvertisementSort:
     """Tests for advertisement list sort parameters."""
