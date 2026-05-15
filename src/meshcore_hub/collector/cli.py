@@ -523,6 +523,18 @@ def import_tags_cmd(
     help="Number of days to retain data (default: 30)",
 )
 @click.option(
+    "--node-cleanup",
+    is_flag=True,
+    default=False,
+    help="Also delete inactive nodes and orphaned relations",
+)
+@click.option(
+    "--node-cleanup-days",
+    type=int,
+    default=30,
+    help="Delete nodes not seen for this many days (default: 30)",
+)
+@click.option(
     "--dry-run",
     is_flag=True,
     default=False,
@@ -532,6 +544,8 @@ def import_tags_cmd(
 def cleanup_cmd(
     ctx: click.Context,
     retention_days: int,
+    node_cleanup: bool,
+    node_cleanup_days: int,
     dry_run: bool,
 ) -> None:
     """Manually run data cleanup to delete old events.
@@ -543,7 +557,9 @@ def cleanup_cmd(
     - Trace paths
     - Event logs
 
-    Node records are never deleted - only event data.
+    Use --node-cleanup to also delete inactive nodes (not seen for
+    --node-cleanup-days) and any orphaned rows in user_profile_nodes,
+    event_observers, and node_tags that reference deleted nodes.
 
     Use --dry-run to preview what would be deleted without
     actually deleting anything.
@@ -568,7 +584,11 @@ def cleanup_cmd(
     click.echo("")
 
     from meshcore_hub.common.database import DatabaseManager
-    from meshcore_hub.collector.cleanup import cleanup_old_data
+    from meshcore_hub.collector.cleanup import (
+        cleanup_old_data,
+        cleanup_inactive_nodes,
+        cleanup_orphaned_node_relations,
+    )
 
     # Initialize database
     db = DatabaseManager(ctx.obj["database_url"])
@@ -590,6 +610,29 @@ def cleanup_cmd(
             click.echo(f"  Trace paths: {stats.trace_paths_deleted}")
             click.echo(f"  Event logs: {stats.event_logs_deleted}")
             click.echo(f"  Total: {stats.total_deleted}")
+
+            if node_cleanup:
+                click.echo("")
+                nodes_deleted = await cleanup_inactive_nodes(
+                    session,
+                    node_cleanup_days,
+                    dry_run=dry_run,
+                )
+                mode = "would be" if dry_run else "were"
+                click.echo(
+                    f"  Inactive nodes {mode} deleted: {nodes_deleted}"
+                    f" (older than {node_cleanup_days} days)"
+                )
+
+                orphan_counts = await cleanup_orphaned_node_relations(
+                    session,
+                    dry_run=dry_run,
+                )
+                if any(orphan_counts.values()):
+                    click.echo("  Orphaned relations:")
+                    for table_name, count in orphan_counts.items():
+                        if count > 0:
+                            click.echo(f"    {table_name}: {count}")
 
             if dry_run:
                 click.echo("")
@@ -718,6 +761,8 @@ def truncate_cmd(
             "WARNING: Clearing nodes will also clear all related data due to foreign keys:"
         )
         click.echo("  - node_tags")
+        click.echo("  - user_profile_nodes")
+        click.echo("  - event_observers")
         click.echo("  - advertisements")
         click.echo("  - messages")
         click.echo("  - telemetry")

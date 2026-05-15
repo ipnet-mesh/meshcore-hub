@@ -294,6 +294,7 @@ class Subscriber(LetsMeshNormalizer):
                             from meshcore_hub.collector.cleanup import (
                                 cleanup_old_data,
                                 cleanup_inactive_nodes,
+                                cleanup_orphaned_node_relations,
                             )
 
                             # Get async session and run cleanup
@@ -321,6 +322,18 @@ class Subscriber(LetsMeshNormalizer):
                                             "Node cleanup completed: %d nodes deleted",
                                             nodes_deleted,
                                         )
+
+                                        orphan_counts = (
+                                            await cleanup_orphaned_node_relations(
+                                                session,
+                                                dry_run=False,
+                                            )
+                                        )
+                                        if any(orphan_counts.values()):
+                                            logger.info(
+                                                "Orphan cleanup completed: %s",
+                                                orphan_counts,
+                                            )
 
                             loop.run_until_complete(run_cleanup())
                             self._last_cleanup = now

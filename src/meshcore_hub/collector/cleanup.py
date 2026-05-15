@@ -13,11 +13,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from meshcore_hub.common.models import (
     Advertisement,
     EventLog,
+    EventObserver,
     Message,
     Node,
+    NodeTag,
     Telemetry,
     TracePath,
 )
+from meshcore_hub.common.models.user_profile_node import UserProfileNode
 
 logger = logging.getLogger(__name__)
 
@@ -223,3 +226,53 @@ async def cleanup_inactive_nodes(
             cutoff_date.isoformat(),
         )
         return count
+
+
+async def cleanup_orphaned_node_relations(
+    db: AsyncSession,
+    dry_run: bool = False,
+) -> dict[str, int]:
+    """Delete orphaned rows in node-dependent tables.
+
+    Finds and deletes rows in user_profile_nodes, event_observers,
+    and node_tags that reference node_id values not present in the
+    nodes table.
+
+    Args:
+        db: Database session
+        dry_run: If True, only count records without deleting
+
+    Returns:
+        Dict mapping table names to deletion counts
+    """
+    counts: dict[str, int] = {}
+    tables = [
+        ("user_profile_nodes", UserProfileNode, UserProfileNode.node_id),
+        ("event_observers", EventObserver, EventObserver.observer_node_id),
+        ("node_tags", NodeTag, NodeTag.node_id),
+    ]
+
+    for table_name, model, fk_column in tables:
+        subq = select(Node.id).where(Node.id == fk_column)
+        if dry_run:
+            count_stmt = select(func.count()).select_from(model).where(~subq.exists())
+            result = await db.execute(count_stmt)
+            count = result.scalar() or 0
+        else:
+            del_stmt = delete(model).where(~subq.exists())
+            result = await db.execute(del_stmt)
+            count = result.rowcount or 0  # type: ignore[attr-defined]
+
+        counts[table_name] = count
+        if count > 0:
+            logger.info(
+                "%s: %s %d orphaned rows",
+                table_name,
+                "would delete" if dry_run else "deleted",
+                count,
+            )
+
+    if not dry_run:
+        await db.commit()
+
+    return counts

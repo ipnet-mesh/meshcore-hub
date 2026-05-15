@@ -5,6 +5,7 @@ from unittest.mock import patch
 import pytest
 
 from meshcore_hub.common.models import UserProfile
+from meshcore_hub.common.models.user_profile_node import UserProfileNode
 
 TEST_USER_ID = "oidc-user-123"
 OTHER_USER_ID = "oidc-user-456"
@@ -80,6 +81,36 @@ class TestListProfiles:
         assert profile["node_count"] == 1
         assert len(profile["adopted_nodes"]) == 1
         assert profile["adopted_nodes"][0]["name"] == sample_node.name
+
+    def test_list_profiles_resilient_to_orphaned_adoption(
+        self, client_no_auth, api_db_session, sample_user_profile, sample_node
+    ):
+        """Test that orphaned UserProfileNode rows don't cause 500 errors."""
+        from sqlalchemy import text
+
+        adoption = UserProfileNode(
+            user_profile_id=sample_user_profile.id,
+            node_id=sample_node.id,
+        )
+        api_db_session.add(adoption)
+        api_db_session.commit()
+
+        api_db_session.execute(text("PRAGMA foreign_keys=OFF"))
+        api_db_session.execute(
+            text("DELETE FROM nodes WHERE id = :id"),
+            {"id": sample_node.id},
+        )
+        api_db_session.commit()
+        api_db_session.execute(text("PRAGMA foreign_keys=ON"))
+
+        response = client_no_auth.get(
+            "/api/v1/user/profiles",
+            headers=USER_HEADERS,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        profile = next(p for p in data["items"] if p["id"] == sample_user_profile.id)
+        assert profile["adopted_nodes"] == []
 
 
 class TestGetMyProfile:

@@ -32,6 +32,13 @@ def _build_adopted_nodes(profile: UserProfile) -> list[AdoptedNodeRead]:
     """Extract adopted node list from a profile's eager-loaded associations."""
     adopted_nodes = []
     for assoc in profile.node_associations:
+        if assoc.node is None:
+            logger.warning(
+                "Orphaned UserProfileNode detected: profile=%s, node_id=%s",
+                profile.id,
+                assoc.node_id,
+            )
+            continue
         adopted_nodes.append(
             AdoptedNodeRead(
                 public_key=assoc.node.public_key,
@@ -89,16 +96,6 @@ async def list_profiles(
 
     items = []
     for profile in profiles:
-        adopted_nodes = []
-        for assoc in profile.node_associations:
-            adopted_nodes.append(
-                AdoptedNodeRead(
-                    public_key=assoc.node.public_key,
-                    name=assoc.node.name,
-                    adv_type=assoc.node.adv_type,
-                    adopted_at=assoc.adopted_at,
-                )
-            )
         items.append(
             UserProfileListItem(
                 id=profile.id,
@@ -108,7 +105,7 @@ async def list_profiles(
                 description=profile.description,
                 url=profile.url,
                 node_count=len(profile.node_associations),
-                adopted_nodes=adopted_nodes,
+                adopted_nodes=_build_adopted_nodes(profile),
             )
         )
 

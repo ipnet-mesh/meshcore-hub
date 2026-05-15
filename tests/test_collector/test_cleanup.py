@@ -2,17 +2,27 @@
 
 import pytest
 from datetime import datetime, timedelta, timezone
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from meshcore_hub.collector.cleanup import cleanup_old_data, CleanupStats
+from meshcore_hub.collector.cleanup import (
+    cleanup_inactive_nodes,
+    cleanup_old_data,
+    cleanup_orphaned_node_relations,
+    CleanupStats,
+)
 from meshcore_hub.common.models import (
     Advertisement,
     EventLog,
+    EventObserver,
     Message,
     Node,
+    NodeTag,
     Telemetry,
     TracePath,
 )
+from meshcore_hub.common.models.user_profile_node import UserProfileNode
+from meshcore_hub.common.models.user_profile import UserProfile
 
 
 @pytest.mark.asyncio
@@ -248,3 +258,162 @@ async def test_cleanup_stats_repr() -> None:
     assert "total=21" in repr_str
     assert "advertisements=10" in repr_str
     assert "messages=5" in repr_str
+
+
+@pytest.mark.asyncio
+async def test_cleanup_inactive_nodes_cascades(async_db_session: AsyncSession) -> None:
+    """Test that deleting inactive nodes cascades to dependent tables."""
+    old_date = datetime.now(timezone.utc) - timedelta(days=60)
+
+    node = Node(
+        public_key="a" * 64,
+        name="Stale Node",
+        last_seen=old_date,
+    )
+    async_db_session.add(node)
+    await async_db_session.flush()
+
+    profile = UserProfile(user_id="cascade-test-user", name="Test")
+    async_db_session.add(profile)
+    await async_db_session.flush()
+
+    adoption = UserProfileNode(
+        user_profile_id=profile.id,
+        node_id=node.id,
+    )
+    async_db_session.add(adoption)
+
+    tag = NodeTag(node_id=node.id, key="role", value="gateway")
+    async_db_session.add(tag)
+
+    observer = EventObserver(
+        event_type="message",
+        event_hash="abc123def456abc123def456abc12345",
+        observer_node_id=node.id,
+    )
+    async_db_session.add(observer)
+
+    await async_db_session.commit()
+
+    deleted = await cleanup_inactive_nodes(
+        async_db_session, inactivity_days=30, dry_run=False
+    )
+    assert deleted == 1
+
+    assert await async_db_session.scalar(select(func.count()).select_from(Node)) == 0
+    assert (
+        await async_db_session.scalar(select(func.count()).select_from(UserProfileNode))
+        == 0
+    )
+    assert await async_db_session.scalar(select(func.count()).select_from(NodeTag)) == 0
+    assert (
+        await async_db_session.scalar(select(func.count()).select_from(EventObserver))
+        == 0
+    )
+
+    assert (
+        await async_db_session.scalar(select(func.count()).select_from(UserProfile))
+        == 1
+    )
+
+
+@pytest.mark.asyncio
+async def test_cleanup_orphaned_node_relations(
+    async_db_session: AsyncSession,
+) -> None:
+    """Test orphan cleanup deletes rows referencing non-existent nodes."""
+    from sqlalchemy import text
+
+    node = Node(
+        public_key="o" * 64,
+        name="Temporary Node",
+    )
+    async_db_session.add(node)
+    await async_db_session.flush()
+
+    profile = UserProfile(user_id="orphan-test-user", name="Test")
+    async_db_session.add(profile)
+    await async_db_session.flush()
+
+    adoption = UserProfileNode(
+        user_profile_id=profile.id,
+        node_id=node.id,
+    )
+    async_db_session.add(adoption)
+
+    tag = NodeTag(node_id=node.id, key="role", value="gateway")
+    async_db_session.add(tag)
+
+    observer = EventObserver(
+        event_type="message",
+        event_hash="abc123def456abc123def456abc12399",
+        observer_node_id=node.id,
+    )
+    async_db_session.add(observer)
+
+    await async_db_session.commit()
+
+    await async_db_session.execute(text("PRAGMA foreign_keys=OFF"))
+    await async_db_session.execute(
+        text("DELETE FROM nodes WHERE id = :id"), {"id": node.id}
+    )
+    await async_db_session.commit()
+    await async_db_session.execute(text("PRAGMA foreign_keys=ON"))
+
+    counts = await cleanup_orphaned_node_relations(async_db_session, dry_run=False)
+
+    assert counts["user_profile_nodes"] == 1
+    assert counts["event_observers"] == 1
+    assert counts["node_tags"] == 1
+
+    assert (
+        await async_db_session.scalar(select(func.count()).select_from(UserProfileNode))
+        == 0
+    )
+    assert await async_db_session.scalar(select(func.count()).select_from(NodeTag)) == 0
+    assert (
+        await async_db_session.scalar(select(func.count()).select_from(EventObserver))
+        == 0
+    )
+
+
+@pytest.mark.asyncio
+async def test_cleanup_orphaned_node_relations_dry_run(
+    async_db_session: AsyncSession,
+) -> None:
+    """Test orphan dry-run counts but does not delete."""
+    from sqlalchemy import text
+
+    node = Node(
+        public_key="p" * 64,
+        name="Dry Run Node",
+    )
+    async_db_session.add(node)
+    await async_db_session.flush()
+
+    profile = UserProfile(user_id="orphan-dryrun-user", name="Test")
+    async_db_session.add(profile)
+    await async_db_session.flush()
+
+    adoption = UserProfileNode(
+        user_profile_id=profile.id,
+        node_id=node.id,
+    )
+    async_db_session.add(adoption)
+    await async_db_session.commit()
+
+    await async_db_session.execute(text("PRAGMA foreign_keys=OFF"))
+    await async_db_session.execute(
+        text("DELETE FROM nodes WHERE id = :id"), {"id": node.id}
+    )
+    await async_db_session.commit()
+    await async_db_session.execute(text("PRAGMA foreign_keys=ON"))
+
+    counts = await cleanup_orphaned_node_relations(async_db_session, dry_run=True)
+
+    assert counts["user_profile_nodes"] == 1
+
+    assert (
+        await async_db_session.scalar(select(func.count()).select_from(UserProfileNode))
+        == 1
+    )

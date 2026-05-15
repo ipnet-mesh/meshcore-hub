@@ -1,6 +1,7 @@
 """Fixtures for collector component tests."""
 
 import pytest
+from sqlalchemy import event as sa_event
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
@@ -33,6 +34,14 @@ async def async_db_session():
     """
     # Create async engine with in-memory database
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+
+    @sa_event.listens_for(engine.sync_engine, "connect")
+    def set_sqlite_pragma_async(
+        dbapi_connection: object, connection_record: object
+    ) -> None:
+        cursor = dbapi_connection.cursor()  # type: ignore[attr-defined]
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
     # Create tables
     async with engine.begin() as conn:
