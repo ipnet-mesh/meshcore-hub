@@ -9,6 +9,19 @@ import {
 } from '../components.js';
 import { createAutoRefresh } from '../auto-refresh.js';
 
+function routeTypeBadge(routeType) {
+    if (!routeType) {
+        return nothing;
+    }
+    if (routeType === 'flood' || routeType === 'transport_flood') {
+        return html`<span class="badge badge-sm badge-info">${routeType === 'flood' ? 'Flood' : 'Relay'}</span>`;
+    }
+    if (routeType === 'direct' || routeType === 'transport_direct') {
+        return html`<span class="badge badge-sm badge-success">${routeType === 'direct' ? 'Zero-hop' : 'Direct relay'}</span>`;
+    }
+    return nothing;
+}
+
 export async function render(container, params, router) {
     const query = params.query || {};
     const search = query.search || '';
@@ -16,6 +29,7 @@ export async function render(container, params, router) {
         ? (Array.isArray(query.observed_by) ? query.observed_by : [query.observed_by])
         : [];
     const adopted_by = query.adopted_by || '';
+    const route_type = query.route_type || 'flood,transport_flood';
     const page = parseInt(query.page, 10) || 1;
     const limit = parseInt(query.limit, 10) || 20;
     const offset = (page - 1) * limit;
@@ -56,7 +70,7 @@ ${displayContent}`, container);
 
     async function fetchAndRenderData() {
         try {
-            const apiParams = { limit, offset, search, sort, order };
+            const apiParams = { limit, offset, search, sort, order, route_type };
             if (observed_by.length > 0) apiParams.observed_by = observed_by;
             if (adopted_by) apiParams.adopted_by = adopted_by;
             const fetches = [
@@ -125,7 +139,10 @@ ${displayContent}`, container);
                     })}
                     <div class="text-right flex-shrink-0">
                         <div class="text-xs opacity-60">${formatDateTimeShort(ad.received_at)}</div>
-                        ${receiversBlock}
+                        <div class="flex items-center justify-end gap-1">
+                            ${receiversBlock}
+                            ${routeTypeBadge(ad.route_type)}
+                        </div>
                     </div>
                 </div>
                 ${ad.observers && ad.observers.length > 0 ? html`
@@ -152,7 +169,7 @@ ${displayContent}`, container);
                 });
 
             const tableRows = advertisements.length === 0
-                ? html`<tr><td colspan="4" class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.advertisements').toLowerCase() })}</td></tr>`
+                ? html`<tr><td colspan="5" class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.advertisements').toLowerCase() })}</td></tr>`
                 : advertisements.map(ad => {
                     const adName = ad.node_tag_name || ad.node_name || ad.name;
                     const adDescription = ad.node_tag_description;
@@ -181,13 +198,14 @@ ${displayContent}`, container);
                               @click=${(e) => copyToClipboard(e, ad.public_key)}
                               title="Click to copy">${ad.public_key}</code>
                     </td>
+                    <td>${routeTypeBadge(ad.route_type)}</td>
                     <td class="text-sm whitespace-nowrap">${formatDateTime(ad.received_at)}</td>
                     <td>${receiversBlock}</td>
                 </tr>${observerDetailRow(ad.observers || [], null, { hidePath: true })}`;
                 });
 
             const paginationBlock = pagination(page, totalPages, '/advertisements', {
-                search, observed_by, adopted_by, limit, sort, order,
+                search, observed_by, adopted_by, route_type, limit, sort, order,
             });
 
             const filterFields = [
@@ -197,6 +215,17 @@ ${displayContent}`, container);
                     <span class="opacity-80 text-sm">${t('common.search')}</span>
                 </label>
                 <input type="text" name="search" .value=${search} placeholder="${t('common.search_placeholder')}" class="input input-bordered input-sm w-80" @keydown=${submitOnEnter} />
+            </div>`,
+                () => html`
+            <div class="flex flex-col gap-1 max-w-48">
+                <label class="flex items-center py-1">
+                    <span class="opacity-80 text-sm">${t('advertisements.filter_route_type_label')}</span>
+                </label>
+                <select name="route_type" class="select select-bordered select-sm" @change=${autoSubmit}>
+                    <option value="flood,transport_flood" ?selected=${route_type === 'flood,transport_flood'}>${t('advertisements.route_type_flood')}</option>
+                    <option value="all" ?selected=${route_type === 'all'}>${t('advertisements.route_type_all')}</option>
+                    <option value="direct" ?selected=${route_type === 'direct'}>${t('advertisements.route_type_direct')}</option>
+                </select>
             </div>`,
             ];
             if (config.oidc_enabled && profiles.length > 0) {
@@ -222,7 +251,7 @@ ${displayContent}`, container);
                 filterFields.push(() => nodesFilter);
             }
 
-            const hasActiveFilters = search !== '' || observed_by.length > 0 || (config.oidc_enabled && adopted_by !== '');
+            const hasActiveFilters = search !== '' || observed_by.length > 0 || (config.oidc_enabled && adopted_by !== '') || route_type !== 'flood,transport_flood';
             const existingDetails = container.querySelector('details.collapse');
             const isFilterOpen = existingDetails ? existingDetails.open : hasActiveFilters;
 
@@ -234,7 +263,7 @@ ${displayContent}`, container);
                 defaultOpen: isFilterOpen,
             });
 
-            const headerParams = { search, observed_by, adopted_by, limit };
+            const headerParams = { search, observed_by, adopted_by, route_type, limit };
             const sortable = (label, sortKey) => sortableTableHeader(label, {
                 sortKey, currentSort: sort, currentOrder: order,
                 navigate, basePath: '/advertisements', params: headerParams,
@@ -266,6 +295,7 @@ ${mobileSortSelect({
             <tr>
                 ${sortable(t('entities.node'), 'node_name')}
                 ${sortable(t('common.public_key'), 'public_key')}
+                <th>${t('advertisements.col_route_type')}</th>
                 ${sortable(t('common.time'), 'time')}
                 <th>${t('common.observers')}</th>
             </tr>

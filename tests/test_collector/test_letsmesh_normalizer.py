@@ -131,6 +131,116 @@ class TestAdvertisementSnrAndPath:
         assert "SNR" not in result
 
 
+class TestAdvertisementRouteTypeAndTimestamp:
+    """Tests for route_type and advert_timestamp extraction in advertisement payloads."""
+
+    def _make_normalizer(self) -> LetsMeshNormalizer:
+        norm = LetsMeshNormalizer()
+        norm._letsmesh_decoder = MagicMock()
+        norm._include_test_channel = False
+        return norm
+
+    def _make_decoded_type4(
+        self, route_type: int | None = None, timestamp: int | None = None
+    ) -> dict:
+        decoded_inner: dict = {
+            "publicKey": "b" * 64,
+        }
+        if timestamp is not None:
+            decoded_inner["timestamp"] = timestamp
+        packet: dict = {
+            "payloadType": 4,
+            "payload": {
+                "decoded": decoded_inner,
+            },
+        }
+        if route_type is not None:
+            packet["routeType"] = route_type
+        return packet
+
+    def test_route_type_flood(self) -> None:
+        norm = self._make_normalizer()
+        result = norm._build_letsmesh_advertisement_payload(
+            {},
+            decoded_packet=self._make_decoded_type4(route_type=1),
+        )
+        assert result is not None
+        assert result["route_type"] == "flood"
+
+    def test_route_type_transport_flood(self) -> None:
+        norm = self._make_normalizer()
+        result = norm._build_letsmesh_advertisement_payload(
+            {},
+            decoded_packet=self._make_decoded_type4(route_type=0),
+        )
+        assert result is not None
+        assert result["route_type"] == "transport_flood"
+
+    def test_route_type_direct(self) -> None:
+        norm = self._make_normalizer()
+        result = norm._build_letsmesh_advertisement_payload(
+            {},
+            decoded_packet=self._make_decoded_type4(route_type=2),
+        )
+        assert result is not None
+        assert result["route_type"] == "direct"
+
+    def test_route_type_transport_direct(self) -> None:
+        norm = self._make_normalizer()
+        result = norm._build_letsmesh_advertisement_payload(
+            {},
+            decoded_packet=self._make_decoded_type4(route_type=3),
+        )
+        assert result is not None
+        assert result["route_type"] == "transport_direct"
+
+    def test_route_type_unknown_int_omitted(self) -> None:
+        norm = self._make_normalizer()
+        result = norm._build_letsmesh_advertisement_payload(
+            {},
+            decoded_packet=self._make_decoded_type4(route_type=99),
+        )
+        assert result is not None
+        assert "route_type" not in result
+
+    def test_route_type_missing_omitted(self) -> None:
+        norm = self._make_normalizer()
+        result = norm._build_letsmesh_advertisement_payload(
+            {},
+            decoded_packet=self._make_decoded_type4(),
+        )
+        assert result is not None
+        assert "route_type" not in result
+
+    def test_advert_timestamp_extracted(self) -> None:
+        norm = self._make_normalizer()
+        result = norm._build_letsmesh_advertisement_payload(
+            {},
+            decoded_packet=self._make_decoded_type4(timestamp=1747300000),
+        )
+        assert result is not None
+        assert result["advert_timestamp"] == 1747300000
+
+    def test_advert_timestamp_missing_omitted(self) -> None:
+        norm = self._make_normalizer()
+        result = norm._build_letsmesh_advertisement_payload(
+            {},
+            decoded_packet=self._make_decoded_type4(),
+        )
+        assert result is not None
+        assert "advert_timestamp" not in result
+
+    def test_both_route_type_and_timestamp(self) -> None:
+        norm = self._make_normalizer()
+        result = norm._build_letsmesh_advertisement_payload(
+            {},
+            decoded_packet=self._make_decoded_type4(route_type=1, timestamp=1747300000),
+        )
+        assert result is not None
+        assert result["route_type"] == "flood"
+        assert result["advert_timestamp"] == 1747300000
+
+
 class TestMessageSnrCasing:
     """Tests for message payload SNR casing (lowercase output)."""
 

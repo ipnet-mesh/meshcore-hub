@@ -542,6 +542,13 @@ class LetsMeshNormalizer:
 
         return None
 
+    _ROUTE_TYPE_MAP: dict[int, str] = {
+        0: "transport_flood",
+        1: "flood",
+        2: "direct",
+        3: "transport_direct",
+    }
+
     def _build_letsmesh_advertisement_payload(
         self,
         payload: dict[str, Any],
@@ -575,6 +582,14 @@ class LetsMeshNormalizer:
         normalized_payload: dict[str, Any] = {
             "public_key": public_key,
         }
+
+        route_type_raw = self._parse_int(decoded_packet.get("routeType"))
+        if route_type_raw is not None and route_type_raw in self._ROUTE_TYPE_MAP:
+            normalized_payload["route_type"] = self._ROUTE_TYPE_MAP[route_type_raw]
+
+        advert_timestamp_raw = self._parse_int(decoded_payload.get("timestamp"))
+        if advert_timestamp_raw is not None:
+            normalized_payload["advert_timestamp"] = advert_timestamp_raw
 
         snr = self._parse_float(payload.get("SNR"))
         if snr is None:

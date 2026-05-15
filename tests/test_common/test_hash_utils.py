@@ -264,3 +264,122 @@ class TestComputeTelemetryHash:
         )
 
         assert hash1 == hash2
+
+    def test_default_bucket_is_300s(self) -> None:
+        """Default bucket_seconds should be 300 (5 minutes)."""
+        time1 = datetime(2024, 1, 15, 10, 31, 0, tzinfo=timezone.utc)
+        time2 = datetime(2024, 1, 15, 10, 33, 0, tzinfo=timezone.utc)
+
+        hash1 = compute_telemetry_hash(
+            node_public_key="a" * 64,
+            parsed_data={"temp": 22.5},
+            received_at=time1,
+        )
+        hash2 = compute_telemetry_hash(
+            node_public_key="a" * 64,
+            parsed_data={"temp": 22.5},
+            received_at=time2,
+        )
+
+        assert hash1 == hash2
+
+
+class TestComputeAdvertisementHashWithAdvertTimestamp:
+    """Tests for compute_advertisement_hash with advert_timestamp parameter."""
+
+    def test_advert_timestamp_used_for_bucketing(self) -> None:
+        """When advert_timestamp is provided, it is used for time bucketing."""
+        received_at = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+        advert_ts = datetime(2024, 1, 15, 10, 28, 0, tzinfo=timezone.utc)
+
+        hash_with_ts = compute_advertisement_hash(
+            public_key="a" * 64,
+            name="Node1",
+            received_at=received_at,
+            advert_timestamp=advert_ts,
+        )
+        hash_ts_only = compute_advertisement_hash(
+            public_key="a" * 64,
+            name="Node1",
+            received_at=received_at,
+            bucket_seconds=300,
+            advert_timestamp=advert_ts,
+        )
+
+        assert hash_with_ts == hash_ts_only
+
+    def test_advert_timestamp_overrides_received_at(self) -> None:
+        """advert_timestamp produces different bucket than received_at when far apart."""
+        received_at = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+        advert_ts = datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
+
+        hash_with_advert_ts = compute_advertisement_hash(
+            public_key="a" * 64,
+            name="Node1",
+            received_at=received_at,
+            advert_timestamp=advert_ts,
+        )
+        hash_with_received_at = compute_advertisement_hash(
+            public_key="a" * 64,
+            name="Node1",
+            received_at=received_at,
+        )
+
+        assert hash_with_advert_ts != hash_with_received_at
+
+    def test_same_advert_timestamp_same_hash(self) -> None:
+        """Same advert_timestamp but different received_at produces same hash."""
+        ts = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+        recv1 = datetime(2024, 1, 15, 10, 31, 0, tzinfo=timezone.utc)
+        recv2 = datetime(2024, 1, 15, 10, 32, 0, tzinfo=timezone.utc)
+
+        hash1 = compute_advertisement_hash(
+            public_key="a" * 64,
+            name="Node1",
+            received_at=recv1,
+            advert_timestamp=ts,
+        )
+        hash2 = compute_advertisement_hash(
+            public_key="a" * 64,
+            name="Node1",
+            received_at=recv2,
+            advert_timestamp=ts,
+        )
+
+        assert hash1 == hash2
+
+    def test_none_advert_timestamp_falls_back_to_received_at(self) -> None:
+        """When advert_timestamp is None, received_at is used for bucketing."""
+        received_at = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+
+        hash_explicit_none = compute_advertisement_hash(
+            public_key="a" * 64,
+            name="Node1",
+            received_at=received_at,
+            advert_timestamp=None,
+        )
+        hash_no_param = compute_advertisement_hash(
+            public_key="a" * 64,
+            name="Node1",
+            received_at=received_at,
+        )
+
+        assert hash_explicit_none == hash_no_param
+
+    def test_default_bucket_is_300s(self) -> None:
+        """Default bucket_seconds should be 300 (5 minutes)."""
+        time1 = datetime(2024, 1, 15, 10, 31, 0, tzinfo=timezone.utc)
+        time2 = datetime(2024, 1, 15, 10, 33, 0, tzinfo=timezone.utc)
+
+        hash1 = compute_advertisement_hash(
+            public_key="a" * 64,
+            name="Node1",
+            received_at=time1,
+        )
+        hash2 = compute_advertisement_hash(
+            public_key="a" * 64,
+            name="Node1",
+            received_at=time2,
+        )
+
+        assert hash1 == hash2

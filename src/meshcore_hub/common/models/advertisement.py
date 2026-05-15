@@ -63,6 +63,14 @@ class Advertisement(Base, UUIDMixin, TimestampMixin):
         nullable=True,
         unique=True,
     )
+    route_type: Mapped[Optional[str]] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+    advert_timestamp: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
     __table_args__ = (Index("ix_advertisements_received_at", "received_at"),)
 

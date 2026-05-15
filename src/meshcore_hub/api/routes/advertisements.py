@@ -19,6 +19,8 @@ from meshcore_hub.common.schemas.messages import (
 router = APIRouter()
 
 VALID_AD_SORT_COLUMNS = {"time", "node_name", "public_key"}
+DEFAULT_FLOOD_ROUTE_TYPES = {"flood", "transport_flood"}
+DISABLE_FILTER_VALUES = {"all", "none", ""}
 
 
 def _get_tag_name(node: Optional[Node]) -> Optional[str]:
@@ -56,6 +58,10 @@ async def list_advertisements(
     ),
     adopted_by: Optional[str] = Query(
         None, description="Filter by adopting user profile UUID"
+    ),
+    route_type: Optional[str] = Query(
+        "flood,transport_flood",
+        description="Comma-separated route types (flood, transport_flood, direct, transport_direct). Use 'all' to show all.",
     ),
     since: Optional[datetime] = Query(None, description="Start timestamp"),
     until: Optional[datetime] = Query(None, description="End timestamp"),
@@ -114,6 +120,18 @@ async def list_advertisements(
                 )
             )
         )
+
+    if route_type and route_type.strip().lower() not in DISABLE_FILTER_VALUES:
+        requested_types = {
+            t.strip().lower() for t in route_type.split(",") if t.strip()
+        }
+        if requested_types:
+            query = query.where(
+                or_(
+                    Advertisement.route_type.in_(requested_types),
+                    Advertisement.route_type.is_(None),
+                )
+            )
 
     if since:
         query = query.where(Advertisement.received_at >= since)
@@ -203,6 +221,8 @@ async def list_advertisements(
             "node_tag_description": _get_tag_description(source_node),
             "adv_type": adv.adv_type or row.source_adv_type,
             "flags": adv.flags,
+            "route_type": adv.route_type,
+            "advert_timestamp": adv.advert_timestamp,
             "received_at": adv.received_at,
             "created_at": adv.created_at,
             "observers": (
@@ -286,6 +306,8 @@ async def get_advertisement(
         "node_tag_description": _get_tag_description(source_node),
         "adv_type": adv.adv_type or result.source_adv_type,
         "flags": adv.flags,
+        "route_type": adv.route_type,
+        "advert_timestamp": adv.advert_timestamp,
         "received_at": adv.received_at,
         "created_at": adv.created_at,
         "observers": observers,

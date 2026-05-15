@@ -129,6 +129,13 @@ class AdvertisementRead(BaseModel):
     )
     adv_type: Optional[str] = Field(default=None, description="Node type")
     flags: Optional[int] = Field(default=None, description="Capability flags")
+    route_type: Optional[str] = Field(
+        default=None,
+        description="Route type: flood, transport_flood, direct, transport_direct",
+    )
+    advert_timestamp: Optional[datetime] = Field(
+        default=None, description="Node's own timestamp from advert payload"
+    )
     received_at: datetime = Field(..., description="When received")
     created_at: datetime = Field(..., description="Record creation timestamp")
     observers: list[ObserverInfo] = Field(

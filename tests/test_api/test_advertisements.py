@@ -525,3 +525,140 @@ class TestAdvertisementSort:
         assert response.status_code == 200
         items = response.json()["items"]
         assert items[0]["name"] == "New"
+
+
+class TestListAdvertisementsRouteTypeFilter:
+    """Tests for route_type query parameter on advertisements endpoint."""
+
+    def test_default_filter_shows_flood_and_null(self, client_no_auth, api_db_session):
+        """Default route_type filter shows flood, transport_flood, and NULL."""
+        now = datetime.now(timezone.utc)
+        flood_ad = Advertisement(
+            public_key="aa" * 16,
+            name="Flood",
+            adv_type="CLIENT",
+            received_at=now,
+            route_type="flood",
+        )
+        null_ad = Advertisement(
+            public_key="bb" * 16,
+            name="Historical",
+            adv_type="CLIENT",
+            received_at=now,
+            route_type=None,
+        )
+        direct_ad = Advertisement(
+            public_key="cc" * 16,
+            name="Direct",
+            adv_type="CLIENT",
+            received_at=now,
+            route_type="direct",
+        )
+        api_db_session.add_all([flood_ad, null_ad, direct_ad])
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/advertisements")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 2
+        names = {item["name"] for item in data["items"]}
+        assert names == {"Flood", "Historical"}
+
+    def test_filter_all_shows_all(self, client_no_auth, api_db_session):
+        """route_type=all shows all advertisements."""
+        now = datetime.now(timezone.utc)
+        flood_ad = Advertisement(
+            public_key="aa" * 16,
+            name="Flood",
+            adv_type="CLIENT",
+            received_at=now,
+            route_type="flood",
+        )
+        direct_ad = Advertisement(
+            public_key="cc" * 16,
+            name="Direct",
+            adv_type="CLIENT",
+            received_at=now,
+            route_type="direct",
+        )
+        api_db_session.add_all([flood_ad, direct_ad])
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/advertisements?route_type=all")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 2
+
+    def test_filter_direct_only(self, client_no_auth, api_db_session):
+        """route_type=direct shows only direct and NULL."""
+        now = datetime.now(timezone.utc)
+        flood_ad = Advertisement(
+            public_key="aa" * 16,
+            name="Flood",
+            adv_type="CLIENT",
+            received_at=now,
+            route_type="flood",
+        )
+        direct_ad = Advertisement(
+            public_key="cc" * 16,
+            name="Direct",
+            adv_type="CLIENT",
+            received_at=now,
+            route_type="direct",
+        )
+        null_ad = Advertisement(
+            public_key="dd" * 16,
+            name="Historical",
+            adv_type="CLIENT",
+            received_at=now,
+            route_type=None,
+        )
+        api_db_session.add_all([flood_ad, direct_ad, null_ad])
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/advertisements?route_type=direct")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 2
+        names = {item["name"] for item in data["items"]}
+        assert names == {"Direct", "Historical"}
+
+    def test_route_type_in_response(self, client_no_auth, api_db_session):
+        """route_type and advert_timestamp are included in response."""
+        now = datetime.now(timezone.utc)
+        ad = Advertisement(
+            public_key="aa" * 16,
+            name="Test",
+            adv_type="CLIENT",
+            received_at=now,
+            route_type="flood",
+        )
+        api_db_session.add(ad)
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/advertisements")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["items"]) == 1
+        assert data["items"][0]["route_type"] == "flood"
+        assert data["items"][0]["advert_timestamp"] is None
+
+    def test_get_advertisement_includes_route_type(
+        self, client_no_auth, api_db_session
+    ):
+        """GET /{id} includes route_type and advert_timestamp."""
+        now = datetime.now(timezone.utc)
+        ad = Advertisement(
+            public_key="aa" * 16,
+            name="Test",
+            adv_type="CLIENT",
+            received_at=now,
+            route_type="transport_flood",
+        )
+        api_db_session.add(ad)
+        api_db_session.commit()
+
+        response = client_no_auth.get(f"/api/v1/advertisements/{ad.id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["route_type"] == "transport_flood"

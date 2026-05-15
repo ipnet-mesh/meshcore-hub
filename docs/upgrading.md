@@ -2,6 +2,37 @@
 
 This guide covers upgrading from a previous MeshCore Hub release to the current version. Check the relevant version section below before upgrading.
 
+## v0.12.0
+
+### Advertisement Route Type & Deduplication Improvements
+
+This release adds route type tracking and improves advertisement deduplication to better distinguish between flood and zero-hop (local) advertisements.
+
+**New database columns on `advertisements` table:**
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `route_type` | `VARCHAR(20), nullable` | Route type: `flood`, `transport_flood`, `direct`, `transport_direct` |
+| `advert_timestamp` | `DATETIME, nullable` | Node's own Unix timestamp from the advert payload |
+
+Both columns are nullable — existing records will have `NULL` values. The Alembic migration adds these columns automatically.
+
+**Default API filter change:**
+
+`GET /api/v1/advertisements` now defaults to `route_type=flood,transport_flood`, showing only flood advertisements. Existing records with `route_type=NULL` are included in all default queries to avoid hiding historical data. Pass `route_type=all` to see all types.
+
+**Dashboard metrics now flood-only:**
+
+All dashboard advertisement counts (`total_advertisements`, `advertisements_24h`, `advertisements_7d`, `recent_advertisements`, and `/activity`) now count only flood/transport_flood adverts plus NULL (historical records).
+
+**Deduplication bucket increased from 120s to 300s:**
+
+Both `compute_advertisement_hash()` and `compute_telemetry_hash()` now use a 5-minute (300-second) deduplication bucket instead of the previous 2-minute (120-second) bucket. This reduces duplicate records when multiple observers report the same event within a 5-minute window.
+
+**Advertisement deduplication now uses node timestamp:**
+
+When available, the node's own `advert_timestamp` is used for deduplication bucketing instead of `received_at`. This means the same flood advertisement observed by multiple receivers will correctly deduplicate even if received several minutes apart. Node timestamps that deviate by more than 4 hours from `received_at` are rejected for bucketing (the raw value is still stored).
+
 ## v0.11.0
 
 ### Async SQLite Foreign Key Fix

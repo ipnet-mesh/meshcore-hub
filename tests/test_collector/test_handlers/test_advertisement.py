@@ -216,3 +216,63 @@ class TestHandleAdvertisement:
         assert observer is not None
         assert observer.snr == 12.5
         assert observer.path_len == 3
+
+    def test_stores_route_type(self, db_manager, db_session):
+        """route_type is stored on the Advertisement record."""
+        payload = {
+            "public_key": "a" * 64,
+            "name": "TestNode",
+            "adv_type": "chat",
+            "route_type": "flood",
+        }
+
+        handle_advertisement("b" * 64, "advertisement", payload, db_manager)
+
+        ad = db_session.execute(select(Advertisement)).scalar_one()
+        assert ad.route_type == "flood"
+
+    def test_stores_advert_timestamp(self, db_manager, db_session):
+        """advert_timestamp is stored on the Advertisement record."""
+        payload = {
+            "public_key": "a" * 64,
+            "name": "TestNode",
+            "adv_type": "chat",
+            "advert_timestamp": 1747300000,
+        }
+
+        handle_advertisement("b" * 64, "advertisement", payload, db_manager)
+
+        ad = db_session.execute(select(Advertisement)).scalar_one()
+        assert ad.advert_timestamp is not None
+        assert ad.advert_timestamp.year == 2025
+
+    def test_advert_timestamp_invalid_falls_back_to_received_at(
+        self, db_manager, db_session
+    ):
+        """Invalid advert_timestamp (far from received_at) still stored but not used for hash."""
+        payload = {
+            "public_key": "a" * 64,
+            "name": "TestNode",
+            "adv_type": "chat",
+            "advert_timestamp": 0,
+        }
+
+        handle_advertisement("b" * 64, "advertisement", payload, db_manager)
+
+        ad = db_session.execute(select(Advertisement)).scalar_one()
+        assert ad.advert_timestamp is not None
+        assert ad.advert_timestamp.year == 1970
+
+    def test_advert_timestamp_valid_used_for_dedup(self, db_manager, db_session):
+        """Valid advert_timestamp produces same hash for different received_at times."""
+        payload1 = {
+            "public_key": "a" * 64,
+            "name": "TestNode",
+            "adv_type": "chat",
+            "advert_timestamp": 1747300000,
+        }
+
+        handle_advertisement("b" * 64, "advertisement", payload1, db_manager)
+
+        ads = db_session.execute(select(Advertisement)).scalars().all()
+        assert len(ads) == 1

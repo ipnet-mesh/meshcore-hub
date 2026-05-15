@@ -1,7 +1,7 @@
 """Handler for advertisement events."""
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import select
@@ -74,14 +74,31 @@ def handle_advertisement(
 
     snr = payload.get("snr")
     path_len = payload.get("path_len")
+    route_type = payload.get("route_type")
 
-    # Compute event hash for deduplication (30-second time bucket)
+    advert_timestamp_epoch = payload.get("advert_timestamp")
+    advert_timestamp_dt: datetime | None = None
+    advert_timestamp_for_hash: datetime | None = None
+    if isinstance(advert_timestamp_epoch, (int, float)):
+        try:
+            advert_timestamp_dt = datetime.fromtimestamp(
+                int(advert_timestamp_epoch), tz=timezone.utc
+            )
+        except (OSError, OverflowError, ValueError):
+            advert_timestamp_dt = None
+        if advert_timestamp_dt is not None:
+            delta = abs(advert_timestamp_dt - now)
+            if delta <= timedelta(hours=4):
+                advert_timestamp_for_hash = advert_timestamp_dt
+
+    # Compute event hash for deduplication (5-minute time bucket)
     event_hash = compute_advertisement_hash(
         public_key=adv_public_key,
         name=name,
         adv_type=adv_type,
         flags=flags,
         received_at=now,
+        advert_timestamp=advert_timestamp_for_hash,
     )
 
     with db.session_scope() as session:
@@ -178,6 +195,8 @@ def handle_advertisement(
             flags=flags,
             received_at=now,
             event_hash=event_hash,
+            route_type=route_type,
+            advert_timestamp=advert_timestamp_dt,
         )
         session.add(advertisement)
 
