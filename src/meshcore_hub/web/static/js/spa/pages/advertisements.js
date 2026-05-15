@@ -140,8 +140,8 @@ ${displayContent}`, container);
                     <div class="text-right flex-shrink-0">
                         <div class="text-xs opacity-60">${formatDateTimeShort(ad.received_at)}</div>
                         <div class="flex items-center justify-end gap-1">
-                            ${receiversBlock}
                             ${routeTypeBadge(ad.route_type)}
+                            ${receiversBlock}
                         </div>
                     </div>
                 </div>

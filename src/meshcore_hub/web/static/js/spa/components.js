@@ -542,7 +542,7 @@ export function observerIcons(observers) {
     if (!observers || observers.length === 0) return nothing;
     const names = observers.map(o => o.tag_name || o.name || truncateKey(o.public_key, 8));
     const tooltip = names.join(', ');
-    return html`<span class="observer-badge-group">\u{1F4E1}<span class="badge badge-sm badge-ghost cursor-help observer-badge" title=${tooltip}>${observers.length}</span></span>`;
+    return html`<span class="badge badge-sm badge-primary cursor-help observer-badge" title=${tooltip}>${observers.length}</span>`;
 }
 
 /**
