@@ -47,7 +47,9 @@ Node advertisements announcing presence and metadata.
   "adv_type": "string (optional)",
   "flags": "integer (optional)",
   "lat": "number (optional)",
-  "lon": "number (optional)"
+  "lon": "number (optional)",
+  "route_type": "string (optional)",
+  "advert_timestamp": "integer (optional)"
 }
 ```
 
@@ -58,6 +60,8 @@ Node advertisements announcing presence and metadata.
 - `flags`: Node capability/status flags (bitmask)
 - `lat`: GPS latitude when provided by decoder metadata
 - `lon`: GPS longitude when provided by decoder metadata
+- `route_type`: Route type of the advertisement packet — `"flood"` (original flood), `"transport_flood"` (relayed flood), `"direct"` (zero-hop local), `"transport_direct"` (relayed direct). Only present for LetsMesh-decoded adverts; native mode adverts have `route_type=NULL`.
+- `advert_timestamp`: Node's own Unix timestamp (uint32) from the decoded advert payload. Used for deduplication when within ±4 hours of `received_at`. May be `NULL` for native mode adverts or when the decoder does not provide a timestamp.
 
 **Example**:
 ```json
@@ -67,7 +71,9 @@ Node advertisements announcing presence and metadata.
   "adv_type": "repeater",
   "flags": 218,
   "lat": 42.470001,
-  "lon": -71.330001
+  "lon": -71.330001,
+  "route_type": "flood",
+  "advert_timestamp": 1747300000
 }
 ```
 

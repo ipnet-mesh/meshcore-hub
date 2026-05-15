@@ -351,3 +351,91 @@ class TestDashboardTestUserExclusion:
             data = response.json()
             assert data["total_operators"] == 0
             assert data["total_members"] == 0
+
+
+class TestDashboardFloodOnlyFilter:
+    """Tests for flood-only advertisement filtering on dashboard."""
+
+    def test_stats_excludes_direct_adverts(self, client_no_auth, api_db_session):
+        """Dashboard stats exclude direct (zero-hop) advertisements."""
+        now = datetime.now(timezone.utc)
+        flood_ad = Advertisement(
+            public_key="aa" * 16,
+            name="Flood",
+            adv_type="CLIENT",
+            received_at=now,
+            route_type="flood",
+        )
+        direct_ad = Advertisement(
+            public_key="bb" * 16,
+            name="Direct",
+            adv_type="CLIENT",
+            received_at=now,
+            route_type="direct",
+        )
+        null_ad = Advertisement(
+            public_key="cc" * 16,
+            name="Historical",
+            adv_type="CLIENT",
+            received_at=now,
+            route_type=None,
+        )
+        api_db_session.add_all([flood_ad, direct_ad, null_ad])
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/dashboard/stats")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_advertisements"] == 2
+
+    def test_recent_ads_excludes_direct(self, client_no_auth, api_db_session):
+        """Recent advertisements list excludes direct adverts."""
+        now = datetime.now(timezone.utc)
+        direct_ad = Advertisement(
+            public_key="aa" * 16,
+            name="Direct",
+            adv_type="CLIENT",
+            received_at=now,
+            route_type="direct",
+        )
+        flood_ad = Advertisement(
+            public_key="bb" * 16,
+            name="Flood",
+            adv_type="CLIENT",
+            received_at=now - timedelta(seconds=1),
+            route_type="flood",
+        )
+        api_db_session.add_all([direct_ad, flood_ad])
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/dashboard/stats")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["recent_advertisements"]) == 1
+        assert data["recent_advertisements"][0]["name"] == "Flood"
+
+    def test_activity_excludes_direct(self, client_no_auth, api_db_session):
+        """Activity endpoint excludes direct advertisements."""
+        yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+        direct_ad = Advertisement(
+            public_key="aa" * 16,
+            name="Direct",
+            adv_type="CLIENT",
+            received_at=yesterday,
+            route_type="direct",
+        )
+        flood_ad = Advertisement(
+            public_key="bb" * 16,
+            name="Flood",
+            adv_type="CLIENT",
+            received_at=yesterday,
+            route_type="flood",
+        )
+        api_db_session.add_all([direct_ad, flood_ad])
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/dashboard/activity")
+        assert response.status_code == 200
+        data = response.json()
+        total_count = sum(point["count"] for point in data["data"])
+        assert total_count == 1

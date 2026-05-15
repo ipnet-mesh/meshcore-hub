@@ -175,6 +175,12 @@
         }
     },
     "advertisements": {
+        "filter_route_type_label": "Advert Type",
+        "route_type_all": "All",
+        "route_type_flood": "Flood & Relay",
+        "route_type_direct": "Zero-hop only",
+        "route_type_unknown": "Unknown",
+        "col_route_type": "Type",
         "sort": {
             "newest": "Time (newest)",
             "oldest": "Time (oldest)",

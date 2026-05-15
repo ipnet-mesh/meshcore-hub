@@ -3,7 +3,8 @@
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
+from sqlalchemy.sql.elements import ColumnElement
 
 from meshcore_hub.api.auth import RequireRead
 from meshcore_hub.api.dependencies import DbSession
@@ -25,6 +26,21 @@ from meshcore_hub.common.schemas.messages import (
 )
 
 router = APIRouter()
+
+_FLOOD_ROUTE_TYPES = {"flood", "transport_flood"}
+
+
+def _flood_only_filter(
+    ad_model: type[Advertisement],
+) -> ColumnElement[bool]:
+    """Build a flood-only filter clause for advertisement queries.
+
+    Includes flood/transport_flood records and NULL (historical) records.
+    """
+    return or_(
+        ad_model.route_type.in_(_FLOOD_ROUTE_TYPES),
+        ad_model.route_type.is_(None),
+    )
 
 
 @router.get("/stats", response_model=DashboardStats)
@@ -64,27 +80,34 @@ async def get_stats(
         or 0
     )
 
-    # Total advertisements
+    # Total advertisements (flood-only)
     total_advertisements = (
-        session.execute(select(func.count()).select_from(Advertisement)).scalar() or 0
+        session.execute(
+            select(func.count())
+            .select_from(Advertisement)
+            .where(_flood_only_filter(Advertisement))
+        ).scalar()
+        or 0
     )
 
-    # Advertisements in last 24h
+    # Advertisements in last 24h (flood-only)
     advertisements_24h = (
         session.execute(
             select(func.count())
             .select_from(Advertisement)
             .where(Advertisement.received_at >= yesterday)
+            .where(_flood_only_filter(Advertisement))
         ).scalar()
         or 0
     )
 
-    # Advertisements in last 7 days
+    # Advertisements in last 7 days (flood-only)
     advertisements_7d = (
         session.execute(
             select(func.count())
             .select_from(Advertisement)
             .where(Advertisement.received_at >= seven_days_ago)
+            .where(_flood_only_filter(Advertisement))
         ).scalar()
         or 0
     )
@@ -99,10 +122,13 @@ async def get_stats(
         or 0
     )
 
-    # Recent advertisements (last 10)
+    # Recent advertisements (last 10, flood-only)
     recent_ads = (
         session.execute(
-            select(Advertisement).order_by(Advertisement.received_at.desc()).limit(10)
+            select(Advertisement)
+            .where(_flood_only_filter(Advertisement))
+            .order_by(Advertisement.received_at.desc())
+            .limit(10)
         )
         .scalars()
         .all()
@@ -285,6 +311,7 @@ async def get_activity(
         )
         .where(Advertisement.received_at >= start_date)
         .where(Advertisement.received_at < end_date)
+        .where(_flood_only_filter(Advertisement))
         .group_by(date_expr)
         .order_by(date_expr)
     )

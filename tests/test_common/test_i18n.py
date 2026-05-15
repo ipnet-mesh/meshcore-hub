@@ -135,3 +135,20 @@ class TestEnJsonCompleteness:
         assert t("entities.messages") != "entities.messages"
         assert t("entities.map") != "entities.map"
         assert t("entities.members") != "entities.members"
+
+    def test_advertisements_route_type_keys(self):
+        """Advertisement route type filter keys are all present."""
+        assert (
+            t("advertisements.filter_route_type_label")
+            != "advertisements.filter_route_type_label"
+        )
+        assert t("advertisements.route_type_all") != "advertisements.route_type_all"
+        assert t("advertisements.route_type_flood") != "advertisements.route_type_flood"
+        assert (
+            t("advertisements.route_type_direct") != "advertisements.route_type_direct"
+        )
+        assert (
+            t("advertisements.route_type_unknown")
+            != "advertisements.route_type_unknown"
+        )
+        assert t("advertisements.col_route_type") != "advertisements.col_route_type"
