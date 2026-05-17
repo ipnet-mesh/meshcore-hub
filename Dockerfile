@@ -86,6 +86,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # For serial port access
     udev \
+    # For database debugging and maintenance
+    sqlite3 \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /data
 
