@@ -144,7 +144,7 @@ docs/letsmesh.md documents the LetsMesh packet normalization and decoding behavi
 
 - [ ] MQTT subscription topics match `subscriber.py` topic patterns
 - [ ] Payload type mappings match `letsmesh_decoder.py` and `letsmesh_normalizer.py` logic
-- [ ] Channel key handling documented matches `COLLECTOR_CHANNEL_KEYS` config behavior
+- [ ] Channel key handling documented matches database-backed channels (channels table, CHANNEL_REFRESH_INTERVAL_SECONDS)
 - [ ] Known channel indexes (`17 -> Public`, `217 -> #test`) match built-in defaults in decoder
 - [ ] Message normalization rules match collector handler implementations
 - [ ] GPS/location update behavior documented matches advertisement handler logic
@@ -219,7 +219,7 @@ Verify sections exist and are correctly ordered:
 2. [ ] Common Settings (`COMPOSE_PROJECT_NAME`, `TRAEFIK_DOMAIN`, `IMAGE_VERSION`, `LOG_LEVEL`, `DATA_HOME`, `SEED_HOME`)
 3. [ ] MQTT Settings (`MQTT_HOST`, `MQTT_PORT`, `MQTT_USERNAME`, `MQTT_PASSWORD`, `MQTT_PREFIX`, `MQTT_TLS`, `MQTT_TRANSPORT`, `MQTT_WS_PATH`, `MQTT_TOKEN_AUDIENCE`)
 4. [ ] Packet Capture Settings (all `PACKETCAPTURE_*` vars + `SERIAL_PORT`)
-5. [ ] Collector Settings (`COLLECTOR_CHANNEL_KEYS`, `COLLECTOR_INCLUDE_TEST_CHANNEL`, webhooks, retention, cleanup)
+5. [ ] Collector Settings (`CHANNEL_REFRESH_INTERVAL_SECONDS`, webhooks, retention, cleanup)
 6. [ ] API Settings (`API_PORT`, `API_READ_KEY`, `API_ADMIN_KEY`, metrics)
 7. [ ] Web Dashboard Settings (`WEB_PORT`, `API_BASE_URL`, `API_KEY`, theme, locale, auto-refresh, admin, TZ, content home, network info, feature flags, contact info)
 
@@ -243,7 +243,7 @@ For every variable in `.env.example`:
 - [ ] `MQTT_WS_PATH` comment notes default `/` vs production `/mqtt`
 - [ ] `MQTT_TOKEN_AUDIENCE` comment explains it must match broker config
 - [ ] `PACKETCAPTURE_*` comments reference the external packet capture image
-- [ ] `COLLECTOR_CHANNEL_KEYS` comment explains label=hex format
+- [ ] `CHANNEL_REFRESH_INTERVAL_SECONDS` comment explains channel key refresh from database
 - [ ] `WEB_*` comments reference web dashboard behavior
 - [ ] `FEATURE_*` comments explain what each flag controls
 - [ ] `NETWORK_*` comments explain where values appear in UI

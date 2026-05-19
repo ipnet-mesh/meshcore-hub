@@ -2,6 +2,43 @@
 
 This guide covers upgrading from a previous MeshCore Hub release to the current version. Check the relevant version section below before upgrading.
 
+## v0.13.0
+
+### Database-Backed Channel Keys
+
+Channel decryption keys are now managed via the `channels` database table instead of the `COLLECTOR_CHANNEL_KEYS` environment variable. This enables runtime key management, permission-based visibility, and a Channels dashboard page.
+
+**New database table: `channels`**
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | `VARCHAR(36), PK` | UUID primary key |
+| `name` | `VARCHAR(100), UNIQUE` | Channel display name |
+| `key_hex` | `VARCHAR(64), UNIQUE` | Uppercase hex key (32 or 64 chars) |
+| `channel_hash` | `VARCHAR(2)` | First byte of SHA-256 of key |
+| `visibility` | `VARCHAR(20)` | `public`, `member`, `operator`, or `admin` |
+| `enabled` | `BOOLEAN` | Whether the channel is active |
+| `created_at`, `updated_at` | `DATETIME` | Timestamps |
+
+**Removed environment variables:**
+- `COLLECTOR_CHANNEL_KEYS` — replaced by database channels table
+- `COLLECTOR_INCLUDE_TEST_CHANNEL` — replaced by presence of a `test` channel row in the database
+
+**New environment variables:**
+- `CHANNEL_REFRESH_INTERVAL_SECONDS` — seconds between key refresh (default: `300`)
+- `FEATURE_CHANNELS` — enable/disable the /channels page (default: `true`)
+
+**Migration steps:**
+
+1. Run `meshcore-hub db upgrade` to create the `channels` table
+2. Convert any `COLLECTOR_CHANNEL_KEYS` values to either:
+   - A `channels.yaml` seed file in `SEED_HOME` (see `docs/seeding.md`)
+   - Database rows via CLI: `meshcore-hub collector channel add --name X --key HEX`
+3. Remove `COLLECTOR_CHANNEL_KEYS` and `COLLECTOR_INCLUDE_TEST_CHANNEL` from your `.env`
+4. If you previously relied on test channel messages, add a test channel: `meshcore-hub collector channel add --name test --key 9CD8FCF22A47333B591D96A2B848B73F`
+
+**Test channel behavior change:** Test channel messages (channel_idx 217) are now discarded by default unless a `test` channel row exists in the database with `enabled=true`. Previously this was controlled by `COLLECTOR_INCLUDE_TEST_CHANNEL`.
+
 ## v0.12.0
 
 ### Advertisement Route Type & Deduplication Improvements

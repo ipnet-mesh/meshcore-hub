@@ -311,7 +311,7 @@ def sample_message_with_receiver(api_db_session, receiver_node):
     """Create a message with a receiver node."""
     message = Message(
         message_type="channel",
-        channel_idx=1,
+        channel_idx=17,
         pubkey_prefix="xyz789",
         text="Channel message with receiver",
         received_at=datetime.now(timezone.utc),

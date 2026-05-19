@@ -2,8 +2,6 @@
 
 import json
 import logging
-import os
-import re
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -124,6 +122,15 @@ def _build_endpoint_access(
             "GET": _OPEN,
             "PUT": _AUTHENTICATED,
         },
+        "v1/channels": {
+            "GET": _OPEN,
+            "POST": frozenset({role_admin}),
+        },
+        "v1/channels/": {
+            "POST": frozenset({role_admin}),
+            "PUT": frozenset({role_admin}),
+            "DELETE": frozenset({role_admin}),
+        },
     }
 
 
@@ -161,27 +168,31 @@ def check_api_access(
     return False
 
 
-def _parse_decoder_key_entries(raw: str | None) -> list[str]:
-    """Parse COLLECTOR_CHANNEL_KEYS into key entries."""
-    if not raw:
-        return []
-    return [part.strip() for part in re.split(r"[,\s]+", raw) if part.strip()]
-
-
 def _build_channel_labels() -> dict[str, str]:
-    """Build UI channel labels from built-in + configured decoder keys."""
-    raw_keys = os.getenv("COLLECTOR_CHANNEL_KEYS")
-    include_test = os.getenv("COLLECTOR_INCLUDE_TEST_CHANNEL", "false").lower() in (
-        "true",
-        "1",
-        "yes",
-    )
-    decoder = LetsMeshPacketDecoder(
-        channel_keys=_parse_decoder_key_entries(raw_keys),
-    )
+    """Build UI channel labels from built-in + database channel keys."""
+    decoder = LetsMeshPacketDecoder(channel_keys=[])
     labels = decoder.channel_labels_by_index()
-    if not include_test:
-        labels.pop(LetsMeshPacketDecoder.TEST_CHANNEL_IDX, None)
+
+    try:
+        from meshcore_hub.common.config import get_collector_settings
+
+        settings = get_collector_settings()
+        from meshcore_hub.common.database import DatabaseManager
+
+        db = DatabaseManager(settings.effective_database_url)
+        from meshcore_hub.common.models.channel import Channel
+
+        with db.session_scope() as session:
+            channels = session.query(Channel).filter(Channel.enabled.is_(True)).all()
+            db_decoder = LetsMeshPacketDecoder(
+                channel_keys=[f"{ch.name}={ch.key_hex}" for ch in channels]
+            )
+            db_labels = db_decoder.channel_labels_by_index()
+            labels.update(db_labels)
+        db.dispose()
+    except Exception as e:
+        logger.warning("Failed to load channel labels from database: %s", e)
+
     return {str(idx): label for idx, label in sorted(labels.items())}
 
 
@@ -683,6 +694,13 @@ def create_app(
                 ):
                     resp_headers[k] = v
 
+            if (
+                response.status_code < 300
+                and path.startswith("v1/channels")
+                and request.method in ("POST", "PUT", "DELETE")
+            ):
+                request.app.state.channel_labels = _build_channel_labels()
+
             return Response(
                 content=response.content,
                 status_code=response.status_code,
@@ -933,6 +951,7 @@ def create_app(
             ("/dashboard", "hourly", "0.9", "dashboard"),
             ("/nodes", "hourly", "0.9", "nodes"),
             ("/advertisements", "hourly", "0.8", "advertisements"),
+            ("/channels", "daily", "0.7", "channels"),
             ("/map", "daily", "0.7", "map"),
             ("/members", "weekly", "0.6", "members"),
         ]

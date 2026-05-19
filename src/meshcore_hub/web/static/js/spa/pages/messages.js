@@ -24,7 +24,7 @@ export async function render(container, params, router) {
     const order = query.order || 'desc';
 
     const config = getConfig();
-    const channelLabels = getChannelLabelsMap(config);
+    let channelLabels = new Map();
     const tz = config.timezone || '';
     const tzBadge = tz && tz !== 'UTC' ? html`<span class="text-sm opacity-60">${tz}</span>` : nothing;
     const navigate = (url) => router.navigate(url);
@@ -206,9 +206,16 @@ ${displayContent}`, container);
         try {
             const apiParams = { limit, offset, message_type, channel_idx, sort, order };
             if (observed_by.length > 0) apiParams.observed_by = observed_by;
-            const [data, nodesData] = await Promise.all([
+            const [data, nodesData, channelsData] = await Promise.all([
                 apiGet('/api/v1/messages', apiParams),
                 apiGet('/api/v1/nodes', { limit: 500, observer: true }),
+                apiGet('/api/v1/channels'),
+            ]);
+            channelLabels = new Map([
+                ...getChannelLabelsMap(config),
+                ...(channelsData.items || [])
+                    .map(ch => [parseInt(ch.channel_hash, 16), ch.name])
+                    .filter(([idx]) => Number.isInteger(idx)),
             ]);
             const messages = dedupeBySignature(data.items || []);
             const allNodes = nodesData.items || [];

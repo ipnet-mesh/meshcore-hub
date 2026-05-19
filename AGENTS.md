@@ -264,11 +264,13 @@ meshcore-hub/
 │   │   ├── hash_utils.py     # Hash utility functions
 │   │   ├── models/           # SQLAlchemy models
 │   │   │   ├── node.py       # Node model
+│   │   │   ├── channel.py    # Channel model (encryption keys)
 │   │   │   ├── user_profile.py     # User profile model (OIDC users)
 │   │   │   ├── user_profile_node.py # User-node adoption join table
 │   │   │   └── ...
 │   │   └── schemas/          # Pydantic schemas
 │   │       ├── user_profiles.py  # User profile API schemas
+│   │       ├── channels.py  # Channel API schemas
 │   │       └── ...
 │   ├── collector/
 │   │   ├── cli.py            # Collector CLI with seed commands
@@ -287,8 +289,9 @@ meshcore-hub/
 │   │   ├── metrics.py        # Prometheus metrics endpoint
 │   │   └── routes/           # API routes
 │   │       ├── user_profiles.py  # User profile endpoints (GET/PUT profile)
-│   │   ├── adoptions.py      # Node adoption endpoints (POST adopt, DELETE release)
-│   │   └── ...
+│   │       ├── adoptions.py      # Node adoption endpoints (POST adopt, DELETE release)
+│   │       ├── channels.py       # Channel CRUD endpoints (GET/POST/PUT/DELETE channels)
+│   │       └── ...
 │   └── web/
 │       ├── cli.py
 │       ├── app.py            # FastAPI app
@@ -635,8 +638,7 @@ Key variables:
 - `MQTT_TRANSPORT` - MQTT transport protocol (default: `websockets`)
 - `MQTT_WS_PATH` - WebSocket path (default: `/`)
 - `MQTT_TLS` - Enable TLS/SSL for MQTT (default: `false`, set `true` for `wss://`)
-- `COLLECTOR_CHANNEL_KEYS` - Additional decoder channel keys for decrypting GroupText packets
-- `COLLECTOR_INCLUDE_TEST_CHANNEL` - Include built-in 'test' channel messages (default: `false`)
+- `CHANNEL_REFRESH_INTERVAL_SECONDS` - Seconds between channel key refresh from database (default: `300`, min: `10`)
 - `API_HOST` - API server bind address (default: `0.0.0.0`)
 - `API_PORT` - API server port (default: `8000`)
 - `API_READ_KEY`, `API_ADMIN_KEY` - API authentication keys
@@ -668,7 +670,7 @@ Key variables:
 - `WEB_AUTO_REFRESH_SECONDS` - Auto-refresh interval in seconds for list pages (default: `30`, `0` to disable)
 - `WEB_DEBUG` - Enable debug mode in the web dashboard (default: `false`)
 - `TZ` - Timezone for web dashboard date/time display (default: `UTC`, e.g., `America/New_York`, `Europe/London`)
-- `FEATURE_DASHBOARD`, `FEATURE_NODES`, `FEATURE_ADVERTISEMENTS`, `FEATURE_MESSAGES`, `FEATURE_MAP`, `FEATURE_MEMBERS`, `FEATURE_PAGES` - Feature flags to enable/disable specific web dashboard pages (default: all `true`). Dependencies: Dashboard auto-disables when all of Nodes/Advertisements/Messages are disabled. Map auto-disables when Nodes is disabled.
+- `FEATURE_DASHBOARD`, `FEATURE_NODES`, `FEATURE_ADVERTISEMENTS`, `FEATURE_MESSAGES`, `FEATURE_MAP`, `FEATURE_MEMBERS`, `FEATURE_PAGES`, `FEATURE_CHANNELS` - Feature flags to enable/disable specific web dashboard pages (default: all `true`). Dependencies: Dashboard auto-disables when all of Nodes/Advertisements/Messages are disabled. Map auto-disables when Nodes is disabled.
 - `NETWORK_DOMAIN` - Network domain name (default: none)
 - `NETWORK_NAME` - Network display name (default: `MeshCore Network`)
 - `NETWORK_CITY` - Network city location (default: none)

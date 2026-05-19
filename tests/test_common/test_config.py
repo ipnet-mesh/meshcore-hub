@@ -59,18 +59,20 @@ class TestCollectorSettings:
         assert settings.effective_seed_home == "/seed/data"
         assert settings.node_tags_file == "/seed/data/node_tags.yaml"
 
-    def test_collector_channel_keys_list(self) -> None:
-        """Channel keys are parsed from comma/space-separated env values."""
+    def test_channel_refresh_interval_seconds(self) -> None:
+        """Channel refresh interval defaults to 300."""
+        settings = CollectorSettings(_env_file=None)
+
+        assert settings.channel_refresh_interval_seconds == 300
+
+    def test_channel_refresh_interval_seconds_custom(self) -> None:
+        """Channel refresh interval can be overridden."""
         settings = CollectorSettings(
             _env_file=None,
-            collector_channel_keys="aa11, bb22 cc33",
+            channel_refresh_interval_seconds=60,
         )
 
-        assert settings.collector_channel_keys_list == [
-            "aa11",
-            "bb22",
-            "cc33",
-        ]
+        assert settings.channel_refresh_interval_seconds == 60
 
 
 class TestAPISettings:

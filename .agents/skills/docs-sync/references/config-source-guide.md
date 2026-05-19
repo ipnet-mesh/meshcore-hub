@@ -74,8 +74,6 @@ Some code bypasses Pydantic Settings entirely and reads env vars directly:
 
 | File | Env Var | Default | Purpose |
 |------|---------|---------|---------|
-| `src/meshcore_hub/web/app.py` | `COLLECTOR_CHANNEL_KEYS` | `None` | Reads channel keys for web UI label building |
-| `src/meshcore_hub/web/app.py` | `COLLECTOR_INCLUDE_TEST_CHANNEL` | `"false"` | Reads test channel flag for web UI |
 | `src/meshcore_hub/common/health.py` | `HEALTH_DIR` | `/tmp/meshcore-hub` | Health status file directory |
 | `src/meshcore_hub/alembic/env.py` | `DATABASE_URL` | Falls to config | Alembic migration DB URL |
 | `src/meshcore_hub/alembic/env.py` | `DATA_HOME` | Falls to config | Alembic fallback for computing DB URL |

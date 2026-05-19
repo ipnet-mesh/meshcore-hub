@@ -112,7 +112,7 @@ class TestListMessages:
         """Messages include observers list in response."""
         msg = Message(
             message_type="channel",
-            channel_idx=1,
+            channel_idx=17,
             text="Msg with observer",
             received_at=datetime.now(timezone.utc),
             observer_node_id=receiver_node.id,
@@ -158,7 +158,7 @@ class TestGetMessage:
         """Get message includes observers list."""
         msg = Message(
             message_type="channel",
-            channel_idx=1,
+            channel_idx=17,
             text="Msg for get observer test",
             received_at=datetime.now(timezone.utc),
             observer_node_id=receiver_node.id,
@@ -204,11 +204,11 @@ class TestListMessagesFilters:
     ):
         """Test filtering messages by channel_idx."""
         # Channel 1 should match sample_message_with_receiver
-        response = client_no_auth.get("/api/v1/messages?channel_idx=1")
+        response = client_no_auth.get("/api/v1/messages?channel_idx=17")
         assert response.status_code == 200
         data = response.json()
         assert len(data["items"]) == 1
-        assert data["items"][0]["channel_idx"] == 1
+        assert data["items"][0]["channel_idx"] == 17
 
         # Channel 0 should return no results
         response = client_no_auth.get("/api/v1/messages?channel_idx=0")
@@ -251,14 +251,14 @@ class TestListMessagesFilters:
         # Create two messages, each observed by a different receiver
         msg1 = Message(
             message_type="channel",
-            channel_idx=1,
+            channel_idx=17,
             text="Msg from receiver A",
             received_at=datetime.now(timezone.utc),
             observer_node_id=receiver_node.id,
         )
         msg2 = Message(
             message_type="channel",
-            channel_idx=2,
+            channel_idx=17,
             text="Msg from receiver B",
             received_at=datetime.now(timezone.utc),
             observer_node_id=second_receiver.id,
@@ -381,7 +381,7 @@ class TestMessageSort:
         now = datetime.now(timezone.utc)
         msg_ch = Message(
             message_type="channel",
-            channel_idx=1,
+            channel_idx=17,
             text="Channel msg",
             received_at=now,
         )

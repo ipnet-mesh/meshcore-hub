@@ -5,7 +5,7 @@ import {
 } from '../components.js';
 import {
     iconDashboard, iconNodes, iconAdvertisements, iconMessages, iconMembers, iconMap,
-    iconPage, iconInfo, iconChart, iconAntenna, iconUsers,
+    iconPage, iconInfo, iconChart, iconAntenna, iconUsers, iconChannel,
     iconSettings, iconFrequency, iconBandwidth, iconSpreadingFactor, iconCodingRate, iconTxPower,
 } from '../icons.js';
 
@@ -98,6 +98,12 @@ function renderHeroSection({ networkName, logoUrl, logoInvertLight, networkCity,
                     icon: iconMessages('w-full h-full'),
                     label: t('entities.messages'),
                     colorVar: '--color-messages',
+                }) : nothing}
+                ${features.channels !== false ? renderNavCard({
+                    href: '/channels',
+                    icon: iconChannel('w-full h-full'),
+                    label: t('entities.channels'),
+                    colorVar: '--color-channels',
                 }) : nothing}
                 ${features.members !== false ? renderNavCard({
                     href: '/members',

@@ -141,8 +141,7 @@ Complete list from `docker-compose.yml` collector `environment:` block:
 | `MQTT_WS_PATH` | `/` | MQTT |
 | `DATA_HOME` | `/data` (hardcoded) | Path |
 | `SEED_HOME` | `/seed` (hardcoded) | Path |
-| `COLLECTOR_CHANNEL_KEYS` | (empty) | Collector |
-| `COLLECTOR_INCLUDE_TEST_CHANNEL` | `false` | Collector |
+| `CHANNEL_REFRESH_INTERVAL_SECONDS` | `300` | Collector |
 | `WEBHOOK_ADVERTISEMENT_URL` | (passthrough) | Webhook |
 | `WEBHOOK_ADVERTISEMENT_SECRET` | (passthrough) | Webhook |
 | `WEBHOOK_MESSAGE_URL` | (passthrough) | Webhook |
@@ -221,8 +220,7 @@ Complete list from `docker-compose.yml` collector `environment:` block:
 | `NETWORK_WELCOME_TEXT` | (empty) | Network |
 | `CONTENT_HOME` | `/content` (hardcoded) | Path |
 | `TZ` | `UTC` | Display |
-| `COLLECTOR_CHANNEL_KEYS` | (empty) | Display |
-| `COLLECTOR_INCLUDE_TEST_CHANNEL` | `false` | Display |
+| `FEATURE_CHANNELS` | `true` | Feature |
 | `FEATURE_DASHBOARD` | `true` | Feature |
 | `FEATURE_NODES` | `true` | Feature |
 | `FEATURE_ADVERTISEMENTS` | `true` | Feature |
@@ -230,6 +228,7 @@ Complete list from `docker-compose.yml` collector `environment:` block:
 | `FEATURE_MAP` | `true` | Feature |
 | `FEATURE_MEMBERS` | `true` | Feature |
 | `FEATURE_PAGES` | `true` | Feature |
+| `FEATURE_CHANNELS` | `true` | Feature |
 
 ### Observer (Packet Capture) Env Vars
 

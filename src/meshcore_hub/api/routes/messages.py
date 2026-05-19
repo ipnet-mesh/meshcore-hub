@@ -3,11 +3,16 @@
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import func, select
+from fastapi import APIRouter, HTTPException, Query, Request
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import aliased, selectinload
 
 from meshcore_hub.api.auth import RequireRead
+from meshcore_hub.api.channel_visibility import (
+    get_max_visibility_level,
+    get_visible_channel_indices,
+    resolve_user_role,
+)
 from meshcore_hub.api.dependencies import DbSession
 from meshcore_hub.api.observer_utils import fetch_observers_for_events
 from meshcore_hub.common.models import Message, Node, NodeTag
@@ -32,6 +37,7 @@ def _get_tag_name(node: Optional[Node]) -> Optional[str]:
 async def list_messages(
     _: RequireRead,
     session: DbSession,
+    request: Request,
     message_type: Optional[str] = Query(None, description="Filter by message type"),
     pubkey_prefix: Optional[str] = Query(None, description="Filter by sender prefix"),
     channel_idx: Optional[int] = Query(None, description="Filter by channel"),
@@ -78,6 +84,18 @@ async def list_messages(
 
     if search:
         query = query.where(Message.text.ilike(f"%{search}%"))
+
+    # Apply channel visibility filtering
+    role = resolve_user_role(request)
+    max_level = get_max_visibility_level(role)
+    visible_indices = get_visible_channel_indices(session, max_level)
+    query = query.where(
+        or_(
+            Message.message_type != "channel",
+            Message.channel_idx.is_(None),
+            Message.channel_idx.in_(visible_indices),
+        )
+    )
 
     # Get total count
     count_query = select(func.count()).select_from(query.subquery())
@@ -211,6 +229,7 @@ async def list_messages(
 async def get_message(
     _: RequireRead,
     session: DbSession,
+    request: Request,
     message_id: str,
 ) -> MessageRead:
     """Get a single message by ID."""
@@ -226,6 +245,14 @@ async def get_message(
         raise HTTPException(status_code=404, detail="Message not found")
 
     message, observer_pk = result
+
+    # Apply channel visibility filter
+    if message.message_type == "channel" and message.channel_idx is not None:
+        role = resolve_user_role(request)
+        max_level = get_max_visibility_level(role)
+        visible_indices = get_visible_channel_indices(session, max_level)
+        if message.channel_idx not in visible_indices:
+            raise HTTPException(status_code=404, detail="Message not found")
 
     # Fetch observers for this message
     observers = []

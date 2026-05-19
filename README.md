@@ -330,10 +330,9 @@ All components are configured via environment variables. Create a `.env` file or
 
 ### Collector Settings
 
-| Variable                         | Default  | Description                                                          |
-| -------------------------------- | -------- | -------------------------------------------------------------------- |
-| `COLLECTOR_CHANNEL_KEYS`         | _(none)_ | Additional decoder channel keys (`label=hex`, `label:hex`, or `hex`) |
-| `COLLECTOR_INCLUDE_TEST_CHANNEL` | `false`  | Include built-in 'test' channel messages                             |
+| Variable                           | Default | Description                                              |
+| ---------------------------------- | ------- | -------------------------------------------------------- |
+| `CHANNEL_REFRESH_INTERVAL_SECONDS` | `300`   | Seconds between channel key refresh from database (min 10) |
 
 #### LetsMesh Packet Decoding
 

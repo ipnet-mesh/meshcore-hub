@@ -2,11 +2,16 @@
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from sqlalchemy import func, or_, select
 from sqlalchemy.sql.elements import ColumnElement
 
 from meshcore_hub.api.auth import RequireRead
+from meshcore_hub.api.channel_visibility import (
+    get_max_visibility_level,
+    get_visible_channel_indices,
+    resolve_user_role,
+)
 from meshcore_hub.api.dependencies import DbSession
 from meshcore_hub.common.models import (
     Advertisement,
@@ -47,12 +52,28 @@ def _flood_only_filter(
 async def get_stats(
     _: RequireRead,
     session: DbSession,
+    request: Request,
 ) -> DashboardStats:
     """Get dashboard statistics."""
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     yesterday = now - timedelta(days=1)
     seven_days_ago = now - timedelta(days=7)
+
+    # Resolve channel visibility
+    role = resolve_user_role(request)
+    max_level = get_max_visibility_level(role)
+    visible_indices = get_visible_channel_indices(session, max_level)
+
+    # Build channel message visibility filter
+    def _channel_visible_filter(
+        model: type[Message] = Message,
+    ) -> ColumnElement[bool]:
+        return or_(
+            model.message_type != "channel",
+            model.channel_idx.is_(None),
+            model.channel_idx.in_(visible_indices),
+        )
 
     # Total nodes
     total_nodes = session.execute(select(func.count()).select_from(Node)).scalar() or 0
@@ -67,7 +88,10 @@ async def get_stats(
 
     # Total messages
     total_messages = (
-        session.execute(select(func.count()).select_from(Message)).scalar() or 0
+        session.execute(
+            select(func.count()).select_from(Message).where(_channel_visible_filter())
+        ).scalar()
+        or 0
     )
 
     # Messages today
@@ -76,6 +100,7 @@ async def get_stats(
             select(func.count())
             .select_from(Message)
             .where(Message.received_at >= today_start)
+            .where(_channel_visible_filter())
         ).scalar()
         or 0
     )
@@ -118,6 +143,7 @@ async def get_stats(
             select(func.count())
             .select_from(Message)
             .where(Message.received_at >= seven_days_ago)
+            .where(_channel_visible_filter())
         ).scalar()
         or 0
     )
@@ -171,11 +197,12 @@ async def get_stats(
         for ad in recent_ads
     ]
 
-    # Channel message counts
+    # Channel message counts (only visible channels)
     channel_counts_query = (
         select(Message.channel_idx, func.count())
         .where(Message.message_type == "channel")
         .where(Message.channel_idx.isnot(None))
+        .where(Message.channel_idx.in_(visible_indices))
         .group_by(Message.channel_idx)
     )
     channel_results = session.execute(channel_counts_query).all()
@@ -336,6 +363,7 @@ async def get_activity(
 async def get_message_activity(
     _: RequireRead,
     session: DbSession,
+    request: Request,
     days: int = 30,
 ) -> MessageActivity:
     """Get daily message activity for the specified period.
@@ -349,11 +377,13 @@ async def get_message_activity(
     days = min(days, 90)
 
     now = datetime.now(timezone.utc)
-    # End at start of today (exclude today's incomplete data)
     end_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
     start_date = end_date - timedelta(days=days)
 
-    # Query message counts grouped by date
+    role = resolve_user_role(request)
+    max_level = get_max_visibility_level(role)
+    visible_indices = get_visible_channel_indices(session, max_level)
+
     date_expr = func.date(Message.received_at)
 
     query = (
@@ -363,6 +393,13 @@ async def get_message_activity(
         )
         .where(Message.received_at >= start_date)
         .where(Message.received_at < end_date)
+        .where(
+            or_(
+                Message.message_type != "channel",
+                Message.channel_idx.is_(None),
+                Message.channel_idx.in_(visible_indices),
+            )
+        )
         .group_by(date_expr)
         .order_by(date_expr)
     )

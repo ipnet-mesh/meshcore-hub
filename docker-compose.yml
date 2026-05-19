@@ -155,8 +155,7 @@ services:
       - MQTT_TLS=${MQTT_TLS:-false}
       - MQTT_TRANSPORT=${MQTT_TRANSPORT:-websockets}
       - MQTT_WS_PATH=${MQTT_WS_PATH:-/}
-      - COLLECTOR_CHANNEL_KEYS=${COLLECTOR_CHANNEL_KEYS:-}
-      - COLLECTOR_INCLUDE_TEST_CHANNEL=${COLLECTOR_INCLUDE_TEST_CHANNEL:-false}
+      - CHANNEL_REFRESH_INTERVAL_SECONDS=${CHANNEL_REFRESH_INTERVAL_SECONDS:-300}
       - DATA_HOME=/data
       - SEED_HOME=/seed
       # Webhook configuration
@@ -295,8 +294,6 @@ services:
       - NETWORK_ANNOUNCEMENT=${NETWORK_ANNOUNCEMENT:-}
       - CONTENT_HOME=/content
       - TZ=${TZ:-UTC}
-      - COLLECTOR_CHANNEL_KEYS=${COLLECTOR_CHANNEL_KEYS:-}
-      - COLLECTOR_INCLUDE_TEST_CHANNEL=${COLLECTOR_INCLUDE_TEST_CHANNEL:-false}
       # Feature flags (set to false to disable specific pages)
       - FEATURE_DASHBOARD=${FEATURE_DASHBOARD:-true}
       - FEATURE_NODES=${FEATURE_NODES:-true}
@@ -305,6 +302,7 @@ services:
       - FEATURE_MAP=${FEATURE_MAP:-true}
       - FEATURE_MEMBERS=${FEATURE_MEMBERS:-true}
       - FEATURE_PAGES=${FEATURE_PAGES:-true}
+      - FEATURE_CHANNELS=${FEATURE_CHANNELS:-true}
     command: ["web"]
     healthcheck:
       test:

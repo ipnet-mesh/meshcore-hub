@@ -320,7 +320,6 @@ def web_app(mock_http_client: MockHttpClient, monkeypatch: pytest.MonkeyPatch) -
     """Create a web app with mocked HTTP client."""
     # Ensure tests use a consistent locale regardless of local .env
     monkeypatch.setenv("WEB_DATETIME_LOCALE", "en-US")
-    monkeypatch.setenv("COLLECTOR_INCLUDE_TEST_CHANNEL", "true")
     monkeypatch.setenv("OIDC_ENABLED", "false")
     monkeypatch.setenv("NETWORK_ANNOUNCEMENT", "")
     app = create_app(
@@ -366,7 +365,6 @@ def web_app_with_oidc(
     )
     monkeypatch.setenv("OIDC_SESSION_SECRET", "test-session-secret")
     monkeypatch.setenv("WEB_DATETIME_LOCALE", "en-US")
-    monkeypatch.setenv("COLLECTOR_INCLUDE_TEST_CHANNEL", "true")
     monkeypatch.setenv("NETWORK_ANNOUNCEMENT", "")
 
     app = create_app(
