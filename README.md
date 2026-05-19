@@ -232,11 +232,11 @@ This ensures `beta.example.com` (priority 20) is matched before the production w
 
 ### Adding Remote Observers
 
-Other operators can run their own [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) instance and publish decoded packets to your MeshCore Hub. They can also optionally contribute to the LetsMesh network.
+Other operators can run their own [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) instance and publish decoded packets to your MeshCore Hub. They can also optionally contribute to the LetsMesh and MeshRank networks.
 
 > **Prerequisite:** Your MQTT broker must be accessible to remote observers. In production, this means exposing the WebSocket listener via a reverse proxy with TLS (e.g., `wss://mqtt.example.com/mqtt`).
 
-#### Example: Observer contributing to LetsMesh and your community Hub
+#### Example: Contribute to MeshCore Hub, LetsMesh, and MeshRank
 
 A ready-made Docker Compose setup is provided in `contrib/packetcapture/`. Download it and configure:
 
@@ -253,15 +253,20 @@ Edit `.env` and update the following variables:
 
 | Variable | Description |
 |----------|-------------|
-| `SERIAL_PORT` | Device path for your Meshtastic device (e.g. `/dev/ttyUSB0`, or `/dev/serial/by-id/...` for a stable path) |
+| `SERIAL_PORT` | Device path for your MeshCore companion device (e.g. `/dev/ttyUSB0`, or `/dev/serial/by-id/...` for a stable path) |
 | `IATA` | 3-letter area code for your location (e.g. `STN`, `SEA`) |
 | `ORIGIN` | Observer identifier (default: `observer`) |
-| `ENABLE_LETSMESH_US` | Set `true` to contribute to LetsMesh US |
-| `ENABLE_LETSMESH_EU` | Set `true` to contribute to LetsMesh EU |
-| `CUSTOM_MQTT_HOST` | Your community Hub's public MQTT domain (e.g. `mqtt.example.com`) |
-| `CUSTOM_MQTT_PORT` | MQTT port — `443` for TLS/WSS, `1883` for local/plain |
-| `CUSTOM_MQTT_TLS` | `true` for TLS, `false` for plain connections |
-| `CUSTOM_MQTT_AUDIENCE` | Must match `MQTT_TOKEN_AUDIENCE` on your broker (e.g. `mqtt.example.com` for TLS, `mqtt.localhost` for local) |
+| `IPNET_ENABLE` | Set `true` to contribute packets to IPNet MeshCore Hub (default: `true`) |
+| `LETSMESH_ENABLE` | Set `true` to contribute to LetsMesh (default: `false`) |
+| `LETSMESH_REGION` | LetsMesh region: `eu` or `us` (default: `eu`) |
+| `MESHRANK_ENABLE` | Set `true` to contribute to MeshRank (default: `false`) |
+| `MESHRANK_UPLINK_KEY` | Your MeshRank uplink key (required if MeshRank enabled) |
+| `CUSTOM_ENABLE` | Set `true` to publish to a custom MQTT broker (default: `false`) |
+| `CUSTOM_MQTT_SERVER` | Custom MQTT broker hostname |
+| `CUSTOM_MQTT_PORT` | Custom MQTT broker port (default: `8883`) |
+| `CUSTOM_MQTT_USE_TLS` | `true` for TLS, `false` for plain (default: `true`) |
+| `CUSTOM_MQTT_USERNAME` | Username for custom broker auth |
+| `CUSTOM_MQTT_PASSWORD` | Password for custom broker auth |
 
 Then start the observer:
 
@@ -269,7 +274,7 @@ Then start the observer:
 docker compose up -d
 ```
 
-> **Local network (no TLS):** Set `CUSTOM_MQTT_HOST` to the Hub's LAN IP (e.g. `192.168.1.100`), `CUSTOM_MQTT_PORT=1883`, `CUSTOM_MQTT_TLS=false`, and `CUSTOM_MQTT_AUDIENCE=mqtt.localhost`.
+> **Local network (no TLS):** Set `CUSTOM_MQTT_SERVER` to the Hub's LAN IP (e.g. `192.168.1.100`), `CUSTOM_MQTT_PORT=1883`, and `CUSTOM_MQTT_USE_TLS=false`.
 
 ### Backup & Restore
 
