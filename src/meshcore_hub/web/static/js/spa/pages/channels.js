@@ -2,17 +2,11 @@ import { apiGet, apiPost, apiPut, apiDelete } from '../api.js';
 import { html, litRender, nothing, t, errorAlert, getConfig, hasRole } from '../components.js';
 import { iconChannel, iconPlus, iconEdit, iconTrash, iconLock } from '../icons.js';
 
-const VISIBILITY_COLORS = {
-    public: 'badge-success',
-    member: 'badge-warning',
-    operator: 'badge-orange',
-    admin: 'badge-error',
-};
+const VISIBILITY_ORDER = ['public', 'member', 'operator', 'admin'];
 
 function renderVisibilityBadge(visibility, oidcEnabled) {
     if (!oidcEnabled) return nothing;
-    const colorClass = VISIBILITY_COLORS[visibility] || 'badge-ghost';
-    return html`<span class="badge ${colorClass} badge-sm">${visibility}</span>`;
+    return html`<span class="badge badge-primary badge-sm">${visibility}</span>`;
 }
 
 function renderChannelCard(channel, { oidcEnabled, isAdmin, onDelete, onEdit, onNavigate }) {
@@ -21,8 +15,8 @@ function renderChannelCard(channel, { oidcEnabled, isAdmin, onDelete, onEdit, on
         ? html`<span class="badge badge-ghost badge-sm">${t('channels.disabled')}</span>`
         : nothing;
 
-    const qrId = `qr-${channel.id}`;
     const channelIdx = parseInt(channel.channel_hash, 16);
+    const qrId = `qr-${channel.id}`;
 
     const adminButtons = isAdmin
         ? html`<div class="flex gap-2 mt-2">
@@ -39,17 +33,24 @@ function renderChannelCard(channel, { oidcEnabled, isAdmin, onDelete, onEdit, on
         ? html`<div class="font-mono text-xs opacity-70 mt-1 break-all select-all">${channel.key_hex.toLowerCase()}</div>`
         : nothing;
 
+    const qrPlaceholder = channel.key_hex
+        ? html`<div id="${qrId}" class="qr-container"></div>`
+        : nothing;
+
     return html`<div class="card bg-base-100 shadow-xl cursor-pointer" @click=${() => onNavigate(channelIdx)}>
-        <div class="card-body">
-            <h2 class="card-title flex items-center gap-2">
-                ${iconChannel('h-5 w-5')}
-                ${channel.name}
-                ${visibilityBadge}
-                ${enabledBadge}
-            </h2>
-            ${keyDisplay}
-            <div id="${qrId}" class="qr-container mt-2"></div>
-            ${adminButtons}
+        <div class="card-body flex-row gap-4">
+            <div class="flex-1 min-w-0">
+                <h2 class="card-title flex items-center gap-2">
+                    ${channel.name}
+                    ${visibilityBadge}
+                    ${enabledBadge}
+                </h2>
+                ${keyDisplay}
+                ${adminButtons}
+            </div>
+            <div class="flex-shrink-0 self-center">
+                ${qrPlaceholder}
+            </div>
         </div>
     </div>`;
 }
@@ -145,6 +146,36 @@ export async function render(container, params, router) {
                 </div>`
                 : nothing;
 
+            const groups = new Map();
+            for (const vis of VISIBILITY_ORDER) {
+                groups.set(vis, []);
+            }
+            for (const ch of channelsList) {
+                const vis = ch.visibility || 'public';
+                if (!groups.has(vis)) groups.set(vis, []);
+                groups.get(vis).push(ch);
+            }
+
+            const cardOpts = {
+                oidcEnabled,
+                isAdmin,
+                onDelete: handleDeleteClick,
+                onEdit: handleEditClick,
+                onNavigate: (idx) => router.navigate(`/messages?channel_idx=${idx}`),
+            };
+
+            const groupedSections = [];
+            for (const vis of VISIBILITY_ORDER) {
+                const group = groups.get(vis);
+                if (!group || group.length === 0) continue;
+                groupedSections.push(html`
+                    <h2 class="text-lg font-semibold mt-6 mb-3 opacity-70">${vis.charAt(0).toUpperCase() + vis.slice(1)}</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        ${group.map(ch => renderChannelCard(ch, cardOpts))}
+                    </div>
+                `);
+            }
+
             let modalHtml = nothing;
             if (modalState?.type === 'add' || modalState?.type === 'edit') {
                 modalHtml = renderChannelModal({
@@ -170,15 +201,7 @@ export async function render(container, params, router) {
                 </div>
                 ${adminHeader}
                 ${emptyMessage}
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    ${channelsList.map(ch => renderChannelCard(ch, {
-                        oidcEnabled,
-                        isAdmin,
-                        onDelete: handleDeleteClick,
-                        onEdit: handleEditClick,
-                        onNavigate: (idx) => router.navigate(`/messages?channel_idx=${idx}`),
-                    }))}
-                </div>
+                ${groupedSections}
                 ${modalHtml}
             `, container);
 

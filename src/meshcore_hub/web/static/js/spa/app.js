@@ -71,11 +71,11 @@ if (features.nodes !== false) {
         router.navigate(`/nodes/${params.prefix}`, true);
     });
 }
-if (features.messages !== false) {
-    router.addRoute('/messages', pageHandler(pages.messages));
-}
 if (features.channels !== false) {
     router.addRoute('/channels', pageHandler(pages.channels));
+}
+if (features.messages !== false) {
+    router.addRoute('/messages', pageHandler(pages.messages));
 }
 if (features.advertisements !== false) {
     router.addRoute('/advertisements', pageHandler(pages.advertisements));
@@ -153,8 +153,8 @@ function updatePageTitle(pathname) {
     // Add feature-dependent titles
     if (features.dashboard !== false) titles['/dashboard'] = composePageTitle('entities.dashboard');
     if (features.nodes !== false) titles['/nodes'] = composePageTitle('entities.nodes');
-    if (features.messages !== false) titles['/messages'] = composePageTitle('entities.messages');
     if (features.channels !== false) titles['/channels'] = composePageTitle('entities.channels');
+    if (features.messages !== false) titles['/messages'] = composePageTitle('entities.messages');
     if (features.advertisements !== false) titles['/advertisements'] = composePageTitle('entities.advertisements');
     if (features.map !== false) titles['/map'] = composePageTitle('entities.map');
     if (features.members !== false) titles['/members'] = composePageTitle('entities.members');
@@ -203,11 +203,11 @@ function renderMobileNav(config) {
     if (features.advertisements !== false) {
         items.push(html`<li><a href="/advertisements" data-nav-link>${iconAdvertisements('h-5 w-5 nav-icon-adverts')} ${t('entities.advertisements')}</a></li>`);
     }
-    if (features.messages !== false) {
-        items.push(html`<li><a href="/messages" data-nav-link>${iconMessages('h-5 w-5 nav-icon-messages')} ${t('entities.messages')}</a></li>`);
-    }
     if (features.channels !== false) {
         items.push(html`<li><a href="/channels" data-nav-link>${iconChannel('h-5 w-5')} ${t('entities.channels')}</a></li>`);
+    }
+    if (features.messages !== false) {
+        items.push(html`<li><a href="/messages" data-nav-link>${iconMessages('h-5 w-5 nav-icon-messages')} ${t('entities.messages')}</a></li>`);
     }
     if (features.map !== false) {
         items.push(html`<li><a href="/map" data-nav-link>${iconMap('h-5 w-5 nav-icon-map')} ${t('entities.map')}</a></li>`);

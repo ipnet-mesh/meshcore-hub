@@ -35,14 +35,14 @@ function renderRadioTiles(rc) {
 
 function renderNavCard({ href, icon, label, colorVar }) {
     return html`
-        <a href="${href}" class="w-28 h-28 sm:w-32 sm:h-32
+        <a href="${href}" class="w-24 h-24 sm:w-28 sm:h-28
             border border-base-content/20 rounded-box
             hover:scale-105 hover:border-base-content/40
             transition-all duration-200 ease-out
             flex flex-col items-center justify-center gap-2
             bg-base-200/50 hover:bg-base-200
             group">
-            <span class="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center"
+            <span class="w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center"
                   style="${colorVar ? `color: var(${colorVar})` : ''}">
                 ${icon}
             </span>
@@ -74,7 +74,7 @@ function renderHeroSection({ networkName, logoUrl, logoInvertLight, networkCity,
             </div>
             ${welcomeText}
             <div class="flex-1"></div>
-            <div class="flex flex-wrap justify-center gap-3 sm:gap-4 mt-auto">
+            <div class="flex flex-wrap justify-center gap-2 sm:gap-3 mt-auto">
                 ${features.dashboard !== false ? renderNavCard({
                     href: '/dashboard',
                     icon: iconDashboard('w-full h-full'),
@@ -93,17 +93,17 @@ function renderHeroSection({ networkName, logoUrl, logoInvertLight, networkCity,
                     label: t('entities.advertisements'),
                     colorVar: '--color-adverts',
                 }) : nothing}
-                ${features.messages !== false ? renderNavCard({
-                    href: '/messages',
-                    icon: iconMessages('w-full h-full'),
-                    label: t('entities.messages'),
-                    colorVar: '--color-messages',
-                }) : nothing}
                 ${features.channels !== false ? renderNavCard({
                     href: '/channels',
                     icon: iconChannel('w-full h-full'),
                     label: t('entities.channels'),
                     colorVar: '--color-channels',
+                }) : nothing}
+                ${features.messages !== false ? renderNavCard({
+                    href: '/messages',
+                    icon: iconMessages('w-full h-full'),
+                    label: t('entities.messages'),
+                    colorVar: '--color-messages',
                 }) : nothing}
                 ${features.members !== false ? renderNavCard({
                     href: '/members',

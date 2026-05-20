@@ -103,4 +103,4 @@ class TestMessagesConfig:
         config = json.loads(text[config_start:config_end])
 
         assert config["channel_labels"]["17"] == "Public"
-        assert config["channel_labels"]["217"] == "test"
+        assert config["channel_labels"]["217"] == "Test"

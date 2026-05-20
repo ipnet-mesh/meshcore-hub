@@ -32,7 +32,7 @@ class LetsMeshPacketDecoder:
 
     BUILTIN_CHANNEL_KEYS: tuple[tuple[str, str], ...] = (
         ("Public", "8B3387E9C5CDEA6AC9E5EDBAA115CD72"),
-        ("test", "9CD8FCF22A47333B591D96A2B848B73F"),
+        ("Test", "9CD8FCF22A47333B591D96A2B848B73F"),
     )
 
     TEST_CHANNEL_HASH: str = "D9"

@@ -5,8 +5,8 @@
         "nodes": "Nodes",
         "node": "Node",
         "node_detail": "Node Detail",
-        "advertisements": "Advertisements",
-        "advertisement": "Advertisement",
+        "advertisements": "Adverts",
+        "advertisement": "Advert",
         "messages": "Messages",
         "message": "Message",
         "map": "Map",
@@ -235,7 +235,9 @@
         "visibility_label": "Visibility",
         "enabled_label": "Enabled",
         "channel_hash_label": "Hash",
-        "disabled": "Disabled"
+        "disabled": "Disabled",
+        "optgroup_standard": "Standard",
+        "optgroup_custom": "Custom"
     },
     "not_found": {
         "description": "The page you're looking for doesn't exist or has been moved."
