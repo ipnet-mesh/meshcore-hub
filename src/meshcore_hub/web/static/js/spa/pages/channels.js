@@ -2,7 +2,7 @@ import { apiGet, apiPost, apiPut, apiDelete } from '../api.js';
 import { html, litRender, nothing, t, errorAlert, getConfig, hasRole } from '../components.js';
 import { iconChannel, iconPlus, iconEdit, iconTrash, iconLock } from '../icons.js';
 
-const VISIBILITY_ORDER = ['public', 'member', 'operator', 'admin'];
+const VISIBILITY_ORDER = ['community', 'member', 'operator', 'admin'];
 
 function renderVisibilityBadge(visibility, oidcEnabled) {
     if (!oidcEnabled) return nothing;
@@ -83,7 +83,7 @@ function renderChannelModal({ channel, isEdit, onSave, onCancel }) {
                         pattern="[0-9A-Fa-f]{32,64}" />` : nothing}
                     <label class="label-text text-right">${t('channels.visibility_label')}</label>
                     <select id="channel-modal-visibility" class="select select-bordered select-sm">
-                        <option value="public" .selected=${channel?.visibility === 'public' || !channel}>public</option>
+                        <option value="community" .selected=${channel?.visibility === 'community' || !channel}>community</option>
                         <option value="member" .selected=${channel?.visibility === 'member'}>member</option>
                         <option value="operator" .selected=${channel?.visibility === 'operator'}>operator</option>
                         <option value="admin" .selected=${channel?.visibility === 'admin'}>admin</option>
@@ -151,7 +151,7 @@ export async function render(container, params, router) {
                 groups.set(vis, []);
             }
             for (const ch of channelsList) {
-                const vis = ch.visibility || 'public';
+                const vis = ch.visibility || 'community';
                 if (!groups.has(vis)) groups.set(vis, []);
                 groups.get(vis).push(ch);
             }
@@ -169,7 +169,7 @@ export async function render(container, params, router) {
                 const group = groups.get(vis);
                 if (!group || group.length === 0) continue;
                 groupedSections.push(html`
-                    <h2 class="text-lg font-semibold mt-6 mb-3 opacity-70">${vis.charAt(0).toUpperCase() + vis.slice(1)}</h2>
+                    <h2 class="text-lg font-semibold mt-6 mb-3 opacity-70">${t(`channels.visibility_${vis}`)}</h2>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         ${group.map(ch => renderChannelCard(ch, cardOpts))}
                     </div>
@@ -220,7 +220,7 @@ export async function render(container, params, router) {
         }
 
         function handleAdd() {
-            modalState = { type: 'add', channel: { visibility: 'public', enabled: true } };
+            modalState = { type: 'add', channel: { visibility: 'community', enabled: true } };
             renderPage(channels);
         }
 

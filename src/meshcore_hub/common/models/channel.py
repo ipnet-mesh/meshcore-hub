@@ -12,7 +12,7 @@ from meshcore_hub.common.models.base import Base, TimestampMixin, UUIDMixin
 class ChannelVisibility(str, Enum):
     """Channel visibility/permission levels."""
 
-    PUBLIC = "public"
+    COMMUNITY = "community"
     MEMBER = "member"
     OPERATOR = "operator"
     ADMIN = "admin"
@@ -26,7 +26,7 @@ class Channel(Base, UUIDMixin, TimestampMixin):
         name: Channel display name (unique, non-empty)
         key_hex: Secret key as uppercase hex (supports AES-128 and AES-256)
         channel_hash: First byte of SHA-256 of key_hex (2-char uppercase hex)
-        visibility: Permission level (public, member, operator, admin)
+        visibility: Permission level (community, member, operator, admin)
         enabled: Whether the channel is active
         created_at: Record creation timestamp
         updated_at: Record update timestamp
@@ -40,7 +40,7 @@ class Channel(Base, UUIDMixin, TimestampMixin):
     key_hex: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     channel_hash: Mapped[str] = mapped_column(String(2), nullable=False)
     visibility: Mapped[str] = mapped_column(
-        String(20), default=ChannelVisibility.PUBLIC.value, nullable=False
+        String(20), default=ChannelVisibility.COMMUNITY.value, nullable=False
     )
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 

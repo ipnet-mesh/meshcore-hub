@@ -157,3 +157,10 @@ class TestEnJsonCompleteness:
         """Channel optgroup labels exist and resolve correctly."""
         assert t("channels.optgroup_standard") == "Standard"
         assert t("channels.optgroup_custom") == "Custom"
+
+    def test_channels_visibility_keys(self):
+        """Channel visibility level labels exist and resolve correctly."""
+        assert t("channels.visibility_community") == "Community"
+        assert t("channels.visibility_member") == "Member"
+        assert t("channels.visibility_operator") == "Operator"
+        assert t("channels.visibility_admin") == "Admin"

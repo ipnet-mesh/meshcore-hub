@@ -86,7 +86,7 @@ MyChannel:
 
 Key rules:
 - Keys must be uppercase hex, 32 characters (AES-128) or 64 characters (AES-256)
-- Seeded channels always have `visibility: public` — to set member/operator/admin visibility, use the CLI or API
+- Seeded channels always have `visibility: community` — to set member/operator/admin visibility, use the CLI or API
 - The `Public` and `test` built-in keys are always loaded into the decoder regardless of database contents
 - Test channel messages are only stored when a `test` channel row exists in the database with `enabled: true`
 

@@ -180,16 +180,20 @@ def _build_channel_labels() -> dict[str, str]:
         from meshcore_hub.common.database import DatabaseManager
 
         db = DatabaseManager(settings.effective_database_url)
-        from meshcore_hub.common.models.channel import Channel
+        try:
+            from meshcore_hub.common.models.channel import Channel
 
-        with db.session_scope() as session:
-            channels = session.query(Channel).filter(Channel.enabled.is_(True)).all()
-            db_decoder = LetsMeshPacketDecoder(
-                channel_keys=[f"{ch.name}={ch.key_hex}" for ch in channels]
-            )
-            db_labels = db_decoder.channel_labels_by_index()
-            labels.update(db_labels)
-        db.dispose()
+            with db.session_scope() as session:
+                channels = (
+                    session.query(Channel).filter(Channel.enabled.is_(True)).all()
+                )
+                db_decoder = LetsMeshPacketDecoder(
+                    channel_keys=[f"{ch.name}={ch.key_hex}" for ch in channels]
+                )
+                db_labels = db_decoder.channel_labels_by_index()
+                labels.update(db_labels)
+        finally:
+            db.dispose()
     except Exception as e:
         logger.warning("Failed to load channel labels from database: %s", e)
 

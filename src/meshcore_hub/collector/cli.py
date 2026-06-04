@@ -348,9 +348,9 @@ def channel_list_cmd(ctx: click.Context) -> None:
 )
 @click.option(
     "--visibility",
-    type=click.Choice(["public", "member", "operator", "admin"]),
-    default="public",
-    help="Channel visibility level (default: public)",
+    type=click.Choice(["community", "member", "operator", "admin"]),
+    default="community",
+    help="Channel visibility level (default: community)",
 )
 @click.pass_context
 def channel_add_cmd(
@@ -633,7 +633,7 @@ def _import_channels(
                         name=name,
                         key_hex=key_hex,
                         channel_hash=Channel.compute_channel_hash(key_hex),
-                        visibility="public",
+                        visibility="community",
                         enabled=enabled,
                     )
                     session.add(channel)

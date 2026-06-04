@@ -74,6 +74,19 @@ class TestCollectorSettings:
 
         assert settings.channel_refresh_interval_seconds == 60
 
+    def test_channels_file_path(self) -> None:
+        """channels_file property resolves to seed_home/channels.yaml."""
+        settings = CollectorSettings(_env_file=None, seed_home="/seed/data")
+
+        assert settings.channels_file == "/seed/data/channels.yaml"
+
+    def test_channels_file_default(self) -> None:
+        """channels_file uses default seed_home."""
+        settings = CollectorSettings(_env_file=None)
+
+        assert settings.channels_file.endswith("channels.yaml")
+        assert "seed" in settings.channels_file
+
 
 class TestAPISettings:
     """Tests for APISettings."""
@@ -109,3 +122,23 @@ class TestWebSettings:
         settings = WebSettings(_env_file=None)
 
         assert settings.network_announcement is None
+
+    def test_feature_channels_default_true(self) -> None:
+        """Test that feature_channels defaults to True."""
+        settings = WebSettings(_env_file=None)
+
+        assert settings.feature_channels is True
+
+    def test_feature_channels_override(self) -> None:
+        """Test that feature_channels can be disabled."""
+        settings = WebSettings(_env_file=None, feature_channels=False)
+
+        assert settings.feature_channels is False
+
+    def test_features_dict_includes_channels(self) -> None:
+        """Test that features dict includes channels key."""
+        settings = WebSettings(_env_file=None)
+        features = settings.features
+
+        assert "channels" in features
+        assert features["channels"] is True

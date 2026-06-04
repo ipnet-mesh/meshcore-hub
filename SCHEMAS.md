@@ -154,7 +154,7 @@ Group/broadcast messages on specific channels.
 
 **Field Descriptions**:
 - `channel_idx`: Channel number (0-255) when available
-- `channel_name`: Channel display label (e.g., `"Public"`, `"#test"`) when available
+- `channel_name`: Channel display label (e.g., `"Public"`, `"Community"`, `"#test"`) when available
 - `pubkey_prefix`: First 12 characters of the source public key prefix, used for message identification when available
 - `path_len`: Number of hops message traveled
 - `txt_type`: Message type indicator (0=plain, 2=signed, etc.)

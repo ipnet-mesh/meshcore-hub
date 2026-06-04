@@ -10,7 +10,7 @@ from sqlalchemy import select
 from meshcore_hub.api.dependencies import DbSession
 from meshcore_hub.common.models.channel import Channel
 
-VISIBILITY_LEVELS = {"public": 0, "member": 1, "operator": 2, "admin": 3}
+VISIBILITY_LEVELS = {"community": 0, "member": 1, "operator": 2, "admin": 3}
 
 
 def resolve_user_role(request: Request) -> str | None:
@@ -34,7 +34,7 @@ def resolve_user_role(request: Request) -> str | None:
 def get_max_visibility_level(role: str | None) -> int:
     """Get the maximum visibility level for a given role.
 
-    Returns 0 for anonymous users (public only).
+    Returns 0 for anonymous users (community only).
     """
     if role is None:
         return 0

@@ -2,7 +2,9 @@
 
 from datetime import datetime, timedelta, timezone
 
-from meshcore_hub.common.models import EventObserver, Message, Node, NodeTag
+import pytest
+
+from meshcore_hub.common.models import EventObserver, Message, Node, NodeTag, Channel
 
 
 class TestListMessages:
@@ -465,3 +467,125 @@ class TestMessageSort:
         assert response.status_code == 200
         items = response.json()["items"]
         assert items[0]["text"] == "New"
+
+
+class TestMessageChannelVisibility:
+    """Tests for channel visibility filtering on messages."""
+
+    @pytest.fixture
+    def messages_with_visibility(self, api_db_session):
+        """Create messages on public and admin channels."""
+        pub_key = "AABBCCDDEEFF00112233445566778899"
+        adm_key = "FFEEDDCCBBAA99887766554433221100"
+        pub_idx = int(Channel.compute_channel_hash(pub_key), 16)
+        adm_idx = int(Channel.compute_channel_hash(adm_key), 16)
+
+        pub_ch = Channel(
+            name="CommunityCh",
+            key_hex=pub_key,
+            channel_hash=Channel.compute_channel_hash(pub_key),
+            visibility="community",
+            enabled=True,
+        )
+        adm_ch = Channel(
+            name="AdminCh",
+            key_hex=adm_key,
+            channel_hash=Channel.compute_channel_hash(adm_key),
+            visibility="admin",
+            enabled=True,
+        )
+        api_db_session.add_all([pub_ch, adm_ch])
+
+        pub_msg = Message(
+            message_type="channel",
+            channel_idx=pub_idx,
+            text="Community channel message",
+            received_at=datetime.now(timezone.utc),
+        )
+        adm_msg = Message(
+            message_type="channel",
+            channel_idx=adm_idx,
+            text="Admin channel message",
+            received_at=datetime.now(timezone.utc),
+        )
+        direct_msg = Message(
+            message_type="direct",
+            pubkey_prefix="abc123",
+            text="Direct message",
+            received_at=datetime.now(timezone.utc),
+        )
+        api_db_session.add_all([pub_msg, adm_msg, direct_msg])
+        api_db_session.commit()
+
+        return pub_msg, adm_msg, direct_msg
+
+    def test_anonymous_sees_only_community_channel_messages(
+        self, client_no_auth, messages_with_visibility
+    ):
+        """Anonymous users see community channel and direct messages only."""
+        response = client_no_auth.get("/api/v1/messages")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 2
+        texts = {item["text"] for item in data["items"]}
+        assert "Community channel message" in texts
+        assert "Direct message" in texts
+        assert "Admin channel message" not in texts
+
+    def test_admin_sees_all_channel_messages(
+        self, client_no_auth, messages_with_visibility
+    ):
+        """Admin users see all channel messages."""
+        response = client_no_auth.get(
+            "/api/v1/messages",
+            headers={"X-User-Roles": "admin"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 3
+        texts = {item["text"] for item in data["items"]}
+        assert "Community channel message" in texts
+        assert "Admin channel message" in texts
+        assert "Direct message" in texts
+
+    def test_get_message_hidden_channel_returns_404(
+        self, client_no_auth, messages_with_visibility
+    ):
+        """Getting a message on a hidden channel returns 404."""
+        pub_msg, adm_msg, direct_msg = messages_with_visibility
+
+        response = client_no_auth.get(f"/api/v1/messages/{adm_msg.id}")
+        assert response.status_code == 404
+
+    def test_get_message_hidden_channel_visible_to_admin(
+        self, client_no_auth, messages_with_visibility
+    ):
+        """Admin can get a message on an admin channel."""
+        pub_msg, adm_msg, direct_msg = messages_with_visibility
+
+        response = client_no_auth.get(
+            f"/api/v1/messages/{adm_msg.id}",
+            headers={"X-User-Roles": "admin"},
+        )
+        assert response.status_code == 200
+        assert response.json()["text"] == "Admin channel message"
+
+    def test_get_message_community_channel_visible(
+        self, client_no_auth, messages_with_visibility
+    ):
+        """Anonymous can get a message on a community channel."""
+        pub_msg, adm_msg, direct_msg = messages_with_visibility
+
+        response = client_no_auth.get(f"/api/v1/messages/{pub_msg.id}")
+        assert response.status_code == 200
+        assert response.json()["text"] == "Community channel message"
+
+    def test_direct_messages_always_visible(
+        self, client_no_auth, messages_with_visibility
+    ):
+        """Direct messages are always visible regardless of channel visibility."""
+        pub_msg, adm_msg, direct_msg = messages_with_visibility
+
+        response = client_no_auth.get(f"/api/v1/messages/{direct_msg.id}")
+        assert response.status_code == 200
+        assert response.json()["text"] == "Direct message"

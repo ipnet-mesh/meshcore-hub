@@ -22,8 +22,8 @@ class ChannelCreate(BaseModel):
         max_length=64,
         description="Channel secret key as uppercase hex (32 or 64 chars)",
     )
-    visibility: Literal["public", "member", "operator", "admin"] = Field(
-        default="public",
+    visibility: Literal["community", "member", "operator", "admin"] = Field(
+        default="community",
         description="Channel visibility/permission level",
     )
     enabled: bool = Field(
@@ -52,7 +52,7 @@ class ChannelUpdate(BaseModel):
         max_length=64,
         description="Channel secret key as uppercase hex",
     )
-    visibility: Optional[Literal["public", "member", "operator", "admin"]] = Field(
+    visibility: Optional[Literal["community", "member", "operator", "admin"]] = Field(
         default=None,
         description="Channel visibility/permission level",
     )

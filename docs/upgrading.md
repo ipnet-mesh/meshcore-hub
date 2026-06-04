@@ -2,7 +2,15 @@
 
 This guide covers upgrading from a previous MeshCore Hub release to the current version. Check the relevant version section below before upgrading.
 
-## v0.13.0
+## v0.11.0
+
+### Channel Visibility Rename: "public" → "community"
+
+The channel visibility level `"public"` has been renamed to `"community"` to avoid confusion with MeshCore's concept of public channels. All MeshCore channels are private (encrypted) in protocol terms, so "community" better reflects the access level.
+
+The Alembic migration automatically updates existing `visibility='public'` rows to `visibility='community'`. No manual database changes are required.
+
+API consumers that filter channels by `visibility=public` must update to `visibility=community`.
 
 ### Database-Backed Channel Keys
 
@@ -16,7 +24,7 @@ Channel decryption keys are now managed via the `channels` database table instea
 | `name` | `VARCHAR(100), UNIQUE` | Channel display name |
 | `key_hex` | `VARCHAR(64), UNIQUE` | Uppercase hex key (32 or 64 chars) |
 | `channel_hash` | `VARCHAR(2)` | First byte of SHA-256 of key |
-| `visibility` | `VARCHAR(20)` | `public`, `member`, `operator`, or `admin` |
+| `visibility` | `VARCHAR(20)` | `community`, `member`, `operator`, or `admin` |
 | `enabled` | `BOOLEAN` | Whether the channel is active |
 | `created_at`, `updated_at` | `DATETIME` | Timestamps |
 
@@ -30,7 +38,7 @@ Channel decryption keys are now managed via the `channels` database table instea
 
 **Migration steps:**
 
-1. Run `meshcore-hub db upgrade` to create the `channels` table
+1. Run `meshcore-hub db upgrade` to create the `channels` table and update visibility values
 2. Convert any `COLLECTOR_CHANNEL_KEYS` values to either:
    - A `channels.yaml` seed file in `SEED_HOME` (see `docs/seeding.md`)
    - Database rows via CLI: `meshcore-hub collector channel add --name X --key HEX`
@@ -39,38 +47,9 @@ Channel decryption keys are now managed via the `channels` database table instea
 
 **Test channel behavior change:** Test channel messages (channel_idx 217) are now discarded by default unless a `test` channel row exists in the database with `enabled=true`. Previously this was controlled by `COLLECTOR_INCLUDE_TEST_CHANNEL`.
 
-## v0.12.0
+### Advertisement Route Type & Deduplication
 
-### Advertisement Route Type & Deduplication Improvements
-
-This release adds route type tracking and improves advertisement deduplication to better distinguish between flood and zero-hop (local) advertisements.
-
-**New database columns on `advertisements` table:**
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `route_type` | `VARCHAR(20), nullable` | Route type: `flood`, `transport_flood`, `direct`, `transport_direct` |
-| `advert_timestamp` | `DATETIME, nullable` | Node's own Unix timestamp from the advert payload |
-
-Both columns are nullable — existing records will have `NULL` values. The Alembic migration adds these columns automatically.
-
-**Default API filter change:**
-
-`GET /api/v1/advertisements` now defaults to `route_type=flood,transport_flood`, showing only flood advertisements. Existing records with `route_type=NULL` are included in all default queries to avoid hiding historical data. Pass `route_type=all` to see all types.
-
-**Dashboard metrics now flood-only:**
-
-All dashboard advertisement counts (`total_advertisements`, `advertisements_24h`, `advertisements_7d`, `recent_advertisements`, and `/activity`) now count only flood/transport_flood adverts plus NULL (historical records).
-
-**Deduplication bucket increased from 120s to 300s:**
-
-Both `compute_advertisement_hash()` and `compute_telemetry_hash()` now use a 5-minute (300-second) deduplication bucket instead of the previous 2-minute (120-second) bucket. This reduces duplicate records when multiple observers report the same event within a 5-minute window.
-
-**Advertisement deduplication now uses node timestamp:**
-
-When available, the node's own `advert_timestamp` is used for deduplication bucketing instead of `received_at`. This means the same flood advertisement observed by multiple receivers will correctly deduplicate even if received several minutes apart. Node timestamps that deviate by more than 4 hours from `received_at` are rejected for bucketing (the raw value is still stored).
-
-## v0.11.0
+Advertisement route type tracking and improved deduplication are included. New `route_type` and `advert_timestamp` columns are added to the `advertisements` table automatically by the migration. The API defaults to showing flood advertisements only. Deduplication uses a 5-minute bucket with node timestamps when available.
 
 ### Async SQLite Foreign Key Fix
 
