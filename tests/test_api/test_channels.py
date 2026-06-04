@@ -118,6 +118,41 @@ class TestListChannels:
         names = {item["name"] for item in data["items"]}
         assert names == {"Community", "MemberCh"}
 
+    def test_list_channels_operator_sees_community_member_operator(
+        self, client_no_auth, api_db_session
+    ):
+        """Operator role sees community, member, and operator channels."""
+        pub_key = "AABBCCDDEEFF00112233445566778899"
+        mem_key = "11223344556677889900AABBCCDDEEFF"
+        op_key = "0A0B0C0D0E0F10111213141516171819"
+        adm_key = "FFEEDDCCBBAA99887766554433221100"
+
+        for name, key, vis in [
+            ("Community", pub_key, "community"),
+            ("MemberCh", mem_key, "member"),
+            ("OperatorCh", op_key, "operator"),
+            ("AdminCh", adm_key, "admin"),
+        ]:
+            ch = Channel(
+                name=name,
+                key_hex=key,
+                channel_hash=Channel.compute_channel_hash(key),
+                visibility=vis,
+                enabled=True,
+            )
+            api_db_session.add(ch)
+        api_db_session.commit()
+
+        response = client_no_auth.get(
+            "/api/v1/channels",
+            headers={"X-User-Roles": "operator"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 3
+        names = {item["name"] for item in data["items"]}
+        assert names == {"Community", "MemberCh", "OperatorCh"}
+
 
 class TestCreateChannel:
     """Tests for POST /channels endpoint."""

@@ -142,3 +142,48 @@ class TestWebSettings:
 
         assert "channels" in features
         assert features["channels"] is True
+
+    def test_features_dashboard_auto_disables(self) -> None:
+        """Dashboard disables when nodes, ads, and messages all off."""
+        settings = WebSettings(
+            _env_file=None,
+            feature_dashboard=True,
+            feature_nodes=False,
+            feature_advertisements=False,
+            feature_messages=False,
+        )
+        assert settings.features["dashboard"] is False
+
+    def test_features_map_auto_disables_without_nodes(self) -> None:
+        """Map disables when nodes feature is off."""
+        settings = WebSettings(
+            _env_file=None,
+            feature_map=True,
+            feature_nodes=False,
+        )
+        assert settings.features["map"] is False
+
+    def test_features_members_auto_disables_without_oidc(self) -> None:
+        """Members disables when OIDC is not enabled."""
+        settings = WebSettings(
+            _env_file=None,
+            feature_members=True,
+            oidc_enabled=False,
+        )
+        assert settings.features["members"] is False
+
+    def test_features_all_enabled_by_default(self) -> None:
+        """All features are enabled with default settings."""
+        settings = WebSettings(
+            _env_file=None,
+            oidc_enabled=True,
+        )
+        features = settings.features
+        assert features["dashboard"] is True
+        assert features["nodes"] is True
+        assert features["advertisements"] is True
+        assert features["messages"] is True
+        assert features["map"] is True
+        assert features["members"] is True
+        assert features["channels"] is True
+        assert features["pages"] is True

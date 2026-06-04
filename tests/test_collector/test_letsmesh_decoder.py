@@ -195,3 +195,82 @@ def test_decode_payload_returns_none_for_non_string_raw() -> None:
     decoder = LetsMeshPacketDecoder()
     assert decoder.decode_payload({"raw": 12345}) is None
     assert decoder.decode_payload({"raw": None}) is None
+
+
+def test_reload_keys_replaces_existing_keys() -> None:
+    """reload_keys replaces channel keys and names."""
+    decoder = LetsMeshPacketDecoder(
+        channel_keys=["bot=EB50A1BCB3E4E5D7BF69A57C9DADA211"]
+    )
+
+    new_key = "D0BDD6D71538138ED979EEC00D98AD97"
+    decoder.reload_keys([f"chat={new_key}"])
+
+    assert new_key.upper() in decoder._channel_keys
+    assert "EB50A1BCB3E4E5D7BF69A57C9DADA211" not in decoder._channel_keys
+    new_hash = LetsMeshPacketDecoder._compute_channel_hash(new_key)
+    assert decoder._channel_names_by_hash.get(new_hash) == "chat"
+
+
+def test_reload_keys_with_empty_list_keeps_builtins() -> None:
+    """Reloading with empty list retains builtin keys."""
+    decoder = LetsMeshPacketDecoder(
+        channel_keys=["bot=EB50A1BCB3E4E5D7BF69A57C9DADA211"]
+    )
+    decoder.reload_keys([])
+
+    assert "8B3387E9C5CDEA6AC9E5EDBAA115CD72" in decoder._channel_keys
+    assert "9CD8FCF22A47333B591D96A2B848B73F" in decoder._channel_keys
+    assert "EB50A1BCB3E4E5D7BF69A57C9DADA211" not in decoder._channel_keys
+
+
+def test_enrich_payload_decoded_merges_attributes() -> None:
+    """_enrich_payload_decoded merges payload object attributes into dict."""
+    payload_obj = MagicMock()
+    payload_obj.channel_hash = "AB"
+    payload_obj.decrypted = {"message": "hello"}
+    payload_obj.sender_public_key = "DEADBEEF"
+    payload_obj.cipher_mac = None
+    payload_obj.ciphertext = None
+    payload_obj.ciphertext_length = None
+    payload_obj.destination_hash = None
+    payload_obj.source_hash = None
+    payload_obj.path_length = None
+    payload_obj.path_hashes = None
+    payload_obj.extra_type = None
+    payload_obj.extra_data = None
+    payload_obj.checksum = None
+
+    decoded_dict = {
+        "payload": {
+            "decoded": {
+                "type": 5,
+            }
+        }
+    }
+    LetsMeshPacketDecoder._enrich_payload_decoded(decoded_dict, payload_obj)
+
+    decoded = decoded_dict["payload"]["decoded"]
+    assert decoded["channelHash"] == "AB"
+    assert decoded["decrypted"] == {"message": "hello"}
+    assert decoded["senderPublicKey"] == "DEADBEEF"
+    assert "cipherMac" not in decoded
+
+
+def test_channel_name_from_decoded_returns_none_for_non_dict() -> None:
+    """channel_name_from_decoded returns None for non-dict inputs."""
+    decoder = LetsMeshPacketDecoder()
+    assert decoder.channel_name_from_decoded(None) is None
+    assert decoder.channel_name_from_decoded("string") is None  # type: ignore[arg-type]
+    assert decoder.channel_name_from_decoded(42) is None  # type: ignore[arg-type]
+    assert decoder.channel_name_from_decoded({"payload": "not a dict"}) is None
+    assert (
+        decoder.channel_name_from_decoded({"payload": {"decoded": "not a dict"}})
+        is None
+    )
+    assert (
+        decoder.channel_name_from_decoded(
+            {"payload": {"decoded": {"channelHash": 123}}}
+        )
+        is None
+    )

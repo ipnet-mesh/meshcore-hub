@@ -324,21 +324,24 @@ def channel_list_cmd(ctx: click.Context) -> None:
     from meshcore_hub.common.models.channel import Channel
 
     db = DatabaseManager(ctx.obj["database_url"])
-    with db.session_scope() as session:
-        channels = session.query(Channel).order_by(Channel.name).all()
-        if not channels:
-            click.echo("No channels found.")
-        else:
-            click.echo(
-                f"{'Name':<20} {'Key':<16} {'Hash':<6} {'Visibility':<12} {'Enabled'}"
-            )
-            click.echo("-" * 70)
-            for ch in channels:
+    try:
+        with db.session_scope() as session:
+            channels = session.query(Channel).order_by(Channel.name).all()
+            if not channels:
+                click.echo("No channels found.")
+            else:
                 click.echo(
-                    f"{ch.name:<20} {ch.masked_key:<16} {ch.channel_hash:<6} "
-                    f"{ch.visibility:<12} {'Yes' if ch.enabled else 'No'}"
+                    f"{'Name':<20} {'Key':<16} {'Hash':<6} "
+                    f"{'Visibility':<12} {'Enabled'}"
                 )
-    db.dispose()
+                click.echo("-" * 70)
+                for ch in channels:
+                    click.echo(
+                        f"{ch.name:<20} {ch.masked_key:<16} {ch.channel_hash:<6} "
+                        f"{ch.visibility:<12} {'Yes' if ch.enabled else 'No'}"
+                    )
+    finally:
+        db.dispose()
 
 
 @channel_group.command("add")
@@ -366,23 +369,24 @@ def channel_add_cmd(
     from meshcore_hub.common.models.channel import Channel
 
     db = DatabaseManager(ctx.obj["database_url"])
-    with db.session_scope() as session:
-        existing = session.query(Channel).filter(Channel.name == name).first()
-        if existing:
-            click.echo(f"Error: Channel '{name}' already exists.", err=True)
-            db.dispose()
-            return
+    try:
+        with db.session_scope() as session:
+            existing = session.query(Channel).filter(Channel.name == name).first()
+            if existing:
+                click.echo(f"Error: Channel '{name}' already exists.", err=True)
+                return
 
-        channel = Channel(
-            name=name,
-            key_hex=key_hex.upper(),
-            channel_hash=Channel.compute_channel_hash(key_hex.upper()),
-            visibility=visibility,
-            enabled=True,
-        )
-        session.add(channel)
-        click.echo(f"Channel '{name}' added (hash={channel.channel_hash})")
-    db.dispose()
+            channel = Channel(
+                name=name,
+                key_hex=key_hex.upper(),
+                channel_hash=Channel.compute_channel_hash(key_hex.upper()),
+                visibility=visibility,
+                enabled=True,
+            )
+            session.add(channel)
+            click.echo(f"Channel '{name}' added (hash={channel.channel_hash})")
+    finally:
+        db.dispose()
 
 
 @channel_group.command("remove")
@@ -396,15 +400,16 @@ def channel_remove_cmd(ctx: click.Context, name: str) -> None:
     from meshcore_hub.common.models.channel import Channel
 
     db = DatabaseManager(ctx.obj["database_url"])
-    with db.session_scope() as session:
-        channel = session.query(Channel).filter(Channel.name == name).first()
-        if not channel:
-            click.echo(f"Error: Channel '{name}' not found.", err=True)
-            db.dispose()
-            return
-        session.delete(channel)
-        click.echo(f"Channel '{name}' removed.")
-    db.dispose()
+    try:
+        with db.session_scope() as session:
+            channel = session.query(Channel).filter(Channel.name == name).first()
+            if not channel:
+                click.echo(f"Error: Channel '{name}' not found.", err=True)
+                return
+            session.delete(channel)
+            click.echo(f"Channel '{name}' removed.")
+    finally:
+        db.dispose()
 
 
 @channel_group.command("enable")
@@ -418,15 +423,16 @@ def channel_enable_cmd(ctx: click.Context, name: str) -> None:
     from meshcore_hub.common.models.channel import Channel
 
     db = DatabaseManager(ctx.obj["database_url"])
-    with db.session_scope() as session:
-        channel = session.query(Channel).filter(Channel.name == name).first()
-        if not channel:
-            click.echo(f"Error: Channel '{name}' not found.", err=True)
-            db.dispose()
-            return
-        channel.enabled = True
-        click.echo(f"Channel '{name}' enabled.")
-    db.dispose()
+    try:
+        with db.session_scope() as session:
+            channel = session.query(Channel).filter(Channel.name == name).first()
+            if not channel:
+                click.echo(f"Error: Channel '{name}' not found.", err=True)
+                return
+            channel.enabled = True
+            click.echo(f"Channel '{name}' enabled.")
+    finally:
+        db.dispose()
 
 
 @channel_group.command("disable")
@@ -440,15 +446,16 @@ def channel_disable_cmd(ctx: click.Context, name: str) -> None:
     from meshcore_hub.common.models.channel import Channel
 
     db = DatabaseManager(ctx.obj["database_url"])
-    with db.session_scope() as session:
-        channel = session.query(Channel).filter(Channel.name == name).first()
-        if not channel:
-            click.echo(f"Error: Channel '{name}' not found.", err=True)
-            db.dispose()
-            return
-        channel.enabled = False
-        click.echo(f"Channel '{name}' disabled.")
-    db.dispose()
+    try:
+        with db.session_scope() as session:
+            channel = session.query(Channel).filter(Channel.name == name).first()
+            if not channel:
+                click.echo(f"Error: Channel '{name}' not found.", err=True)
+                return
+            channel.enabled = False
+            click.echo(f"Channel '{name}' disabled.")
+    finally:
+        db.dispose()
 
 
 @collector.command("seed")

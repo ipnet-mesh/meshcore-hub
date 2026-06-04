@@ -447,6 +447,99 @@ class TestMessageSort:
         assert items[0]["text"] == "Alpha message"
         assert items[1]["text"] == "Zebra message"
 
+    def test_sort_by_type_desc(self, client_no_auth, api_db_session):
+        """sort=type&order=desc sorts by message_type descending."""
+        now = datetime.now(timezone.utc)
+        msg_ch = Message(
+            message_type="channel",
+            channel_idx=17,
+            text="Channel msg",
+            received_at=now,
+        )
+        msg_ct = Message(
+            message_type="contact",
+            text="Contact msg",
+            received_at=now,
+        )
+        api_db_session.add_all([msg_ch, msg_ct])
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/messages?sort=type&order=desc")
+        assert response.status_code == 200
+        items = response.json()["items"]
+        assert items[0]["message_type"] == "contact"
+        assert items[1]["message_type"] == "channel"
+
+    def test_sort_by_from_desc(self, client_no_auth, api_db_session):
+        """sort=from&order=desc sorts by pubkey_prefix descending."""
+        now = datetime.now(timezone.utc)
+        msg_b = Message(
+            message_type="direct",
+            pubkey_prefix="bb_prefix",
+            text="From B",
+            received_at=now,
+        )
+        msg_a = Message(
+            message_type="direct",
+            pubkey_prefix="aa_prefix",
+            text="From A",
+            received_at=now,
+        )
+        api_db_session.add_all([msg_b, msg_a])
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/messages?sort=from&order=desc")
+        assert response.status_code == 200
+        items = response.json()["items"]
+        assert items[0]["text"] == "From B"
+        assert items[1]["text"] == "From A"
+
+    def test_sort_by_message_desc(self, client_no_auth, api_db_session):
+        """sort=message&order=desc sorts by text descending."""
+        now = datetime.now(timezone.utc)
+        msg_b = Message(
+            message_type="direct",
+            text="Zebra message",
+            received_at=now,
+        )
+        msg_a = Message(
+            message_type="direct",
+            text="Alpha message",
+            received_at=now,
+        )
+        api_db_session.add_all([msg_b, msg_a])
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/messages?sort=message&order=desc")
+        assert response.status_code == 200
+        items = response.json()["items"]
+        assert items[0]["text"] == "Zebra message"
+        assert items[1]["text"] == "Alpha message"
+
+    def test_sort_by_time_asc(self, client_no_auth, api_db_session):
+        """sort=time&order=asc sorts by received_at ascending."""
+        now = datetime.now(timezone.utc)
+        msg_old = Message(
+            message_type="direct",
+            pubkey_prefix="aa",
+            text="Old msg",
+            received_at=now - timedelta(hours=1),
+        )
+        msg_new = Message(
+            message_type="direct",
+            pubkey_prefix="bb",
+            text="New msg",
+            received_at=now,
+        )
+        api_db_session.add_all([msg_old, msg_new])
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/messages?sort=time&order=asc")
+        assert response.status_code == 200
+        items = response.json()["items"]
+        assert items[0]["text"] == "Old msg"
+        assert items[1]["text"] == "New msg"
+
     def test_sort_invalid_ignored(self, client_no_auth, api_db_session):
         """Invalid sort value falls back to default (time desc)."""
         now = datetime.now(timezone.utc)
@@ -589,3 +682,38 @@ class TestMessageChannelVisibility:
         response = client_no_auth.get(f"/api/v1/messages/{direct_msg.id}")
         assert response.status_code == 200
         assert response.json()["text"] == "Direct message"
+
+    def test_get_message_channel_null_idx_not_filtered(
+        self, client_no_auth, api_db_session
+    ):
+        """Channel message with channel_idx=None bypasses visibility filter."""
+        msg = Message(
+            message_type="channel",
+            channel_idx=None,
+            text="Channel msg no idx",
+            received_at=datetime.now(timezone.utc),
+        )
+        api_db_session.add(msg)
+        api_db_session.commit()
+
+        response = client_no_auth.get(f"/api/v1/messages/{msg.id}")
+        assert response.status_code == 200
+        assert response.json()["text"] == "Channel msg no idx"
+
+    def test_get_message_no_observers_without_event_hash(
+        self, client_no_auth, api_db_session
+    ):
+        """Message without event_hash returns empty observers list."""
+        msg = Message(
+            message_type="direct",
+            pubkey_prefix="nohash1",
+            text="No hash msg",
+            received_at=datetime.now(timezone.utc),
+            event_hash=None,
+        )
+        api_db_session.add(msg)
+        api_db_session.commit()
+
+        response = client_no_auth.get(f"/api/v1/messages/{msg.id}")
+        assert response.status_code == 200
+        assert response.json()["observers"] == []

@@ -5,7 +5,13 @@ from unittest.mock import patch
 
 import pytest
 
-from meshcore_hub.common.models import Advertisement, Message, Node, Channel
+from meshcore_hub.common.models import (
+    Advertisement,
+    Message,
+    Node,
+    NodeTag,
+    Channel,
+)
 from meshcore_hub.common.models import UserProfile
 
 
@@ -575,3 +581,88 @@ class TestDashboardChannelVisibility:
         admin_data = response_admin.json()
         admin_total = sum(p["count"] for p in admin_data["data"])
         assert admin_total >= 1
+
+    def test_recent_advertisements_includes_tag_name(
+        self, client_no_auth, api_db_session
+    ):
+        """Recent advertisements resolve tag_name from name tags."""
+        now = datetime.now(timezone.utc)
+        pub_key = "aa" * 16
+        node = Node(
+            public_key=pub_key,
+            name="NodeName",
+            adv_type="CLIENT",
+            first_seen=now,
+            last_seen=now,
+        )
+        api_db_session.add(node)
+        api_db_session.commit()
+
+        tag = NodeTag(node_id=node.id, key="name", value="TagName")
+        api_db_session.add(tag)
+
+        ad = Advertisement(
+            public_key=pub_key,
+            name=None,
+            adv_type="CLIENT",
+            received_at=now,
+            route_type="flood",
+        )
+        api_db_session.add(ad)
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/dashboard/stats")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["recent_advertisements"]) == 1
+        assert data["recent_advertisements"][0]["tag_name"] == "TagName"
+
+    def test_operator_sees_community_and_member_channel_counts(
+        self, client_no_auth, api_db_session
+    ):
+        """Operator role sees community + member channels but not admin in stats."""
+        pub_key = "AABBCCDDEEFF00112233445566778899"
+        mem_key = "11223344556677889900AABBCCDDEEFF"
+        adm_key = "FFEEDDCCBBAA99887766554433221100"
+        pub_idx = int(Channel.compute_channel_hash(pub_key), 16)
+        mem_idx = int(Channel.compute_channel_hash(mem_key), 16)
+        adm_idx = int(Channel.compute_channel_hash(adm_key), 16)
+
+        for name, key, vis in [
+            ("Community", pub_key, "community"),
+            ("Member", mem_key, "member"),
+            ("Admin", adm_key, "admin"),
+        ]:
+            ch = Channel(
+                name=name,
+                key_hex=key,
+                channel_hash=Channel.compute_channel_hash(key),
+                visibility=vis,
+                enabled=True,
+            )
+            api_db_session.add(ch)
+        api_db_session.commit()
+
+        for idx, text in [
+            (pub_idx, "Pub msg"),
+            (mem_idx, "Mem msg"),
+            (adm_idx, "Adm msg"),
+        ]:
+            msg = Message(
+                message_type="channel",
+                channel_idx=idx,
+                text=text,
+                received_at=datetime.now(timezone.utc),
+            )
+            api_db_session.add(msg)
+        api_db_session.commit()
+
+        response = client_no_auth.get(
+            "/api/v1/dashboard/stats",
+            headers={"X-User-Roles": "operator"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert str(pub_idx) in data["channel_message_counts"]
+        assert str(mem_idx) in data["channel_message_counts"]
+        assert str(adm_idx) not in data["channel_message_counts"]
