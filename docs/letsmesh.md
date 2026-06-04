@@ -21,8 +21,8 @@ The collector subscribes to packets published by [meshcore-packet-capture](https
 
 - For channel packets, if a channel key is available, a channel label is attached (for example `Public` or `#test`) for UI display.
 - In the messages feed and dashboard channel sections, known channel indexes are preferred for labels (`17 -> Public`, `217 -> #test`) to avoid stale channel-name mismatches.
-- Additional channel names are loaded from `COLLECTOR_CHANNEL_KEYS` when entries are provided as `label=hex` (for example `bot=<key>`).
-- The collector keeps built-in keys for `Public` and `#test`, and merges any additional keys from `COLLECTOR_CHANNEL_KEYS`.
+- Additional channel names are loaded from the `channels` database table (managed via CLI, API, or seed YAML).
+- The collector keeps built-in keys for `Public` and `#test`, and merges any additional keys from enabled database channel rows.
 
 ## Location and Messages
 

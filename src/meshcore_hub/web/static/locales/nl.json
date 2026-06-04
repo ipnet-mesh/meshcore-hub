@@ -170,6 +170,12 @@
         "empty_state_description": "Nog geen leden.",
         "empty_description": "Leden verschijnen hier zodra gebruikers inloggen en knooppunten adopteren."
     },
+    "channels": {
+        "visibility_community": "Community",
+        "visibility_member": "Lid",
+        "visibility_operator": "Operator",
+        "visibility_admin": "Beheerder"
+    },
     "not_found": {
         "description": "De pagina die u zoekt bestaat niet of is verplaatst."
     },

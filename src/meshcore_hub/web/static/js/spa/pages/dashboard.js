@@ -160,17 +160,24 @@ function renderChartCards({ showNodes, showAdverts, showMessages }) {
 export async function render(container, params, router) {
     try {
         const config = getConfig();
-        const channelLabels = getChannelLabelsMap(config);
+        let channelLabels = new Map();
         const features = config.features || {};
         const showNodes = features.nodes !== false;
         const showAdverts = features.advertisements !== false;
         const showMessages = features.messages !== false;
 
-        const [stats, advertActivity, messageActivity, nodeCount] = await Promise.all([
+        const [stats, advertActivity, messageActivity, nodeCount, channelsData] = await Promise.all([
             apiGet('/api/v1/dashboard/stats'),
             apiGet('/api/v1/dashboard/activity', { days: 7 }),
             apiGet('/api/v1/dashboard/message-activity', { days: 7 }),
             apiGet('/api/v1/dashboard/node-count', { days: 7 }),
+            apiGet('/api/v1/channels'),
+        ]);
+        channelLabels = new Map([
+            ...getChannelLabelsMap(config),
+            ...(channelsData.items || [])
+                .map(ch => [parseInt(ch.channel_hash, 16), ch.name])
+                .filter(([idx]) => Number.isInteger(idx)),
         ]);
 
         // Top section: stats + charts

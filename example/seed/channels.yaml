@@ -1,0 +1,14 @@
+# Channel seed data for MeshCore Hub
+#
+# Format options:
+#   Shorthand:  name: HEX_KEY
+#   Expanded:   name: { key: HEX_KEY, enabled: true }
+#
+# Visibility is always 'public' for seeded channels.
+# To set member/operator/admin visibility, use the CLI or API.
+#
+# Example:
+#   MyChannel: AABBCCDD11223344AABBCCDD11223344
+#   PrivateChannel:
+#     key: 11223344AABBCCDD11223344AABBCCDD11223344AABBCCDD11223344AABBCCDD
+#     enabled: true

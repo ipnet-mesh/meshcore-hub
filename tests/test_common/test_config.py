@@ -59,18 +59,33 @@ class TestCollectorSettings:
         assert settings.effective_seed_home == "/seed/data"
         assert settings.node_tags_file == "/seed/data/node_tags.yaml"
 
-    def test_collector_channel_keys_list(self) -> None:
-        """Channel keys are parsed from comma/space-separated env values."""
+    def test_channel_refresh_interval_seconds(self) -> None:
+        """Channel refresh interval defaults to 300."""
+        settings = CollectorSettings(_env_file=None)
+
+        assert settings.channel_refresh_interval_seconds == 300
+
+    def test_channel_refresh_interval_seconds_custom(self) -> None:
+        """Channel refresh interval can be overridden."""
         settings = CollectorSettings(
             _env_file=None,
-            collector_channel_keys="aa11, bb22 cc33",
+            channel_refresh_interval_seconds=60,
         )
 
-        assert settings.collector_channel_keys_list == [
-            "aa11",
-            "bb22",
-            "cc33",
-        ]
+        assert settings.channel_refresh_interval_seconds == 60
+
+    def test_channels_file_path(self) -> None:
+        """channels_file property resolves to seed_home/channels.yaml."""
+        settings = CollectorSettings(_env_file=None, seed_home="/seed/data")
+
+        assert settings.channels_file == "/seed/data/channels.yaml"
+
+    def test_channels_file_default(self) -> None:
+        """channels_file uses default seed_home."""
+        settings = CollectorSettings(_env_file=None)
+
+        assert settings.channels_file.endswith("channels.yaml")
+        assert "seed" in settings.channels_file
 
 
 class TestAPISettings:
@@ -107,3 +122,68 @@ class TestWebSettings:
         settings = WebSettings(_env_file=None)
 
         assert settings.network_announcement is None
+
+    def test_feature_channels_default_true(self) -> None:
+        """Test that feature_channels defaults to True."""
+        settings = WebSettings(_env_file=None)
+
+        assert settings.feature_channels is True
+
+    def test_feature_channels_override(self) -> None:
+        """Test that feature_channels can be disabled."""
+        settings = WebSettings(_env_file=None, feature_channels=False)
+
+        assert settings.feature_channels is False
+
+    def test_features_dict_includes_channels(self) -> None:
+        """Test that features dict includes channels key."""
+        settings = WebSettings(_env_file=None)
+        features = settings.features
+
+        assert "channels" in features
+        assert features["channels"] is True
+
+    def test_features_dashboard_auto_disables(self) -> None:
+        """Dashboard disables when nodes, ads, and messages all off."""
+        settings = WebSettings(
+            _env_file=None,
+            feature_dashboard=True,
+            feature_nodes=False,
+            feature_advertisements=False,
+            feature_messages=False,
+        )
+        assert settings.features["dashboard"] is False
+
+    def test_features_map_auto_disables_without_nodes(self) -> None:
+        """Map disables when nodes feature is off."""
+        settings = WebSettings(
+            _env_file=None,
+            feature_map=True,
+            feature_nodes=False,
+        )
+        assert settings.features["map"] is False
+
+    def test_features_members_auto_disables_without_oidc(self) -> None:
+        """Members disables when OIDC is not enabled."""
+        settings = WebSettings(
+            _env_file=None,
+            feature_members=True,
+            oidc_enabled=False,
+        )
+        assert settings.features["members"] is False
+
+    def test_features_all_enabled_by_default(self) -> None:
+        """All features are enabled with default settings."""
+        settings = WebSettings(
+            _env_file=None,
+            oidc_enabled=True,
+        )
+        features = settings.features
+        assert features["dashboard"] is True
+        assert features["nodes"] is True
+        assert features["advertisements"] is True
+        assert features["messages"] is True
+        assert features["map"] is True
+        assert features["members"] is True
+        assert features["channels"] is True
+        assert features["pages"] is True

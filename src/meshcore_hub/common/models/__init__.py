@@ -11,6 +11,7 @@ from meshcore_hub.common.models.event_log import EventLog
 from meshcore_hub.common.models.user_profile import UserProfile
 from meshcore_hub.common.models.user_profile_node import UserProfileNode
 from meshcore_hub.common.models.event_observer import EventObserver, add_event_observer
+from meshcore_hub.common.models.channel import Channel, ChannelVisibility
 
 __all__ = [
     "Base",
@@ -26,4 +27,6 @@ __all__ = [
     "UserProfileNode",
     "EventObserver",
     "add_event_observer",
+    "Channel",
+    "ChannelVisibility",
 ]

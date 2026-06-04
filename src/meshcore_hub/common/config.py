@@ -1,7 +1,6 @@
 """Pydantic Settings for MeshCore Hub configuration."""
 
 from enum import Enum
-import re
 from typing import Optional
 
 from pydantic import Field, field_validator
@@ -138,16 +137,10 @@ class CollectorSettings(CommonSettings):
         description="Remove nodes not seen for this many days (last_seen)",
         ge=1,
     )
-    collector_channel_keys: Optional[str] = Field(
-        default=None,
-        description=(
-            "Optional channel secret keys for message decryption. "
-            "Provide as comma/space separated hex values."
-        ),
-    )
-    collector_include_test_channel: bool = Field(
-        default=False,
-        description="Include built-in 'test' channel messages (channel_idx 217).",
+    channel_refresh_interval_seconds: int = Field(
+        default=300,
+        description="Seconds between channel key refresh from database",
+        ge=10,
     )
 
     @property
@@ -182,15 +175,11 @@ class CollectorSettings(CommonSettings):
         return str(Path(self.effective_seed_home) / "node_tags.yaml")
 
     @property
-    def collector_channel_keys_list(self) -> list[str]:
-        """Parse configured channel keys into a normalized list."""
-        if not self.collector_channel_keys:
-            return []
-        return [
-            part.strip()
-            for part in re.split(r"[,\s]+", self.collector_channel_keys)
-            if part.strip()
-        ]
+    def channels_file(self) -> str:
+        """Get the path to channels.yaml in seed_home."""
+        from pathlib import Path
+
+        return str(Path(self.effective_seed_home) / "channels.yaml")
 
     @field_validator("database_url")
     @classmethod
@@ -383,6 +372,9 @@ class WebSettings(CommonSettings):
         default=True, description="Enable the /map page and /map/data endpoint"
     )
     feature_members: bool = Field(default=True, description="Enable the /members page")
+    feature_channels: bool = Field(
+        default=True, description="Enable the /channels page"
+    )
     feature_pages: bool = Field(
         default=True, description="Enable custom markdown pages"
     )
@@ -412,6 +404,7 @@ class WebSettings(CommonSettings):
             "messages": self.feature_messages,
             "map": self.feature_map and self.feature_nodes,
             "members": self.feature_members and self.oidc_enabled,
+            "channels": self.feature_channels,
             "pages": self.feature_pages,
         }
 

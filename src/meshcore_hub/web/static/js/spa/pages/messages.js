@@ -24,7 +24,7 @@ export async function render(container, params, router) {
     const order = query.order || 'desc';
 
     const config = getConfig();
-    const channelLabels = getChannelLabelsMap(config);
+    let channelLabels = new Map();
     const tz = config.timezone || '';
     const tzBadge = tz && tz !== 'UTC' ? html`<span class="text-sm opacity-60">${tz}</span>` : nothing;
     const navigate = (url) => router.navigate(url);
@@ -206,10 +206,18 @@ ${displayContent}`, container);
         try {
             const apiParams = { limit, offset, message_type, channel_idx, sort, order };
             if (observed_by.length > 0) apiParams.observed_by = observed_by;
-            const [data, nodesData] = await Promise.all([
+            const [data, nodesData, channelsData] = await Promise.all([
                 apiGet('/api/v1/messages', apiParams),
                 apiGet('/api/v1/nodes', { limit: 500, observer: true }),
+                apiGet('/api/v1/channels'),
             ]);
+            const builtinLabels = getChannelLabelsMap(config);
+            const customLabels = new Map(
+                (channelsData.items || [])
+                    .map(ch => [parseInt(ch.channel_hash, 16), ch.name])
+                    .filter(([idx]) => Number.isInteger(idx)),
+            );
+            channelLabels = new Map([...builtinLabels, ...customLabels]);
             const messages = dedupeBySignature(data.items || []);
             const allNodes = nodesData.items || [];
 
@@ -356,9 +364,12 @@ ${displayContent}`, container);
                 </label>
                 <select name="channel_idx" class="select select-bordered select-sm" @change=${autoSubmit}>
                     <option value="">${t('common.all_channels')}</option>
-                    ${[...channelLabels.entries()].map(([idx, label]) =>
+                    ${builtinLabels.size > 0 ? html`<optgroup label=${t('channels.optgroup_standard')}>${[...builtinLabels.entries()].map(([idx, label]) =>
                         html`<option value=${idx} ?selected=${channel_idx === String(idx)}>${label}</option>`
-                    )}
+                    )}</optgroup>` : nothing}
+                    ${customLabels.size > 0 ? html`<optgroup label=${t('channels.optgroup_custom')}>${[...customLabels.entries()].map(([idx, label]) =>
+                        html`<option value=${idx} ?selected=${channel_idx === String(idx)}>${label}</option>`
+                    )}</optgroup>` : nothing}
                 </select>
             </div>`,
             ];

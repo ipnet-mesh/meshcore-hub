@@ -5,8 +5,8 @@
         "nodes": "Nodes",
         "node": "Node",
         "node_detail": "Node Detail",
-        "advertisements": "Advertisements",
-        "advertisement": "Advertisement",
+        "advertisements": "Adverts",
+        "advertisement": "Advert",
         "messages": "Messages",
         "message": "Message",
         "map": "Map",
@@ -14,7 +14,8 @@
         "member": "Member",
         "tags": "Tags",
         "tag": "Tag",
-        "channel": "Channel"
+        "channel": "Channel",
+        "channels": "Channels"
     },
     "common": {
         "filter": "Filter",
@@ -222,6 +223,25 @@
     "members": {
         "empty_state_description": "No members yet.",
         "empty_description": "Members will appear here once users log in and adopt nodes."
+    },
+    "channels": {
+        "title": "Channels",
+        "add_channel": "Add Channel",
+        "edit_channel": "Edit Channel",
+        "delete_channel": "Delete Channel",
+        "delete_confirm": "Are you sure you want to delete channel {{name}}?",
+        "name_label": "Channel Name",
+        "key_label": "Channel Key (hex)",
+        "visibility_label": "Visibility",
+        "visibility_community": "Community",
+        "visibility_member": "Member",
+        "visibility_operator": "Operator",
+        "visibility_admin": "Admin",
+        "enabled_label": "Enabled",
+        "channel_hash_label": "Hash",
+        "disabled": "Disabled",
+        "optgroup_standard": "Standard",
+        "optgroup_custom": "Custom"
     },
     "not_found": {
         "description": "The page you're looking for doesn't exist or has been moved."

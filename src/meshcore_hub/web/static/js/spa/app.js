@@ -8,7 +8,7 @@
 import { Router } from './router.js';
 import { html, litRender, getConfig, hasRole, renderAuthSection } from './components.js';
 import { loadLocale, t } from './i18n.js';
-import { iconHome, iconDashboard, iconNodes, iconAdvertisements, iconMessages, iconMap, iconMembers, iconPage } from './icons.js';
+import { iconHome, iconDashboard, iconNodes, iconAdvertisements, iconMessages, iconMap, iconMembers, iconPage, iconChannel } from './icons.js';
 
 // Page modules (lazy-loaded)
 const pages = {
@@ -20,6 +20,7 @@ const pages = {
     advertisements: () => import('./pages/advertisements.js'),
     map: () => import('./pages/map.js'),
     members: () => import('./pages/members.js'),
+    channels: () => import('./pages/channels.js'),
     customPage: () => import('./pages/custom-page.js'),
     notFound: () => import('./pages/not-found.js'),
     profile: () => import('./pages/profile.js'),
@@ -69,6 +70,9 @@ if (features.nodes !== false) {
         // Short link redirect
         router.navigate(`/nodes/${params.prefix}`, true);
     });
+}
+if (features.channels !== false) {
+    router.addRoute('/channels', pageHandler(pages.channels));
 }
 if (features.messages !== false) {
     router.addRoute('/messages', pageHandler(pages.messages));
@@ -149,6 +153,7 @@ function updatePageTitle(pathname) {
     // Add feature-dependent titles
     if (features.dashboard !== false) titles['/dashboard'] = composePageTitle('entities.dashboard');
     if (features.nodes !== false) titles['/nodes'] = composePageTitle('entities.nodes');
+    if (features.channels !== false) titles['/channels'] = composePageTitle('entities.channels');
     if (features.messages !== false) titles['/messages'] = composePageTitle('entities.messages');
     if (features.advertisements !== false) titles['/advertisements'] = composePageTitle('entities.advertisements');
     if (features.map !== false) titles['/map'] = composePageTitle('entities.map');
@@ -197,6 +202,9 @@ function renderMobileNav(config) {
     }
     if (features.advertisements !== false) {
         items.push(html`<li><a href="/advertisements" data-nav-link>${iconAdvertisements('h-5 w-5 nav-icon-adverts')} ${t('entities.advertisements')}</a></li>`);
+    }
+    if (features.channels !== false) {
+        items.push(html`<li><a href="/channels" data-nav-link>${iconChannel('h-5 w-5')} ${t('entities.channels')}</a></li>`);
     }
     if (features.messages !== false) {
         items.push(html`<li><a href="/messages" data-nav-link>${iconMessages('h-5 w-5 nav-icon-messages')} ${t('entities.messages')}</a></li>`);

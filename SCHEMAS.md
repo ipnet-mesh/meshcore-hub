@@ -154,7 +154,7 @@ Group/broadcast messages on specific channels.
 
 **Field Descriptions**:
 - `channel_idx`: Channel number (0-255) when available
-- `channel_name`: Channel display label (e.g., `"Public"`, `"#test"`) when available
+- `channel_name`: Channel display label (e.g., `"Public"`, `"Community"`, `"#test"`) when available
 - `pubkey_prefix`: First 12 characters of the source public key prefix, used for message identification when available
 - `path_len`: Number of hops message traveled
 - `txt_type`: Message type indicator (0=plain, 2=signed, etc.)
@@ -186,7 +186,7 @@ Group/broadcast messages on specific channels.
 - In LetsMesh upload compatibility mode, packet type `5` is normalized to `CHANNEL_MSG_RECV` and packet types `1`, `2`, and `7` are normalized to `CONTACT_MSG_RECV` when decryptable text is available.
 - LetsMesh packets without decryptable message text are treated as informational `letsmesh_packet` events instead of message events.
 - For UI labels, known channel indexes are mapped (`17 -> Public`, `217 -> #test`) and preferred over ambiguous/stale channel-name hints.
-- Additional channel labels can be provided through `COLLECTOR_CHANNEL_KEYS` using `label=hex` entries.
+- Additional channel labels are loaded from the `channels` database table via the collector's periodic refresh.
 - When decoder output includes a human sender (`payload.decoded.decrypted.sender`), message text is normalized to `Name: Message`; sender identity remains unknown when only hash/prefix metadata is available.
 
 **Compatibility ingest note (advertisements)**:

@@ -1,11 +1,11 @@
 """Database connection and session management."""
 
 from contextlib import asynccontextmanager, contextmanager
-from typing import AsyncGenerator, Generator
+from typing import Any, AsyncGenerator, Generator
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from meshcore_hub.common.models.base import Base
@@ -88,6 +88,8 @@ class DatabaseManager:
     """Database connection manager.
 
     Manages database engine and session creation for a component.
+    The async engine is created lazily on first async session access
+    to avoid leaking connections when only sync operations are needed.
     """
 
     def __init__(self, database_url: str, echo: bool = False):
@@ -98,6 +100,7 @@ class DatabaseManager:
             echo: Enable SQL query logging
         """
         self.database_url = database_url
+        self._echo = echo
 
         # Ensure parent directory exists for SQLite databases
         if database_url.startswith("sqlite:///"):
@@ -110,14 +113,24 @@ class DatabaseManager:
         self.engine = create_database_engine(database_url, echo=echo)
         self.session_factory = create_session_factory(self.engine)
 
-        # Create async engine for async operations
-        async_url = database_url.replace("sqlite://", "sqlite+aiosqlite://")
-        self.async_engine = create_async_engine(async_url, echo=echo)
+        # Lazy-initialized async engine (created on first async_session call)
+        self._async_engine: AsyncEngine | None = None
+        self._async_session_factory: Any = None
+
+    def _ensure_async_engine(self) -> None:
+        """Create the async engine and session factory on first use."""
+        if self._async_engine is not None:
+            return
+
+        from sqlalchemy.ext.asyncio import async_sessionmaker
+
+        async_url = self.database_url.replace("sqlite://", "sqlite+aiosqlite://")
+        self._async_engine = create_async_engine(async_url, echo=self._echo)
 
         # Enable foreign keys for async SQLite engine
-        if database_url.startswith("sqlite"):
+        if self.database_url.startswith("sqlite"):
 
-            @event.listens_for(self.async_engine.sync_engine, "connect")
+            @event.listens_for(self._async_engine.sync_engine, "connect")
             def set_sqlite_pragma_async(
                 dbapi_connection: object, connection_record: object
             ) -> None:
@@ -125,10 +138,8 @@ class DatabaseManager:
                 cursor.execute("PRAGMA foreign_keys=ON")
                 cursor.close()
 
-        from sqlalchemy.ext.asyncio import async_sessionmaker
-
-        self.async_session_factory = async_sessionmaker(
-            self.async_engine,
+        self._async_session_factory = async_sessionmaker(
+            self._async_engine,
             class_=AsyncSession,
             expire_on_commit=False,
         )
@@ -183,12 +194,16 @@ class DatabaseManager:
                 result = await session.execute(select(Node))
                 await session.commit()
         """
-        async with self.async_session_factory() as session:
+        self._ensure_async_engine()
+        assert self._async_session_factory is not None
+        async with self._async_session_factory() as session:
             yield session
 
     def dispose(self) -> None:
         """Dispose of the database engine and connection pool."""
         self.engine.dispose()
+        if self._async_engine is not None:
+            self._async_engine.sync_engine.dispose()
 
 
 # Global database manager instance (initialized at runtime)

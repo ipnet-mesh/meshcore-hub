@@ -21,6 +21,7 @@ from meshcore_hub.common.database import DatabaseManager
 from meshcore_hub.common.models import (
     Advertisement,
     Base,
+    Channel,
     Message,
     Node,
     NodeTag,
@@ -311,7 +312,7 @@ def sample_message_with_receiver(api_db_session, receiver_node):
     """Create a message with a receiver node."""
     message = Message(
         message_type="channel",
-        channel_idx=1,
+        channel_idx=17,
         pubkey_prefix="xyz789",
         text="Channel message with receiver",
         received_at=datetime.now(timezone.utc),
@@ -445,3 +446,53 @@ def sample_adopted_node(api_db_session, sample_user_profile, sample_node):
     api_db_session.commit()
     api_db_session.refresh(association)
     return association
+
+
+@pytest.fixture
+def sample_channel(api_db_session):
+    """Create a sample community channel in the database."""
+    channel = Channel(
+        name="TestChannel",
+        key_hex="AABBCCDDEEFF00112233445566778899",
+        channel_hash=Channel.compute_channel_hash("AABBCCDDEEFF00112233445566778899"),
+        visibility="community",
+        enabled=True,
+    )
+    api_db_session.add(channel)
+    api_db_session.commit()
+    api_db_session.refresh(channel)
+    return channel
+
+
+@pytest.fixture
+def sample_member_channel(api_db_session):
+    """Create a sample member-only channel in the database."""
+    key = "11223344556677889900AABBCCDDEEFF"
+    channel = Channel(
+        name="MemberChannel",
+        key_hex=key,
+        channel_hash=Channel.compute_channel_hash(key),
+        visibility="member",
+        enabled=True,
+    )
+    api_db_session.add(channel)
+    api_db_session.commit()
+    api_db_session.refresh(channel)
+    return channel
+
+
+@pytest.fixture
+def sample_admin_channel(api_db_session):
+    """Create a sample admin-only channel in the database."""
+    key = "FFEEDDCCBBAA99887766554433221100"
+    channel = Channel(
+        name="AdminChannel",
+        key_hex=key,
+        channel_hash=Channel.compute_channel_hash(key),
+        visibility="admin",
+        enabled=True,
+    )
+    api_db_session.add(channel)
+    api_db_session.commit()
+    api_db_session.refresh(channel)
+    return channel

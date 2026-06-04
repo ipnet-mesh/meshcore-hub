@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import string
+import threading
 from typing import Any, NamedTuple
 
 from meshcoredecoder import MeshCoreDecoder
@@ -31,7 +32,7 @@ class LetsMeshPacketDecoder:
 
     BUILTIN_CHANNEL_KEYS: tuple[tuple[str, str], ...] = (
         ("Public", "8B3387E9C5CDEA6AC9E5EDBAA115CD72"),
-        ("test", "9CD8FCF22A47333B591D96A2B848B73F"),
+        ("Test", "9CD8FCF22A47333B591D96A2B848B73F"),
     )
 
     TEST_CHANNEL_HASH: str = "D9"
@@ -41,6 +42,7 @@ class LetsMeshPacketDecoder:
         self,
         channel_keys: list[str] | None = None,
     ) -> None:
+        self._state_lock = threading.Lock()
         self._channel_key_infos = self._normalize_channel_keys(channel_keys or [])
         self._channel_keys = [info.key_hex for info in self._channel_key_infos]
         self._channel_names_by_hash = {
@@ -66,6 +68,39 @@ class LetsMeshPacketDecoder:
         if self._channel_keys:
             key_store.add_channel_secrets(self._channel_keys)
         return key_store
+
+    def reload_keys(self, channel_keys: list[str]) -> None:
+        """Reload channel keys from a new key list (thread-safe).
+
+        Rebuilds the key store and channel name map without discarding the
+        decode cache.  The state lock is held only during the atomic swap
+        of ``_key_store`` and ``_channel_names_by_hash``, not during key
+        normalization or KeyStore construction.
+
+        Args:
+            channel_keys: New list of channel key entries to load.
+        """
+        new_infos = self._normalize_channel_keys(channel_keys)
+        new_keys = [info.key_hex for info in new_infos]
+        new_names = {info.channel_hash: info.label for info in new_infos if info.label}
+        new_store = MeshCoreKeyStore()
+        if new_keys:
+            new_store.add_channel_secrets(new_keys)
+
+        with self._state_lock:
+            self._channel_key_infos = new_infos
+            self._channel_keys = new_keys
+            self._channel_names_by_hash = new_names
+            self._key_store = new_store
+
+        logger.debug(
+            "LetsMesh decoder reloaded: %d channel keys (%s)",
+            len(new_infos),
+            ", ".join(
+                f"{info.label or 'unlabeled'}=0x{info.channel_hash}"
+                for info in new_infos
+            ),
+        )
 
     @classmethod
     def _normalize_channel_keys(cls, values: list[str]) -> list[ChannelKey]:
@@ -160,12 +195,15 @@ class LetsMeshPacketDecoder:
         if not isinstance(channel_hash, str):
             return None
 
-        return self._channel_names_by_hash.get(channel_hash.upper())
+        with self._state_lock:
+            return self._channel_names_by_hash.get(channel_hash.upper())
 
     def channel_labels_by_index(self) -> dict[int, str]:
         """Return channel labels keyed by numeric channel index (0-255)."""
         labels: dict[int, str] = {}
-        for info in self._channel_key_infos:
+        with self._state_lock:
+            infos = list(self._channel_key_infos)
+        for info in infos:
             if not info.label:
                 continue
 
@@ -202,8 +240,10 @@ class LetsMeshPacketDecoder:
     def _decode_raw(self, raw_hex: str) -> dict[str, Any] | None:
         """Decode raw packet hex with native Python decoder (cached per packet hex)."""
         try:
+            with self._state_lock:
+                key_store = self._key_store
             options = DecryptionOptions(
-                key_store=self._key_store,
+                key_store=key_store,
                 attempt_decryption=True,
             )
             result = MeshCoreDecoder.decode(raw_hex, options)

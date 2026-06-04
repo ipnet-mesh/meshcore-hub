@@ -260,8 +260,7 @@ def _run_collector_service(
 
     click.echo("")
     builtin_keys = len(LetsMeshPacketDecoder.BUILTIN_CHANNEL_KEYS)
-    env_keys = len(settings.collector_channel_keys_list)
-    click.echo(f"Packet decoder: {builtin_keys} built-in keys, {env_keys} from .env")
+    click.echo(f"Packet decoder: {builtin_keys} built-in keys, loading from database")
 
     click.echo("")
     click.echo("Starting MQTT subscriber...")
@@ -281,8 +280,7 @@ def _run_collector_service(
         cleanup_interval_hours=settings.data_retention_interval_hours,
         node_cleanup_enabled=settings.node_cleanup_enabled,
         node_cleanup_days=settings.node_cleanup_days,
-        channel_keys=settings.collector_channel_keys_list,
-        include_test_channel=settings.collector_include_test_channel,
+        channel_refresh_interval_seconds=settings.channel_refresh_interval_seconds,
     )
 
 
@@ -307,6 +305,157 @@ def run_cmd(ctx: click.Context) -> None:
         data_home=ctx.obj["data_home"],
         seed_home=ctx.obj["seed_home"],
     )
+
+
+@collector.group("channel")
+@click.pass_context
+def channel_group(ctx: click.Context) -> None:
+    """Manage decryption channels in the database."""
+    pass
+
+
+@channel_group.command("list")
+@click.pass_context
+def channel_list_cmd(ctx: click.Context) -> None:
+    """List all channels in the database."""
+    configure_logging(level=ctx.obj["log_level"])
+
+    from meshcore_hub.common.database import DatabaseManager
+    from meshcore_hub.common.models.channel import Channel
+
+    db = DatabaseManager(ctx.obj["database_url"])
+    try:
+        with db.session_scope() as session:
+            channels = session.query(Channel).order_by(Channel.name).all()
+            if not channels:
+                click.echo("No channels found.")
+            else:
+                click.echo(
+                    f"{'Name':<20} {'Key':<16} {'Hash':<6} "
+                    f"{'Visibility':<12} {'Enabled'}"
+                )
+                click.echo("-" * 70)
+                for ch in channels:
+                    click.echo(
+                        f"{ch.name:<20} {ch.masked_key:<16} {ch.channel_hash:<6} "
+                        f"{ch.visibility:<12} {'Yes' if ch.enabled else 'No'}"
+                    )
+    finally:
+        db.dispose()
+
+
+@channel_group.command("add")
+@click.option("--name", required=True, help="Channel display name")
+@click.option(
+    "--key", "key_hex", required=True, help="Channel key as hex (32 or 64 chars)"
+)
+@click.option(
+    "--visibility",
+    type=click.Choice(["community", "member", "operator", "admin"]),
+    default="community",
+    help="Channel visibility level (default: community)",
+)
+@click.pass_context
+def channel_add_cmd(
+    ctx: click.Context,
+    name: str,
+    key_hex: str,
+    visibility: str,
+) -> None:
+    """Add a new channel to the database."""
+    configure_logging(level=ctx.obj["log_level"])
+
+    from meshcore_hub.common.database import DatabaseManager
+    from meshcore_hub.common.models.channel import Channel
+
+    db = DatabaseManager(ctx.obj["database_url"])
+    try:
+        with db.session_scope() as session:
+            existing = session.query(Channel).filter(Channel.name == name).first()
+            if existing:
+                click.echo(f"Error: Channel '{name}' already exists.", err=True)
+                return
+
+            channel = Channel(
+                name=name,
+                key_hex=key_hex.upper(),
+                channel_hash=Channel.compute_channel_hash(key_hex.upper()),
+                visibility=visibility,
+                enabled=True,
+            )
+            session.add(channel)
+            click.echo(f"Channel '{name}' added (hash={channel.channel_hash})")
+    finally:
+        db.dispose()
+
+
+@channel_group.command("remove")
+@click.option("--name", required=True, help="Channel name to remove")
+@click.pass_context
+def channel_remove_cmd(ctx: click.Context, name: str) -> None:
+    """Remove a channel from the database."""
+    configure_logging(level=ctx.obj["log_level"])
+
+    from meshcore_hub.common.database import DatabaseManager
+    from meshcore_hub.common.models.channel import Channel
+
+    db = DatabaseManager(ctx.obj["database_url"])
+    try:
+        with db.session_scope() as session:
+            channel = session.query(Channel).filter(Channel.name == name).first()
+            if not channel:
+                click.echo(f"Error: Channel '{name}' not found.", err=True)
+                return
+            session.delete(channel)
+            click.echo(f"Channel '{name}' removed.")
+    finally:
+        db.dispose()
+
+
+@channel_group.command("enable")
+@click.option("--name", required=True, help="Channel name to enable")
+@click.pass_context
+def channel_enable_cmd(ctx: click.Context, name: str) -> None:
+    """Enable a channel."""
+    configure_logging(level=ctx.obj["log_level"])
+
+    from meshcore_hub.common.database import DatabaseManager
+    from meshcore_hub.common.models.channel import Channel
+
+    db = DatabaseManager(ctx.obj["database_url"])
+    try:
+        with db.session_scope() as session:
+            channel = session.query(Channel).filter(Channel.name == name).first()
+            if not channel:
+                click.echo(f"Error: Channel '{name}' not found.", err=True)
+                return
+            channel.enabled = True
+            click.echo(f"Channel '{name}' enabled.")
+    finally:
+        db.dispose()
+
+
+@channel_group.command("disable")
+@click.option("--name", required=True, help="Channel name to disable")
+@click.pass_context
+def channel_disable_cmd(ctx: click.Context, name: str) -> None:
+    """Disable a channel."""
+    configure_logging(level=ctx.obj["log_level"])
+
+    from meshcore_hub.common.database import DatabaseManager
+    from meshcore_hub.common.models.channel import Channel
+
+    db = DatabaseManager(ctx.obj["database_url"])
+    try:
+        with db.session_scope() as session:
+            channel = session.query(Channel).filter(Channel.name == name).first()
+            if not channel:
+                click.echo(f"Error: Channel '{name}' not found.", err=True)
+                return
+            channel.enabled = False
+            click.echo(f"Channel '{name}' disabled.")
+    finally:
+        db.dispose()
 
 
 @collector.command("seed")
@@ -408,7 +557,98 @@ def _run_seed_import(
     elif verbose:
         click.echo(f"\nNo node_tags.yaml found in {seed_home}")
 
+    # Import channels if file exists
+    channels_file = Path(seed_home) / "channels.yaml"
+    if channels_file.exists():
+        if verbose:
+            click.echo(f"\nImporting channels from: {channels_file}")
+        channel_stats = _import_channels(
+            file_path=str(channels_file),
+            db=db,
+            verbose=verbose,
+        )
+        if verbose:
+            click.echo(
+                f"  Channels: {channel_stats['created']} created, "
+                f"{channel_stats['updated']} updated"
+            )
+            if channel_stats["errors"]:
+                for error in channel_stats["errors"]:  # type: ignore[union-attr]
+                    click.echo(f"  Error: {error}", err=True)
+        imported_any = True
+    elif verbose:
+        click.echo(f"\nNo channels.yaml found in {seed_home}")
+
     return imported_any
+
+
+def _import_channels(
+    file_path: str,
+    db: "DatabaseManager",
+    verbose: bool = False,
+) -> dict[str, int | list[str]]:
+    """Import channels from a YAML file.
+
+    Supports two formats:
+    - Shorthand: name: HEX (value is string, treated as key_hex)
+    - Expanded: name: { key: HEX, enabled: true } (value is dict)
+
+    Visibility is always 'public' for seeded channels.
+
+    Returns:
+        Dict with 'created', 'updated', and 'errors' counts.
+    """
+    import yaml
+
+    from meshcore_hub.common.models.channel import Channel
+
+    created: int = 0
+    updated: int = 0
+    errors: list[str] = []
+
+    with open(file_path) as f:
+        data = yaml.safe_load(f)
+
+    if not data or not isinstance(data, dict):
+        return {"created": created, "updated": updated, "errors": errors}
+
+    with db.session_scope() as session:
+        for name, value in data.items():
+            try:
+                if isinstance(value, str):
+                    key_hex = value.strip().upper()
+                    enabled = True
+                elif isinstance(value, dict):
+                    key_hex = value.get("key", "").strip().upper()
+                    enabled = value.get("enabled", True)
+                else:
+                    errors.append(f"Invalid format for channel '{name}'")
+                    continue
+
+                if not key_hex:
+                    errors.append(f"Empty key for channel '{name}'")
+                    continue
+
+                existing = session.query(Channel).filter(Channel.name == name).first()
+                if existing:
+                    existing.key_hex = key_hex
+                    existing.channel_hash = Channel.compute_channel_hash(key_hex)
+                    existing.enabled = enabled
+                    updated += 1
+                else:
+                    channel = Channel(
+                        name=name,
+                        key_hex=key_hex,
+                        channel_hash=Channel.compute_channel_hash(key_hex),
+                        visibility="community",
+                        enabled=enabled,
+                    )
+                    session.add(channel)
+                    created += 1
+            except Exception as e:
+                errors.append(f"Channel '{name}': {e}")
+
+    return {"created": created, "updated": updated, "errors": errors}
 
 
 @collector.command("import-tags")

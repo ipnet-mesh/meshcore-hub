@@ -402,8 +402,8 @@ class TestSubscriber:
         subscriber = Subscriber(
             mock_mqtt_client,
             db_manager,
-            include_test_channel=True,
         )
+        subscriber._include_test_channel = True
         handler = MagicMock()
         subscriber.register_handler("channel_msg_recv", handler)
         subscriber.start()
@@ -984,3 +984,204 @@ class TestCreateSubscriber:
 
             assert subscriber is not None
             MockMQTT.assert_called_once()
+
+
+class TestChannelKeyRefresh:
+    """Tests for channel key loading and refresh from database."""
+
+    @pytest.fixture
+    def mock_mqtt_client(self):
+        """Create a mock MQTT client."""
+        client = MagicMock()
+        client.topic_builder = MagicMock()
+        client.topic_builder.prefix = "meshcore"
+        client.topic_builder.parse_letsmesh_upload_topic.return_value = (
+            "a" * 64,
+            "status",
+        )
+        return client
+
+    def test_load_channel_keys_from_db(self, mock_mqtt_client, db_manager):
+        """Test loading channel keys from database."""
+        from meshcore_hub.common.models.channel import Channel
+
+        with db_manager.session_scope() as session:
+            ch = Channel(
+                name="TestCh",
+                key_hex="AABBCCDDEEFF00112233445566778899",
+                channel_hash=Channel.compute_channel_hash(
+                    "AABBCCDDEEFF00112233445566778899"
+                ),
+                visibility="community",
+                enabled=True,
+            )
+            session.add(ch)
+
+        subscriber = Subscriber(mock_mqtt_client, db_manager)
+
+        assert len(subscriber._db_channel_keys) == 1
+        assert "TestCh=AABBCCDDEEFF00112233445566778899" in subscriber._db_channel_keys
+
+    def test_load_channel_keys_detects_test_channel(self, mock_mqtt_client, db_manager):
+        """Test that test channel is detected by name."""
+        from meshcore_hub.common.models.channel import Channel
+
+        with db_manager.session_scope() as session:
+            ch = Channel(
+                name="Test",
+                key_hex="AABBCCDDEEFF00112233445566778899",
+                channel_hash=Channel.compute_channel_hash(
+                    "AABBCCDDEEFF00112233445566778899"
+                ),
+                visibility="community",
+                enabled=True,
+            )
+            session.add(ch)
+
+        subscriber = Subscriber(mock_mqtt_client, db_manager)
+
+        assert subscriber._include_test_channel is True
+
+    def test_load_channel_keys_only_enabled(self, mock_mqtt_client, db_manager):
+        """Test that only enabled channels are loaded."""
+        from meshcore_hub.common.models.channel import Channel
+
+        with db_manager.session_scope() as session:
+            ch1 = Channel(
+                name="Enabled",
+                key_hex="AABBCCDDEEFF00112233445566778899",
+                channel_hash=Channel.compute_channel_hash(
+                    "AABBCCDDEEFF00112233445566778899"
+                ),
+                enabled=True,
+            )
+            ch2 = Channel(
+                name="Disabled",
+                key_hex="11223344556677889900AABBCCDDEEFF",
+                channel_hash=Channel.compute_channel_hash(
+                    "11223344556677889900AABBCCDDEEFF"
+                ),
+                enabled=False,
+            )
+            session.add_all([ch1, ch2])
+
+        subscriber = Subscriber(mock_mqtt_client, db_manager)
+
+        assert len(subscriber._db_channel_keys) == 1
+        assert "Enabled=" in subscriber._db_channel_keys[0]
+
+    def test_load_channel_keys_handles_db_error(self, mock_mqtt_client, db_manager):
+        """Test graceful handling of database errors during key loading."""
+        broken_db = MagicMock()
+        broken_db.session_scope.side_effect = Exception("DB connection failed")
+
+        subscriber = Subscriber(mock_mqtt_client, broken_db)
+
+        assert subscriber._db_channel_keys == []
+        assert subscriber._include_test_channel is False
+
+    def test_refresh_channel_keys_from_db(self, mock_mqtt_client, db_manager):
+        """Test refreshing channel keys reloads the decoder."""
+        from meshcore_hub.common.models.channel import Channel
+
+        subscriber = Subscriber(mock_mqtt_client, db_manager)
+        assert len(subscriber._db_channel_keys) == 0
+
+        with db_manager.session_scope() as session:
+            ch = Channel(
+                name="NewCh",
+                key_hex="CCDDEEFF00112233445566778899AABB",
+                channel_hash=Channel.compute_channel_hash(
+                    "CCDDEEFF00112233445566778899AABB"
+                ),
+                visibility="community",
+                enabled=True,
+            )
+            session.add(ch)
+
+        with patch.object(subscriber._letsmesh_decoder, "reload_keys") as mock_reload:
+            subscriber._refresh_channel_keys_from_db()
+
+        assert len(subscriber._db_channel_keys) == 1
+        mock_reload.assert_called_once_with(subscriber._db_channel_keys)
+
+    def test_refresh_handles_db_error(self, mock_mqtt_client, db_manager):
+        """Test refresh handles database errors gracefully."""
+        broken_db = MagicMock()
+
+        def broken_scope():
+            raise Exception("DB error")
+
+        broken_db.session_scope.side_effect = broken_scope
+
+        subscriber = Subscriber(broken_db, broken_db)
+
+        with patch.object(subscriber._letsmesh_decoder, "reload_keys"):
+            subscriber._refresh_channel_keys_from_db()
+
+        assert subscriber._db_channel_keys == []
+
+    def test_channel_refresh_scheduler_starts(self, mock_mqtt_client, db_manager):
+        """Test channel refresh scheduler starts a daemon thread."""
+        subscriber = Subscriber(
+            mock_mqtt_client, db_manager, channel_refresh_interval_seconds=300
+        )
+        subscriber._running = True
+        subscriber._start_channel_refresh_scheduler()
+
+        assert subscriber._channel_refresh_thread is not None
+        assert subscriber._channel_refresh_thread.daemon is True
+
+        subscriber._running = False
+        subscriber._channel_refresh_thread.join(timeout=2.0)
+
+    def test_channel_refresh_scheduler_disabled(self, mock_mqtt_client, db_manager):
+        """Test channel refresh scheduler is disabled when interval is 0."""
+        subscriber = Subscriber(
+            mock_mqtt_client, db_manager, channel_refresh_interval_seconds=0
+        )
+        subscriber._running = True
+        subscriber._start_channel_refresh_scheduler()
+
+        assert subscriber._channel_refresh_thread is None
+
+        subscriber._running = False
+
+    def test_channel_refresh_scheduler_stop(self, mock_mqtt_client, db_manager):
+        """Test stopping the channel refresh scheduler."""
+        subscriber = Subscriber(
+            mock_mqtt_client, db_manager, channel_refresh_interval_seconds=300
+        )
+        subscriber._running = True
+        subscriber._start_channel_refresh_scheduler()
+        subscriber._running = False
+
+        subscriber._stop_channel_refresh_scheduler()
+        assert subscriber._channel_refresh_thread is not None
+        assert not subscriber._channel_refresh_thread.is_alive()
+
+    def test_load_channel_keys_empty_db(self, mock_mqtt_client, db_manager):
+        """Test loading channel keys from empty database."""
+        subscriber = Subscriber(mock_mqtt_client, db_manager)
+
+        assert subscriber._db_channel_keys == []
+        assert subscriber._include_test_channel is False
+
+    def test_decoder_initialized_with_db_keys(self, mock_mqtt_client, db_manager):
+        """Test decoder is initialized with database channel keys."""
+        from meshcore_hub.common.models.channel import Channel
+
+        key_hex = "DDEEFF00112233445566778899AABBCC"
+        with db_manager.session_scope() as session:
+            ch = Channel(
+                name="DecCh",
+                key_hex=key_hex,
+                channel_hash=Channel.compute_channel_hash(key_hex),
+                visibility="community",
+                enabled=True,
+            )
+            session.add(ch)
+
+        subscriber = Subscriber(mock_mqtt_client, db_manager)
+
+        assert key_hex in subscriber._letsmesh_decoder._channel_keys

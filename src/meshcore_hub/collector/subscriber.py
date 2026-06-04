@@ -47,8 +47,7 @@ class Subscriber(LetsMeshNormalizer):
         cleanup_interval_hours: int = 24,
         node_cleanup_enabled: bool = False,
         node_cleanup_days: int = 90,
-        channel_keys: list[str] | None = None,
-        include_test_channel: bool = False,
+        channel_refresh_interval_seconds: int = 300,
     ):
         """Initialize subscriber.
 
@@ -61,8 +60,7 @@ class Subscriber(LetsMeshNormalizer):
             cleanup_interval_hours: Hours between cleanup runs
             node_cleanup_enabled: Enable automatic cleanup of inactive nodes
             node_cleanup_days: Remove nodes not seen for this many days
-            channel_keys: Optional channel keys for decrypting group text
-            include_test_channel: Include built-in test channel messages
+            channel_refresh_interval_seconds: Seconds between channel key refresh
         """
         self.mqtt = mqtt_client
         self.db = db_manager
@@ -85,10 +83,14 @@ class Subscriber(LetsMeshNormalizer):
         self._node_cleanup_days = node_cleanup_days
         self._cleanup_thread: Optional[threading.Thread] = None
         self._last_cleanup: Optional[datetime] = None
+        # Channel key refresh
+        self._channel_refresh_interval_seconds = channel_refresh_interval_seconds
+        self._channel_refresh_thread: Optional[threading.Thread] = None
+        # Load initial channel keys from database
+        self._include_test_channel = self._load_channel_keys_from_db()
         self._letsmesh_decoder = LetsMeshPacketDecoder(
-            channel_keys=channel_keys,
+            channel_keys=self._db_channel_keys,
         )
-        self._include_test_channel = include_test_channel
 
     @property
     def is_healthy(self) -> bool:
@@ -98,6 +100,68 @@ class Subscriber(LetsMeshNormalizer):
             True if MQTT and database are connected
         """
         return self._running and self._mqtt_connected and self._db_connected
+
+    def _load_channel_keys_from_db(self) -> bool:
+        """Load channel keys from the database (synchronous).
+
+        Queries enabled channels, merges with built-in keys, and
+        determines whether the test channel should be included.
+
+        Returns:
+            True if test channel should be included (DB row exists with enabled=True).
+        """
+        self._db_channel_keys: list[str] = []
+        include_test = False
+        try:
+            from meshcore_hub.common.models.channel import Channel
+
+            with self.db.session_scope() as session:
+                channels = (
+                    session.query(Channel)
+                    .filter(Channel.enabled == True)  # noqa: E712
+                    .all()
+                )
+                for ch in channels:
+                    self._db_channel_keys.append(f"{ch.name}={ch.key_hex}")
+                    if ch.name.lower() == "test":
+                        include_test = True
+            logger.info(
+                "Loaded %d channel keys from database (include_test=%s)",
+                len(self._db_channel_keys),
+                include_test,
+            )
+        except Exception as e:
+            logger.warning("Failed to load channel keys from database: %s", e)
+            self._db_channel_keys = []
+        return include_test
+
+    def _refresh_channel_keys_from_db(self) -> None:
+        """Refresh channel keys from the database and reload the decoder."""
+        new_keys: list[str] = []
+        include_test = False
+        try:
+            from meshcore_hub.common.models.channel import Channel
+
+            with self.db.session_scope() as session:
+                channels = (
+                    session.query(Channel)
+                    .filter(Channel.enabled == True)  # noqa: E712
+                    .all()
+                )
+                for ch in channels:
+                    new_keys.append(f"{ch.name}={ch.key_hex}")
+                    if ch.name.lower() == "test":
+                        include_test = True
+            self._db_channel_keys = new_keys
+            self._include_test_channel = include_test
+            self._letsmesh_decoder.reload_keys(new_keys)
+            logger.info(
+                "Refreshed %d channel keys from database (include_test=%s)",
+                len(new_keys),
+                include_test,
+            )
+        except Exception as e:
+            logger.error("Failed to refresh channel keys from database: %s", e)
 
     def get_health_status(self) -> dict[str, Any]:
         """Get detailed health status.
@@ -364,6 +428,40 @@ class Subscriber(LetsMeshNormalizer):
             if self._cleanup_thread.is_alive():
                 logger.warning("Cleanup scheduler thread did not stop cleanly")
 
+    def _start_channel_refresh_scheduler(self) -> None:
+        """Start background thread for periodic channel key refresh."""
+        interval = self._channel_refresh_interval_seconds
+        if interval <= 0:
+            logger.info("Channel key refresh is disabled (interval=0)")
+            return
+
+        logger.info("Starting channel refresh scheduler (interval=%ds)", interval)
+
+        def run_refresh_loop() -> None:
+            """Periodically refresh channel keys from database."""
+            while self._running:
+                for _ in range(interval):
+                    if not self._running:
+                        break
+                    time.sleep(1)
+                if self._running:
+                    try:
+                        self._refresh_channel_keys_from_db()
+                    except Exception as e:
+                        logger.error("Channel refresh error: %s", e, exc_info=True)
+
+        self._channel_refresh_thread = threading.Thread(
+            target=run_refresh_loop, daemon=True, name="channel-refresh"
+        )
+        self._channel_refresh_thread.start()
+
+    def _stop_channel_refresh_scheduler(self) -> None:
+        """Stop the channel refresh scheduler thread."""
+        if self._channel_refresh_thread and self._channel_refresh_thread.is_alive():
+            self._channel_refresh_thread.join(timeout=5.0)
+            if self._channel_refresh_thread.is_alive():
+                logger.warning("Channel refresh thread did not stop cleanly")
+
     def start(self) -> None:
         """Start the subscriber."""
         logger.info("Starting collector subscriber")
@@ -428,6 +526,9 @@ class Subscriber(LetsMeshNormalizer):
         # Start cleanup scheduler if configured
         self._start_cleanup_scheduler()
 
+        # Start channel key refresh scheduler
+        self._start_channel_refresh_scheduler()
+
         # Start health reporter for Docker health checks
         self._health_reporter = HealthReporter(
             component="collector",
@@ -463,6 +564,9 @@ class Subscriber(LetsMeshNormalizer):
         # Stop cleanup scheduler
         self._stop_cleanup_scheduler()
 
+        # Stop channel refresh scheduler
+        self._stop_channel_refresh_scheduler()
+
         # Stop webhook processor
         self._stop_webhook_processor()
 
@@ -495,8 +599,7 @@ def create_subscriber(
     cleanup_interval_hours: int = 24,
     node_cleanup_enabled: bool = False,
     node_cleanup_days: int = 90,
-    channel_keys: list[str] | None = None,
-    include_test_channel: bool = False,
+    channel_refresh_interval_seconds: int = 300,
 ) -> Subscriber:
     """Create a configured subscriber instance.
 
@@ -516,8 +619,7 @@ def create_subscriber(
         cleanup_interval_hours: Hours between cleanup runs
         node_cleanup_enabled: Enable automatic cleanup of inactive nodes
         node_cleanup_days: Remove nodes not seen for this many days
-        channel_keys: Optional channel keys for decrypting group text
-        include_test_channel: Include built-in test channel messages
+        channel_refresh_interval_seconds: Seconds between channel key refresh
 
     Returns:
         Configured Subscriber instance
@@ -550,8 +652,7 @@ def create_subscriber(
         cleanup_interval_hours=cleanup_interval_hours,
         node_cleanup_enabled=node_cleanup_enabled,
         node_cleanup_days=node_cleanup_days,
-        channel_keys=channel_keys,
-        include_test_channel=include_test_channel,
+        channel_refresh_interval_seconds=channel_refresh_interval_seconds,
     )
 
     # Register handlers
@@ -578,8 +679,7 @@ def run_collector(
     cleanup_interval_hours: int = 24,
     node_cleanup_enabled: bool = False,
     node_cleanup_days: int = 90,
-    channel_keys: list[str] | None = None,
-    include_test_channel: bool = False,
+    channel_refresh_interval_seconds: int = 300,
 ) -> None:
     """Run the collector (blocking).
 
@@ -599,8 +699,7 @@ def run_collector(
         cleanup_interval_hours: Hours between cleanup runs
         node_cleanup_enabled: Enable automatic cleanup of inactive nodes
         node_cleanup_days: Remove nodes not seen for this many days
-        channel_keys: Optional channel keys for decrypting group text
-        include_test_channel: Include built-in test channel messages
+        channel_refresh_interval_seconds: Seconds between channel key refresh
     """
     subscriber = create_subscriber(
         mqtt_host=mqtt_host,
@@ -618,8 +717,7 @@ def run_collector(
         cleanup_interval_hours=cleanup_interval_hours,
         node_cleanup_enabled=node_cleanup_enabled,
         node_cleanup_days=node_cleanup_days,
-        channel_keys=channel_keys,
-        include_test_channel=include_test_channel,
+        channel_refresh_interval_seconds=channel_refresh_interval_seconds,
     )
 
     # Set up signal handlers

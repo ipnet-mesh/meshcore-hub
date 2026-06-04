@@ -5,7 +5,13 @@ from unittest.mock import patch
 
 import pytest
 
-from meshcore_hub.common.models import Advertisement, Message, Node
+from meshcore_hub.common.models import (
+    Advertisement,
+    Message,
+    Node,
+    NodeTag,
+    Channel,
+)
 from meshcore_hub.common.models import UserProfile
 
 
@@ -439,3 +445,224 @@ class TestDashboardFloodOnlyFilter:
         data = response.json()
         total_count = sum(point["count"] for point in data["data"])
         assert total_count == 1
+
+
+class TestDashboardChannelVisibility:
+    """Tests for channel visibility filtering on dashboard stats."""
+
+    @pytest.fixture
+    def channels_with_messages(self, api_db_session):
+        """Create public and admin channels with messages."""
+        pub_key = "AABBCCDDEEFF00112233445566778899"
+        adm_key = "FFEEDDCCBBAA99887766554433221100"
+        pub_idx = int(Channel.compute_channel_hash(pub_key), 16)
+        adm_idx = int(Channel.compute_channel_hash(adm_key), 16)
+
+        pub_ch = Channel(
+            name="CommunityCh",
+            key_hex=pub_key,
+            channel_hash=Channel.compute_channel_hash(pub_key),
+            visibility="community",
+            enabled=True,
+        )
+        adm_ch = Channel(
+            name="AdminCh",
+            key_hex=adm_key,
+            channel_hash=Channel.compute_channel_hash(adm_key),
+            visibility="admin",
+            enabled=True,
+        )
+        api_db_session.add_all([pub_ch, adm_ch])
+
+        pub_msg = Message(
+            message_type="channel",
+            channel_idx=pub_idx,
+            text="Public message",
+            received_at=datetime.now(timezone.utc),
+        )
+        adm_msg = Message(
+            message_type="channel",
+            channel_idx=adm_idx,
+            text="Admin message",
+            received_at=datetime.now(timezone.utc),
+        )
+        direct_msg = Message(
+            message_type="direct",
+            pubkey_prefix="abc123",
+            text="Direct message",
+            received_at=datetime.now(timezone.utc),
+        )
+        api_db_session.add_all([pub_msg, adm_msg, direct_msg])
+        api_db_session.commit()
+
+        return pub_idx, adm_idx
+
+    def test_anonymous_sees_only_community_messages(
+        self, client_no_auth, channels_with_messages
+    ):
+        """Anonymous users only see community and direct messages in stats."""
+        response = client_no_auth.get("/api/v1/dashboard/stats")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_messages"] == 2
+
+    def test_admin_sees_all_messages(self, client_no_auth, channels_with_messages):
+        """Admin users see all messages in stats."""
+        response = client_no_auth.get(
+            "/api/v1/dashboard/stats",
+            headers={"X-User-Roles": "admin"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_messages"] == 3
+
+    def test_channel_message_counts_filtered(
+        self, client_no_auth, channels_with_messages
+    ):
+        """Channel message counts exclude hidden channels."""
+        pub_idx, adm_idx = channels_with_messages
+
+        response = client_no_auth.get("/api/v1/dashboard/stats")
+        assert response.status_code == 200
+        data = response.json()
+        assert str(pub_idx) in data["channel_message_counts"]
+        assert str(adm_idx) not in data["channel_message_counts"]
+
+    def test_admin_channel_message_counts_all(
+        self, client_no_auth, channels_with_messages
+    ):
+        """Admin users see all channel message counts."""
+        pub_idx, adm_idx = channels_with_messages
+
+        response = client_no_auth.get(
+            "/api/v1/dashboard/stats",
+            headers={"X-User-Roles": "admin"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert str(pub_idx) in data["channel_message_counts"]
+        assert str(adm_idx) in data["channel_message_counts"]
+
+    def test_message_activity_respects_visibility(self, client_no_auth, api_db_session):
+        """Message activity endpoint filters by channel visibility."""
+        adm_key = "FFEEDDCCBBAA99887766554433221100"
+        adm_idx = int(Channel.compute_channel_hash(adm_key), 16)
+
+        adm_ch = Channel(
+            name="AdminCh",
+            key_hex=adm_key,
+            channel_hash=Channel.compute_channel_hash(adm_key),
+            visibility="admin",
+            enabled=True,
+        )
+        api_db_session.add(adm_ch)
+
+        yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+        adm_msg = Message(
+            message_type="channel",
+            channel_idx=adm_idx,
+            text="Admin msg",
+            received_at=yesterday,
+        )
+        api_db_session.add(adm_msg)
+        api_db_session.commit()
+
+        response_anon = client_no_auth.get("/api/v1/dashboard/message-activity")
+        assert response_anon.status_code == 200
+        anon_data = response_anon.json()
+        anon_total = sum(p["count"] for p in anon_data["data"])
+        assert anon_total == 0
+
+        response_admin = client_no_auth.get(
+            "/api/v1/dashboard/message-activity",
+            headers={"X-User-Roles": "admin"},
+        )
+        assert response_admin.status_code == 200
+        admin_data = response_admin.json()
+        admin_total = sum(p["count"] for p in admin_data["data"])
+        assert admin_total >= 1
+
+    def test_recent_advertisements_includes_tag_name(
+        self, client_no_auth, api_db_session
+    ):
+        """Recent advertisements resolve tag_name from name tags."""
+        now = datetime.now(timezone.utc)
+        pub_key = "aa" * 16
+        node = Node(
+            public_key=pub_key,
+            name="NodeName",
+            adv_type="CLIENT",
+            first_seen=now,
+            last_seen=now,
+        )
+        api_db_session.add(node)
+        api_db_session.commit()
+
+        tag = NodeTag(node_id=node.id, key="name", value="TagName")
+        api_db_session.add(tag)
+
+        ad = Advertisement(
+            public_key=pub_key,
+            name=None,
+            adv_type="CLIENT",
+            received_at=now,
+            route_type="flood",
+        )
+        api_db_session.add(ad)
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/dashboard/stats")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["recent_advertisements"]) == 1
+        assert data["recent_advertisements"][0]["tag_name"] == "TagName"
+
+    def test_operator_sees_community_and_member_channel_counts(
+        self, client_no_auth, api_db_session
+    ):
+        """Operator role sees community + member channels but not admin in stats."""
+        pub_key = "AABBCCDDEEFF00112233445566778899"
+        mem_key = "11223344556677889900AABBCCDDEEFF"
+        adm_key = "FFEEDDCCBBAA99887766554433221100"
+        pub_idx = int(Channel.compute_channel_hash(pub_key), 16)
+        mem_idx = int(Channel.compute_channel_hash(mem_key), 16)
+        adm_idx = int(Channel.compute_channel_hash(adm_key), 16)
+
+        for name, key, vis in [
+            ("Community", pub_key, "community"),
+            ("Member", mem_key, "member"),
+            ("Admin", adm_key, "admin"),
+        ]:
+            ch = Channel(
+                name=name,
+                key_hex=key,
+                channel_hash=Channel.compute_channel_hash(key),
+                visibility=vis,
+                enabled=True,
+            )
+            api_db_session.add(ch)
+        api_db_session.commit()
+
+        for idx, text in [
+            (pub_idx, "Pub msg"),
+            (mem_idx, "Mem msg"),
+            (adm_idx, "Adm msg"),
+        ]:
+            msg = Message(
+                message_type="channel",
+                channel_idx=idx,
+                text=text,
+                received_at=datetime.now(timezone.utc),
+            )
+            api_db_session.add(msg)
+        api_db_session.commit()
+
+        response = client_no_auth.get(
+            "/api/v1/dashboard/stats",
+            headers={"X-User-Roles": "operator"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert str(pub_idx) in data["channel_message_counts"]
+        assert str(mem_idx) in data["channel_message_counts"]
+        assert str(adm_idx) not in data["channel_message_counts"]

@@ -48,7 +48,7 @@ class TestTranslation:
 
     def test_nested_key(self):
         """Deeply nested keys resolve correctly."""
-        assert t("entities.advertisements") == "Advertisements"
+        assert t("entities.advertisements") == "Adverts"
 
     def test_missing_key_returns_key(self):
         """Missing key returns the key itself as fallback."""
@@ -152,3 +152,15 @@ class TestEnJsonCompleteness:
             != "advertisements.route_type_unknown"
         )
         assert t("advertisements.col_route_type") != "advertisements.col_route_type"
+
+    def test_channels_optgroup_keys(self):
+        """Channel optgroup labels exist and resolve correctly."""
+        assert t("channels.optgroup_standard") == "Standard"
+        assert t("channels.optgroup_custom") == "Custom"
+
+    def test_channels_visibility_keys(self):
+        """Channel visibility level labels exist and resolve correctly."""
+        assert t("channels.visibility_community") == "Community"
+        assert t("channels.visibility_member") == "Member"
+        assert t("channels.visibility_operator") == "Operator"
+        assert t("channels.visibility_admin") == "Admin"

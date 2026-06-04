@@ -23,6 +23,7 @@
     --color-nodes: oklch(0.65 0.24 265);       /* violet */
     --color-adverts: oklch(0.7 0.17 330);      /* magenta */
     --color-messages: oklch(0.75 0.18 180);    /* teal */
+    --color-channels: oklch(0.72 0.15 300);    /* purple */
     --color-map: oklch(0.8471 0.199 83.87);      /* yellow (matches btn-warning) */
     --color-members: oklch(0.72 0.17 50);      /* orange */
     --color-neutral: oklch(0.3 0.01 250);     /* subtle dark grey */
@@ -35,6 +36,7 @@
     --color-nodes: oklch(0.50 0.24 265);
     --color-adverts: oklch(0.55 0.17 330);
     --color-messages: oklch(0.55 0.18 180);
+    --color-channels: oklch(0.55 0.15 300);
     --color-map: oklch(0.58 0.16 45);
     --color-members: oklch(0.55 0.18 25);
     --color-neutral: oklch(0.85 0.01 250);
