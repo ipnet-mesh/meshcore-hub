@@ -263,18 +263,15 @@ def _build_config_json(app: FastAPI, request: Request) -> str:
     Returns:
         JSON string with app configuration.
     """
-    # Parse radio config
-    radio_config = RadioConfig.from_config_string(app.state.network_radio_config)
-    radio_config_dict = None
-    if radio_config:
-        radio_config_dict = {
-            "profile": radio_config.profile,
-            "frequency": radio_config.frequency,
-            "bandwidth": radio_config.bandwidth,
-            "spreading_factor": radio_config.spreading_factor,
-            "coding_rate": radio_config.coding_rate,
-            "tx_power": radio_config.tx_power,
-        }
+    radio_config = RadioConfig(
+        profile=app.state.network_radio_profile,
+        frequency=app.state.network_radio_frequency,
+        bandwidth=app.state.network_radio_bandwidth,
+        spreading_factor=app.state.network_radio_spreading_factor,
+        coding_rate=app.state.network_radio_coding_rate,
+        tx_power=app.state.network_radio_tx_power,
+    )
+    radio_config_dict = radio_config.format_for_display()
 
     # Get feature flags
     features = app.state.features
@@ -358,7 +355,12 @@ def create_app(
     network_name: str | None = None,
     network_city: str | None = None,
     network_country: str | None = None,
-    network_radio_config: str | None = None,
+    network_radio_profile: str | None = None,
+    network_radio_frequency: float | None = None,
+    network_radio_bandwidth: float | None = None,
+    network_radio_spreading_factor: int | None = None,
+    network_radio_coding_rate: int | None = None,
+    network_radio_tx_power: float | None = None,
     network_contact_email: str | None = None,
     network_contact_discord: str | None = None,
     network_contact_github: str | None = None,
@@ -378,7 +380,12 @@ def create_app(
         network_name: Display name for the network
         network_city: City where the network is located
         network_country: Country where the network is located
-        network_radio_config: Radio configuration description
+        network_radio_profile: Radio profile name
+        network_radio_frequency: Radio frequency in MHz
+        network_radio_bandwidth: Radio bandwidth in kHz
+        network_radio_spreading_factor: Radio spreading factor
+        network_radio_coding_rate: Radio coding rate
+        network_radio_tx_power: Radio TX power in dBm
         network_contact_email: Contact email address
         network_contact_discord: Discord invite/server info
         network_contact_github: GitHub repository URL
@@ -469,8 +476,33 @@ def create_app(
     app.state.network_name = network_name or settings.network_name
     app.state.network_city = network_city or settings.network_city
     app.state.network_country = network_country or settings.network_country
-    app.state.network_radio_config = (
-        network_radio_config or settings.network_radio_config
+    app.state.network_radio_profile = (
+        network_radio_profile or settings.network_radio_profile
+    )
+    app.state.network_radio_frequency = (
+        network_radio_frequency
+        if network_radio_frequency is not None
+        else settings.network_radio_frequency
+    )
+    app.state.network_radio_bandwidth = (
+        network_radio_bandwidth
+        if network_radio_bandwidth is not None
+        else settings.network_radio_bandwidth
+    )
+    app.state.network_radio_spreading_factor = (
+        network_radio_spreading_factor
+        if network_radio_spreading_factor is not None
+        else settings.network_radio_spreading_factor
+    )
+    app.state.network_radio_coding_rate = (
+        network_radio_coding_rate
+        if network_radio_coding_rate is not None
+        else settings.network_radio_coding_rate
+    )
+    app.state.network_radio_tx_power = (
+        network_radio_tx_power
+        if network_radio_tx_power is not None
+        else settings.network_radio_tx_power
     )
     app.state.network_contact_email = (
         network_contact_email or settings.network_contact_email

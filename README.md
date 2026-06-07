@@ -402,7 +402,12 @@ The collector automatically cleans up old event data and inactive nodes:
 | `NETWORK_NAME`             | `MeshCore Network`      | Display name for the network                                                                                                                                                                                                                 |
 | `NETWORK_CITY`             | _(none)_                | City where network is located                                                                                                                                                                                                                |
 | `NETWORK_COUNTRY`          | _(none)_                | Country code (ISO 3166-1 alpha-2)                                                                                                                                                                                                            |
-| `NETWORK_RADIO_CONFIG`     | _(none)_                | Radio config (comma-delimited: profile,freq,bw,sf,cr,power)                                                                                                                                                                                  |
+| `NETWORK_RADIO_PROFILE`          | `EU/UK Narrow`           | Radio profile name                                                                                          |
+| `NETWORK_RADIO_FREQUENCY`        | `869.618`                | Radio frequency in MHz (raw number, units applied on display)                                               |
+| `NETWORK_RADIO_BANDWIDTH`        | `62.5`                   | Radio bandwidth in kHz (raw number, units applied on display)                                               |
+| `NETWORK_RADIO_SPREADING_FACTOR` | `8`                      | Radio spreading factor                                                                                      |
+| `NETWORK_RADIO_CODING_RATE`      | `8`                      | Radio coding rate                                                                                           |
+| `NETWORK_RADIO_TX_POWER`         | `22`                     | Radio TX power in dBm (raw number, units applied on display)                                                |
 | `NETWORK_WELCOME_TEXT`     | _(none)_                | Custom welcome text for homepage                                                                                                                                                                                                             |
 | `NETWORK_CONTACT_EMAIL`    | _(none)_                | Contact email address                                                                                                                                                                                                                        |
 | `NETWORK_CONTACT_DISCORD`  | _(none)_                | Discord server link                                                                                                                                                                                                                          |
@@ -427,6 +432,8 @@ Control which pages are visible in the web dashboard. Disabled features are full
 | `FEATURE_MAP`            | `true`  | Enable the `/map` page and `/map/data` endpoint       |
 | `FEATURE_MEMBERS`        | `true`  | Enable the `/members` page                            |
 | `FEATURE_PAGES`          | `true`  | Enable custom markdown pages                          |
+| `FEATURE_CHANNELS`       | `true`  | Enable the `/channels` page                          |
+| `FEATURE_RADIO_CONFIG`   | `true`  | Show radio config panel on home page                 |
 
 **Dependencies:** Dashboard auto-disables when all of Nodes/Advertisements/Messages are disabled. Map auto-disables when Nodes is disabled. Members auto-disables when OIDC is disabled (set via `OIDC_ENABLED`).
 

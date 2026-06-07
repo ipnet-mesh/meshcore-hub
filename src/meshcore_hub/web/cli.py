@@ -61,11 +61,46 @@ import click
     help="Network country",
 )
 @click.option(
-    "--network-radio-config",
+    "--network-radio-profile",
     type=str,
     default=None,
-    envvar="NETWORK_RADIO_CONFIG",
-    help="Radio configuration description",
+    envvar="NETWORK_RADIO_PROFILE",
+    help="Radio profile name",
+)
+@click.option(
+    "--network-radio-frequency",
+    type=float,
+    default=None,
+    envvar="NETWORK_RADIO_FREQUENCY",
+    help="Radio frequency in MHz",
+)
+@click.option(
+    "--network-radio-bandwidth",
+    type=float,
+    default=None,
+    envvar="NETWORK_RADIO_BANDWIDTH",
+    help="Radio bandwidth in kHz",
+)
+@click.option(
+    "--network-radio-spreading-factor",
+    type=int,
+    default=None,
+    envvar="NETWORK_RADIO_SPREADING_FACTOR",
+    help="Radio spreading factor",
+)
+@click.option(
+    "--network-radio-coding-rate",
+    type=int,
+    default=None,
+    envvar="NETWORK_RADIO_CODING_RATE",
+    help="Radio coding rate",
+)
+@click.option(
+    "--network-radio-tx-power",
+    type=float,
+    default=None,
+    envvar="NETWORK_RADIO_TX_POWER",
+    help="Radio TX power in dBm",
 )
 @click.option(
     "--network-contact-email",
@@ -126,7 +161,12 @@ def web(
     network_name: str | None,
     network_city: str | None,
     network_country: str | None,
-    network_radio_config: str | None,
+    network_radio_profile: str | None,
+    network_radio_frequency: float | None,
+    network_radio_bandwidth: float | None,
+    network_radio_spreading_factor: int | None,
+    network_radio_coding_rate: int | None,
+    network_radio_tx_power: float | None,
     network_contact_email: str | None,
     network_contact_discord: str | None,
     network_contact_github: str | None,
@@ -220,7 +260,12 @@ def web(
             network_name=network_name,
             network_city=network_city,
             network_country=network_country,
-            network_radio_config=network_radio_config,
+            network_radio_profile=network_radio_profile,
+            network_radio_frequency=network_radio_frequency,
+            network_radio_bandwidth=network_radio_bandwidth,
+            network_radio_spreading_factor=network_radio_spreading_factor,
+            network_radio_coding_rate=network_radio_coding_rate,
+            network_radio_tx_power=network_radio_tx_power,
             network_contact_email=network_contact_email,
             network_contact_discord=network_contact_discord,
             network_contact_github=network_contact_github,

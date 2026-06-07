@@ -26,7 +26,12 @@ def xss_app(mock_http_client: MockHttpClient) -> Any:
         network_name="</script><script>alert(1)</script>",
         network_city="Test City",
         network_country="Test Country",
-        network_radio_config="Test Radio Config",
+        network_radio_profile="Test Profile",
+        network_radio_frequency=868.0,
+        network_radio_bandwidth=125.0,
+        network_radio_spreading_factor=7,
+        network_radio_coding_rate=5,
+        network_radio_tx_power=20.0,
         network_contact_email="test@example.com",
         features=ALL_FEATURES_ENABLED,
     )
