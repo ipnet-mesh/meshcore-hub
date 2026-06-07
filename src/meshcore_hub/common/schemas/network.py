@@ -1,65 +1,40 @@
 """Pydantic schemas for network configuration."""
 
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel
 
 
 class RadioConfig(BaseModel):
-    """Parsed radio configuration from comma-delimited string.
+    """Radio configuration with individual fields.
 
-    Format: "<profile>,<frequency>,<bandwidth>,<spreading_factor>,<coding_rate>,<tx_power>"
-    Example: "EU/UK Narrow,869.618MHz,62.5kHz,8,8,22dBm"
+    Frequency, bandwidth, and TX power are stored as raw floats.
+    Use ``format_for_display()`` to produce formatted strings with units
+    (e.g. ``"869.618MHz"``, ``"62.5kHz"``, ``"22dBm"``).
     """
 
     profile: Optional[str] = None
-    frequency: Optional[str] = None
-    bandwidth: Optional[str] = None
+    frequency: Optional[float] = None
+    bandwidth: Optional[float] = None
     spreading_factor: Optional[int] = None
     coding_rate: Optional[int] = None
-    tx_power: Optional[str] = None
+    tx_power: Optional[float] = None
 
-    @classmethod
-    def from_config_string(cls, config_str: Optional[str]) -> Optional["RadioConfig"]:
-        """Parse a comma-delimited radio config string.
+    def format_for_display(self) -> dict[str, Any]:
+        """Return a dict with formatted strings for display.
 
-        Args:
-            config_str: Comma-delimited string in format:
-                "<profile>,<frequency>,<bandwidth>,<spreading_factor>,<coding_rate>,<tx_power>"
-
-        Returns:
-            RadioConfig instance if parsing succeeds, None if input is None or empty
+        Numeric fields are formatted with ``:g`` to strip trailing zeros.
+        ``None`` values are preserved as ``None``.
         """
-        if not config_str:
-            return None
-
-        parts = [p.strip() for p in config_str.split(",")]
-
-        # Handle partial configs by filling with None
-        while len(parts) < 6:
-            parts.append("")
-
-        # Parse spreading factor and coding rate as integers
-        spreading_factor = None
-        coding_rate = None
-
-        try:
-            if parts[3]:
-                spreading_factor = int(parts[3])
-        except ValueError:
-            pass
-
-        try:
-            if parts[4]:
-                coding_rate = int(parts[4])
-        except ValueError:
-            pass
-
-        return cls(
-            profile=parts[0] or None,
-            frequency=parts[1] or None,
-            bandwidth=parts[2] or None,
-            spreading_factor=spreading_factor,
-            coding_rate=coding_rate,
-            tx_power=parts[5] or None,
-        )
+        return {
+            "profile": self.profile,
+            "frequency": (
+                f"{self.frequency:g}MHz" if self.frequency is not None else None
+            ),
+            "bandwidth": (
+                f"{self.bandwidth:g}kHz" if self.bandwidth is not None else None
+            ),
+            "spreading_factor": self.spreading_factor,
+            "coding_rate": self.coding_rate,
+            "tx_power": f"{self.tx_power:g}dBm" if self.tx_power is not None else None,
+        }

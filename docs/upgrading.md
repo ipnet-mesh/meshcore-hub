@@ -2,6 +2,33 @@
 
 This guide covers upgrading from a previous MeshCore Hub release to the current version. Check the relevant version section below before upgrading.
 
+## v0.12.0
+
+### Radio Config Split Into Individual Environment Variables
+
+The single `NETWORK_RADIO_CONFIG` comma-delimited environment variable has been replaced with six individual variables. The legacy variable and its `from_config_string` parsing have been removed entirely. Each variable defaults to the EU/UK Narrow profile when unset.
+
+Frequency, bandwidth, and TX power are now configured as raw numbers without unit suffixes. Units (`MHz`, `kHz`, `dBm`) are applied automatically on display.
+
+**Migration example:**
+
+Before:
+```
+NETWORK_RADIO_CONFIG=EU/UK Narrow,869.618MHz,62.5kHz,8,8,22dBm
+```
+
+After:
+```
+NETWORK_RADIO_PROFILE=EU/UK Narrow
+NETWORK_RADIO_FREQUENCY=869.618
+NETWORK_RADIO_BANDWIDTH=62.5
+NETWORK_RADIO_SPREADING_FACTOR=8
+NETWORK_RADIO_CODING_RATE=8
+NETWORK_RADIO_TX_POWER=22
+```
+
+**Note:** Radio config is now "always on" with EU/UK Narrow defaults. To hide the radio config panel entirely, set `FEATURE_RADIO_CONFIG=false`.
+
 ## v0.11.0
 
 ### Channel Visibility Rename: "public" → "community"

@@ -334,8 +334,21 @@ class WebSettings(CommonSettings):
     network_country: Optional[str] = Field(
         default=None, description="Network country (ISO 3166-1 alpha-2)"
     )
-    network_radio_config: Optional[str] = Field(
-        default=None, description="Radio configuration details"
+    network_radio_profile: str = Field(
+        default="EU/UK Narrow", description="Radio profile name"
+    )
+    network_radio_frequency: float = Field(
+        default=869.618, description="Radio frequency (MHz)"
+    )
+    network_radio_bandwidth: float = Field(
+        default=62.5, description="Radio bandwidth (kHz)"
+    )
+    network_radio_spreading_factor: int = Field(
+        default=8, description="Radio spreading factor"
+    )
+    network_radio_coding_rate: int = Field(default=8, description="Radio coding rate")
+    network_radio_tx_power: float = Field(
+        default=22.0, description="Radio TX power (dBm)"
     )
     network_contact_email: Optional[str] = Field(
         default=None, description="Contact email address"
@@ -378,6 +391,9 @@ class WebSettings(CommonSettings):
     feature_pages: bool = Field(
         default=True, description="Enable custom markdown pages"
     )
+    feature_radio_config: bool = Field(
+        default=True, description="Enable radio config panel on home page"
+    )
 
     # Content directory (contains pages/ and media/ subdirectories)
     content_home: Optional[str] = Field(
@@ -406,6 +422,7 @@ class WebSettings(CommonSettings):
             "members": self.feature_members and self.oidc_enabled,
             "channels": self.feature_channels,
             "pages": self.feature_pages,
+            "radio_config": self.feature_radio_config,
         }
 
     @property

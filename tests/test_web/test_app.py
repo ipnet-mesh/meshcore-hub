@@ -26,7 +26,12 @@ def xss_app(mock_http_client: MockHttpClient) -> Any:
         network_name="</script><script>alert(1)</script>",
         network_city="Test City",
         network_country="Test Country",
-        network_radio_config="Test Radio Config",
+        network_radio_profile="Test Profile",
+        network_radio_frequency=868.0,
+        network_radio_bandwidth=125.0,
+        network_radio_spreading_factor=7,
+        network_radio_coding_rate=5,
+        network_radio_tx_power=20.0,
         network_contact_email="test@example.com",
         features=ALL_FEATURES_ENABLED,
     )
@@ -243,6 +248,36 @@ class TestCheckApiAccess:
             user_id="user-1",
             mapping=mapping,
         )
+
+
+class TestRadioConfigSettingsFallback:
+    """Tests that radio config falls back to settings when params are None."""
+
+    def test_radio_params_fall_back_to_settings(
+        self, mock_http_client: MockHttpClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Radio config uses settings defaults when no CLI params are passed."""
+        monkeypatch.setenv("OIDC_ENABLED", "false")
+        monkeypatch.setenv("NETWORK_ANNOUNCEMENT", "")
+        app = create_app(
+            api_url="http://localhost:8000",
+            api_key="test-api-key",
+            network_radio_profile=None,
+            network_radio_frequency=None,
+            network_radio_bandwidth=None,
+            network_radio_spreading_factor=None,
+            network_radio_coding_rate=None,
+            network_radio_tx_power=None,
+            features=ALL_FEATURES_ENABLED,
+        )
+        app.state.http_client = mock_http_client
+
+        assert app.state.network_radio_profile == "EU/UK Narrow"
+        assert app.state.network_radio_frequency == 869.618
+        assert app.state.network_radio_bandwidth == 62.5
+        assert app.state.network_radio_spreading_factor == 8
+        assert app.state.network_radio_coding_rate == 8
+        assert app.state.network_radio_tx_power == 22.0
 
 
 class TestFlashBannerVisibility:

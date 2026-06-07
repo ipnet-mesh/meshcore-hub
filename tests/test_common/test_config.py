@@ -129,6 +129,30 @@ class TestWebSettings:
 
         assert settings.feature_channels is True
 
+    def test_radio_config_defaults(self) -> None:
+        """Test that radio config fields default to EU/UK Narrow values."""
+        settings = WebSettings(_env_file=None)
+
+        assert settings.network_radio_profile == "EU/UK Narrow"
+        assert settings.network_radio_frequency == 869.618
+        assert settings.network_radio_bandwidth == 62.5
+        assert settings.network_radio_spreading_factor == 8
+        assert settings.network_radio_coding_rate == 8
+        assert settings.network_radio_tx_power == 22.0
+
+    def test_radio_config_no_legacy_field(self) -> None:
+        """Test that network_radio_config no longer exists."""
+        settings = WebSettings(_env_file=None)
+        assert not hasattr(settings, "network_radio_config")
+
+    def test_radio_config_custom_frequency(self) -> None:
+        """Test that frequency can be set as a float."""
+        settings = WebSettings(
+            _env_file=None,
+            network_radio_frequency=915.0,
+        )
+        assert settings.network_radio_frequency == 915.0
+
     def test_feature_channels_override(self) -> None:
         """Test that feature_channels can be disabled."""
         settings = WebSettings(_env_file=None, feature_channels=False)
@@ -187,3 +211,17 @@ class TestWebSettings:
         assert features["members"] is True
         assert features["channels"] is True
         assert features["pages"] is True
+        assert features["radio_config"] is True
+
+    def test_feature_radio_config_default_true(self) -> None:
+        """Test that feature_radio_config defaults to True."""
+        settings = WebSettings(_env_file=None)
+
+        assert settings.feature_radio_config is True
+
+    def test_feature_radio_config_can_disable(self) -> None:
+        """Test that feature_radio_config can be disabled."""
+        settings = WebSettings(_env_file=None, feature_radio_config=False)
+
+        assert settings.feature_radio_config is False
+        assert settings.features["radio_config"] is False

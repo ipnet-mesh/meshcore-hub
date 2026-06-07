@@ -220,6 +220,7 @@ export async function render(container, params, router) {
         const showMessageSeries = features.messages !== false;
         const showActivityChart = showAdvertSeries || showMessageSeries;
         const showMembersPanel = features.members !== false;
+        const showRadioPanel = features.radio_config !== false;
 
         const heroSection = renderHeroSection({
             networkName, logoUrl, logoInvertLight,
@@ -241,7 +242,8 @@ export async function render(container, params, router) {
     ${showStats ? statsPanel : nothing}
 </div>
 
-<div class="grid grid-cols-1 md:grid-cols-2 ${showMembersPanel && showActivityChart ? 'lg:grid-cols-3' : ''} gap-6 mt-6">
+<div class="grid grid-cols-1 md:grid-cols-2 ${(showRadioPanel && showMembersPanel && showActivityChart) ? 'lg:grid-cols-3' : ''} gap-6 mt-6">
+    ${showRadioPanel ? html`
     <div class="card bg-base-100 shadow-xl">
         <div class="card-body">
             <h2 class="card-title">
@@ -253,6 +255,7 @@ export async function render(container, params, router) {
             </div>
         </div>
     </div>
+    ` : nothing}
 
     ${renderMembersPanel({ features, stats })}
 
