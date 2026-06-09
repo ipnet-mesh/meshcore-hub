@@ -370,6 +370,32 @@ The collector automatically cleans up old event data and inactive nodes:
 | `METRICS_CACHE_TTL` | `60`      | Seconds to cache metrics output (reduces database load) |
 | `CORS_ORIGINS`      | _(none)_  | Comma-separated list of allowed CORS origins for the API (optional, only needed when the web dashboard runs on a different origin) |
 
+### Redis Caching
+
+Optional Redis-backed caching for API responses. When disabled or unavailable, the API queries the database directly.
+
+**Docker:** Redis is included in the `cache` profile. Disabled by default — set `REDIS_ENABLED=true` to enable.
+
+```bash
+docker compose --profile cache up    # Start with bundled Redis
+docker compose --profile core up     # Start without Redis
+```
+
+**Bare-metal:** Install Redis separately, then set `REDIS_ENABLED=true` and `REDIS_HOST=localhost`.
+
+**Multi-instance:** Use different `REDIS_KEY_PREFIX` values per instance to share one Redis without key collisions.
+
+| Variable                     | Default     | Description                                    |
+| ---------------------------- | ----------- | ---------------------------------------------- |
+| `REDIS_ENABLED`              | `false`     | Enable Redis API response caching              |
+| `REDIS_HOST`                 | `localhost` | Redis server host (`redis` in Docker)          |
+| `REDIS_PORT`                 | `6379`      | Redis server port                              |
+| `REDIS_DB`                   | `0`         | Redis database number                          |
+| `REDIS_PASSWORD`             | _(none)_    | Redis password (optional)                      |
+| `REDIS_KEY_PREFIX`           | `hub`       | Cache key prefix for multi-instance isolation  |
+| `REDIS_CACHE_TTL`            | `30`        | Default cache TTL in seconds                   |
+| `REDIS_CACHE_TTL_DASHBOARD`  | `30`        | Cache TTL for dashboard endpoints in seconds   |
+
 ### Web Dashboard Settings
 
 | Variable                   | Default                 | Description                                                                                                                                                                                                                                  |

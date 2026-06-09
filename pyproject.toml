@@ -45,6 +45,7 @@ dependencies = [
     "markdown>=3.5.0",
     "prometheus-client>=0.20.0",
     "meshcoredecoder>=0.3.2",
+    "redis[hiredis]>=5.0.0",
 ]
 
 [project.optional-dependencies]
@@ -122,6 +123,7 @@ module = [
     "prometheus_client.*",
     "meshcoredecoder.*",
     "authlib.*",
+    "redis.*",
 ]
 ignore_missing_imports = true
 

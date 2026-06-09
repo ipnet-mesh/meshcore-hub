@@ -8,6 +8,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import aliased, selectinload
 
 from meshcore_hub.api.auth import RequireRead
+from meshcore_hub.api.cache import cached, sorted_query_string
 from meshcore_hub.api.channel_visibility import (
     get_max_visibility_level,
     get_visible_channel_indices,
@@ -23,6 +24,11 @@ router = APIRouter()
 VALID_MSG_SORT_COLUMNS = {"time", "type", "from", "message"}
 
 
+def _messages_key_builder(request: Request) -> str:
+    role = resolve_user_role(request) or "anonymous"
+    return f"messages:role={role}:{sorted_query_string(request)}"
+
+
 def _get_tag_name(node: Optional[Node]) -> Optional[str]:
     """Extract name tag from a node's tags."""
     if not node or not node.tags:
@@ -34,6 +40,7 @@ def _get_tag_name(node: Optional[Node]) -> Optional[str]:
 
 
 @router.get("", response_model=MessageList)
+@cached("messages", key_builder=_messages_key_builder)
 async def list_messages(
     _: RequireRead,
     session: DbSession,

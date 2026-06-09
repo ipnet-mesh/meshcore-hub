@@ -208,6 +208,29 @@ class APISettings(CommonSettings):
         default=None, description="Admin API key (full access)"
     )
 
+    # Redis cache
+    redis_enabled: bool = Field(
+        default=False, description="Enable Redis API response caching"
+    )
+    redis_host: str = Field(default="localhost", description="Redis server host")
+    redis_port: int = Field(default=6379, description="Redis server port")
+    redis_db: int = Field(default=0, description="Redis database number")
+    redis_password: Optional[str] = Field(
+        default=None, description="Redis password (optional)"
+    )
+    redis_key_prefix: str = Field(
+        default="hub",
+        description="Prefix for all cache keys (isolates multi-instance setups)",
+    )
+    redis_cache_ttl: int = Field(
+        default=30,
+        description="Default cache TTL in seconds",
+    )
+    redis_cache_ttl_dashboard: int = Field(
+        default=30,
+        description="Cache TTL for dashboard endpoints (seconds)",
+    )
+
     @property
     def effective_database_url(self) -> str:
         """Get the effective database URL, using default if not set."""

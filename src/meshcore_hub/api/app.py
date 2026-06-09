@@ -2,9 +2,9 @@
 
 import logging
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
@@ -36,9 +36,32 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info(f"Initializing database: {database_url}")
     _db_manager = DatabaseManager(database_url)
 
+    # Initialize Redis cache
+    redis_enabled = getattr(app.state, "redis_enabled", False)
+    if redis_enabled:
+        from meshcore_hub.common.redis import RedisCacheBackend
+
+        redis_cache = RedisCacheBackend(
+            host=getattr(app.state, "redis_host", "localhost"),
+            port=getattr(app.state, "redis_port", 6379),
+            db=getattr(app.state, "redis_db", 0),
+            password=getattr(app.state, "redis_password", None),
+            key_prefix=getattr(app.state, "redis_key_prefix", "hub"),
+        )
+        app.state.redis_cache = redis_cache
+        logger.info("Redis cache enabled")
+    else:
+        from meshcore_hub.common.redis import NullCache
+
+        app.state.redis_cache = NullCache()
+        logger.info("Redis cache disabled")
+
     yield
 
     # Cleanup
+    _cache = getattr(app.state, "redis_cache", None)
+    if _cache is not None and hasattr(_cache, "close"):
+        _cache.close()
     if _db_manager:
         _db_manager.dispose()
         _db_manager = None
@@ -60,6 +83,14 @@ def create_app(
     cors_origins: list[str] | None = None,
     metrics_enabled: bool = True,
     metrics_cache_ttl: int = 60,
+    redis_enabled: bool = False,
+    redis_host: str = "localhost",
+    redis_port: int = 6379,
+    redis_db: int = 0,
+    redis_password: str | None = None,
+    redis_key_prefix: str = "hub",
+    redis_cache_ttl: int = 30,
+    redis_cache_ttl_dashboard: int = 30,
 ) -> FastAPI:
     """Create and configure the FastAPI application.
 
@@ -78,6 +109,14 @@ def create_app(
         cors_origins: Allowed CORS origins
         metrics_enabled: Enable Prometheus metrics endpoint at /metrics
         metrics_cache_ttl: Seconds to cache metrics output
+        redis_enabled: Enable Redis API response caching
+        redis_host: Redis server host
+        redis_port: Redis server port
+        redis_db: Redis database number
+        redis_password: Redis password (optional)
+        redis_key_prefix: Prefix for all cache keys
+        redis_cache_ttl: Default cache TTL in seconds
+        redis_cache_ttl_dashboard: Cache TTL for dashboard endpoints
 
     Returns:
         Configured FastAPI application
@@ -105,6 +144,14 @@ def create_app(
     app.state.mqtt_transport = mqtt_transport
     app.state.mqtt_ws_path = mqtt_ws_path
     app.state.metrics_cache_ttl = metrics_cache_ttl
+    app.state.redis_enabled = redis_enabled
+    app.state.redis_host = redis_host
+    app.state.redis_port = redis_port
+    app.state.redis_db = redis_db
+    app.state.redis_password = redis_password
+    app.state.redis_key_prefix = redis_key_prefix
+    app.state.redis_cache_ttl = redis_cache_ttl
+    app.state.redis_cache_ttl_dashboard = redis_cache_ttl_dashboard
 
     # Configure CORS
     if cors_origins is None:
@@ -117,6 +164,14 @@ def create_app(
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def cache_header_middleware(request: Request, call_next: Any) -> Any:
+        response = await call_next(request)
+        cache_status = getattr(request.state, "cache_status", None)
+        if cache_status is not None:
+            response.headers["X-Cache"] = cache_status
+        return response
 
     # Include routers
     from meshcore_hub.api.routes import api_router
@@ -137,13 +192,23 @@ def create_app(
 
     @app.get("/health/ready", tags=["Health"])
     async def health_ready() -> dict:
-        """Readiness check including database."""
+        """Readiness check including database and optional Redis."""
         try:
             db = get_db_manager()
             with db.session_scope() as session:
                 session.execute(text("SELECT 1"))
-            return {"status": "ready", "database": "connected"}
+            result: dict[str, str] = {"status": "ready", "database": "connected"}
         except Exception as e:
-            return {"status": "not_ready", "database": str(e)}
+            result = {"status": "not_ready", "database": str(e)}
+
+        redis_cache = getattr(app.state, "redis_cache", None)
+        redis_enabled = getattr(app.state, "redis_enabled", False)
+        if redis_enabled and redis_cache is not None:
+            if redis_cache.ping():
+                result["redis"] = "connected"
+            else:
+                result["redis"] = "unreachable"
+
+        return result
 
     return app

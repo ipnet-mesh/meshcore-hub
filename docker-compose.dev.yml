@@ -25,3 +25,7 @@ services:
   web:
     ports:
       - "${WEB_PORT:-8080}:8080"
+
+  redis:
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
