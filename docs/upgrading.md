@@ -4,6 +4,36 @@ This guide covers upgrading from a previous MeshCore Hub release to the current 
 
 ## v0.12.0
 
+### Optional Redis API Cache
+
+A new optional Redis-backed caching layer reduces database load for read-heavy API endpoints (nodes, advertisements, messages, channels, dashboard). Redis is entirely optional — the API works identically without it.
+
+**New optional dependency:** `redis[hiredis]` is installed automatically with `pip install -e .`. No manual action needed.
+
+**New environment variables:**
+
+| Variable                    | Default     | Description                                                      |
+| --------------------------- | ----------- | ---------------------------------------------------------------- |
+| `REDIS_ENABLED`             | `false`     | Enable Redis API response caching                                |
+| `REDIS_HOST`                | `localhost` | Redis server host (`redis` in Docker)                            |
+| `REDIS_PORT`                | `6379`      | Redis server port                                                |
+| `REDIS_DB`                  | `0`         | Redis database number                                            |
+| `REDIS_PASSWORD`            | _(none)_    | Redis password (optional)                                        |
+| `REDIS_KEY_PREFIX`          | `hub`       | Cache key prefix (change per instance for multi-instance setups) |
+| `REDIS_CACHE_TTL`           | `30`        | Default cache TTL in seconds                                     |
+| `REDIS_CACHE_TTL_DASHBOARD` | `30`        | Cache TTL for dashboard endpoints                                |
+
+**Docker Compose:** Redis is available via the `cache` profile:
+
+```bash
+docker compose --profile cache up    # Start with bundled Redis
+docker compose --profile core up     # Start without Redis (default)
+```
+
+`REDIS_ENABLED` defaults to `false` everywhere (code and Docker Compose). Cache TTL defaults to 30 seconds (matching the web dashboard auto-refresh interval).
+
+## v0.11.0
+
 ### Radio Config Split Into Individual Environment Variables
 
 The single `NETWORK_RADIO_CONFIG` comma-delimited environment variable has been replaced with six individual variables. The legacy variable and its `from_config_string` parsing have been removed entirely. Each variable defaults to the EU/UK Narrow profile when unset.
@@ -30,36 +60,6 @@ NETWORK_RADIO_TX_POWER=22
 ```
 
 **Note:** Radio config is now "always on" with EU/UK Narrow defaults. To hide the radio config panel entirely, set `FEATURE_RADIO_CONFIG=false`.
-
-### Optional Redis API Cache
-
-A new optional Redis-backed caching layer reduces database load for read-heavy API endpoints (nodes, advertisements, messages, channels, dashboard). Redis is entirely optional — the API works identically without it.
-
-**New optional dependency:** `redis[hiredis]` is installed automatically with `pip install -e .`. No manual action needed.
-
-**New environment variables:**
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `REDIS_ENABLED` | `false` | Enable Redis API response caching |
-| `REDIS_HOST` | `localhost` | Redis server host (`redis` in Docker) |
-| `REDIS_PORT` | `6379` | Redis server port |
-| `REDIS_DB` | `0` | Redis database number |
-| `REDIS_PASSWORD` | *(none)* | Redis password (optional) |
-| `REDIS_KEY_PREFIX` | `hub` | Cache key prefix (change per instance for multi-instance setups) |
-| `REDIS_CACHE_TTL` | `30` | Default cache TTL in seconds |
-| `REDIS_CACHE_TTL_DASHBOARD` | `30` | Cache TTL for dashboard endpoints |
-
-**Docker Compose:** Redis is available via the `cache` profile:
-
-```bash
-docker compose --profile cache up    # Start with bundled Redis
-docker compose --profile core up     # Start without Redis (default)
-```
-
-`REDIS_ENABLED` defaults to `false` everywhere (code and Docker Compose). Cache TTL defaults to 30 seconds (matching the web dashboard auto-refresh interval).
-
-## v0.11.0
 
 ### Channel Visibility Rename: "public" → "community"
 
