@@ -417,3 +417,52 @@ async def test_cleanup_orphaned_node_relations_dry_run(
         await async_db_session.scalar(select(func.count()).select_from(UserProfileNode))
         == 1
     )
+
+
+@pytest.mark.asyncio
+async def test_cleanup_clears_stale_observer_flags(
+    async_db_session: AsyncSession,
+) -> None:
+    """A node whose only events are pruned gets is_observer cleared; an active
+    observer keeps its flag."""
+    old_date = datetime.now(timezone.utc) - timedelta(days=60)
+    recent_date = datetime.now(timezone.utc) - timedelta(days=5)
+
+    stale = Node(public_key="s" * 64, name="Stale Observer", is_observer=True)
+    active = Node(public_key="b" * 64, name="Active Observer", is_observer=True)
+    async_db_session.add_all([stale, active])
+    await async_db_session.flush()
+
+    # Stale observer's only event is old and will be pruned
+    async_db_session.add(
+        Advertisement(
+            public_key=stale.public_key,
+            observer_node_id=stale.id,
+            created_at=old_date,
+            updated_at=old_date,
+        )
+    )
+    # Active observer has a recent event that survives cleanup
+    async_db_session.add(
+        Advertisement(
+            public_key=active.public_key,
+            observer_node_id=active.id,
+            created_at=recent_date,
+            updated_at=recent_date,
+        )
+    )
+    await async_db_session.commit()
+
+    stats = await cleanup_old_data(async_db_session, retention_days=30, dry_run=False)
+
+    assert stats.observers_cleared == 1
+
+    await async_db_session.rollback()  # Refresh from DB
+    stale_flag = await async_db_session.scalar(
+        select(Node.is_observer).where(Node.id == stale.id)
+    )
+    active_flag = await async_db_session.scalar(
+        select(Node.is_observer).where(Node.id == active.id)
+    )
+    assert stale_flag is False
+    assert active_flag is True

@@ -52,7 +52,7 @@ def _check_tag_access(
 
 
 @router.get("/nodes/{public_key}/tags", response_model=list[NodeTagRead])
-async def list_node_tags(
+def list_node_tags(
     _: RequireRead,
     session: DbSession,
     public_key: str,
@@ -68,7 +68,7 @@ async def list_node_tags(
 
 
 @router.post("/nodes/{public_key}/tags", response_model=NodeTagRead, status_code=201)
-async def create_node_tag(
+def create_node_tag(
     caller_info: RequireOperatorOrAdmin,
     session: DbSession,
     request: Request,
@@ -115,7 +115,7 @@ async def create_node_tag(
 
 
 @router.put("/nodes/{public_key}/tags/{key}", response_model=NodeTagRead)
-async def update_node_tag(
+def update_node_tag(
     caller_info: RequireOperatorOrAdmin,
     session: DbSession,
     request: Request,
@@ -171,7 +171,7 @@ async def update_node_tag(
 
 
 @router.delete("/nodes/{public_key}/tags/{key}", status_code=204)
-async def delete_node_tag(
+def delete_node_tag(
     caller_info: RequireOperatorOrAdmin,
     session: DbSession,
     request: Request,

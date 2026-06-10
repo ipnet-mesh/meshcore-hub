@@ -65,7 +65,7 @@ def _flood_only_filter(
     ttl_setting="redis_cache_ttl_dashboard",
     key_builder=_dashboard_stats_key_builder,
 )
-async def get_stats(
+def get_stats(
     _: RequireRead,
     session: DbSession,
     request: Request,
@@ -323,7 +323,7 @@ async def get_stats(
 
 @router.get("/activity", response_model=DailyActivity)
 @cached("dashboard/activity", ttl_setting="redis_cache_ttl_dashboard")
-async def get_activity(
+def get_activity(
     _: RequireRead,
     session: DbSession,
     request: Request,
@@ -383,7 +383,7 @@ async def get_activity(
     ttl_setting="redis_cache_ttl_dashboard",
     key_builder=_dashboard_msg_activity_key_builder,
 )
-async def get_message_activity(
+def get_message_activity(
     _: RequireRead,
     session: DbSession,
     request: Request,
@@ -443,7 +443,7 @@ async def get_message_activity(
 
 @router.get("/node-count", response_model=NodeCountHistory)
 @cached("dashboard/node-count", ttl_setting="redis_cache_ttl_dashboard")
-async def get_node_count_history(
+def get_node_count_history(
     _: RequireRead,
     session: DbSession,
     request: Request,

@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import DateTime, Float, Index, Integer, String
+from sqlalchemy import Boolean, DateTime, Float, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from meshcore_hub.common.models.base import Base, TimestampMixin, UUIDMixin, utc_now
@@ -26,6 +26,7 @@ class Node(Base, UUIDMixin, TimestampMixin):
         last_seen: Timestamp of most recent activity
         lat: GPS latitude coordinate (if available)
         lon: GPS longitude coordinate (if available)
+        is_observer: True if this node has observed at least one event
         created_at: Record creation timestamp
         updated_at: Record update timestamp
     """
@@ -74,6 +75,12 @@ class Node(Base, UUIDMixin, TimestampMixin):
         Float,
         nullable=True,
     )
+    is_observer: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="0",
+        nullable=False,
+    )
 
     # Relationships
     tags: Mapped[list["NodeTag"]] = relationship(
@@ -92,6 +99,7 @@ class Node(Base, UUIDMixin, TimestampMixin):
     __table_args__ = (
         Index("ix_nodes_last_seen", "last_seen"),
         Index("ix_nodes_adv_type", "adv_type"),
+        Index("ix_nodes_is_observer", "is_observer"),
     )
 
     def __repr__(self) -> str:

@@ -46,7 +46,7 @@ def _get_tag_description(node: Optional[Node]) -> Optional[str]:
 
 @router.get("", response_model=AdvertisementList)
 @cached("advertisements")
-async def list_advertisements(
+def list_advertisements(
     _: RequireRead,
     session: DbSession,
     request: Request,
@@ -243,7 +243,7 @@ async def list_advertisements(
 
 
 @router.get("/{advertisement_id}", response_model=AdvertisementRead)
-async def get_advertisement(
+def get_advertisement(
     _: RequireRead,
     session: DbSession,
     advertisement_id: str,

@@ -17,7 +17,7 @@ router = APIRouter()
 
 
 @router.get("", response_model=TelemetryList)
-async def list_telemetry(
+def list_telemetry(
     _: RequireRead,
     session: DbSession,
     node_public_key: Optional[str] = Query(None, description="Filter by node"),
@@ -91,7 +91,7 @@ async def list_telemetry(
 
 
 @router.get("/{telemetry_id}", response_model=TelemetryRead)
-async def get_telemetry(
+def get_telemetry(
     _: RequireRead,
     session: DbSession,
     telemetry_id: str,

@@ -17,7 +17,7 @@ router = APIRouter()
 
 
 @router.get("", response_model=TracePathList)
-async def list_trace_paths(
+def list_trace_paths(
     _: RequireRead,
     session: DbSession,
     observed_by: Optional[str] = Query(
@@ -91,7 +91,7 @@ async def list_trace_paths(
 
 
 @router.get("/{trace_path_id}", response_model=TracePathRead)
-async def get_trace_path(
+def get_trace_path(
     _: RequireRead,
     session: DbSession,
     trace_path_id: str,

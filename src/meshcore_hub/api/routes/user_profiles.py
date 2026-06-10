@@ -53,7 +53,7 @@ def _build_adopted_nodes(profile: UserProfile) -> list[AdoptedNodeRead]:
 
 @router.get("/profiles", response_model=UserProfileList)
 @cached("profiles")
-async def list_profiles(
+def list_profiles(
     _: RequireRead,
     session: DbSession,
     request: Request,
@@ -116,7 +116,7 @@ async def list_profiles(
 
 
 @router.get("/profile/me", response_model=UserProfileWithNodes)
-async def get_my_profile(
+def get_my_profile(
     request: Request,
     session: DbSession,
 ) -> UserProfileWithNodes:
@@ -148,7 +148,7 @@ async def get_my_profile(
 
 
 @router.get("/profile/{profile_id}")
-async def get_profile(
+def get_profile(
     profile_id: str,
     request: Request,
     session: DbSession,
@@ -201,7 +201,7 @@ async def get_profile(
 
 
 @router.put("/profile/{profile_id}", response_model=UserProfileRead)
-async def update_profile(
+def update_profile(
     profile_id: str,
     profile_update: UserProfileUpdate,
     caller_id: RequireUserOwner,

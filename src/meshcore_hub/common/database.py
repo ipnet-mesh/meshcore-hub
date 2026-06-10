@@ -25,24 +25,42 @@ def create_database_engine(
         SQLAlchemy Engine instance
     """
     connect_args = {}
+    engine_kwargs: dict[str, Any] = {}
 
     # SQLite-specific configuration
     if database_url.startswith("sqlite"):
         connect_args["check_same_thread"] = False
+
+    # Size the pool above the default Starlette threadpool (~40 threads) so
+    # concurrent request handlers don't block waiting for a connection. Applies
+    # to file-based SQLite and networked backends (e.g. a future Postgres).
+    # In-memory SQLite uses a non-overflow pool, so skip these args there.
+    is_memory_sqlite = database_url in ("sqlite://", "sqlite:///:memory:")
+    if not is_memory_sqlite:
+        engine_kwargs["pool_size"] = 20
+        engine_kwargs["max_overflow"] = 30
 
     engine = create_engine(
         database_url,
         echo=echo,
         connect_args=connect_args,
         pool_pre_ping=True,
+        **engine_kwargs,
     )
 
-    # Enable foreign keys for SQLite
+    # Apply SQLite pragmas on every new connection
     if database_url.startswith("sqlite"):
 
         @event.listens_for(engine, "connect")
         def set_sqlite_pragma(dbapi_connection, connection_record):  # type: ignore
             cursor = dbapi_connection.cursor()
+            # WAL lets readers run concurrently with a single writer (the
+            # collector), and busy_timeout waits instead of immediately raising
+            # "database is locked" under contention. synchronous=NORMAL is safe
+            # under WAL and faster.
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA busy_timeout=5000")
+            cursor.execute("PRAGMA synchronous=NORMAL")
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.close()
 
@@ -127,7 +145,8 @@ class DatabaseManager:
         async_url = self.database_url.replace("sqlite://", "sqlite+aiosqlite://")
         self._async_engine = create_async_engine(async_url, echo=self._echo)
 
-        # Enable foreign keys for async SQLite engine
+        # Apply the same SQLite pragmas as the sync engine (see
+        # create_database_engine) for the async engine's connections.
         if self.database_url.startswith("sqlite"):
 
             @event.listens_for(self._async_engine.sync_engine, "connect")
@@ -135,6 +154,9 @@ class DatabaseManager:
                 dbapi_connection: object, connection_record: object
             ) -> None:
                 cursor = dbapi_connection.cursor()  # type: ignore[attr-defined]
+                cursor.execute("PRAGMA journal_mode=WAL")
+                cursor.execute("PRAGMA busy_timeout=5000")
+                cursor.execute("PRAGMA synchronous=NORMAL")
                 cursor.execute("PRAGMA foreign_keys=ON")
                 cursor.close()
 
