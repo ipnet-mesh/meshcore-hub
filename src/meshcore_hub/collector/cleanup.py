@@ -7,7 +7,7 @@ based on configured retention policies.
 import logging
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import CompoundSelect, delete, func, select, union, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from meshcore_hub.common.models import (
@@ -35,6 +35,7 @@ class CleanupStats:
         self.trace_paths_deleted: int = 0
         self.event_logs_deleted: int = 0
         self.nodes_deleted: int = 0
+        self.observers_cleared: int = 0
         self.total_deleted: int = 0
 
     def __repr__(self) -> str:
@@ -45,7 +46,8 @@ class CleanupStats:
             f"telemetry={self.telemetry_deleted}, "
             f"trace_paths={self.trace_paths_deleted}, "
             f"event_logs={self.event_logs_deleted}, "
-            f"nodes={self.nodes_deleted})"
+            f"nodes={self.nodes_deleted}, "
+            f"observers_cleared={self.observers_cleared})"
         )
 
 
@@ -107,6 +109,9 @@ async def cleanup_old_data(
         + stats.event_logs_deleted
     )
 
+    # Clear the is_observer flag for nodes whose events were all pruned above.
+    stats.observers_cleared = await recompute_observer_flags(db, dry_run)
+
     if not dry_run:
         await db.commit()
         logger.info("Cleanup completed: %s", stats)
@@ -114,6 +119,67 @@ async def cleanup_old_data(
         logger.info("Cleanup dry run completed: %s", stats)
 
     return stats
+
+
+def _observer_node_id_union() -> CompoundSelect:
+    """Union of observer_node_id across every event source (excluding NULLs)."""
+    return union(
+        select(Advertisement.observer_node_id).where(
+            Advertisement.observer_node_id.is_not(None)
+        ),
+        select(Message.observer_node_id).where(Message.observer_node_id.is_not(None)),
+        select(Telemetry.observer_node_id).where(
+            Telemetry.observer_node_id.is_not(None)
+        ),
+        select(TracePath.observer_node_id).where(
+            TracePath.observer_node_id.is_not(None)
+        ),
+        select(EventObserver.observer_node_id),
+    )
+
+
+async def recompute_observer_flags(db: AsyncSession, dry_run: bool = False) -> int:
+    """Clear nodes.is_observer for nodes that no longer have any events.
+
+    The collector sets the flag when a node observes an event; this clears it
+    again once retention has pruned all of a node's events, so stale observers
+    drop off the API's ``observer=true`` listing.
+
+    Args:
+        db: Database session
+        dry_run: If True, only count nodes without modifying them
+
+    Returns:
+        Number of nodes whose is_observer flag was (or would be) cleared.
+    """
+    observer_union = _observer_node_id_union().subquery()
+    stale = Node.id.not_in(select(observer_union.c.observer_node_id))
+
+    if dry_run:
+        count_stmt = (
+            select(func.count())
+            .select_from(Node)
+            .where(Node.is_observer.is_(True), stale)
+        )
+        result = await db.execute(count_stmt)
+        count = result.scalar() or 0
+    else:
+        upd = (
+            update(Node)
+            .where(Node.is_observer.is_(True), stale)
+            .values(is_observer=False)
+        )
+        result = await db.execute(upd)
+        count = result.rowcount or 0  # type: ignore[attr-defined]
+
+    if count > 0:
+        logger.info(
+            "is_observer: %s %d stale observer node(s)",
+            "would clear" if dry_run else "cleared",
+            count,
+        )
+
+    return count
 
 
 async def _cleanup_table(

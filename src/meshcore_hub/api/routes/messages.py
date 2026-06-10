@@ -41,7 +41,7 @@ def _get_tag_name(node: Optional[Node]) -> Optional[str]:
 
 @router.get("", response_model=MessageList)
 @cached("messages", key_builder=_messages_key_builder)
-async def list_messages(
+def list_messages(
     _: RequireRead,
     session: DbSession,
     request: Request,
@@ -233,7 +233,7 @@ async def list_messages(
 
 
 @router.get("/{message_id}", response_model=MessageRead)
-async def get_message(
+def get_message(
     _: RequireRead,
     session: DbSession,
     request: Request,

@@ -116,6 +116,9 @@ class NodeRead(BaseModel):
     )
     lat: Optional[float] = Field(default=None, description="GPS latitude coordinate")
     lon: Optional[float] = Field(default=None, description="GPS longitude coordinate")
+    is_observer: bool = Field(
+        default=False, description="Whether this node has observed at least one event"
+    )
     created_at: datetime = Field(..., description="Record creation timestamp")
     updated_at: datetime = Field(..., description="Record update timestamp")
     tags: list[NodeTagRead] = Field(default_factory=list, description="Node tags")

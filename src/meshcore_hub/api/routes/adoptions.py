@@ -18,7 +18,7 @@ router = APIRouter()
 
 
 @router.post("", response_model=AdoptedNodeRead, status_code=201)
-async def adopt_node(
+def adopt_node(
     adopt_request: NodeAdoptRequest,
     caller_info: RequireOperatorOrAdmin,
     session: DbSession,
@@ -74,7 +74,7 @@ async def adopt_node(
 
 
 @router.delete("/{public_key}", status_code=204)
-async def release_node(
+def release_node(
     public_key: str,
     caller_info: RequireOperatorOrAdmin,
     request: Request,

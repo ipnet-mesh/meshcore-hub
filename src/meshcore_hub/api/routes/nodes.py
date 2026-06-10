@@ -10,13 +10,8 @@ from meshcore_hub.api.auth import RequireRead
 from meshcore_hub.api.cache import cached
 from meshcore_hub.api.dependencies import DbSession
 from meshcore_hub.common.models import (
-    Advertisement,
-    EventObserver,
-    Message,
     Node,
     NodeTag,
-    Telemetry,
-    TracePath,
     UserProfileNode,
 )
 from meshcore_hub.common.schemas.nodes import AdoptedByUser, NodeList, NodeRead
@@ -49,7 +44,7 @@ VALID_NODE_SORT_COLUMNS = {"name", "public_key", "last_seen"}
 
 @router.get("", response_model=NodeList)
 @cached("nodes")
-async def list_nodes(
+def list_nodes(
     _: RequireRead,
     session: DbSession,
     request: Request,
@@ -149,56 +144,9 @@ async def list_nodes(
         )
 
     if observer is not None:
-        if observer:
-            query = query.where(
-                or_(
-                    Node.id.in_(
-                        select(Advertisement.observer_node_id).where(
-                            Advertisement.observer_node_id.is_not(None)
-                        )
-                    ),
-                    Node.id.in_(
-                        select(Message.observer_node_id).where(
-                            Message.observer_node_id.is_not(None)
-                        )
-                    ),
-                    Node.id.in_(
-                        select(Telemetry.observer_node_id).where(
-                            Telemetry.observer_node_id.is_not(None)
-                        )
-                    ),
-                    Node.id.in_(
-                        select(TracePath.observer_node_id).where(
-                            TracePath.observer_node_id.is_not(None)
-                        )
-                    ),
-                    Node.id.in_(select(EventObserver.observer_node_id)),
-                )
-            )
-        else:
-            query = query.where(
-                ~Node.id.in_(
-                    select(Advertisement.observer_node_id).where(
-                        Advertisement.observer_node_id.is_not(None)
-                    )
-                ),
-                ~Node.id.in_(
-                    select(Message.observer_node_id).where(
-                        Message.observer_node_id.is_not(None)
-                    )
-                ),
-                ~Node.id.in_(
-                    select(Telemetry.observer_node_id).where(
-                        Telemetry.observer_node_id.is_not(None)
-                    )
-                ),
-                ~Node.id.in_(
-                    select(TracePath.observer_node_id).where(
-                        TracePath.observer_node_id.is_not(None)
-                    )
-                ),
-                ~Node.id.in_(select(EventObserver.observer_node_id)),
-            )
+        # Uses the precomputed, indexed nodes.is_observer flag (maintained by the
+        # collector + cleanup job) instead of scanning the event tables.
+        query = query.where(Node.is_observer.is_(bool(observer)))
 
     # Get total count
     count_query = select(func.count()).select_from(query.subquery())
@@ -245,7 +193,7 @@ async def list_nodes(
 
 
 @router.get("/prefix/{prefix}", response_model=NodeRead)
-async def get_node_by_prefix(
+def get_node_by_prefix(
     _: RequireRead,
     session: DbSession,
     prefix: str = Path(description="Public key prefix to search for"),
@@ -275,7 +223,7 @@ async def get_node_by_prefix(
 
 
 @router.get("/{public_key}", response_model=NodeRead)
-async def get_node(
+def get_node(
     _: RequireRead,
     session: DbSession,
     public_key: str = Path(description="Full 64-character public key"),

@@ -171,27 +171,10 @@ class TestListNodesFilters:
     def test_filter_by_observer_true(
         self, client_no_auth, api_db_session, receiver_node
     ):
-        """Test filtering nodes that have observed events."""
-        from datetime import datetime, timezone
-
-        from meshcore_hub.common.models import Advertisement, Message
-
-        # This node has observed an ad and a message
-        advert = Advertisement(
-            public_key="obsflt1obsflt1obsflt1obsflt1ob",
-            name="ObservedAd",
-            adv_type="CLIENT",
-            received_at=datetime.now(timezone.utc),
-            observer_node_id=receiver_node.id,
-        )
-        msg = Message(
-            message_type="channel",
-            channel_idx=1,
-            text="Observed msg",
-            received_at=datetime.now(timezone.utc),
-            observer_node_id=receiver_node.id,
-        )
-        api_db_session.add_all([advert, msg])
+        """Test filtering nodes by the precomputed is_observer flag."""
+        # The collector sets this flag when a node observes an event.
+        receiver_node.is_observer = True
+        api_db_session.add(receiver_node)
         api_db_session.commit()
 
         response = client_no_auth.get("/api/v1/nodes?observer=true")

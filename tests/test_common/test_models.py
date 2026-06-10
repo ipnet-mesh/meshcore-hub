@@ -260,3 +260,21 @@ class TestEventObserverModel:
         observer = db_session.execute(select(EventObserver)).scalar_one()
         assert observer.path_len is None
         assert observer.snr is None
+
+    def test_add_event_observer_sets_is_observer_flag(self, db_session) -> None:
+        """Observing an event marks the observer node with is_observer=True."""
+        node = Node(public_key="c" * 64, name="Observer3")
+        db_session.add(node)
+        db_session.commit()
+        assert node.is_observer is False
+
+        add_event_observer(
+            session=db_session,
+            event_type="advertisement",
+            event_hash="deadbeef",
+            observer_node_id=node.id,
+        )
+        db_session.commit()
+
+        db_session.refresh(node)
+        assert node.is_observer is True

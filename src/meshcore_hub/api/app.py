@@ -186,12 +186,12 @@ def create_app(
 
     # Health check endpoints
     @app.get("/health", tags=["Health"])
-    async def health() -> dict:
+    def health() -> dict:
         """Basic health check."""
         return {"status": "healthy", "version": __version__}
 
     @app.get("/health/ready", tags=["Health"])
-    async def health_ready() -> dict:
+    def health_ready() -> dict:
         """Readiness check including database and optional Redis."""
         try:
             db = get_db_manager()

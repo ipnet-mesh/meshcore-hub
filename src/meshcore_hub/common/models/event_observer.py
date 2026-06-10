@@ -12,6 +12,7 @@ from sqlalchemy import (
     Index,
     String,
     UniqueConstraint,
+    update,
 )
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
@@ -138,4 +139,16 @@ def add_event_observer(
     )
     result = session.execute(stmt)
     rowcount = getattr(result, "rowcount", 0)
+
+    # Mark the observing node as an observer. Guarded on is_observer == False so
+    # this only writes on the first observation; the indexed flag lets the API's
+    # observer filter avoid scanning the (large) event tables.
+    from meshcore_hub.common.models.node import Node
+
+    session.execute(
+        update(Node)
+        .where(Node.id == observer_node_id, Node.is_observer.is_(False))
+        .values(is_observer=True)
+    )
+
     return bool(rowcount and rowcount > 0)

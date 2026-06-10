@@ -45,7 +45,7 @@ def _channel_to_read(channel: Channel, include_key: bool = False) -> ChannelRead
 
 @router.get("", response_model=ChannelList)
 @cached("channels", key_builder=_channels_key_builder)
-async def list_channels(
+def list_channels(
     _: RequireRead,
     session: DbSession,
     request: Request,
@@ -71,7 +71,7 @@ async def list_channels(
 
 
 @router.post("", response_model=ChannelRead, status_code=201)
-async def create_channel(
+def create_channel(
     __: RequireAdmin,
     session: DbSession,
     body: ChannelCreate,
@@ -110,7 +110,7 @@ async def create_channel(
 
 
 @router.put("/{channel_id}", response_model=ChannelRead)
-async def update_channel(
+def update_channel(
     __: RequireAdmin,
     session: DbSession,
     channel_id: str,
@@ -149,7 +149,7 @@ async def update_channel(
 
 
 @router.delete("/{channel_id}", status_code=204)
-async def delete_channel(
+def delete_channel(
     __: RequireAdmin,
     session: DbSession,
     channel_id: str,
