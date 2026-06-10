@@ -127,6 +127,27 @@ services:
       - observer_data:/app/data
 
   # ==========================================================================
+  # Redis Cache - Optional shared cache for API response caching
+  # Use --profile cache to start with the bundled Redis, or point
+  # REDIS_HOST at an external Redis instance for multi-instance setups.
+  # ==========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-hub}-redis
+    profiles:
+      - all
+      - cache
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ==========================================================================
   # Collector - MQTT subscriber and database storage
   # ==========================================================================
   collector:
@@ -221,6 +242,14 @@ services:
       - API_ADMIN_KEY=${API_ADMIN_KEY:-}
       - METRICS_ENABLED=${METRICS_ENABLED:-true}
       - METRICS_CACHE_TTL=${METRICS_CACHE_TTL:-60}
+      # Redis cache (optional — API works without Redis)
+      - REDIS_ENABLED=${REDIS_ENABLED:-false}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_KEY_PREFIX=${REDIS_KEY_PREFIX:-hub}
+      - REDIS_CACHE_TTL=${REDIS_CACHE_TTL:-30}
+      - REDIS_CACHE_TTL_DASHBOARD=${REDIS_CACHE_TTL_DASHBOARD:-30}
     command: ["api"]
     healthcheck:
       test:
@@ -378,3 +407,5 @@ volumes:
     name: ${COMPOSE_PROJECT_NAME:-hub}_mqtt_data
   observer_data:
     name: ${COMPOSE_PROJECT_NAME:-hub}_observer_data
+  redis_data:
+    name: ${COMPOSE_PROJECT_NAME:-hub}_redis_data

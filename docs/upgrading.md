@@ -4,6 +4,36 @@ This guide covers upgrading from a previous MeshCore Hub release to the current 
 
 ## v0.12.0
 
+### Optional Redis API Cache
+
+A new optional Redis-backed caching layer reduces database load for read-heavy API endpoints (nodes, advertisements, messages, channels, dashboard). Redis is entirely optional — the API works identically without it.
+
+**New optional dependency:** `redis[hiredis]` is installed automatically with `pip install -e .`. No manual action needed.
+
+**New environment variables:**
+
+| Variable                    | Default     | Description                                                      |
+| --------------------------- | ----------- | ---------------------------------------------------------------- |
+| `REDIS_ENABLED`             | `false`     | Enable Redis API response caching                                |
+| `REDIS_HOST`                | `localhost` | Redis server host (`redis` in Docker)                            |
+| `REDIS_PORT`                | `6379`      | Redis server port                                                |
+| `REDIS_DB`                  | `0`         | Redis database number                                            |
+| `REDIS_PASSWORD`            | _(none)_    | Redis password (optional)                                        |
+| `REDIS_KEY_PREFIX`          | `hub`       | Cache key prefix (change per instance for multi-instance setups) |
+| `REDIS_CACHE_TTL`           | `30`        | Default cache TTL in seconds                                     |
+| `REDIS_CACHE_TTL_DASHBOARD` | `30`        | Cache TTL for dashboard endpoints                                |
+
+**Docker Compose:** Redis is available via the `cache` profile:
+
+```bash
+docker compose --profile cache up    # Start with bundled Redis
+docker compose --profile core up     # Start without Redis (default)
+```
+
+`REDIS_ENABLED` defaults to `false` everywhere (code and Docker Compose). Cache TTL defaults to 30 seconds (matching the web dashboard auto-refresh interval).
+
+## v0.11.0
+
 ### Radio Config Split Into Individual Environment Variables
 
 The single `NETWORK_RADIO_CONFIG` comma-delimited environment variable has been replaced with six individual variables. The legacy variable and its `from_config_string` parsing have been removed entirely. Each variable defaults to the EU/UK Narrow profile when unset.
@@ -13,11 +43,13 @@ Frequency, bandwidth, and TX power are now configured as raw numbers without uni
 **Migration example:**
 
 Before:
+
 ```
 NETWORK_RADIO_CONFIG=EU/UK Narrow,869.618MHz,62.5kHz,8,8,22dBm
 ```
 
 After:
+
 ```
 NETWORK_RADIO_PROFILE=EU/UK Narrow
 NETWORK_RADIO_FREQUENCY=869.618
@@ -28,8 +60,6 @@ NETWORK_RADIO_TX_POWER=22
 ```
 
 **Note:** Radio config is now "always on" with EU/UK Narrow defaults. To hide the radio config panel entirely, set `FEATURE_RADIO_CONFIG=false`.
-
-## v0.11.0
 
 ### Channel Visibility Rename: "public" → "community"
 
@@ -45,21 +75,23 @@ Channel decryption keys are now managed via the `channels` database table instea
 
 **New database table: `channels`**
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | `VARCHAR(36), PK` | UUID primary key |
-| `name` | `VARCHAR(100), UNIQUE` | Channel display name |
-| `key_hex` | `VARCHAR(64), UNIQUE` | Uppercase hex key (32 or 64 chars) |
-| `channel_hash` | `VARCHAR(2)` | First byte of SHA-256 of key |
-| `visibility` | `VARCHAR(20)` | `community`, `member`, `operator`, or `admin` |
-| `enabled` | `BOOLEAN` | Whether the channel is active |
-| `created_at`, `updated_at` | `DATETIME` | Timestamps |
+| Column                     | Type                   | Description                                   |
+| -------------------------- | ---------------------- | --------------------------------------------- |
+| `id`                       | `VARCHAR(36), PK`      | UUID primary key                              |
+| `name`                     | `VARCHAR(100), UNIQUE` | Channel display name                          |
+| `key_hex`                  | `VARCHAR(64), UNIQUE`  | Uppercase hex key (32 or 64 chars)            |
+| `channel_hash`             | `VARCHAR(2)`           | First byte of SHA-256 of key                  |
+| `visibility`               | `VARCHAR(20)`          | `community`, `member`, `operator`, or `admin` |
+| `enabled`                  | `BOOLEAN`              | Whether the channel is active                 |
+| `created_at`, `updated_at` | `DATETIME`             | Timestamps                                    |
 
 **Removed environment variables:**
+
 - `COLLECTOR_CHANNEL_KEYS` — replaced by database channels table
 - `COLLECTOR_INCLUDE_TEST_CHANNEL` — replaced by presence of a `test` channel row in the database
 
 **New environment variables:**
+
 - `CHANNEL_REFRESH_INTERVAL_SECONDS` — seconds between key refresh (default: `300`)
 - `FEATURE_CHANNELS` — enable/disable the /channels page (default: `true`)
 
@@ -98,10 +130,10 @@ The collector's scheduled cleanup cycle now also runs orphan cleanup automatical
 
 The `meshcore-hub collector cleanup` command now accepts:
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--node-cleanup` | `false` | Also delete inactive nodes and orphaned relations |
-| `--node-cleanup-days` | `30` | Inactivity threshold for node deletion |
+| Flag                  | Default | Description                                       |
+| --------------------- | ------- | ------------------------------------------------- |
+| `--node-cleanup`      | `false` | Also delete inactive nodes and orphaned relations |
+| `--node-cleanup-days` | `30`    | Inactivity threshold for node deletion            |
 
 ## v0.10.0
 
@@ -109,33 +141,33 @@ This release introduces OIDC authentication, user profiles with node adoption, r
 
 ### Breaking Changes
 
-| Area | Before | After |
-|------|--------|-------|
-| Admin auth | `WEB_ADMIN_ENABLED=true` (open access) | OIDC/OAuth2 authentication via identity provider |
-| Network Members | `members` table + CRUD API + YAML seed | Removed — replaced by `UserProfile` roles |
-| Infrastructure detection | `role=infra` NodeTag | `user_profile_nodes` adoption records |
-| Tag editing | `/admin/node-tags` dedicated page | Inline editor on node detail page |
-| Tag API auth | `RequireAdmin` (API key with open fallback) | `RequireOperatorOrAdmin` (OIDC role-based, always requires auth) |
-| Admin UI | `/admin/` routes with SPA pages | Removed entirely |
-| Map API field | `infra_center` | `adopted_center` |
-| Map API field | `is_infra` (on node objects) | `is_adopted` |
-| Prometheus label | `role="infra"` / `role=""` | `adopted="true"` / `adopted="false"` |
-| Profile endpoint | `GET /api/v1/user/profile/{user_id}` | `GET /api/v1/user/profile/{profile_id}` (UUID) |
-| Node cleanup default | 7 days | 30 days |
-| Python | 3.13 | 3.14 |
+| Area                     | Before                                      | After                                                            |
+| ------------------------ | ------------------------------------------- | ---------------------------------------------------------------- |
+| Admin auth               | `WEB_ADMIN_ENABLED=true` (open access)      | OIDC/OAuth2 authentication via identity provider                 |
+| Network Members          | `members` table + CRUD API + YAML seed      | Removed — replaced by `UserProfile` roles                        |
+| Infrastructure detection | `role=infra` NodeTag                        | `user_profile_nodes` adoption records                            |
+| Tag editing              | `/admin/node-tags` dedicated page           | Inline editor on node detail page                                |
+| Tag API auth             | `RequireAdmin` (API key with open fallback) | `RequireOperatorOrAdmin` (OIDC role-based, always requires auth) |
+| Admin UI                 | `/admin/` routes with SPA pages             | Removed entirely                                                 |
+| Map API field            | `infra_center`                              | `adopted_center`                                                 |
+| Map API field            | `is_infra` (on node objects)                | `is_adopted`                                                     |
+| Prometheus label         | `role="infra"` / `role=""`                  | `adopted="true"` / `adopted="false"`                             |
+| Profile endpoint         | `GET /api/v1/user/profile/{user_id}`        | `GET /api/v1/user/profile/{profile_id}` (UUID)                   |
+| Node cleanup default     | 7 days                                      | 30 days                                                          |
+| Python                   | 3.13                                        | 3.14                                                             |
 
 ### Removed API Endpoints
 
-| Method | Path | Replacement |
-|--------|------|-------------|
-| `GET` | `/nodes/{pk}/tags/{key}` | Use `GET /nodes/{pk}` and filter tags client-side |
-| `PUT` | `/nodes/{pk}/tags/{key}/move` | No replacement (delete + recreate) |
-| `POST` | `/nodes/{pk}/tags/copy-to/{dest}` | No replacement (create tags individually) |
-| `DELETE` | `/nodes/{pk}/tags` (bulk) | No replacement (delete tags individually) |
-| `POST` | `/api/v1/commands/send-message` | Removed |
-| `POST` | `/api/v1/commands/send-channel-message` | Removed |
-| `POST` | `/api/v1/commands/send-advertisement` | Removed |
-| All | `/api/v1/members/*` | Use `/api/v1/user/profiles` |
+| Method   | Path                                    | Replacement                                       |
+| -------- | --------------------------------------- | ------------------------------------------------- |
+| `GET`    | `/nodes/{pk}/tags/{key}`                | Use `GET /nodes/{pk}` and filter tags client-side |
+| `PUT`    | `/nodes/{pk}/tags/{key}/move`           | No replacement (delete + recreate)                |
+| `POST`   | `/nodes/{pk}/tags/copy-to/{dest}`       | No replacement (create tags individually)         |
+| `DELETE` | `/nodes/{pk}/tags` (bulk)               | No replacement (delete tags individually)         |
+| `POST`   | `/api/v1/commands/send-message`         | Removed                                           |
+| `POST`   | `/api/v1/commands/send-channel-message` | Removed                                           |
+| `POST`   | `/api/v1/commands/send-advertisement`   | Removed                                           |
+| All      | `/api/v1/members/*`                     | Use `/api/v1/user/profiles`                       |
 
 ### Removed Schemas
 
@@ -158,6 +190,7 @@ This release introduces OIDC authentication, user profiles with node adoption, r
 ### Upgrade Actions
 
 1. **Set up an OIDC identity provider** (LogTo, Keycloak, etc.) and configure these environment variables:
+
    ```bash
    OIDC_ENABLED=true
    OIDC_CLIENT_ID=your-client-id
@@ -193,6 +226,7 @@ This release introduces OIDC authentication, user profiles with node adoption, r
 ### OIDC-Disabled Deployments
 
 When `OIDC_ENABLED=false`:
+
 - Tag writes require OIDC authentication → 401 on direct API access (tags are read-only via web UI)
 - The inline tag editor is hidden on the node detail page
 - `adopted_center` is always `null`, all nodes have `is_adopted: false`
@@ -202,17 +236,18 @@ When `OIDC_ENABLED=false`:
 ### Tag Editor Authorization
 
 Tag write endpoints now use `RequireOperatorOrAdmin` (OIDC role-based). The previous `RequireAdmin` had a fallback allowing open access when no admin key was configured. The new system always requires OIDC authentication:
+
 - Operators can edit tags on their adopted nodes only
 - Admins can edit tags on any node
 - The admin API key no longer grants tag write access
 
 ### New Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OIDC_ROLE_ADMIN` | `admin` | IdP role name granting admin access |
-| `OIDC_ROLE_OPERATOR` | `operator` | IdP role name for operator access |
-| `OIDC_ROLE_MEMBER` | `member` | IdP role name for member access |
+| Variable             | Default    | Description                         |
+| -------------------- | ---------- | ----------------------------------- |
+| `OIDC_ROLE_ADMIN`    | `admin`    | IdP role name granting admin access |
+| `OIDC_ROLE_OPERATOR` | `operator` | IdP role name for operator access   |
+| `OIDC_ROLE_MEMBER`   | `member`   | IdP role name for member access     |
 
 See `.env.example` for the full list of OIDC environment variables.
 
@@ -222,22 +257,22 @@ This release includes **breaking changes** to the MQTT broker, packet capture se
 
 ### Overview of Changes
 
-| Area | Before | After |
-|------|--------|-------|
-| MQTT broker | Eclipse Mosquitto (TCP) | [meshcore-mqtt-broker](https://github.com/michaelhart/meshcore-mqtt-broker) (WebSocket, JWT auth) |
-| Packet capture | Proprietary `interface-receiver` service | [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) (LetsMesh Observer model) |
-| Auth model | MQTT username/password for publishing | JWT signed by device hardware public key |
-| Collector MQTT | Anonymous subscriber | Subscriber account (admin-level) with credentials |
-| Decoder | Node.js `meshcore-decoder` CLI subprocess | Native Python `meshcoredecoder` library |
-| Python | 3.13 | 3.14 |
-| DB columns | `receiver_node_id` | `observer_node_id` |
-| DB table | `event_receivers` | `event_observers` |
-| API commands | `/api/v1/commands/*` | Removed |
-| Compose profiles | `receiver`, `sender`, `mock` | `observer` |
-| Compose files | Single `docker-compose.yml` | Base + environment overrides (`.dev.yml`, `.prod.yml`) |
-| Container names | `meshcore-*` | Parameterized via `COMPOSE_PROJECT_NAME` (default: `hub-*`) |
-| Volume names | `meshcore_*` | Parameterized via `COMPOSE_PROJECT_NAME` (default: `hub_*`) |
-| Public key case | Mixed (uppercase/lowercase) | Normalized to **lowercase** |
+| Area             | Before                                    | After                                                                                                     |
+| ---------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| MQTT broker      | Eclipse Mosquitto (TCP)                   | [meshcore-mqtt-broker](https://github.com/michaelhart/meshcore-mqtt-broker) (WebSocket, JWT auth)         |
+| Packet capture   | Proprietary `interface-receiver` service  | [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) (LetsMesh Observer model) |
+| Auth model       | MQTT username/password for publishing     | JWT signed by device hardware public key                                                                  |
+| Collector MQTT   | Anonymous subscriber                      | Subscriber account (admin-level) with credentials                                                         |
+| Decoder          | Node.js `meshcore-decoder` CLI subprocess | Native Python `meshcoredecoder` library                                                                   |
+| Python           | 3.13                                      | 3.14                                                                                                      |
+| DB columns       | `receiver_node_id`                        | `observer_node_id`                                                                                        |
+| DB table         | `event_receivers`                         | `event_observers`                                                                                         |
+| API commands     | `/api/v1/commands/*`                      | Removed                                                                                                   |
+| Compose profiles | `receiver`, `sender`, `mock`              | `observer`                                                                                                |
+| Compose files    | Single `docker-compose.yml`               | Base + environment overrides (`.dev.yml`, `.prod.yml`)                                                    |
+| Container names  | `meshcore-*`                              | Parameterized via `COMPOSE_PROJECT_NAME` (default: `hub-*`)                                               |
+| Volume names     | `meshcore_*`                              | Parameterized via `COMPOSE_PROJECT_NAME` (default: `hub_*`)                                               |
+| Public key case  | Mixed (uppercase/lowercase)               | Normalized to **lowercase**                                                                               |
 
 ### Public Key Case Normalization
 
@@ -296,8 +331,8 @@ docker volume ls | grep meshcore
 
 These volumes always need migrating:
 
-| Old Name | New Name |
-|----------|----------|
+| Old Name            | New Name   |
+| ------------------- | ---------- |
 | `meshcore_hub_data` | `hub_data` |
 
 > **Note:** `observer_data` and `mqtt_data` are new — they are created automatically on first run and do not need migrating.
@@ -382,12 +417,12 @@ MQTT_WS_PORT=9001
 
 #### Variables to Update
 
-| Variable | Old Value | New Value | Notes |
-|----------|-----------|-----------|-------|
-| `MQTT_TRANSPORT` | `tcp` | `websockets` | Required by the new JWT-based broker |
-| `MQTT_WS_PATH` | `/mqtt` | `/` | New broker accepts connections on `/` |
-| `MQTT_USERNAME` | (empty/optional) | Subscriber username | Now **required** for collector subscriber auth. Set to match your broker's `SUBSCRIBER_1` config. |
-| `MQTT_PASSWORD` | (empty/optional) | Subscriber password | Now **required** for collector subscriber auth. Generate a secure password: `openssl rand -base64 32` |
+| Variable         | Old Value        | New Value           | Notes                                                                                                 |
+| ---------------- | ---------------- | ------------------- | ----------------------------------------------------------------------------------------------------- |
+| `MQTT_TRANSPORT` | `tcp`            | `websockets`        | Required by the new JWT-based broker                                                                  |
+| `MQTT_WS_PATH`   | `/mqtt`          | `/`                 | New broker accepts connections on `/`                                                                 |
+| `MQTT_USERNAME`  | (empty/optional) | Subscriber username | Now **required** for collector subscriber auth. Set to match your broker's `SUBSCRIBER_1` config.     |
+| `MQTT_PASSWORD`  | (empty/optional) | Subscriber password | Now **required** for collector subscriber auth. Generate a secure password: `openssl rand -base64 32` |
 
 > **Note:** The Python-level defaults for `MQTT_TRANSPORT` and `MQTT_WS_PATH` are now `websockets` and `/`, matching the Docker Compose and `.env.example` values. No additional configuration is needed for non-Docker users.
 
@@ -469,6 +504,7 @@ The new packet capture service ([meshcore-packet-capture](https://github.com/age
 In production, the MQTT WebSocket server should be hosted behind a TLS/SSL-terminated reverse proxy (e.g., Nginx Proxy Manager, Caddy, Traefik) under the `/mqtt` path. The proxy handles TLS termination and forwards plain WebSocket connections to the broker on port 1883.
 
 **Local / development (default):**
+
 ```bash
 MQTT_PORT=1883
 MQTT_TRANSPORT=websockets
@@ -478,6 +514,7 @@ MQTT_TOKEN_AUDIENCE=mqtt.localhost
 ```
 
 **Production (behind reverse proxy):**
+
 ```bash
 MQTT_PORT=443
 MQTT_TRANSPORT=websockets
@@ -505,11 +542,11 @@ PACKETCAPTURE_MQTT3_TOKEN_AUDIENCE=mqtt.localhost
 
 The following Docker Compose services have been removed:
 
-| Old Service | Replacement |
-|-------------|-------------|
-| `interface-receiver` | `observer` (profile: `observer`) |
-| `interface-sender` | None (removed) |
-| `interface-mock-receiver` | None (removed) |
+| Old Service               | Replacement                      |
+| ------------------------- | -------------------------------- |
+| `interface-receiver`      | `observer` (profile: `observer`) |
+| `interface-sender`        | None (removed)                   |
+| `interface-mock-receiver` | None (removed)                   |
 
 The `observer` service uses the [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) image and is included in `docker-compose.yml` under the `observer` profile for an easy transition.
 
@@ -517,12 +554,12 @@ The `observer` service uses the [meshcore-packet-capture](https://github.com/age
 
 The Docker Compose configuration is now split into multiple files:
 
-| File | Purpose |
-|------|---------|
-| `docker-compose.yml` | Base shared config (services, profiles, healthchecks, environment) |
-| `docker-compose.dev.yml` | Development overrides (port mappings for direct access) |
-| `docker-compose.prod.yml` | Production overrides (external proxy network, no exposed ports) |
-| `docker-compose.traefik.yml` | Optional Traefik auto-discovery labels |
+| File                         | Purpose                                                            |
+| ---------------------------- | ------------------------------------------------------------------ |
+| `docker-compose.yml`         | Base shared config (services, profiles, healthchecks, environment) |
+| `docker-compose.dev.yml`     | Development overrides (port mappings for direct access)            |
+| `docker-compose.prod.yml`    | Production overrides (external proxy network, no exposed ports)    |
+| `docker-compose.traefik.yml` | Optional Traefik auto-discovery labels                             |
 
 All `docker compose` commands now require explicit file selection:
 

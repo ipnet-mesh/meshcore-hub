@@ -2,11 +2,12 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Path, Query
+from fastapi import APIRouter, HTTPException, Path, Query, Request
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
 from meshcore_hub.api.auth import RequireRead
+from meshcore_hub.api.cache import cached
 from meshcore_hub.api.dependencies import DbSession
 from meshcore_hub.common.models import (
     Advertisement,
@@ -47,9 +48,11 @@ VALID_NODE_SORT_COLUMNS = {"name", "public_key", "last_seen"}
 
 
 @router.get("", response_model=NodeList)
+@cached("nodes")
 async def list_nodes(
     _: RequireRead,
     session: DbSession,
+    request: Request,
     search: Optional[str] = Query(
         None, description="Search in name tag, node name, or public key"
     ),

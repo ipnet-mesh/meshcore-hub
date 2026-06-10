@@ -123,6 +123,61 @@ import click
     help="Seconds to cache metrics output (reduces database load)",
 )
 @click.option(
+    "--redis-enabled/--no-redis",
+    default=False,
+    envvar="REDIS_ENABLED",
+    help="Enable Redis API response caching",
+)
+@click.option(
+    "--redis-host",
+    type=str,
+    default="localhost",
+    envvar="REDIS_HOST",
+    help="Redis server host",
+)
+@click.option(
+    "--redis-port",
+    type=int,
+    default=6379,
+    envvar="REDIS_PORT",
+    help="Redis server port",
+)
+@click.option(
+    "--redis-db",
+    type=int,
+    default=0,
+    envvar="REDIS_DB",
+    help="Redis database number",
+)
+@click.option(
+    "--redis-password",
+    type=str,
+    default=None,
+    envvar="REDIS_PASSWORD",
+    help="Redis password (optional)",
+)
+@click.option(
+    "--redis-key-prefix",
+    type=str,
+    default="hub",
+    envvar="REDIS_KEY_PREFIX",
+    help="Prefix for all Redis cache keys",
+)
+@click.option(
+    "--redis-cache-ttl",
+    type=int,
+    default=30,
+    envvar="REDIS_CACHE_TTL",
+    help="Default cache TTL in seconds",
+)
+@click.option(
+    "--redis-cache-ttl-dashboard",
+    type=int,
+    default=30,
+    envvar="REDIS_CACHE_TTL_DASHBOARD",
+    help="Cache TTL for dashboard endpoints (seconds)",
+)
+@click.option(
     "--reload",
     is_flag=True,
     default=False,
@@ -148,6 +203,14 @@ def api(
     cors_origins: str | None,
     metrics_enabled: bool,
     metrics_cache_ttl: int,
+    redis_enabled: bool,
+    redis_host: str,
+    redis_port: int,
+    redis_db: int,
+    redis_password: str | None,
+    redis_key_prefix: str,
+    redis_cache_ttl: int,
+    redis_cache_ttl_dashboard: int,
     reload: bool,
 ) -> None:
     """Run the REST API server.
@@ -199,6 +262,13 @@ def api(
     click.echo(f"CORS origins: {cors_origins or 'none'}")
     click.echo(f"Metrics enabled: {metrics_enabled}")
     click.echo(f"Metrics cache TTL: {metrics_cache_ttl}s")
+    click.echo(f"Redis enabled: {redis_enabled}")
+    if redis_enabled:
+        click.echo(f"Redis: {redis_host}:{redis_port}/{redis_db}")
+        click.echo(f"Redis key prefix: {redis_key_prefix}")
+        click.echo(
+            f"Redis cache TTL: {redis_cache_ttl}s (dashboard: {redis_cache_ttl_dashboard}s)"
+        )
     click.echo(f"Reload mode: {reload}")
     click.echo("=" * 50)
 
@@ -212,6 +282,7 @@ def api(
         # We need to pass app as string for reload to work
         click.echo("\nStarting in development mode with auto-reload...")
         click.echo("Note: Using default settings for reload mode.")
+        click.echo("Note: Redis defaults to disabled in reload mode.")
 
         uvicorn.run(
             "meshcore_hub.api.app:create_app",
@@ -237,6 +308,14 @@ def api(
             cors_origins=origins_list,
             metrics_enabled=metrics_enabled,
             metrics_cache_ttl=metrics_cache_ttl,
+            redis_enabled=redis_enabled,
+            redis_host=redis_host,
+            redis_port=redis_port,
+            redis_db=redis_db,
+            redis_password=redis_password,
+            redis_key_prefix=redis_key_prefix,
+            redis_cache_ttl=redis_cache_ttl,
+            redis_cache_ttl_dashboard=redis_cache_ttl_dashboard,
         )
 
         click.echo("\nStarting API server...")

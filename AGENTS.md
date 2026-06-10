@@ -55,6 +55,7 @@ MeshCore Hub is a Python 3.14+ monorepo for managing and orchestrating MeshCore 
 | Database ORM | SQLAlchemy 2.0 (async) |
 | Migrations | Alembic |
 | REST API | FastAPI |
+| Redis Client | redis[hiredis] (optional) |
 | MQTT Client | paho-mqtt |
 | MQTT Broker | [meshcore-mqtt-broker](https://github.com/michaelhart/meshcore-mqtt-broker) (WebSocket + JWT auth) |
 | Templates | Jinja2 (server), lit-html (SPA) |
@@ -262,6 +263,7 @@ meshcore-hub/
 │   │   ├── i18n.py           # Translation loading
 │   │   ├── health.py         # Health check utilities
 │   │   ├── hash_utils.py     # Hash utility functions
+│   │   ├── redis.py          # Redis cache backend
 │   │   ├── models/           # SQLAlchemy models
 │   │   │   ├── node.py       # Node model
 │   │   │   ├── channel.py    # Channel model (encryption keys)
@@ -287,6 +289,7 @@ meshcore-hub/
 │   │   ├── auth.py           # Authentication
 │   │   ├── dependencies.py
 │   │   ├── metrics.py        # Prometheus metrics endpoint
+│   │   ├── cache.py           # API response caching (Redis)
 │   │   └── routes/           # API routes
 │   │       ├── user_profiles.py  # User profile endpoints (GET/PUT profile)
 │   │       ├── adoptions.py      # Node adoption endpoints (POST adopt, DELETE release)
@@ -645,6 +648,14 @@ Key variables:
 - `CORS_ORIGINS` - Comma-separated list of allowed CORS origins for the API (optional)
 - `METRICS_ENABLED` - Enable Prometheus metrics endpoint at /metrics (default: `true`)
 - `METRICS_CACHE_TTL` - Seconds to cache metrics output (default: `60`)
+- `REDIS_ENABLED` - Enable Redis API response caching (default: `false`)
+- `REDIS_HOST` - Redis server host (default: `localhost`)
+- `REDIS_PORT` - Redis server port (default: `6379`)
+- `REDIS_DB` - Redis database number (default: `0`)
+- `REDIS_PASSWORD` - Redis password (optional)
+- `REDIS_KEY_PREFIX` - Cache key prefix for multi-instance isolation (default: `hub`)
+- `REDIS_CACHE_TTL` - Default cache TTL in seconds (default: `30`)
+- `REDIS_CACHE_TTL_DASHBOARD` - Cache TTL for dashboard endpoints in seconds (default: `30`)
 - `WEB_HOST` - Web server bind address (default: `0.0.0.0`)
 - `WEB_PORT` - Web server port (default: `8080`)
 - `API_BASE_URL` - API server base URL for the web dashboard (default: `http://localhost:8000`)

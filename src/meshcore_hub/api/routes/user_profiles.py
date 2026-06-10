@@ -8,6 +8,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
 from meshcore_hub.api.auth import RequireRead, RequireUserOwner, X_USER_ID_HEADER
+from meshcore_hub.api.cache import cached
 from meshcore_hub.api.dependencies import DbSession
 from meshcore_hub.api.profile_utils import get_or_create_profile
 from meshcore_hub.common.config import get_web_settings
@@ -51,9 +52,11 @@ def _build_adopted_nodes(profile: UserProfile) -> list[AdoptedNodeRead]:
 
 
 @router.get("/profiles", response_model=UserProfileList)
+@cached("profiles")
 async def list_profiles(
     _: RequireRead,
     session: DbSession,
+    request: Request,
     exclude_test: bool = Query(
         default=True, description="Exclude test users from results"
     ),

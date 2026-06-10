@@ -7,6 +7,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.sql.elements import ColumnElement
 
 from meshcore_hub.api.auth import RequireRead
+from meshcore_hub.api.cache import cached, sorted_query_string
 from meshcore_hub.api.channel_visibility import (
     get_max_visibility_level,
     get_visible_channel_indices,
@@ -35,6 +36,16 @@ router = APIRouter()
 _FLOOD_ROUTE_TYPES = {"flood", "transport_flood"}
 
 
+def _dashboard_stats_key_builder(request: Request) -> str:
+    role = resolve_user_role(request) or "anonymous"
+    return f"dashboard/stats:role={role}:{sorted_query_string(request)}"
+
+
+def _dashboard_msg_activity_key_builder(request: Request) -> str:
+    role = resolve_user_role(request) or "anonymous"
+    return f"dashboard/message-activity:role={role}:{sorted_query_string(request)}"
+
+
 def _flood_only_filter(
     ad_model: type[Advertisement],
 ) -> ColumnElement[bool]:
@@ -49,6 +60,11 @@ def _flood_only_filter(
 
 
 @router.get("/stats", response_model=DashboardStats)
+@cached(
+    "dashboard/stats",
+    ttl_setting="redis_cache_ttl_dashboard",
+    key_builder=_dashboard_stats_key_builder,
+)
 async def get_stats(
     _: RequireRead,
     session: DbSession,
@@ -306,9 +322,11 @@ async def get_stats(
 
 
 @router.get("/activity", response_model=DailyActivity)
+@cached("dashboard/activity", ttl_setting="redis_cache_ttl_dashboard")
 async def get_activity(
     _: RequireRead,
     session: DbSession,
+    request: Request,
     days: int = 30,
 ) -> DailyActivity:
     """Get daily advertisement activity for the specified period.
@@ -360,6 +378,11 @@ async def get_activity(
 
 
 @router.get("/message-activity", response_model=MessageActivity)
+@cached(
+    "dashboard/message-activity",
+    ttl_setting="redis_cache_ttl_dashboard",
+    key_builder=_dashboard_msg_activity_key_builder,
+)
 async def get_message_activity(
     _: RequireRead,
     session: DbSession,
@@ -419,9 +442,11 @@ async def get_message_activity(
 
 
 @router.get("/node-count", response_model=NodeCountHistory)
+@cached("dashboard/node-count", ttl_setting="redis_cache_ttl_dashboard")
 async def get_node_count_history(
     _: RequireRead,
     session: DbSession,
+    request: Request,
     days: int = 30,
 ) -> NodeCountHistory:
     """Get cumulative node count over time.

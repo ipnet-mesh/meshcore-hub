@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
 
 from meshcore_hub.api.auth import RequireAdmin, RequireRead
+from meshcore_hub.api.cache import cached, sorted_query_string
 from meshcore_hub.api.channel_visibility import (
     VISIBILITY_LEVELS,
     get_max_visibility_level,
@@ -19,6 +20,11 @@ from meshcore_hub.common.schemas.channels import (
 )
 
 router = APIRouter()
+
+
+def _channels_key_builder(request: Request) -> str:
+    role = resolve_user_role(request) or "anonymous"
+    return f"channels:role={role}:{sorted_query_string(request)}"
 
 
 def _channel_to_read(channel: Channel, include_key: bool = False) -> ChannelRead:
@@ -38,6 +44,7 @@ def _channel_to_read(channel: Channel, include_key: bool = False) -> ChannelRead
 
 
 @router.get("", response_model=ChannelList)
+@cached("channels", key_builder=_channels_key_builder)
 async def list_channels(
     _: RequireRead,
     session: DbSession,

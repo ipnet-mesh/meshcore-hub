@@ -3,11 +3,12 @@
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import aliased, selectinload
 
 from meshcore_hub.api.auth import RequireRead
+from meshcore_hub.api.cache import cached
 from meshcore_hub.api.dependencies import DbSession
 from meshcore_hub.api.observer_utils import fetch_observers_for_events
 from meshcore_hub.common.models import Advertisement, Node, NodeTag, UserProfileNode
@@ -44,9 +45,11 @@ def _get_tag_description(node: Optional[Node]) -> Optional[str]:
 
 
 @router.get("", response_model=AdvertisementList)
+@cached("advertisements")
 async def list_advertisements(
     _: RequireRead,
     session: DbSession,
+    request: Request,
     search: Optional[str] = Query(
         None, description="Search in name tag, node name, or public key"
     ),
