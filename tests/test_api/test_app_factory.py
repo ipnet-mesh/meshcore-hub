@@ -65,3 +65,19 @@ def test_factory_redis_enabled_accepts_truthy_values(clean_env):
     clean_env.setenv("REDIS_ENABLED", "1")
     app = create_app_from_env()
     assert app.state.redis_enabled is True
+
+
+def test_factory_metrics_enabled_via_env(clean_env):
+    """METRICS_ENABLED=true mounts the /metrics endpoint."""
+    clean_env.setenv("METRICS_ENABLED", "true")
+    app = create_app_from_env()
+    paths = {getattr(route, "path", None) for route in app.routes}
+    assert "/metrics" in paths
+
+
+def test_factory_metrics_disabled_via_env(clean_env):
+    """METRICS_ENABLED=false omits the /metrics endpoint."""
+    clean_env.setenv("METRICS_ENABLED", "false")
+    app = create_app_from_env()
+    paths = {getattr(route, "path", None) for route in app.routes}
+    assert "/metrics" not in paths
