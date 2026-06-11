@@ -132,7 +132,7 @@ services:
   # REDIS_HOST at an external Redis instance for multi-instance setups.
   # ==========================================================================
   redis:
-    image: redis:7-alpine
+    image: redis:8-alpine
     container_name: ${COMPOSE_PROJECT_NAME:-hub}-redis
     profiles:
       - all
