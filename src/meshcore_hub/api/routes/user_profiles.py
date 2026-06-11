@@ -46,6 +46,7 @@ def _build_adopted_nodes(profile: UserProfile) -> list[AdoptedNodeRead]:
                 name=assoc.node.name,
                 adv_type=assoc.node.adv_type,
                 adopted_at=assoc.adopted_at,
+                last_seen=assoc.node.last_seen,
             )
         )
     return adopted_nodes
