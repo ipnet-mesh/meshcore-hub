@@ -212,3 +212,60 @@ def create_app(
         return result
 
     return app
+
+
+def create_app_from_env() -> FastAPI:
+    """Build the application purely from environment configuration.
+
+    This factory is used when running multiple uvicorn workers: each forked
+    worker re-imports and calls it with no arguments, so all configuration
+    must come from the environment (CLI flags do not propagate to workers).
+    It mirrors the resolution the ``api`` CLI command performs for its
+    single-process path, drawing structured config from ``APISettings`` plus
+    the few env vars the CLI handles directly (CORS / metrics).
+    """
+    import os
+
+    from meshcore_hub.common.config import get_api_settings
+
+    settings = get_api_settings()
+
+    cors_env = os.environ.get("CORS_ORIGINS")
+    cors_origins = [o.strip() for o in cors_env.split(",")] if cors_env else None
+
+    def _env_bool(name: str, default: bool) -> bool:
+        raw = os.environ.get(name)
+        if raw is None:
+            return default
+        return raw.strip().lower() in ("1", "true", "yes", "on")
+
+    metrics_enabled = _env_bool("METRICS_ENABLED", True)
+    metrics_cache_ttl = int(os.environ.get("METRICS_CACHE_TTL", "60"))
+
+    # mqtt_transport is an enum on the settings object; create_app wants a str.
+    mqtt_transport = getattr(settings.mqtt_transport, "value", settings.mqtt_transport)
+
+    return create_app(
+        database_url=settings.effective_database_url,
+        read_key=settings.api_read_key,
+        admin_key=settings.api_admin_key,
+        mqtt_host=settings.mqtt_host,
+        mqtt_port=settings.mqtt_port,
+        mqtt_username=settings.mqtt_username,
+        mqtt_password=settings.mqtt_password,
+        mqtt_prefix=settings.mqtt_prefix,
+        mqtt_tls=settings.mqtt_tls,
+        mqtt_transport=mqtt_transport,
+        mqtt_ws_path=settings.mqtt_ws_path,
+        cors_origins=cors_origins,
+        metrics_enabled=metrics_enabled,
+        metrics_cache_ttl=metrics_cache_ttl,
+        redis_enabled=settings.redis_enabled,
+        redis_host=settings.redis_host,
+        redis_port=settings.redis_port,
+        redis_db=settings.redis_db,
+        redis_password=settings.redis_password,
+        redis_key_prefix=settings.redis_key_prefix,
+        redis_cache_ttl=settings.redis_cache_ttl,
+        redis_cache_ttl_dashboard=settings.redis_cache_ttl_dashboard,
+    )

@@ -238,6 +238,8 @@ services:
       - DATA_HOME=/data
       - API_HOST=0.0.0.0
       - API_PORT=8000
+      # Worker processes for multi-core concurrency (1 = single process).
+      - API_WORKERS=${API_WORKERS:-1}
       - API_READ_KEY=${API_READ_KEY:-}
       - API_ADMIN_KEY=${API_ADMIN_KEY:-}
       - METRICS_ENABLED=${METRICS_ENABLED:-true}

@@ -4,6 +4,26 @@ This guide covers upgrading from a previous MeshCore Hub release to the current 
 
 ## v0.12.0
 
+### Multi-Worker API (`API_WORKERS`)
+
+The API can now run multiple worker processes in a single container for multi-core concurrency, controlled by a new `API_WORKERS` environment variable (default `1`, unchanged behaviour). Each worker is an independent process sharing one listening socket.
+
+**New environment variable:**
+
+| Variable      | Default | Description                                                         |
+| ------------- | ------- | ------------------------------------------------------------------- |
+| `API_WORKERS` | `1`     | Number of API worker processes (increase for multi-core concurrency) |
+
+**No action required to upgrade** — the default of `1` preserves the previous single-process behaviour. To use it, set `API_WORKERS` in your `.env` and recreate the `api` service.
+
+**Important:** with more than one worker, configuration must come from **environment variables** — CLI flags passed to `meshcore-hub api` are not propagated to forked worker processes. Docker Compose deployments already configure everything via env, so they are unaffected. Enabling Redis (`REDIS_ENABLED=true`) is recommended so all workers share one response cache.
+
+While on SQLite, all workers share the same database file on the same host (WAL mode allows concurrent reads alongside the collector's single writer). Writes do not scale and this does not extend across multiple hosts; switch `DATABASE_URL` to PostgreSQL to scale beyond a single host. See [Scaling the API](../README.md#scaling-the-api) for details.
+
+### Read-Path Query Optimisations
+
+Several read-heavy endpoints had their query patterns optimised (node `is_observer` filtering, dashboard node-count history, and message/dashboard sender-name resolution). These are internal performance improvements with no API or configuration changes — responses are unchanged. The `is_observer` change ships an Alembic migration that is applied automatically on startup (Docker) or via `meshcore-hub db upgrade`.
+
 ### Optional Redis API Cache
 
 A new optional Redis-backed caching layer reduces database load for read-heavy API endpoints (nodes, advertisements, messages, channels, dashboard). Redis is entirely optional — the API works identically without it.

@@ -183,6 +183,18 @@ import click
     default=False,
     help="Enable auto-reload for development",
 )
+@click.option(
+    "--workers",
+    type=int,
+    default=1,
+    envvar="API_WORKERS",
+    help=(
+        "Number of worker processes (default: 1). Values >1 run multiple "
+        "processes for multi-core concurrency; workers are built from the "
+        "environment via the app factory, so configure via env vars (not "
+        "CLI flags) when scaling. Ignored in --reload mode."
+    ),
+)
 @click.pass_context
 def api(
     ctx: click.Context,
@@ -212,6 +224,7 @@ def api(
     redis_cache_ttl: int,
     redis_cache_ttl_dashboard: int,
     reload: bool,
+    workers: int,
 ) -> None:
     """Run the REST API server.
 
@@ -270,6 +283,7 @@ def api(
             f"Redis cache TTL: {redis_cache_ttl}s (dashboard: {redis_cache_ttl_dashboard}s)"
         )
     click.echo(f"Reload mode: {reload}")
+    click.echo(f"Workers: {workers}")
     click.echo("=" * 50)
 
     # Parse CORS origins
@@ -291,8 +305,21 @@ def api(
             reload=True,
             factory=True,
         )
+    elif workers > 1:
+        # Multiple worker processes require an import string so uvicorn can
+        # re-import the app in each forked worker. Workers rebuild the app from
+        # the environment via the factory, so configuration must come from env
+        # vars — CLI flags do not propagate to the workers.
+        click.echo(f"\nStarting API server with {workers} workers...")
+        uvicorn.run(
+            "meshcore_hub.api.app:create_app_from_env",
+            host=host,
+            port=port,
+            workers=workers,
+            factory=True,
+        )
     else:
-        # For production, create app directly
+        # Single process: build the app directly so CLI flags apply.
         app = create_app(
             database_url=effective_db_url,
             read_key=read_key,
