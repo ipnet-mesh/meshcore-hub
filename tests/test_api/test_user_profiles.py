@@ -206,6 +206,7 @@ class TestGetProfile:
         assert len(data["nodes"]) == 1
         assert data["nodes"][0]["public_key"] == "abc123def456abc123def456abc123de"
         assert "adopted_at" in data["nodes"][0]
+        assert data["nodes"][0]["last_seen"] is not None
 
     def test_get_profile_returns_roles(self, client_no_auth, sample_user_profile):
         """Test that profile includes roles."""

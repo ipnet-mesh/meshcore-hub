@@ -75,6 +75,9 @@ class AdoptedNodeRead(BaseModel):
     name: Optional[str] = Field(default=None, description="Node display name")
     adv_type: Optional[str] = Field(default=None, description="Advertisement type")
     adopted_at: datetime = Field(..., description="When the node was adopted")
+    last_seen: Optional[datetime] = Field(
+        default=None, description="Timestamp of the node's most recent activity"
+    )
 
     class Config:
         from_attributes = True
