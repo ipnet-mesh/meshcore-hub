@@ -73,6 +73,44 @@ class TestListMessages:
         assert len(data["items"]) == 1
         assert data["items"][0]["sender_name"] == "SenderNode"
 
+    def test_list_messages_resolves_multiple_distinct_senders(
+        self, client_no_auth, api_db_session
+    ):
+        """Senders with different prefixes each resolve to their own name in a
+        single batched lookup."""
+        api_db_session.add_all(
+            [
+                Node(public_key="aa" + "0" * 62, name="Alice"),
+                Node(public_key="bb" + "1" * 62, name="Bob"),
+            ]
+        )
+        api_db_session.commit()
+
+        now = datetime.now(timezone.utc)
+        api_db_session.add_all(
+            [
+                Message(
+                    message_type="contact",
+                    pubkey_prefix="aa" + "0" * 10,
+                    text="from alice",
+                    received_at=now,
+                ),
+                Message(
+                    message_type="contact",
+                    pubkey_prefix="bb" + "1" * 10,
+                    text="from bob",
+                    received_at=now,
+                ),
+            ]
+        )
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/messages")
+        assert response.status_code == 200
+        names = {item["text"]: item["sender_name"] for item in response.json()["items"]}
+        assert names["from alice"] == "Alice"
+        assert names["from bob"] == "Bob"
+
     def test_list_messages_sender_tag_name_resolution(
         self, client_no_auth, api_db_session
     ):
