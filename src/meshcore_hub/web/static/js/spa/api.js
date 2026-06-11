@@ -5,12 +5,24 @@
  */
 
 /**
+ * Returns true if the error is a fetch abort (e.g. the request was cancelled
+ * because the user navigated to another page).
+ * @param {*} e
+ * @returns {boolean}
+ */
+export function isAbortError(e) {
+    return !!e && e.name === 'AbortError';
+}
+
+/**
  * Make a GET request and return parsed JSON.
  * @param {string} path - URL path (e.g., '/api/v1/nodes')
  * @param {Object} [params] - Query parameters
+ * @param {Object} [options] - Extra options
+ * @param {AbortSignal} [options.signal] - Signal to cancel the request (e.g. on navigation)
  * @returns {Promise<any>} Parsed JSON response
  */
-export async function apiGet(path, params = {}) {
+export async function apiGet(path, params = {}, { signal } = {}) {
     const url = new URL(path, window.location.origin);
     for (const [k, v] of Object.entries(params)) {
         if (v !== null && v !== undefined && v !== '') {
@@ -21,7 +33,7 @@ export async function apiGet(path, params = {}) {
             }
         }
     }
-    const response = await fetch(url);
+    const response = await fetch(url, { signal });
     if (!response.ok) {
         throw new Error(`API error: ${response.status} ${response.statusText}`);
     }

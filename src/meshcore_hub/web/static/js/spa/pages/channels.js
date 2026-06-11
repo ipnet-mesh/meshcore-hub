@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut, apiDelete } from '../api.js';
+import { apiGet, apiPost, apiPut, apiDelete, isAbortError } from '../api.js';
 import { html, litRender, nothing, t, errorAlert, getConfig, hasRole } from '../components.js';
 import { iconChannel, iconPlus, iconEdit, iconTrash, iconLock } from '../icons.js';
 
@@ -120,12 +120,13 @@ function renderDeleteModal({ channel, onConfirm, onCancel }) {
 }
 
 export async function render(container, params, router) {
+    const { signal } = params || {};
     try {
         const config = getConfig();
         const oidcEnabled = config.oidc_enabled;
         const isAdmin = hasRole('admin');
 
-        const data = await apiGet('/api/v1/channels');
+        const data = await apiGet('/api/v1/channels', {}, { signal });
         const channels = data.items || [];
 
         let modalState = null;
@@ -281,6 +282,7 @@ export async function render(container, params, router) {
         renderPage(channels);
 
     } catch (e) {
+        if (isAbortError(e)) return;
         litRender(errorAlert(e.message || t('common.failed_to_load_page')), container);
     }
 }

@@ -1,4 +1,4 @@
-import { apiGet } from '../api.js';
+import { apiGet, isAbortError } from '../api.js';
 import {
     html, litRender, nothing, t,
     getConfig, formatDateTime, formatDateTimeShort, formatRelativeTime,
@@ -11,6 +11,7 @@ import {
 import { createAutoRefresh } from '../auto-refresh.js';
 
 export async function render(container, params, router) {
+    const { signal } = params || {};
     const query = params.query || {};
     const message_type = query.message_type || '';
     const channel_idx = query.channel_idx || '';
@@ -207,9 +208,9 @@ ${displayContent}`, container);
             const apiParams = { limit, offset, message_type, channel_idx, sort, order };
             if (observed_by.length > 0) apiParams.observed_by = observed_by;
             const [data, nodesData, channelsData] = await Promise.all([
-                apiGet('/api/v1/messages', apiParams),
-                apiGet('/api/v1/nodes', { limit: 500, observer: true }),
-                apiGet('/api/v1/channels'),
+                apiGet('/api/v1/messages', apiParams, { signal }),
+                apiGet('/api/v1/nodes', { limit: 500, observer: true }, { signal }),
+                apiGet('/api/v1/channels', {}, { signal }),
             ]);
             const builtinLabels = getChannelLabelsMap(config);
             const customLabels = new Map(
@@ -437,6 +438,7 @@ ${mobileSortSelect({
 ${paginationBlock}`, { total });
 
         } catch (e) {
+            if (isAbortError(e)) return;
             renderPage(nothing, { error: e.message });
         }
     }

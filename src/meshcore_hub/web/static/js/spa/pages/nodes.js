@@ -1,4 +1,4 @@
-import { apiGet } from '../api.js';
+import { apiGet, isAbortError } from '../api.js';
 import {
     html, litRender, nothing,
     getConfig, formatDateTime, formatDateTimeShort,
@@ -9,6 +9,7 @@ import {
 import { createAutoRefresh } from '../auto-refresh.js';
 
 export async function render(container, params, router) {
+    const { signal } = params || {};
     const query = params.query || {};
     const search = query.search || '';
     const adv_type = query.adv_type || '';
@@ -55,9 +56,9 @@ ${displayContent}`, container);
         try {
             const apiParams = { limit, offset, search, adv_type, sort, order };
             if (adopted_by) apiParams.adopted_by = adopted_by;
-            const fetches = [apiGet('/api/v1/nodes', apiParams)];
+            const fetches = [apiGet('/api/v1/nodes', apiParams, { signal })];
             if (config.oidc_enabled) {
-                fetches.push(apiGet('/api/v1/user/profiles', { limit: 500 }));
+                fetches.push(apiGet('/api/v1/user/profiles', { limit: 500 }, { signal }));
             }
             const results = await Promise.all(fetches);
             const data = results[0];
@@ -225,6 +226,7 @@ ${mobileSortSelect({
 ${paginationBlock}`, { total });
 
         } catch (e) {
+            if (isAbortError(e)) return;
             renderPage(nothing, { error: e.message });
         }
     }

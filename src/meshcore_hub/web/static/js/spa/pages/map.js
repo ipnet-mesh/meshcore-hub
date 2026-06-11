@@ -1,4 +1,4 @@
-import { apiGet } from '../api.js';
+import { apiGet, isAbortError } from '../api.js';
 import {
     html, litRender, nothing, t,
     getConfig, typeEmoji, formatRelativeTime, escapeHtml, errorAlert,
@@ -116,9 +116,10 @@ function createPopupContent(node, oidcEnabled) {
 }
 
 export async function render(container, params, router) {
+    const { signal } = params || {};
     try {
         const config = getConfig();
-        const data = await apiGet('/map/data');
+        const data = await apiGet('/map/data', {}, { signal });
         let allNodes = data.nodes || [];
         const mapCenter = data.center || { lat: 0, lon: 0 };
         const adoptedCenter = data.adopted_center || null;
@@ -140,7 +141,7 @@ export async function render(container, params, router) {
                 lastMemberFilter = memberFilter;
                 const params = {};
                 if (memberFilter) params.adopted_by = memberFilter;
-                const newData = await apiGet('/map/data', params);
+                const newData = await apiGet('/map/data', params, { signal });
                 allNodes = newData.nodes || [];
             }
             const filteredNodes = applyFiltersCore();
@@ -356,6 +357,7 @@ ${config.oidc_enabled ? html`
         return () => map.remove();
 
     } catch (e) {
+        if (isAbortError(e)) return;
         litRender(errorAlert(e.message || t('common.failed_to_load_page')), container);
     }
 }

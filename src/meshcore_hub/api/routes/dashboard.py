@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Request
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.sql.elements import ColumnElement
 
 from meshcore_hub.api.auth import RequireRead
@@ -92,78 +92,45 @@ def get_stats(
             model.channel_idx.in_(visible_indices),
         )
 
-    # Total nodes
-    total_nodes = session.execute(select(func.count()).select_from(Node)).scalar() or 0
+    # Node counts (total + active in the last 24h) in a single pass.
+    node_row = session.execute(
+        select(
+            func.count(),
+            func.sum(case((Node.last_seen >= yesterday, 1), else_=0)),
+        ).select_from(Node)
+    ).one()
+    total_nodes = node_row[0] or 0
+    active_nodes = node_row[1] or 0
 
-    # Active nodes (last 24h)
-    active_nodes = (
-        session.execute(
-            select(func.count()).select_from(Node).where(Node.last_seen >= yesterday)
-        ).scalar()
-        or 0
-    )
+    # Message counts (total + today + last 7 days), channel-visible only,
+    # via conditional aggregation so it's one query instead of three.
+    msg_row = session.execute(
+        select(
+            func.count(),
+            func.sum(case((Message.received_at >= today_start, 1), else_=0)),
+            func.sum(case((Message.received_at >= seven_days_ago, 1), else_=0)),
+        )
+        .select_from(Message)
+        .where(_channel_visible_filter())
+    ).one()
+    total_messages = msg_row[0] or 0
+    messages_today = msg_row[1] or 0
+    messages_7d = msg_row[2] or 0
 
-    # Total messages
-    total_messages = (
-        session.execute(
-            select(func.count()).select_from(Message).where(_channel_visible_filter())
-        ).scalar()
-        or 0
-    )
-
-    # Messages today
-    messages_today = (
-        session.execute(
-            select(func.count())
-            .select_from(Message)
-            .where(Message.received_at >= today_start)
-            .where(_channel_visible_filter())
-        ).scalar()
-        or 0
-    )
-
-    # Total advertisements (flood-only)
-    total_advertisements = (
-        session.execute(
-            select(func.count())
-            .select_from(Advertisement)
-            .where(_flood_only_filter(Advertisement))
-        ).scalar()
-        or 0
-    )
-
-    # Advertisements in last 24h (flood-only)
-    advertisements_24h = (
-        session.execute(
-            select(func.count())
-            .select_from(Advertisement)
-            .where(Advertisement.received_at >= yesterday)
-            .where(_flood_only_filter(Advertisement))
-        ).scalar()
-        or 0
-    )
-
-    # Advertisements in last 7 days (flood-only)
-    advertisements_7d = (
-        session.execute(
-            select(func.count())
-            .select_from(Advertisement)
-            .where(Advertisement.received_at >= seven_days_ago)
-            .where(_flood_only_filter(Advertisement))
-        ).scalar()
-        or 0
-    )
-
-    # Messages in last 7 days
-    messages_7d = (
-        session.execute(
-            select(func.count())
-            .select_from(Message)
-            .where(Message.received_at >= seven_days_ago)
-            .where(_channel_visible_filter())
-        ).scalar()
-        or 0
-    )
+    # Advertisement counts (total + last 24h + last 7 days), flood-only,
+    # again folded into one query.
+    adv_row = session.execute(
+        select(
+            func.count(),
+            func.sum(case((Advertisement.received_at >= yesterday, 1), else_=0)),
+            func.sum(case((Advertisement.received_at >= seven_days_ago, 1), else_=0)),
+        )
+        .select_from(Advertisement)
+        .where(_flood_only_filter(Advertisement))
+    ).one()
+    total_advertisements = adv_row[0] or 0
+    advertisements_24h = adv_row[1] or 0
+    advertisements_7d = adv_row[2] or 0
 
     # Recent advertisements (last 10, flood-only)
     recent_ads = (
@@ -265,27 +232,23 @@ def get_stats(
     member_role = web_settings.oidc_role_member
     test_role = web_settings.oidc_role_test
 
-    total_operators_query = (
-        select(func.count())
-        .select_from(UserProfile)
-        .where(UserProfile.roles.contains(operator_role))
-    )
+    # Operator + member counts in one query. The optional test-role exclusion
+    # is folded into each conditional branch.
+    operator_cond = UserProfile.roles.contains(operator_role)
+    member_cond = UserProfile.roles.contains(member_role)
     if test_role:
-        total_operators_query = total_operators_query.where(
-            ~UserProfile.roles.contains(test_role)
-        )
-    total_operators = session.execute(total_operators_query).scalar() or 0
+        not_test = ~UserProfile.roles.contains(test_role)
+        operator_cond = and_(operator_cond, not_test)
+        member_cond = and_(member_cond, not_test)
 
-    total_members_query = (
-        select(func.count())
-        .select_from(UserProfile)
-        .where(UserProfile.roles.contains(member_role))
-    )
-    if test_role:
-        total_members_query = total_members_query.where(
-            ~UserProfile.roles.contains(test_role)
-        )
-    total_members = session.execute(total_members_query).scalar() or 0
+    profile_row = session.execute(
+        select(
+            func.sum(case((operator_cond, 1), else_=0)),
+            func.sum(case((member_cond, 1), else_=0)),
+        ).select_from(UserProfile)
+    ).one()
+    total_operators = profile_row[0] or 0
+    total_members = profile_row[1] or 0
 
     return DashboardStats(
         total_nodes=total_nodes,

@@ -1,9 +1,10 @@
-import { apiGet } from '../api.js';
+import { apiGet, isAbortError } from '../api.js';
 import { html, litRender, unsafeHTML, getConfig, errorAlert, t } from '../components.js';
 
 export async function render(container, params, router) {
+    const { signal } = params || {};
     try {
-        const page = await apiGet('/spa/pages/' + encodeURIComponent(params.slug));
+        const page = await apiGet('/spa/pages/' + encodeURIComponent(params.slug), {}, { signal });
 
         const config = getConfig();
         const networkName = config.network_name || 'MeshCore Network';
@@ -19,6 +20,7 @@ export async function render(container, params, router) {
 </div>`, container);
 
     } catch (e) {
+        if (isAbortError(e)) return;
         if (e.message && e.message.includes('404')) {
             litRender(errorAlert(t('common.page_not_found')), container);
         } else {

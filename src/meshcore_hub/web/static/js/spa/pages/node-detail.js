@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut, apiDelete } from '../api.js';
+import { apiGet, apiPost, apiPut, apiDelete, isAbortError } from '../api.js';
 import {
     html, litRender, nothing,
     getConfig, hasRole, typeEmoji, formatDateTime,
@@ -71,20 +71,21 @@ function renderEditTagModal() {
 }
 
 export async function render(container, params, router) {
+    const { signal } = params || {};
     const cleanupFns = [];
     let publicKey = params.publicKey;
 
     try {
         if (publicKey.length !== 64) {
-            const resolved = await apiGet('/api/v1/nodes/prefix/' + encodeURIComponent(publicKey));
+            const resolved = await apiGet('/api/v1/nodes/prefix/' + encodeURIComponent(publicKey), {}, { signal });
             router.navigate('/nodes/' + resolved.public_key, true);
             return;
         }
 
         const [node, adsData, telemetryData] = await Promise.all([
-            apiGet('/api/v1/nodes/' + publicKey),
-            apiGet('/api/v1/advertisements', { public_key: publicKey, limit: 10 }),
-            apiGet('/api/v1/telemetry', { node_public_key: publicKey, limit: 10 }),
+            apiGet('/api/v1/nodes/' + publicKey, {}, { signal }),
+            apiGet('/api/v1/advertisements', { public_key: publicKey, limit: 10 }, { signal }),
+            apiGet('/api/v1/telemetry', { node_public_key: publicKey, limit: 10 }, { signal }),
         ]);
 
         if (!node) {
@@ -556,6 +557,7 @@ ${canEditTags ? renderEditTagModal() : nothing}`, container);
             cleanupFns.forEach(fn => fn());
         };
     } catch (e) {
+        if (isAbortError(e)) return;
         if (e.message && e.message.includes('404')) {
             litRender(renderNotFound(publicKey), container);
         } else {

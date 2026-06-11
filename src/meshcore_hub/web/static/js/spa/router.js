@@ -10,6 +10,8 @@ export class Router {
         this._notFoundHandler = null;
         this._currentCleanup = null;
         this._onNavigate = null;
+        this._navAbort = null;
+        this._navGen = 0;
     }
 
     /**
@@ -90,6 +92,18 @@ export class Router {
      * Handle the current URL.
      */
     async _handleRoute() {
+        // Cancel any in-flight requests from the page we're leaving so they
+        // don't hold connections / server resources behind the new page.
+        if (this._navAbort) {
+            this._navAbort.abort();
+        }
+        this._navAbort = new AbortController();
+        const signal = this._navAbort.signal;
+
+        // Track this navigation so a stale (superseded) route can't toggle the
+        // shared loading indicator for the navigation that replaced it.
+        const navGen = ++this._navGen;
+
         // Clean up previous page
         if (this._currentCleanup) {
             try { this._currentCleanup(); } catch (e) { /* ignore */ }
@@ -119,15 +133,16 @@ export class Router {
         try {
             const result = this._match(pathname);
             if (result) {
-                const cleanup = await result.handler({ ...result.params, query });
+                const cleanup = await result.handler({ ...result.params, query, signal });
                 if (typeof cleanup === 'function') {
                     this._currentCleanup = cleanup;
                 }
             } else if (this._notFoundHandler) {
-                await this._notFoundHandler({ query });
+                await this._notFoundHandler({ query, signal });
             }
         } finally {
-            if (loader) loader.classList.add('hidden');
+            // Only hide the loader if a newer navigation hasn't started.
+            if (loader && navGen === this._navGen) loader.classList.add('hidden');
         }
 
         // Reset focus to dismiss any open dropdown after navigation
