@@ -230,6 +230,23 @@ TRAEFIK_PRIORITY=20
 
 This ensures `beta.example.com` (priority 20) is matched before the production wildcard `*.example.com` (priority 10). For other services on the same network (e.g., an MQTT broker at `mqtt.example.com`), use an even higher priority (e.g., 30).
 
+#### Scaling the API
+
+The API is read-mostly and holds no per-process state — the response cache lives in Redis and authentication is stateless — so it scales across multiple worker processes. Set `API_WORKERS` to run more than one worker in a single container:
+
+```bash
+# .env
+API_WORKERS=4
+```
+
+Each worker is an independent process sharing one listening socket, so the kernel balances connections across them and CPU-bound work (JSON serialisation, validation) spreads over multiple cores. Workers read their configuration from **environment variables** (CLI flags are not propagated to forked workers), which is how Docker Compose already supplies config. Enabling Redis (`REDIS_ENABLED=true`) is recommended so all workers share one cache.
+
+Pick a worker count around the number of CPU cores available to the container; start with `2`–`4` and measure under realistic load.
+
+**SQLite caveat:** all workers share the same SQLite file on the same host. WAL mode (enabled automatically) allows concurrent readers alongside the single writer (the collector), so reads scale — but **writes do not**, and this does not extend across multiple hosts (a network filesystem breaks SQLite locking). To scale the API across hosts, switch `DATABASE_URL` to PostgreSQL; the API requires no code changes for this.
+
+> Prefer `API_WORKERS` over running multiple `api` containers (`--scale api=N`): the `api` service uses a fixed `container_name`, and one process-managed container per stack keeps logs, health checks, and monitoring simple.
+
 ### Adding Remote Observers
 
 Other operators can run their own [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) instance and publish decoded packets to your MeshCore Hub. They can also optionally contribute to the LetsMesh and MeshRank networks.
@@ -364,6 +381,7 @@ The collector automatically cleans up old event data and inactive nodes:
 | ------------------- | --------- | ------------------------------------------------------- |
 | `API_HOST`          | `0.0.0.0` | API bind address                                        |
 | `API_PORT`          | `8000`    | API port                                                |
+| `API_WORKERS`       | `1`       | Number of worker processes (increase for multi-core concurrency; see [Scaling the API](#scaling-the-api)) |
 | `API_READ_KEY`      | _(none)_  | Read-only API key                                       |
 | `API_ADMIN_KEY`     | _(none)_  | Admin API key                                           |
 | `METRICS_ENABLED`   | `true`    | Enable Prometheus metrics endpoint at `/metrics`        |
