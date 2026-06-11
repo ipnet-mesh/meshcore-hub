@@ -167,7 +167,6 @@ ${flashHtml}
 </div>`, container);
 
         const ac = new AbortController();
-        const signal = ac.signal;
 
         container.querySelector('#profile-form').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -184,7 +183,7 @@ ${flashHtml}
             } catch (err) {
                 router.navigate('/profile?error=' + encodeURIComponent(err.message), true);
             }
-        }, { signal });
+        }, { signal: ac.signal });
 
         return () => ac.abort();
 
