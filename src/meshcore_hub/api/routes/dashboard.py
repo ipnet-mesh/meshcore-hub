@@ -14,6 +14,7 @@ from meshcore_hub.api.channel_visibility import (
     resolve_user_role,
 )
 from meshcore_hub.api.dependencies import DbSession
+from meshcore_hub.api.observer_utils import resolve_sender_names
 from meshcore_hub.common.models import (
     Advertisement,
     Message,
@@ -240,25 +241,7 @@ def get_stats(
 
         # Look up sender names for these messages
         msg_prefixes = [m.pubkey_prefix for m in channel_msgs if m.pubkey_prefix]
-        msg_sender_names: dict[str, str] = {}
-        msg_tag_names: dict[str, str] = {}
-        if msg_prefixes:
-            for prefix in set(msg_prefixes):
-                sender_node_query = select(Node.public_key, Node.name).where(
-                    Node.public_key.startswith(prefix)
-                )
-                for public_key, name in session.execute(sender_node_query).all():
-                    if name:
-                        msg_sender_names[public_key[:12]] = name
-
-                sender_tag_query = (
-                    select(Node.public_key, NodeTag.value)
-                    .join(NodeTag, Node.id == NodeTag.node_id)
-                    .where(Node.public_key.startswith(prefix))
-                    .where(NodeTag.key == "name")
-                )
-                for public_key, value in session.execute(sender_tag_query).all():
-                    msg_tag_names[public_key[:12]] = value
+        msg_sender_names, msg_tag_names = resolve_sender_names(session, msg_prefixes)
 
         channel_messages[int(channel_idx)] = [
             ChannelMessage(
@@ -467,23 +450,35 @@ def get_node_count_history(
     end_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
     start_date = end_date - timedelta(days=days)
 
-    # Get all nodes with their creation dates
-    # Count nodes created on or before each date
+    # Cumulative count: seed the running total with every node that already
+    # existed before the window, then add each day's new nodes as we walk it.
+    # This replaces a per-day COUNT(*) loop (up to 90 full scans) with two
+    # queries.
+    baseline = (
+        session.execute(
+            select(func.count()).select_from(Node).where(Node.created_at < start_date)
+        ).scalar()
+        or 0
+    )
+
+    # New nodes per calendar day within the window.
+    date_expr = func.date(Node.created_at)
+    per_day_query = (
+        select(date_expr.label("date"), func.count().label("count"))
+        .where(Node.created_at >= start_date)
+        .where(Node.created_at < end_date)
+        .group_by(date_expr)
+    )
+    new_by_date: dict[str, int] = {
+        row[0]: row[1] for row in session.execute(per_day_query).all()
+    }
+
     data = []
+    running = baseline
     for i in range(days):
         date = start_date + timedelta(days=i)
-        end_of_day = date.replace(hour=23, minute=59, second=59, microsecond=999999)
         date_str = date.strftime("%Y-%m-%d")
-
-        # Count nodes created on or before this date
-        count = (
-            session.execute(
-                select(func.count())
-                .select_from(Node)
-                .where(Node.created_at <= end_of_day)
-            ).scalar()
-            or 0
-        )
-        data.append(DailyActivityPoint(date=date_str, count=count))
+        running += new_by_date.get(date_str, 0)
+        data.append(DailyActivityPoint(date=date_str, count=running))
 
     return NodeCountHistory(days=days, data=data)

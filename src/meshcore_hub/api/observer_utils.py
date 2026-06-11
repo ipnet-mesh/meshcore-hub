@@ -1,6 +1,8 @@
 """Shared utilities for fetching event observer data."""
 
-from sqlalchemy import select
+from collections.abc import Iterable
+
+from sqlalchemy import or_, select
 
 from meshcore_hub.api.dependencies import DbSession
 from meshcore_hub.common.models import EventObserver, Node, NodeTag
@@ -73,3 +75,53 @@ def fetch_observers_for_events(
         )
 
     return observers_by_hash
+
+
+def resolve_sender_names(
+    session: DbSession,
+    prefixes: Iterable[str],
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Resolve sender pubkey prefixes to node names and name-tag values.
+
+    Messages store a leading slice of the sender's public key
+    (``pubkey_prefix``). This looks up the matching nodes and returns two
+    dicts, each keyed by the 12-char prefix: one of node names and one of
+    "name" tag values.
+
+    All prefixes are batched into a single pair of queries (one for names,
+    one for tags) rather than a lookup per prefix.
+
+    Args:
+        session: Database session
+        prefixes: Sender pubkey prefixes to resolve
+
+    Returns:
+        Tuple of (names_by_prefix, tag_names_by_prefix)
+    """
+    names: dict[str, str] = {}
+    tag_names: dict[str, str] = {}
+
+    unique = {p for p in prefixes if p}
+    if not unique:
+        return names, tag_names
+
+    # One indexable LIKE 'prefix%' term per prefix, ORed together. Tolerates
+    # variable-length prefixes (unlike substr(...) IN), preserving the
+    # per-prefix startswith semantics this replaces.
+    clause = or_(*[Node.public_key.startswith(p) for p in unique])
+
+    name_query = select(Node.public_key, Node.name).where(clause)
+    for public_key, name in session.execute(name_query).all():
+        if name:
+            names[public_key[:12]] = name
+
+    tag_query = (
+        select(Node.public_key, NodeTag.value)
+        .join(NodeTag, Node.id == NodeTag.node_id)
+        .where(clause)
+        .where(NodeTag.key == "name")
+    )
+    for public_key, value in session.execute(tag_query).all():
+        tag_names[public_key[:12]] = value
+
+    return names, tag_names

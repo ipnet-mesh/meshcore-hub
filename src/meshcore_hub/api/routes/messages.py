@@ -15,8 +15,11 @@ from meshcore_hub.api.channel_visibility import (
     resolve_user_role,
 )
 from meshcore_hub.api.dependencies import DbSession
-from meshcore_hub.api.observer_utils import fetch_observers_for_events
-from meshcore_hub.common.models import Message, Node, NodeTag
+from meshcore_hub.api.observer_utils import (
+    fetch_observers_for_events,
+    resolve_sender_names,
+)
+from meshcore_hub.common.models import Message, Node
 from meshcore_hub.common.schemas.messages import MessageList, MessageRead
 
 router = APIRouter()
@@ -141,28 +144,7 @@ def list_messages(
 
     # Look up sender names and tag names for senders with pubkey_prefix
     pubkey_prefixes = [r[0].pubkey_prefix for r in results if r[0].pubkey_prefix]
-    sender_names: dict[str, str] = {}
-    sender_tag_names: dict[str, str] = {}
-    if pubkey_prefixes:
-        # Find nodes whose public_key starts with any of these prefixes
-        for prefix in set(pubkey_prefixes):
-            # Get node name
-            node_query = select(Node.public_key, Node.name).where(
-                Node.public_key.startswith(prefix)
-            )
-            for public_key, name in session.execute(node_query).all():
-                if name:
-                    sender_names[public_key[:12]] = name
-
-            # Get name tag
-            tag_name_query = (
-                select(Node.public_key, NodeTag.value)
-                .join(NodeTag, Node.id == NodeTag.node_id)
-                .where(Node.public_key.startswith(prefix))
-                .where(NodeTag.key == "name")
-            )
-            for public_key, value in session.execute(tag_name_query).all():
-                sender_tag_names[public_key[:12]] = value
+    sender_names, sender_tag_names = resolve_sender_names(session, pubkey_prefixes)
 
     # Collect receiver node IDs to fetch tags
     observer_ids = set()

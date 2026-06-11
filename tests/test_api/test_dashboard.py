@@ -291,6 +291,44 @@ class TestNodeCountHistory:
         # The last day should have count >= 1
         assert data["data"][-1]["count"] >= 1
 
+    def test_node_count_is_cumulative_with_baseline(
+        self, client_no_auth, api_db_session
+    ):
+        """Cumulative series counts pre-window nodes from day 0 and steps up
+        on the day a new in-window node is created."""
+        now = datetime.now(timezone.utc)
+        # Created well before a 30-day window: must be in the baseline, so
+        # every day in the series includes it.
+        api_db_session.add(
+            Node(
+                public_key="a" * 64,
+                name="Old Node",
+                created_at=now - timedelta(days=60),
+            )
+        )
+        # Created inside the window, 5 days ago: bumps the running total on
+        # its day and stays for the rest of the series.
+        api_db_session.add(
+            Node(
+                public_key="b" * 64,
+                name="Recent Node",
+                created_at=now - timedelta(days=5),
+            )
+        )
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/dashboard/node-count?days=30")
+        assert response.status_code == 200
+        counts = [point["count"] for point in response.json()["data"]]
+
+        # Baseline node is present from the very first day.
+        assert counts[0] == 1
+        # Cumulative => never decreases.
+        assert counts == sorted(counts)
+        # Recent node lifts the total to 2 by the end, stepping up exactly once.
+        assert counts[-1] == 2
+        assert counts.count(2) >= 1 and 1 in counts
+
 
 class TestDashboardTestUserExclusion:
     """Tests for test user exclusion from dashboard stats."""
