@@ -1,4 +1,4 @@
-import { apiGet } from '../api.js';
+import { apiGet, isAbortError } from '../api.js';
 import { html, litRender, nothing, t, errorAlert, getConfig } from '../components.js';
 import { iconAntenna, iconUsers } from '../icons.js';
 
@@ -64,6 +64,7 @@ function renderGroup(title, profiles, icon, router) {
 }
 
 export async function render(container, params, router) {
+    const { signal } = params || {};
     try {
         const config = getConfig();
         const roleNames = config.role_names || {};
@@ -71,7 +72,7 @@ export async function render(container, params, router) {
         const memberRole = roleNames.member || 'member';
         const testRole = roleNames.test || 'test';
 
-        const resp = await apiGet('/api/v1/user/profiles', { limit: 500 });
+        const resp = await apiGet('/api/v1/user/profiles', { limit: 500 }, { signal });
         const allProfiles = resp.items || [];
 
         const profiles = allProfiles.filter(p => !p.roles || !p.roles.includes(testRole));
@@ -105,6 +106,7 @@ ${renderGroup(t('members_page.members'), members, html`<span class="text-seconda
 `, container);
 
     } catch (e) {
+        if (isAbortError(e)) return;
         litRender(errorAlert(e.message || t('common.failed_to_load_page')), container);
     }
 }

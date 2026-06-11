@@ -42,6 +42,72 @@ class TestDashboardStats:
         assert data["total_messages"] == 1
         assert data["total_advertisements"] == 1
 
+    def test_stats_time_bucket_counts(self, client_no_auth, api_db_session):
+        """Conditional-aggregation buckets (active/today/24h/7d) count the
+        correct rows across recent and older records."""
+        now = datetime.now(timezone.utc)
+
+        # Nodes: one active (seen now), one stale (seen 2 days ago).
+        api_db_session.add_all(
+            [
+                Node(public_key="a" * 64, name="Active", last_seen=now),
+                Node(
+                    public_key="b" * 64,
+                    name="Stale",
+                    last_seen=now - timedelta(days=2),
+                ),
+            ]
+        )
+
+        # Messages (contact type → always channel-visible): today, 3 days ago,
+        # 10 days ago.
+        api_db_session.add_all(
+            [
+                Message(message_type="contact", text="now", received_at=now),
+                Message(
+                    message_type="contact",
+                    text="3d",
+                    received_at=now - timedelta(days=3),
+                ),
+                Message(
+                    message_type="contact",
+                    text="10d",
+                    received_at=now - timedelta(days=10),
+                ),
+            ]
+        )
+
+        # Flood advertisements: now (24h), 3 days ago (7d), 10 days ago (older).
+        api_db_session.add_all(
+            [
+                Advertisement(public_key="c" * 64, route_type="flood", received_at=now),
+                Advertisement(
+                    public_key="d" * 64,
+                    route_type="flood",
+                    received_at=now - timedelta(days=3),
+                ),
+                Advertisement(
+                    public_key="e" * 64,
+                    route_type="flood",
+                    received_at=now - timedelta(days=10),
+                ),
+            ]
+        )
+        api_db_session.commit()
+
+        data = client_no_auth.get("/api/v1/dashboard/stats").json()
+
+        assert data["total_nodes"] == 2
+        assert data["active_nodes"] == 1
+
+        assert data["total_messages"] == 3
+        assert data["messages_today"] == 1
+        assert data["messages_7d"] == 2  # now + 3d (10d excluded)
+
+        assert data["total_advertisements"] == 3
+        assert data["advertisements_24h"] == 1
+        assert data["advertisements_7d"] == 2  # now + 3d (10d excluded)
+
 
 class TestDashboardHtmlRemoved:
     """Tests that legacy HTML dashboard endpoint has been removed."""

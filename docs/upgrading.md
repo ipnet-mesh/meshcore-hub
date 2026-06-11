@@ -22,7 +22,11 @@ While on SQLite, all workers share the same database file on the same host (WAL 
 
 ### Read-Path Query Optimisations
 
-Several read-heavy endpoints had their query patterns optimised (node `is_observer` filtering, dashboard node-count history, and message/dashboard sender-name resolution). These are internal performance improvements with no API or configuration changes — responses are unchanged. The `is_observer` change ships an Alembic migration that is applied automatically on startup (Docker) or via `meshcore-hub db upgrade`.
+Several read-heavy endpoints had their query patterns optimised (node `is_observer` filtering, dashboard node-count history, message/dashboard sender-name resolution, and consolidation of the `dashboard/stats` count queries into conditional aggregates). These are internal performance improvements with no API or configuration changes — responses are unchanged. The `is_observer` change ships an Alembic migration that is applied automatically on startup (Docker) or via `meshcore-hub db upgrade`.
+
+### Dashboard Navigation Responsiveness
+
+The web dashboard now cancels in-flight API requests when you navigate between pages. Previously, rapidly switching pages could leave slow requests (such as the homepage statistics) running in the background, holding connections and delaying the page you actually opened. This is a front-end behaviour fix only — no configuration or action is required.
 
 ### Optional Redis API Cache
 

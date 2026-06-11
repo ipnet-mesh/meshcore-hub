@@ -1,4 +1,4 @@
-import { apiGet } from '../api.js';
+import { apiGet, isAbortError } from '../api.js';
 import {
     html, litRender, nothing, t,
     getConfig, formatDateTime, formatDateTimeShort, formatRelativeTime,
@@ -23,6 +23,7 @@ function routeTypeBadge(routeType) {
 }
 
 export async function render(container, params, router) {
+    const { signal } = params || {};
     const query = params.query || {};
     const search = query.search || '';
     const observed_by = query.observed_by
@@ -74,11 +75,11 @@ ${displayContent}`, container);
             if (observed_by.length > 0) apiParams.observed_by = observed_by;
             if (adopted_by) apiParams.adopted_by = adopted_by;
             const fetches = [
-                apiGet('/api/v1/advertisements', apiParams),
-                apiGet('/api/v1/nodes', { limit: 500, observer: true }),
+                apiGet('/api/v1/advertisements', apiParams, { signal }),
+                apiGet('/api/v1/nodes', { limit: 500, observer: true }, { signal }),
             ];
             if (config.oidc_enabled) {
-                fetches.push(apiGet('/api/v1/user/profiles', { limit: 500 }));
+                fetches.push(apiGet('/api/v1/user/profiles', { limit: 500 }, { signal }));
             }
             const results = await Promise.all(fetches);
             const data = results[0];
@@ -309,6 +310,7 @@ ${mobileSortSelect({
 ${paginationBlock}`, { total });
 
         } catch (e) {
+            if (isAbortError(e)) return;
             renderPage(nothing, { error: e.message });
         }
     }

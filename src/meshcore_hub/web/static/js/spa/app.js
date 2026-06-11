@@ -6,6 +6,7 @@
  */
 
 import { Router } from './router.js';
+import { isAbortError } from './api.js';
 import { html, litRender, getConfig, hasRole, renderAuthSection } from './components.js';
 import { loadLocale, t } from './i18n.js';
 import { iconHome, iconDashboard, iconNodes, iconAdvertisements, iconMessages, iconMap, iconMembers, iconPage, iconChannel } from './icons.js';
@@ -45,6 +46,8 @@ function pageHandler(loader) {
             const module = await loader();
             return await module.render(appContainer, params, router);
         } catch (e) {
+            // Navigating away cancels in-flight requests — not a real error.
+            if (isAbortError(e)) return;
             console.error('Page load error:', e);
             appContainer.innerHTML = `
                 <div class="flex flex-col items-center justify-center py-20">

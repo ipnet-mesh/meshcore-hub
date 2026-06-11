@@ -1,4 +1,4 @@
-import { apiGet } from '../api.js';
+import { apiGet, isAbortError } from '../api.js';
 import {
     html, litRender, nothing,
     getConfig, errorAlert, pageColors, renderStatCard, t,
@@ -200,6 +200,7 @@ function renderMembersPanel({ features, stats }) {
 }
 
 export async function render(container, params, router) {
+    const { signal } = params || {};
     try {
         const config = getConfig();
         const features = config.features || {};
@@ -210,9 +211,9 @@ export async function render(container, params, router) {
         const rc = config.network_radio_config;
 
         const [stats, advertActivity, messageActivity] = await Promise.all([
-            apiGet('/api/v1/dashboard/stats'),
-            apiGet('/api/v1/dashboard/activity', { days: 7 }),
-            apiGet('/api/v1/dashboard/message-activity', { days: 7 }),
+            apiGet('/api/v1/dashboard/stats', {}, { signal }),
+            apiGet('/api/v1/dashboard/activity', { days: 7 }, { signal }),
+            apiGet('/api/v1/dashboard/message-activity', { days: 7 }, { signal }),
         ]);
 
         const showStats = features.nodes !== false || features.advertisements !== false || features.messages !== false;
@@ -276,6 +277,7 @@ export async function render(container, params, router) {
         };
 
     } catch (e) {
+        if (isAbortError(e)) return;
         litRender(errorAlert(e.message || t('common.failed_to_load_page')), container);
     }
 }

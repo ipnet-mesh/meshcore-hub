@@ -1,4 +1,4 @@
-import { apiGet, apiPut } from '../api.js';
+import { apiGet, apiPut, isAbortError } from '../api.js';
 import {
     html, litRender, nothing,
     getConfig, t, errorAlert, successAlert,
@@ -76,13 +76,15 @@ function renderPublicProfile(profile, config, target) {
 }
 
 export async function render(container, params, router) {
+    const { signal } = params || {};
     const config = getConfig();
 
     if (params.id) {
         try {
-            const profile = await apiGet(`/api/v1/user/profile/${params.id}`);
+            const profile = await apiGet(`/api/v1/user/profile/${params.id}`, {}, { signal });
             renderPublicProfile(profile, config, container);
         } catch (e) {
+            if (isAbortError(e)) return;
             litRender(errorAlert(e.message || t('common.failed_to_load_page')), container);
         }
         return;
@@ -99,7 +101,7 @@ export async function render(container, params, router) {
     }
 
     try {
-        const profile = await apiGet('/api/v1/user/profile/me');
+        const profile = await apiGet('/api/v1/user/profile/me', {}, { signal });
         const profilePath = `/api/v1/user/profile/${profile.id}`;
 
         const flashMessage = (params.query && params.query.message) || '';
@@ -187,6 +189,7 @@ ${flashHtml}
         return () => ac.abort();
 
     } catch (e) {
+        if (isAbortError(e)) return;
         litRender(errorAlert(e.message || t('common.failed_to_load_page')), container);
     }
 }
