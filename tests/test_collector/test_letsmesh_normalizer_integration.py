@@ -6,7 +6,7 @@ returning realistic to_dict() structures for each packet type.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable, cast
 from unittest.mock import MagicMock
 
 from meshcore_hub.collector.letsmesh_decoder import LetsMeshPacketDecoder
@@ -31,7 +31,10 @@ def _make_decoder(
     """Create a decoder that returns pre-configured results by raw hex."""
     decoder = LetsMeshPacketDecoder()
 
-    original = decoder.decode_payload
+    original = cast(
+        Callable[[dict[str, Any]], "dict[str, Any] | None"],
+        decoder.decode_payload,
+    )
 
     def stub(payload: dict[str, Any]) -> dict[str, Any] | None:
         raw = payload.get("raw", "")
@@ -39,7 +42,9 @@ def _make_decoder(
             return decoded_packets[raw]
         return original(payload)
 
-    decoder.decode_payload = stub  # type: ignore[method-assign]
+    # Stub the bound method without tripping mypy's method-assign analysis
+    # (which is non-deterministic under incremental caching for this pattern).
+    setattr(decoder, "decode_payload", stub)  # noqa: B010
     return decoder
 
 
@@ -212,7 +217,7 @@ class TestGroupTextPacket:
         result = norm._normalize_letsmesh_event("t", {"raw": raw})
         assert result is not None
         _, event_type, pl = result
-        assert event_type == "letsmesh_packet"
+        assert event_type == "encrypted_channel"
         assert pl.get("decoded_payload_type") == 5
 
 
@@ -333,7 +338,7 @@ class TestTracePacket:
         result = norm._normalize_letsmesh_event("t", {"raw": raw})
         assert result is not None
         _, event_type, pl = result
-        assert event_type == "letsmesh_packet"
+        assert event_type == "trace"
 
 
 class TestControlPacket:
@@ -547,7 +552,7 @@ class TestResponsePacket:
 
 
 class TestAckPacket:
-    def test_ack_falls_through_to_letsmesh_packet(self) -> None:
+    def test_ack_classified_as_ack(self) -> None:
         raw = "ack1"
         decoded = {
             "payloadType": 3,
@@ -569,13 +574,13 @@ class TestAckPacket:
         result = norm._normalize_letsmesh_event("t", {"raw": raw})
         assert result is not None
         _, event_type, pl = result
-        assert event_type == "letsmesh_packet"
+        assert event_type == "ack"
         assert pl["decoded_payload_type"] == 3
         assert pl["decoded_packet"]["payloadType"] == 3
 
 
 class TestRequestPacket:
-    def test_request_without_decrypted_content_falls_through(self) -> None:
+    def test_request_without_decrypted_content_classified_as_req(self) -> None:
         raw = "req1"
         decoded = {
             "payloadType": 0,
@@ -602,7 +607,7 @@ class TestRequestPacket:
         result = norm._normalize_letsmesh_event("t", {"raw": raw})
         assert result is not None
         _, event_type, pl = result
-        assert event_type == "letsmesh_packet"
+        assert event_type == "req"
         assert pl["decoded_payload_type"] == 0
 
 
@@ -625,3 +630,70 @@ class TestUnrecognizedFeed:
 
         result = norm._normalize_letsmesh_event("garbage", {})
         assert result is None
+
+
+class TestFallbackClassification:
+    """The fallback classifier maps payload types to specific event types."""
+
+    def test_payload_type_to_event_type_map(self) -> None:
+        cases = {
+            0: "req",
+            1: "response",
+            2: "encrypted_direct",
+            3: "ack",
+            4: "advert",
+            5: "encrypted_channel",
+            6: "grp_data",
+            7: "anon_req",
+            8: "path",
+            9: "trace",
+            10: "multipart",
+            11: "control",
+            15: "raw_custom",
+        }
+        for packet_type, expected in cases.items():
+            event_type = LetsMeshNormalizer._classify_fallback_event_type(
+                {"packet_type": packet_type}, None
+            )
+            assert event_type == expected, f"type {packet_type}"
+
+    def test_unknown_type_keeps_letsmesh_packet(self) -> None:
+        # Unresolvable type falls back to the generic safety-net label.
+        assert (
+            LetsMeshNormalizer._classify_fallback_event_type({}, None)
+            == "letsmesh_packet"
+        )
+        assert (
+            LetsMeshNormalizer._classify_fallback_event_type({"packet_type": 99}, None)
+            == "letsmesh_packet"
+        )
+
+
+class TestPacketHashPropagation:
+    """The wire packet hash is threaded into advert/message payloads."""
+
+    def test_advert_carries_packet_hash(self) -> None:
+        raw = "advhash"
+        decoded = {
+            "payloadType": 4,
+            "pathLength": 0,
+            "payload": {
+                "decoded": {
+                    "type": 4,
+                    "publicKey": PUB_KEY_UPPER,
+                    "appData": {"name": "HashNode", "deviceRole": 2},
+                }
+            },
+        }
+        decoder = _make_decoder({raw: decoded})
+        norm = _TestNormalizer(decoder)
+        norm.mqtt.topic_builder.parse_letsmesh_upload_topic.return_value = (
+            OBSERVER_KEY,
+            "packets",
+        )
+
+        result = norm._normalize_letsmesh_event("t", {"raw": raw, "hash": "WIREHASH99"})
+        assert result is not None
+        _, event_type, pl = result
+        assert event_type == "advertisement"
+        assert pl["packet_hash"] == "WIREHASH99"

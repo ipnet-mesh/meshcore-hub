@@ -91,6 +91,9 @@ def handle_advertisement(
             if delta <= timedelta(hours=4):
                 advert_timestamp_for_hash = advert_timestamp_dt
 
+    # LetsMesh wire packet hash, for linking to raw_packets
+    packet_hash = payload.get("packet_hash") or payload.get("hash")
+
     # Compute event hash for deduplication (5-minute time bucket)
     event_hash = compute_advertisement_hash(
         public_key=adv_public_key,
@@ -195,6 +198,7 @@ def handle_advertisement(
             flags=flags,
             received_at=now,
             event_hash=event_hash,
+            packet_hash=packet_hash,
             route_type=route_type,
             advert_timestamp=advert_timestamp_dt,
         )

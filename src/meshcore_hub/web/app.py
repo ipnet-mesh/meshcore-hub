@@ -105,6 +105,9 @@ def _build_endpoint_access(
         "v1/advertisements": {
             "GET": _OPEN,
         },
+        "v1/packets": {
+            "GET": _OPEN,
+        },
         "v1/dashboard": {
             "GET": _OPEN,
         },

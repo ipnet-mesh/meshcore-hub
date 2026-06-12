@@ -74,7 +74,10 @@ class LetsMeshNormalizer:
                     normalized_packet_payload["decoded_payload_type"] = (
                         decoded_payload_type
                     )
-            return observer_public_key, "letsmesh_packet", normalized_packet_payload
+            fallback_event_type = self._classify_fallback_event_type(
+                payload, decoded_packet
+            )
+            return observer_public_key, fallback_event_type, normalized_packet_payload
 
         if feed_type == "internal":
             return observer_public_key, "letsmesh_internal", payload
@@ -140,6 +143,8 @@ class LetsMeshNormalizer:
             txt_type if txt_type is not None else packet_type
         )
         normalized_payload["signature"] = payload.get("signature") or packet_hash
+        if packet_hash_text:
+            normalized_payload["packet_hash"] = packet_hash_text
         path_len = self._parse_path_length(payload.get("path"))
         if path_len is None:
             path_len = self._extract_letsmesh_decoder_path_length(decoded_packet)
@@ -549,6 +554,44 @@ class LetsMeshNormalizer:
         3: "transport_direct",
     }
 
+    # MeshCore payload type -> event_type for packets that reach the fallback
+    # (i.e. the structured/message/advert builders declined). Reaching this path
+    # for TXT_MSG (2) / GRP_TXT (5) means the payload did not decrypt, so they
+    # are labelled as encrypted rather than as messages. Unknown/unresolvable
+    # types keep the generic ``letsmesh_packet`` safety-net label.
+    _FALLBACK_EVENT_TYPES: dict[int, str] = {
+        0: "req",  # PAYLOAD_TYPE_REQ
+        1: "response",  # PAYLOAD_TYPE_RESPONSE
+        2: "encrypted_direct",  # PAYLOAD_TYPE_TXT_MSG (undecryptable)
+        3: "ack",  # PAYLOAD_TYPE_ACK
+        4: "advert",  # PAYLOAD_TYPE_ADVERT (no identity metadata)
+        5: "encrypted_channel",  # PAYLOAD_TYPE_GRP_TXT (unknown channel key)
+        6: "grp_data",  # PAYLOAD_TYPE_GRP_DATA
+        7: "anon_req",  # PAYLOAD_TYPE_ANON_REQ
+        8: "path",  # PAYLOAD_TYPE_PATH
+        9: "trace",  # PAYLOAD_TYPE_TRACE
+        10: "multipart",  # PAYLOAD_TYPE_MULTIPART
+        11: "control",  # PAYLOAD_TYPE_CONTROL
+        15: "raw_custom",  # PAYLOAD_TYPE_RAW_CUSTOM
+    }
+
+    @classmethod
+    def _classify_fallback_event_type(
+        cls,
+        payload: dict[str, Any],
+        decoded_packet: dict[str, Any] | None,
+    ) -> str:
+        """Resolve a specific event type for an otherwise-unhandled packet.
+
+        Maps the MeshCore payload type to a precise label so uncategorised
+        packets are no longer all lumped under ``letsmesh_packet``. Falls back
+        to ``letsmesh_packet`` only when the payload type cannot be resolved.
+        """
+        packet_type = cls._resolve_letsmesh_packet_type(payload, decoded_packet)
+        if packet_type is None:
+            return "letsmesh_packet"
+        return cls._FALLBACK_EVENT_TYPES.get(packet_type, "letsmesh_packet")
+
     def _build_letsmesh_advertisement_payload(
         self,
         payload: dict[str, Any],
@@ -582,6 +625,10 @@ class LetsMeshNormalizer:
         normalized_payload: dict[str, Any] = {
             "public_key": public_key,
         }
+
+        advert_hash = payload.get("hash")
+        if isinstance(advert_hash, str) and advert_hash:
+            normalized_payload["packet_hash"] = advert_hash
 
         route_type_raw = self._parse_int(decoded_packet.get("routeType"))
         if route_type_raw is not None and route_type_raw in self._ROUTE_TYPE_MAP:

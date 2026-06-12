@@ -2,6 +2,46 @@
 
 This guide covers upgrading from a previous MeshCore Hub release to the current version. Check the relevant version section below before upgrading.
 
+## v0.13.0
+
+### Raw Packets (capture, browse, and search wire packets)
+
+A new **Raw Packets** feature captures every inbound MeshCore packet exactly as it arrives over the LetsMesh `packets` feed into a dedicated `raw_packets` table, independent of how the collector later classifies it. A new `/packets` API and a SPA **Packets** page (table on desktop, cards on mobile) let operators browse, filter, and search the raw traffic.
+
+**Database migration required:**
+
+```
+meshcore-hub db upgrade
+```
+
+This creates the `raw_packets` table and its indexes. On Docker deployments the migration runs automatically on startup.
+
+**New optional environment variables (all safe to omit):**
+
+| Variable                     | Default                | Description                                                                                  |
+| ---------------------------- | ---------------------- | -------------------------------------------------------------------------------------------- |
+| `FEATURE_PACKETS`            | `false`                | Show the Packets page and nav entry. Off by default.                                          |
+| `RAW_PACKET_CAPTURE_ENABLED` | `false`                | Collector-side capture of raw packets. In Compose this is **derived from `FEATURE_PACKETS`**. |
+| `RAW_PACKET_RETENTION_DAYS`  | = `DATA_RETENTION_DAYS` | Days to retain raw packets, independent of the global retention window.                       |
+
+**Capture ↔ page split:** capture runs in the collector while the page is served by the web app — two separate processes with separate settings. Docker Compose links them: setting `FEATURE_PACKETS=true` enables **both** capture (`RAW_PACKET_CAPTURE_ENABLED=${FEATURE_PACKETS}` on the collector) and the page. Advanced operators running the processes directly can set the two flags independently.
+
+**No backfill:** only packets captured *after* enabling appear — historical traffic is not reconstructed.
+
+**Storage:** `raw_packets` grows fastest of all tables (one row per packet per observer). On busy meshes or constrained storage, lower `RAW_PACKET_RETENTION_DAYS`. Retention cleanup runs regardless of whether capture is currently enabled, so turning capture off lets existing rows drain. Restricted-channel packets are stored in full but returned **metadata-only (redacted)** to roles that cannot see the channel.
+
+**Caching:** `/packets` responses are cached in Redis (when enabled) using a **role-aware** cache key and honour the existing `REDIS_CACHE_TTL`, so redacted responses are never served across roles.
+
+The `advertisements` and `messages` tables gain a nullable `packet_hash` column (added by the same `db upgrade`) so each event can link to its captured raw packets. When `FEATURE_PACKETS` is on, the Adverts and Messages list pages show a packet icon linking to the raw packets for that transmission. Only events ingested while capture was enabled carry the hash (no backfill), so the link is hidden for older rows.
+
+**No action required** to keep current behaviour — the feature is off by default.
+
+### Finer-Grained Packet Classification
+
+Packets the collector previously could not categorise were all emitted as a single `letsmesh_packet` event. They are now classified by their MeshCore payload type — `req`, `response`, `ack`, `encrypted_direct`, `encrypted_channel`, `grp_data`, `anon_req`, `multipart`, `control`, `raw_custom`, plus `advert`/`path`/`trace` for malformed variants. `letsmesh_packet` remains only as a safety net for packets whose payload type can't be resolved.
+
+**Action only if you consume `event_type`:** any external webhook filter, saved query, or dashboard keyed on `letsmesh_packet` should be updated to the specific type(s) it cares about. No database migration or config change is involved.
+
 ## v0.12.0
 
 ### Multi-Worker API (`API_WORKERS`)

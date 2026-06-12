@@ -9,7 +9,7 @@ import { Router } from './router.js';
 import { isAbortError } from './api.js';
 import { html, litRender, getConfig, hasRole, renderAuthSection } from './components.js';
 import { loadLocale, t } from './i18n.js';
-import { iconHome, iconDashboard, iconNodes, iconAdvertisements, iconMessages, iconMap, iconMembers, iconPage, iconChannel } from './icons.js';
+import { iconHome, iconDashboard, iconNodes, iconAdvertisements, iconMessages, iconPackets, iconMap, iconMembers, iconPage, iconChannel } from './icons.js';
 
 // Page modules (lazy-loaded)
 const pages = {
@@ -19,6 +19,8 @@ const pages = {
     nodeDetail: () => import('./pages/node-detail.js'),
     messages: () => import('./pages/messages.js'),
     advertisements: () => import('./pages/advertisements.js'),
+    packets: () => import('./pages/packets.js'),
+    packetDetail: () => import('./pages/packet-detail.js'),
     map: () => import('./pages/map.js'),
     members: () => import('./pages/members.js'),
     channels: () => import('./pages/channels.js'),
@@ -82,6 +84,10 @@ if (features.messages !== false) {
 }
 if (features.advertisements !== false) {
     router.addRoute('/advertisements', pageHandler(pages.advertisements));
+}
+if (features.packets === true) {
+    router.addRoute('/packets', pageHandler(pages.packets));
+    router.addRoute('/packets/:id', pageHandler(pages.packetDetail));
 }
 if (features.map !== false) {
     router.addRoute('/map', pageHandler(pages.map));
@@ -159,6 +165,7 @@ function updatePageTitle(pathname) {
     if (features.channels !== false) titles['/channels'] = composePageTitle('entities.channels');
     if (features.messages !== false) titles['/messages'] = composePageTitle('entities.messages');
     if (features.advertisements !== false) titles['/advertisements'] = composePageTitle('entities.advertisements');
+    if (features.packets === true) titles['/packets'] = composePageTitle('entities.packets');
     if (features.map !== false) titles['/map'] = composePageTitle('entities.map');
     if (features.members !== false) titles['/members'] = composePageTitle('entities.members');
     titles['/profile'] = composePageTitle('links.profile');
@@ -211,6 +218,9 @@ function renderMobileNav(config) {
     }
     if (features.messages !== false) {
         items.push(html`<li><a href="/messages" data-nav-link>${iconMessages('h-5 w-5 nav-icon-messages')} ${t('entities.messages')}</a></li>`);
+    }
+    if (features.packets === true) {
+        items.push(html`<li><a href="/packets" data-nav-link>${iconPackets('h-5 w-5 nav-icon-packets')} ${t('entities.packets')}</a></li>`);
     }
     if (features.map !== false) {
         items.push(html`<li><a href="/map" data-nav-link>${iconMap('h-5 w-5 nav-icon-map')} ${t('entities.map')}</a></li>`);

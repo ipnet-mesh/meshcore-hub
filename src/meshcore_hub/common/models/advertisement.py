@@ -63,6 +63,12 @@ class Advertisement(Base, UUIDMixin, TimestampMixin):
         nullable=True,
         unique=True,
     )
+    # LetsMesh wire packet hash, links this advert to its raw_packets rows.
+    packet_hash: Mapped[Optional[str]] = mapped_column(
+        String(32),
+        nullable=True,
+        index=True,
+    )
     route_type: Mapped[Optional[str]] = mapped_column(
         String(20),
         nullable=True,

@@ -228,6 +228,7 @@ def list_advertisements(
             "advert_timestamp": adv.advert_timestamp,
             "received_at": adv.received_at,
             "created_at": adv.created_at,
+            "packet_hash": adv.packet_hash,
             "observers": (
                 observers_by_hash.get(adv.event_hash, []) if adv.event_hash else []
             ),
@@ -313,6 +314,7 @@ def get_advertisement(
         "advert_timestamp": adv.advert_timestamp,
         "received_at": adv.received_at,
         "created_at": adv.created_at,
+        "packet_hash": adv.packet_hash,
         "observers": observers,
     }
     return AdvertisementRead(**data)
