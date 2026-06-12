@@ -6,7 +6,7 @@ returning realistic to_dict() structures for each packet type.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable, cast
 from unittest.mock import MagicMock
 
 from meshcore_hub.collector.letsmesh_decoder import LetsMeshPacketDecoder
@@ -31,7 +31,10 @@ def _make_decoder(
     """Create a decoder that returns pre-configured results by raw hex."""
     decoder = LetsMeshPacketDecoder()
 
-    original = decoder.decode_payload
+    original = cast(
+        Callable[[dict[str, Any]], "dict[str, Any] | None"],
+        decoder.decode_payload,
+    )
 
     def stub(payload: dict[str, Any]) -> dict[str, Any] | None:
         raw = payload.get("raw", "")
@@ -39,7 +42,9 @@ def _make_decoder(
             return decoded_packets[raw]
         return original(payload)
 
-    decoder.decode_payload = stub  # type: ignore[method-assign]
+    # Stub the bound method without tripping mypy's method-assign analysis
+    # (which is non-deterministic under incremental caching for this pattern).
+    setattr(decoder, "decode_payload", stub)  # noqa: B010
     return decoder
 
 
@@ -662,3 +667,33 @@ class TestFallbackClassification:
             LetsMeshNormalizer._classify_fallback_event_type({"packet_type": 99}, None)
             == "letsmesh_packet"
         )
+
+
+class TestPacketHashPropagation:
+    """The wire packet hash is threaded into advert/message payloads."""
+
+    def test_advert_carries_packet_hash(self) -> None:
+        raw = "advhash"
+        decoded = {
+            "payloadType": 4,
+            "pathLength": 0,
+            "payload": {
+                "decoded": {
+                    "type": 4,
+                    "publicKey": PUB_KEY_UPPER,
+                    "appData": {"name": "HashNode", "deviceRole": 2},
+                }
+            },
+        }
+        decoder = _make_decoder({raw: decoded})
+        norm = _TestNormalizer(decoder)
+        norm.mqtt.topic_builder.parse_letsmesh_upload_topic.return_value = (
+            OBSERVER_KEY,
+            "packets",
+        )
+
+        result = norm._normalize_letsmesh_event("t", {"raw": raw, "hash": "WIREHASH99"})
+        assert result is not None
+        _, event_type, pl = result
+        assert event_type == "advertisement"
+        assert pl["packet_hash"] == "WIREHASH99"

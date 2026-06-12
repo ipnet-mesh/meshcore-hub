@@ -96,3 +96,51 @@ class TestStoreRawPacket:
         rp = db_session.execute(select(RawPacket)).scalar_one()
         assert rp.channel_idx is None
         assert rp.source_pubkey_prefix == "AABBCCDD"[:12]
+
+
+class TestStoreRawPacketEdges:
+    """Cover the observer-update and sender-prefix fallback branches."""
+
+    def test_existing_observer_node_updated(self, db_manager, db_session):
+        """A pre-existing observer node is reused and marked is_observer."""
+        existing = Node(public_key="d" * 64, is_observer=False, last_seen=None)
+        db_session.add(existing)
+        db_session.commit()
+
+        store_raw_packet(
+            "d" * 64,
+            {"raw": "00", "hash": "h1"},
+            _channel_decoded(),
+            "channel_msg_recv",
+            db_manager,
+        )
+
+        nodes = db_session.execute(select(Node)).scalars().all()
+        assert len(nodes) == 1
+        db_session.refresh(nodes[0])
+        # The existing observer was reused, flag flipped, last_seen stamped.
+        assert nodes[0].is_observer is True
+        assert nodes[0].last_seen is not None
+
+    def test_source_prefix_from_sender_public_key(self, db_manager, db_session):
+        """source_pubkey_prefix falls back to senderPublicKey when no sourceHash."""
+        decoded = {
+            "payloadType": 1,
+            "payload": {"decoded": {"senderPublicKey": "C1C2C3C4C5C6C7"}},
+        }
+        store_raw_packet(
+            "a" * 64, {"raw": "00", "hash": "h1"}, decoded, "req", db_manager
+        )
+
+        rp = db_session.execute(select(RawPacket)).scalar_one()
+        assert rp.source_pubkey_prefix == "C1C2C3C4C5C6"
+
+    def test_no_source_prefix_when_absent(self, db_manager, db_session):
+        """No sourceHash/senderPublicKey leaves source_pubkey_prefix NULL."""
+        decoded = {"payloadType": 3, "payload": {"decoded": {}}}
+        store_raw_packet(
+            "a" * 64, {"raw": "00", "hash": "h1"}, decoded, "ack", db_manager
+        )
+
+        rp = db_session.execute(select(RawPacket)).scalar_one()
+        assert rp.source_pubkey_prefix is None

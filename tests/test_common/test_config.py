@@ -51,6 +51,27 @@ class TestCollectorSettings:
         assert settings.database_url == "postgresql://user@host/db"
         assert settings.effective_database_url == "postgresql://user@host/db"
 
+    def test_raw_packet_retention_defaults_to_global(self) -> None:
+        """Unset raw_packet_retention_days resolves to data_retention_days."""
+        settings = CollectorSettings(_env_file=None, data_retention_days=12)
+
+        assert settings.raw_packet_retention_days is None
+        assert settings.effective_raw_packet_retention_days == 12
+
+    def test_raw_packet_retention_explicit_override(self) -> None:
+        """An explicit raw_packet_retention_days wins over the global value."""
+        settings = CollectorSettings(
+            _env_file=None, data_retention_days=30, raw_packet_retention_days=3
+        )
+
+        assert settings.effective_raw_packet_retention_days == 3
+
+    def test_raw_packet_capture_disabled_by_default(self) -> None:
+        """raw_packet_capture_enabled defaults to False."""
+        settings = CollectorSettings(_env_file=None)
+
+        assert settings.raw_packet_capture_enabled is False
+
     def test_explicit_seed_home_overrides(self) -> None:
         """Test that explicit seed_home overrides the default."""
         settings = CollectorSettings(_env_file=None, seed_home="/seed/data")
