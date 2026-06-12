@@ -83,6 +83,105 @@ class TestSubscriber:
 
         handler.assert_called_once()
 
+    def test_raw_capture_disabled_writes_no_rows(self, mock_mqtt_client, db_manager):
+        """With capture disabled, no raw_packets rows are written but the
+        structured handler still runs."""
+        from sqlalchemy import select
+
+        from meshcore_hub.common.models import RawPacket
+
+        mock_mqtt_client.topic_builder.parse_letsmesh_upload_topic.return_value = (
+            "a" * 64,
+            "packets",
+        )
+        subscriber = Subscriber(
+            mock_mqtt_client, db_manager, raw_packet_capture_enabled=False
+        )
+        handler = MagicMock()
+        subscriber.register_handler("channel_msg_recv", handler)
+        subscriber._normalize_letsmesh_event = MagicMock(  # type: ignore[method-assign]
+            return_value=("a" * 64, "channel_msg_recv", {"text": "hi"})
+        )
+
+        subscriber._handle_mqtt_message(
+            topic="meshcore/STN/abc/packets",
+            pattern="meshcore/+/+/packets",
+            payload={"raw": "00", "hash": "h1"},
+        )
+
+        handler.assert_called_once()
+        session = db_manager.get_session()
+        try:
+            rows = session.execute(select(RawPacket)).scalars().all()
+            assert len(rows) == 0
+        finally:
+            session.close()
+
+    def test_raw_capture_enabled_writes_row(self, mock_mqtt_client, db_manager):
+        """With capture enabled, a packets-feed message writes one raw row."""
+        from sqlalchemy import select
+
+        from meshcore_hub.common.models import RawPacket
+
+        mock_mqtt_client.topic_builder.parse_letsmesh_upload_topic.return_value = (
+            "a" * 64,
+            "packets",
+        )
+        subscriber = Subscriber(
+            mock_mqtt_client, db_manager, raw_packet_capture_enabled=True
+        )
+        subscriber._normalize_letsmesh_event = MagicMock(  # type: ignore[method-assign]
+            return_value=("a" * 64, "channel_msg_recv", {"text": "hi"})
+        )
+        subscriber._letsmesh_decoder.decode_payload = MagicMock(  # type: ignore[method-assign]
+            return_value={"payloadType": 4, "payload": {"decoded": {}}}
+        )
+
+        subscriber._handle_mqtt_message(
+            topic="meshcore/STN/abc/packets",
+            pattern="meshcore/+/+/packets",
+            payload={"raw": "0011", "hash": "h1"},
+        )
+
+        session = db_manager.get_session()
+        try:
+            rows = session.execute(select(RawPacket)).scalars().all()
+            assert len(rows) == 1
+            assert rows[0].raw_hex == "0011"
+            assert rows[0].event_type == "channel_msg_recv"
+        finally:
+            session.close()
+
+    def test_raw_capture_skips_status_feed(self, mock_mqtt_client, db_manager):
+        """Capture is packets-feed only; status feed writes no raw rows."""
+        from sqlalchemy import select
+
+        from meshcore_hub.common.models import RawPacket
+
+        mock_mqtt_client.topic_builder.parse_letsmesh_upload_topic.return_value = (
+            "a" * 64,
+            "status",
+        )
+        subscriber = Subscriber(
+            mock_mqtt_client, db_manager, raw_packet_capture_enabled=True
+        )
+        subscriber._normalize_letsmesh_event = MagicMock(  # type: ignore[method-assign]
+            return_value=("a" * 64, "letsmesh_status", {})
+        )
+
+        subscriber._handle_mqtt_message(
+            topic="meshcore/STN/abc/status",
+            pattern="meshcore/+/+/status",
+            payload={"some": "status"},
+        )
+
+        session = db_manager.get_session()
+        try:
+            rows = session.execute(select(RawPacket)).scalars().all()
+            assert len(rows) == 0
+        finally:
+            session.close()
+
     def test_start_subscribes_to_letsmesh_topics(self, mock_mqtt_client, db_manager):
         """LetsMesh ingest mode subscribes to packets/status/internal feeds."""
         subscriber = Subscriber(
@@ -246,7 +345,7 @@ class TestSubscriber:
     def test_letsmesh_packet_without_decrypted_text_is_not_shown_as_message(
         self, mock_mqtt_client, db_manager
     ) -> None:
-        """Undecodable LetsMesh packets are kept as informational events, not messages."""
+        """Undecodable channel packets are kept as informational events, not messages."""
         mock_mqtt_client.topic_builder.parse_letsmesh_upload_topic.return_value = (
             "a" * 64,
             "packets",
@@ -255,9 +354,11 @@ class TestSubscriber:
             mock_mqtt_client,
             db_manager,
         )
-        letsmesh_packet_handler = MagicMock()
+        # A GRP_TXT (type 5) that does not decrypt is classified as
+        # encrypted_channel, not routed to the channel message handler.
+        encrypted_handler = MagicMock()
         channel_handler = MagicMock()
-        subscriber.register_handler("letsmesh_packet", letsmesh_packet_handler)
+        subscriber.register_handler("encrypted_channel", encrypted_handler)
         subscriber.register_handler("channel_msg_recv", channel_handler)
         subscriber.start()
 
@@ -276,7 +377,7 @@ class TestSubscriber:
                 },
             )
 
-        letsmesh_packet_handler.assert_called_once()
+        encrypted_handler.assert_called_once()
         channel_handler.assert_not_called()
 
     def test_letsmesh_packet_uses_decoder_text_when_available(
@@ -760,7 +861,7 @@ class TestSubscriber:
     def test_letsmesh_packet_fallback_logs_decoded_payload(
         self, mock_mqtt_client, db_manager
     ) -> None:
-        """Unmapped packets include decoder output in letsmesh_packet payload."""
+        """Unmapped packets are classified by payload type and keep decoder output."""
         mock_mqtt_client.topic_builder.parse_letsmesh_upload_topic.return_value = (
             "a" * 64,
             "packets",
@@ -769,8 +870,9 @@ class TestSubscriber:
             mock_mqtt_client,
             db_manager,
         )
+        # MULTIPART (type 10) has no structured handler -> classified as multipart.
         packet_handler = MagicMock()
-        subscriber.register_handler("letsmesh_packet", packet_handler)
+        subscriber.register_handler("multipart", packet_handler)
         subscriber.start()
 
         decoded_packet = {
@@ -799,7 +901,7 @@ class TestSubscriber:
 
         packet_handler.assert_called_once()
         _public_key, event_type, payload, _db = packet_handler.call_args.args
-        assert event_type == "letsmesh_packet"
+        assert event_type == "multipart"
         assert payload["decoded_payload_type"] == 10
         assert payload["decoded_packet"] == decoded_packet
 

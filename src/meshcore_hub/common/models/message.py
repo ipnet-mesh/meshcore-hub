@@ -81,6 +81,12 @@ class Message(Base, UUIDMixin, TimestampMixin):
         nullable=True,
         unique=True,
     )
+    # LetsMesh wire packet hash, links this event to its raw_packets rows.
+    packet_hash: Mapped[Optional[str]] = mapped_column(
+        String(32),
+        nullable=True,
+        index=True,
+    )
 
     __table_args__ = (
         Index("ix_messages_message_type", "message_type"),

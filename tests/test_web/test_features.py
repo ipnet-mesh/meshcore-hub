@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from meshcore_hub.web.app import create_app
-from tests.test_web.conftest import MockHttpClient
+from tests.test_web.conftest import ALL_FEATURES_ENABLED, MockHttpClient
 
 
 class TestFeatureFlagsConfig:
@@ -191,6 +191,47 @@ class TestFeatureFlagsSEO:
         assert "Disallow: /nodes" not in disallow_lines or any(
             line == "Disallow: /nodes/" for line in disallow_lines
         )
+
+
+class TestPacketsFeatureFlag:
+    """Test the packets feature flag (off by default)."""
+
+    def _make_app(self, mock_http_client: MockHttpClient, packets: bool):
+        features = dict(ALL_FEATURES_ENABLED)
+        features["packets"] = packets
+        app = create_app(
+            api_url="http://localhost:8000",
+            api_key="test-api-key",
+            network_name="Test Network",
+            features=features,
+        )
+        app.state.http_client = mock_http_client
+        return TestClient(app, raise_server_exceptions=True)
+
+    def test_packets_nav_hidden_when_disabled(
+        self, mock_http_client: MockHttpClient
+    ) -> None:
+        """The packets nav link is absent when the feature is off."""
+        client = self._make_app(mock_http_client, packets=False)
+        html = client.get("/").text
+        assert 'href="/packets"' not in html
+        # Messages still shows (ordering sanity)
+        assert 'href="/messages"' in html
+
+    def test_packets_nav_shown_when_enabled(
+        self, mock_http_client: MockHttpClient
+    ) -> None:
+        """The packets nav link appears when the feature is on."""
+        client = self._make_app(mock_http_client, packets=True)
+        html = client.get("/").text
+        assert 'href="/packets"' in html
+
+    def test_packets_disabled_by_default_in_settings(self) -> None:
+        """The declared default for feature_packets is False (env-independent)."""
+        from meshcore_hub.common.config import WebSettings
+
+        # Check the field default directly so a local .env cannot mask it.
+        assert WebSettings.model_fields["feature_packets"].default is False
 
 
 class TestFeatureFlagsIndividual:

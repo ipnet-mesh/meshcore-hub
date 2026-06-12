@@ -58,6 +58,9 @@ class MessageRead(BaseModel):
     )
     received_at: datetime = Field(..., description="When received by interface")
     created_at: datetime = Field(..., description="Record creation timestamp")
+    packet_hash: Optional[str] = Field(
+        default=None, description="LetsMesh wire packet hash, links to raw packets"
+    )
     observers: list[ObserverInfo] = Field(
         default_factory=list, description="All observers that captured this message"
     )
@@ -138,6 +141,9 @@ class AdvertisementRead(BaseModel):
     )
     received_at: datetime = Field(..., description="When received")
     created_at: datetime = Field(..., description="Record creation timestamp")
+    packet_hash: Optional[str] = Field(
+        default=None, description="LetsMesh wire packet hash, links to raw packets"
+    )
     observers: list[ObserverInfo] = Field(
         default_factory=list,
         description="All observers that captured this advertisement",

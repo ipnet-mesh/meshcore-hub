@@ -174,3 +174,29 @@ class TestHandleChannelMessage:
         assert observer is not None
         assert observer.path_len == 5
         assert observer.snr == 10.0
+
+
+class TestMessagePacketHash:
+    """packet_hash links a message to its raw_packets rows."""
+
+    def test_stores_packet_hash_from_payload(self, db_manager, db_session):
+        payload = {
+            "pubkey_prefix": "01ab2186c4d5",
+            "text": "Hello!",
+            "packet_hash": "DEADBEEF1234",
+        }
+        handle_contact_message("a" * 64, "contact_msg_recv", payload, db_manager)
+
+        msg = db_session.execute(select(Message)).scalar_one()
+        assert msg.packet_hash == "DEADBEEF1234"
+
+    def test_falls_back_to_hash_field(self, db_manager, db_session):
+        payload = {
+            "pubkey_prefix": "01ab2186c4d5",
+            "text": "Hello again!",
+            "hash": "CAFEBABE5678",
+        }
+        handle_contact_message("a" * 64, "contact_msg_recv", payload, db_manager)
+
+        msg = db_session.execute(select(Message)).scalar_one()
+        assert msg.packet_hash == "CAFEBABE5678"

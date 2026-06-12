@@ -212,7 +212,7 @@ class TestGroupTextPacket:
         result = norm._normalize_letsmesh_event("t", {"raw": raw})
         assert result is not None
         _, event_type, pl = result
-        assert event_type == "letsmesh_packet"
+        assert event_type == "encrypted_channel"
         assert pl.get("decoded_payload_type") == 5
 
 
@@ -333,7 +333,7 @@ class TestTracePacket:
         result = norm._normalize_letsmesh_event("t", {"raw": raw})
         assert result is not None
         _, event_type, pl = result
-        assert event_type == "letsmesh_packet"
+        assert event_type == "trace"
 
 
 class TestControlPacket:
@@ -547,7 +547,7 @@ class TestResponsePacket:
 
 
 class TestAckPacket:
-    def test_ack_falls_through_to_letsmesh_packet(self) -> None:
+    def test_ack_classified_as_ack(self) -> None:
         raw = "ack1"
         decoded = {
             "payloadType": 3,
@@ -569,13 +569,13 @@ class TestAckPacket:
         result = norm._normalize_letsmesh_event("t", {"raw": raw})
         assert result is not None
         _, event_type, pl = result
-        assert event_type == "letsmesh_packet"
+        assert event_type == "ack"
         assert pl["decoded_payload_type"] == 3
         assert pl["decoded_packet"]["payloadType"] == 3
 
 
 class TestRequestPacket:
-    def test_request_without_decrypted_content_falls_through(self) -> None:
+    def test_request_without_decrypted_content_classified_as_req(self) -> None:
         raw = "req1"
         decoded = {
             "payloadType": 0,
@@ -602,7 +602,7 @@ class TestRequestPacket:
         result = norm._normalize_letsmesh_event("t", {"raw": raw})
         assert result is not None
         _, event_type, pl = result
-        assert event_type == "letsmesh_packet"
+        assert event_type == "req"
         assert pl["decoded_payload_type"] == 0
 
 
@@ -625,3 +625,40 @@ class TestUnrecognizedFeed:
 
         result = norm._normalize_letsmesh_event("garbage", {})
         assert result is None
+
+
+class TestFallbackClassification:
+    """The fallback classifier maps payload types to specific event types."""
+
+    def test_payload_type_to_event_type_map(self) -> None:
+        cases = {
+            0: "req",
+            1: "response",
+            2: "encrypted_direct",
+            3: "ack",
+            4: "advert",
+            5: "encrypted_channel",
+            6: "grp_data",
+            7: "anon_req",
+            8: "path",
+            9: "trace",
+            10: "multipart",
+            11: "control",
+            15: "raw_custom",
+        }
+        for packet_type, expected in cases.items():
+            event_type = LetsMeshNormalizer._classify_fallback_event_type(
+                {"packet_type": packet_type}, None
+            )
+            assert event_type == expected, f"type {packet_type}"
+
+    def test_unknown_type_keeps_letsmesh_packet(self) -> None:
+        # Unresolvable type falls back to the generic safety-net label.
+        assert (
+            LetsMeshNormalizer._classify_fallback_event_type({}, None)
+            == "letsmesh_packet"
+        )
+        assert (
+            LetsMeshNormalizer._classify_fallback_event_type({"packet_type": 99}, None)
+            == "letsmesh_packet"
+        )

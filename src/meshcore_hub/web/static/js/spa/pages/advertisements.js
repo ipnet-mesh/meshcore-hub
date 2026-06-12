@@ -8,6 +8,23 @@ import {
     observerIcons, observerDetailRow, toggleObserverDetail, toggleCardObserverDetail
 } from '../components.js';
 import { createAutoRefresh } from '../auto-refresh.js';
+import { iconPackets } from '../icons.js';
+
+function packetLink(packetHash, navigate) {
+    if (!packetHash) {
+        return nothing;
+    }
+    const icon = iconPackets('h-5 w-5 nav-icon-packets');
+    const title = t('packets.view_raw');
+    const url = `/packets?packet_hash=${packetHash}`;
+    if (navigate) {
+        // Inside a card that is itself an <a>: use a span to avoid nested anchors.
+        return html`<span class="inline-flex cursor-pointer" title="${title}"
+            @click=${(e) => { e.preventDefault(); e.stopPropagation(); navigate(url); }}>${icon}</span>`;
+    }
+    return html`<a href="${url}" class="inline-flex" title="${title}"
+            @click=${(e) => e.stopPropagation()}>${icon}</a>`;
+}
 
 function routeTypeBadge(routeType) {
     if (!routeType) {
@@ -38,6 +55,8 @@ export async function render(container, params, router) {
     const order = query.order || 'desc';
 
     const config = getConfig();
+    const features = config.features || {};
+    const packetsEnabled = features.packets === true;
     const tz = config.timezone || '';
     const tzBadge = tz && tz !== 'UTC' ? html`<span class="text-sm opacity-60">${tz}</span>` : nothing;
     const navigate = (url) => router.navigate(url);
@@ -143,6 +162,7 @@ ${displayContent}`, container);
                         <div class="flex items-center justify-end gap-1">
                             ${routeTypeBadge(ad.route_type)}
                             ${receiversBlock}
+                            ${packetsEnabled ? packetLink(ad.packet_hash, navigate) : nothing}
                         </div>
                     </div>
                 </div>
@@ -170,7 +190,7 @@ ${displayContent}`, container);
                 });
 
             const tableRows = advertisements.length === 0
-                ? html`<tr><td colspan="5" class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.advertisements').toLowerCase() })}</td></tr>`
+                ? html`<tr><td colspan=${packetsEnabled ? 6 : 5} class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.advertisements').toLowerCase() })}</td></tr>`
                 : advertisements.map(ad => {
                     const adName = ad.node_tag_name || ad.node_name || ad.name;
                     const adDescription = ad.node_tag_description;
@@ -202,6 +222,7 @@ ${displayContent}`, container);
                     <td>${routeTypeBadge(ad.route_type)}</td>
                     <td class="text-sm whitespace-nowrap">${formatDateTime(ad.received_at)}</td>
                     <td>${receiversBlock}</td>
+                    ${packetsEnabled ? html`<td>${packetLink(ad.packet_hash)}</td>` : nothing}
                 </tr>${observerDetailRow(ad.observers || [], null, { hidePath: true })}`;
                 });
 
@@ -299,6 +320,7 @@ ${mobileSortSelect({
                 <th>${t('advertisements.col_route_type')}</th>
                 ${sortable(t('common.time'), 'time')}
                 <th>${t('common.observers')}</th>
+                ${packetsEnabled ? html`<th></th>` : nothing}
             </tr>
         </thead>
         <tbody>

@@ -143,6 +143,26 @@ class CollectorSettings(CommonSettings):
         ge=10,
     )
 
+    # Raw packet capture settings
+    raw_packet_capture_enabled: bool = Field(
+        default=False,
+        description="Capture every inbound packets-feed packet into raw_packets",
+    )
+    raw_packet_retention_days: Optional[int] = Field(
+        default=None,
+        description=(
+            "Days to retain raw packets (defaults to DATA_RETENTION_DAYS when unset)"
+        ),
+        ge=1,
+    )
+
+    @property
+    def effective_raw_packet_retention_days(self) -> int:
+        """Resolve raw-packet retention, falling back to the global default."""
+        if self.raw_packet_retention_days is not None:
+            return self.raw_packet_retention_days
+        return self.data_retention_days
+
     @property
     def collector_data_dir(self) -> str:
         """Get the collector data directory path."""
@@ -411,6 +431,9 @@ class WebSettings(CommonSettings):
     feature_channels: bool = Field(
         default=True, description="Enable the /channels page"
     )
+    feature_packets: bool = Field(
+        default=False, description="Enable the /packets page (off by default)"
+    )
     feature_pages: bool = Field(
         default=True, description="Enable custom markdown pages"
     )
@@ -444,6 +467,7 @@ class WebSettings(CommonSettings):
             "map": self.feature_map and self.feature_nodes,
             "members": self.feature_members and self.oidc_enabled,
             "channels": self.feature_channels,
+            "packets": self.feature_packets,
             "pages": self.feature_pages,
             "radio_config": self.feature_radio_config,
         }

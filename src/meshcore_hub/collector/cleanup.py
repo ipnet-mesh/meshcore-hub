@@ -17,6 +17,7 @@ from meshcore_hub.common.models import (
     Message,
     Node,
     NodeTag,
+    RawPacket,
     Telemetry,
     TracePath,
 )
@@ -34,6 +35,7 @@ class CleanupStats:
         self.telemetry_deleted: int = 0
         self.trace_paths_deleted: int = 0
         self.event_logs_deleted: int = 0
+        self.raw_packets_deleted: int = 0
         self.nodes_deleted: int = 0
         self.observers_cleared: int = 0
         self.total_deleted: int = 0
@@ -46,6 +48,7 @@ class CleanupStats:
             f"telemetry={self.telemetry_deleted}, "
             f"trace_paths={self.trace_paths_deleted}, "
             f"event_logs={self.event_logs_deleted}, "
+            f"raw_packets={self.raw_packets_deleted}, "
             f"nodes={self.nodes_deleted}, "
             f"observers_cleared={self.observers_cleared})"
         )
@@ -55,6 +58,7 @@ async def cleanup_old_data(
     db: AsyncSession,
     retention_days: int,
     dry_run: bool = False,
+    raw_packet_retention_days: int | None = None,
 ) -> CleanupStats:
     """Delete event data older than the retention period.
 
@@ -62,12 +66,22 @@ async def cleanup_old_data(
         db: Database session
         retention_days: Number of days to retain data
         dry_run: If True, only count records without deleting
+        raw_packet_retention_days: Days to retain raw packets (falls back to
+            ``retention_days`` when None). Raw-packet cleanup runs whenever data
+            cleanup runs, independent of whether capture is currently enabled.
 
     Returns:
         CleanupStats object with deletion counts
     """
     stats = CleanupStats()
     cutoff_date = datetime.now(timezone.utc) - timedelta(days=retention_days)
+    raw_packet_cutoff = datetime.now(timezone.utc) - timedelta(
+        days=(
+            raw_packet_retention_days
+            if raw_packet_retention_days is not None
+            else retention_days
+        )
+    )
 
     logger.info(
         "Starting data cleanup (dry_run=%s, retention_days=%d, cutoff=%s)",
@@ -101,12 +115,18 @@ async def cleanup_old_data(
         db, EventLog, cutoff_date, "event_logs", dry_run
     )
 
+    # Clean up raw packets (independent retention window)
+    stats.raw_packets_deleted = await _cleanup_table(
+        db, RawPacket, raw_packet_cutoff, "raw_packets", dry_run
+    )
+
     stats.total_deleted = (
         stats.advertisements_deleted
         + stats.messages_deleted
         + stats.telemetry_deleted
         + stats.trace_paths_deleted
         + stats.event_logs_deleted
+        + stats.raw_packets_deleted
     )
 
     # Clear the is_observer flag for nodes whose events were all pruned above.
@@ -133,6 +153,9 @@ def _observer_node_id_union() -> CompoundSelect:
         ),
         select(TracePath.observer_node_id).where(
             TracePath.observer_node_id.is_not(None)
+        ),
+        select(RawPacket.observer_node_id).where(
+            RawPacket.observer_node_id.is_not(None)
         ),
         select(EventObserver.observer_node_id),
     )

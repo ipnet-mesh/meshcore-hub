@@ -276,3 +276,19 @@ class TestHandleAdvertisement:
 
         ads = db_session.execute(select(Advertisement)).scalars().all()
         assert len(ads) == 1
+
+
+class TestAdvertisementPacketHash:
+    """packet_hash links an advertisement to its raw_packets rows."""
+
+    def test_stores_packet_hash(self, db_manager, db_session):
+        payload = {
+            "public_key": "a" * 64,
+            "name": "TestNode",
+            "adv_type": "chat",
+            "packet_hash": "FEEDFACE9999",
+        }
+        handle_advertisement("b" * 64, "advertisement", payload, db_manager)
+
+        ad = db_session.execute(select(Advertisement)).scalar_one()
+        assert ad.packet_hash == "FEEDFACE9999"

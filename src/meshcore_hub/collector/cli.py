@@ -281,6 +281,8 @@ def _run_collector_service(
         node_cleanup_enabled=settings.node_cleanup_enabled,
         node_cleanup_days=settings.node_cleanup_days,
         channel_refresh_interval_seconds=settings.channel_refresh_interval_seconds,
+        raw_packet_capture_enabled=settings.raw_packet_capture_enabled,
+        raw_packet_retention_days=settings.effective_raw_packet_retention_days,
     )
 
 

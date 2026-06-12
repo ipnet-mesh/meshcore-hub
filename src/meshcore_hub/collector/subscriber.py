@@ -48,6 +48,8 @@ class Subscriber(LetsMeshNormalizer):
         node_cleanup_enabled: bool = False,
         node_cleanup_days: int = 90,
         channel_refresh_interval_seconds: int = 300,
+        raw_packet_capture_enabled: bool = False,
+        raw_packet_retention_days: int = 30,
     ):
         """Initialize subscriber.
 
@@ -61,6 +63,8 @@ class Subscriber(LetsMeshNormalizer):
             node_cleanup_enabled: Enable automatic cleanup of inactive nodes
             node_cleanup_days: Remove nodes not seen for this many days
             channel_refresh_interval_seconds: Seconds between channel key refresh
+            raw_packet_capture_enabled: Capture every packets-feed packet to raw_packets
+            raw_packet_retention_days: Days to retain raw packets
         """
         self.mqtt = mqtt_client
         self.db = db_manager
@@ -83,6 +87,14 @@ class Subscriber(LetsMeshNormalizer):
         self._node_cleanup_days = node_cleanup_days
         self._cleanup_thread: Optional[threading.Thread] = None
         self._last_cleanup: Optional[datetime] = None
+        # Raw packet capture
+        self._raw_packet_capture_enabled = raw_packet_capture_enabled
+        self._raw_packet_retention_days = raw_packet_retention_days
+        logger.info(
+            "Raw packet capture %s (retention=%d days)",
+            "enabled" if raw_packet_capture_enabled else "disabled",
+            raw_packet_retention_days,
+        )
         # Channel key refresh
         self._channel_refresh_interval_seconds = channel_refresh_interval_seconds
         self._channel_refresh_thread: Optional[threading.Thread] = None
@@ -208,7 +220,42 @@ class Subscriber(LetsMeshNormalizer):
 
         public_key, event_type, normalized_payload = parsed
         logger.debug("Received event: %s from %s...", event_type, public_key[:12])
+
+        # Capture the raw packet (packets feed only) independent of, and before,
+        # structured dispatch so the raw_packets table is complete. The boolean
+        # short-circuit avoids the insert entirely when capture is disabled.
+        if self._raw_packet_capture_enabled:
+            self._maybe_capture_raw_packet(topic, public_key, event_type, payload)
+
         self._dispatch_event(public_key, event_type, normalized_payload)
+
+    def _maybe_capture_raw_packet(
+        self,
+        topic: str,
+        public_key: str,
+        event_type: str,
+        payload: dict[str, Any],
+    ) -> None:
+        """Persist a raw_packets row for a packets-feed reception.
+
+        Reuses the decode the normalizer already performed (the decoder caches
+        per raw hex, so this ``decode_payload`` call is a cache hit). Capture
+        failures are logged and never block event dispatch.
+        """
+        try:
+            parsed_topic = self.mqtt.topic_builder.parse_letsmesh_upload_topic(topic)
+            if not parsed_topic:
+                return
+            _, feed_type = parsed_topic
+            if feed_type != "packets":
+                return
+
+            from meshcore_hub.collector.handlers.raw_packet import store_raw_packet
+
+            decoded_packet = self._letsmesh_decoder.decode_payload(payload)
+            store_raw_packet(public_key, payload, decoded_packet, event_type, self.db)
+        except Exception as e:
+            logger.error("Error capturing raw packet: %s", e)
 
     def _dispatch_event(
         self,
@@ -370,6 +417,9 @@ class Subscriber(LetsMeshNormalizer):
                                             session,
                                             self._cleanup_retention_days,
                                             dry_run=False,
+                                            raw_packet_retention_days=(
+                                                self._raw_packet_retention_days
+                                            ),
                                         )
                                         logger.info(
                                             "Event cleanup completed: %s", stats
@@ -600,6 +650,8 @@ def create_subscriber(
     node_cleanup_enabled: bool = False,
     node_cleanup_days: int = 90,
     channel_refresh_interval_seconds: int = 300,
+    raw_packet_capture_enabled: bool = False,
+    raw_packet_retention_days: int = 30,
 ) -> Subscriber:
     """Create a configured subscriber instance.
 
@@ -653,6 +705,8 @@ def create_subscriber(
         node_cleanup_enabled=node_cleanup_enabled,
         node_cleanup_days=node_cleanup_days,
         channel_refresh_interval_seconds=channel_refresh_interval_seconds,
+        raw_packet_capture_enabled=raw_packet_capture_enabled,
+        raw_packet_retention_days=raw_packet_retention_days,
     )
 
     # Register handlers
@@ -680,6 +734,8 @@ def run_collector(
     node_cleanup_enabled: bool = False,
     node_cleanup_days: int = 90,
     channel_refresh_interval_seconds: int = 300,
+    raw_packet_capture_enabled: bool = False,
+    raw_packet_retention_days: int = 30,
 ) -> None:
     """Run the collector (blocking).
 
@@ -718,6 +774,8 @@ def run_collector(
         node_cleanup_enabled=node_cleanup_enabled,
         node_cleanup_days=node_cleanup_days,
         channel_refresh_interval_seconds=channel_refresh_interval_seconds,
+        raw_packet_capture_enabled=raw_packet_capture_enabled,
+        raw_packet_retention_days=raw_packet_retention_days,
     )
 
     # Set up signal handlers
