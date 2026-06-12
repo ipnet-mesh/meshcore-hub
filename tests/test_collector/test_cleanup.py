@@ -18,6 +18,7 @@ from meshcore_hub.common.models import (
     Message,
     Node,
     NodeTag,
+    RawPacket,
     Telemetry,
     TracePath,
 )
@@ -466,3 +467,84 @@ async def test_cleanup_clears_stale_observer_flags(
     )
     assert stale_flag is False
     assert active_flag is True
+
+
+@pytest.mark.asyncio
+async def test_raw_packets_use_dedicated_retention(
+    async_db_session: AsyncSession,
+) -> None:
+    """Raw packets older than RAW_PACKET_RETENTION_DAYS are deleted."""
+    old_date = datetime.now(timezone.utc) - timedelta(days=20)
+    recent_date = datetime.now(timezone.utc) - timedelta(days=3)
+    async_db_session.add(
+        RawPacket(raw_hex="00", created_at=old_date, updated_at=old_date)
+    )
+    async_db_session.add(
+        RawPacket(raw_hex="11", created_at=recent_date, updated_at=recent_date)
+    )
+    await async_db_session.commit()
+
+    # Global retention 30 days would keep both; raw retention of 7 prunes the old one.
+    stats = await cleanup_old_data(
+        async_db_session,
+        retention_days=30,
+        dry_run=False,
+        raw_packet_retention_days=7,
+    )
+
+    assert stats.raw_packets_deleted == 1
+    remaining = await async_db_session.scalar(
+        select(func.count()).select_from(RawPacket)
+    )
+    assert remaining == 1
+
+
+@pytest.mark.asyncio
+async def test_raw_packet_retention_defaults_to_global(
+    async_db_session: AsyncSession,
+) -> None:
+    """When raw retention is None, the global retention value is used."""
+    old_date = datetime.now(timezone.utc) - timedelta(days=40)
+    async_db_session.add(
+        RawPacket(raw_hex="00", created_at=old_date, updated_at=old_date)
+    )
+    await async_db_session.commit()
+
+    stats = await cleanup_old_data(
+        async_db_session,
+        retention_days=30,
+        dry_run=False,
+        raw_packet_retention_days=None,
+    )
+
+    assert stats.raw_packets_deleted == 1
+
+
+@pytest.mark.asyncio
+async def test_raw_packet_only_observer_keeps_flag(
+    async_db_session: AsyncSession,
+) -> None:
+    """A node observing only (live) raw packets keeps is_observer=True."""
+    node = Node(public_key="d" * 64, is_observer=True)
+    async_db_session.add(node)
+    await async_db_session.flush()
+
+    recent_date = datetime.now(timezone.utc) - timedelta(days=2)
+    async_db_session.add(
+        RawPacket(
+            raw_hex="00",
+            observer_node_id=node.id,
+            created_at=recent_date,
+            updated_at=recent_date,
+        )
+    )
+    await async_db_session.commit()
+
+    stats = await cleanup_old_data(async_db_session, retention_days=30, dry_run=False)
+
+    assert stats.observers_cleared == 0
+    await async_db_session.rollback()
+    flag = await async_db_session.scalar(
+        select(Node.is_observer).where(Node.id == node.id)
+    )
+    assert flag is True

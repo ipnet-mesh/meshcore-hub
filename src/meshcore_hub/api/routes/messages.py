@@ -200,6 +200,7 @@ def list_messages(
             "sender_timestamp": m.sender_timestamp,
             "received_at": m.received_at,
             "created_at": m.created_at,
+            "packet_hash": m.packet_hash,
             "observers": (
                 observers_by_hash.get(m.event_hash, []) if m.event_hash else []
             ),
@@ -266,6 +267,7 @@ def get_message(
         "sender_timestamp": message.sender_timestamp,
         "received_at": message.received_at,
         "created_at": message.created_at,
+        "packet_hash": message.packet_hash,
         "observers": observers,
     }
     return MessageRead(**data)

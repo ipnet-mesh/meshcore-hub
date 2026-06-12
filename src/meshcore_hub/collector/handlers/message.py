@@ -86,6 +86,9 @@ def _handle_message(
         except (ValueError, OSError):
             pass
 
+    # LetsMesh wire packet hash, for linking to raw_packets
+    packet_hash = payload.get("packet_hash") or payload.get("hash")
+
     # Compute event hash for deduplication
     event_hash = compute_message_hash(
         text=text,
@@ -151,6 +154,7 @@ def _handle_message(
             sender_timestamp=sender_timestamp,
             received_at=now,
             event_hash=event_hash,
+            packet_hash=packet_hash,
         )
         session.add(message)
 

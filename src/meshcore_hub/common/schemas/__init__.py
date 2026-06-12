@@ -28,6 +28,10 @@ from meshcore_hub.common.schemas.messages import (
 from meshcore_hub.common.schemas.network import (
     RadioConfig,
 )
+from meshcore_hub.common.schemas.raw_packets import (
+    RawPacketRead,
+    RawPacketList,
+)
 
 __all__ = [
     # Events
@@ -54,4 +58,7 @@ __all__ = [
     "MessageFilters",
     # Network
     "RadioConfig",
+    # Raw packets
+    "RawPacketRead",
+    "RawPacketList",
 ]

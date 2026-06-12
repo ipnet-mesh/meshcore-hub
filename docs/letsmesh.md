@@ -16,6 +16,31 @@ The collector subscribes to packets published by [meshcore-packet-capture](https
 - Decoder payload type `1` can map to native response events (`telemetry_response`, `battery`, `path_updated`, `status_response`) when decrypted structured content is available.
 - `packet_type=5` packets are mapped to `channel_msg_recv`.
 - `packet_type=1`, `2`, and `7` packets are mapped to `contact_msg_recv` when decryptable text is available.
+- Packets that no structured handler claims are no longer all labelled `letsmesh_packet`. They are classified by their MeshCore payload type so the `event_type` is specific:
+
+  | Payload type | `event_type` |
+  |---|---|
+  | `0x00 REQ` | `req` |
+  | `0x01 RESPONSE` | `response` |
+  | `0x02 TXT_MSG` (undecryptable) | `encrypted_direct` |
+  | `0x03 ACK` | `ack` |
+  | `0x04 ADVERT` (no identity) | `advert` |
+  | `0x05 GRP_TXT` (unknown key) | `encrypted_channel` |
+  | `0x06 GRP_DATA` | `grp_data` |
+  | `0x07 ANON_REQ` | `anon_req` |
+  | `0x08 PATH` | `path` |
+  | `0x09 TRACE` | `trace` |
+  | `0x0A MULTIPART` | `multipart` |
+  | `0x0B CONTROL` | `control` |
+  | `0x0F RAW_CUSTOM` | `raw_custom` |
+
+  `letsmesh_packet` is retained only as a safety net for packets whose payload type cannot be resolved. Reaching these fallbacks for `TXT_MSG`/`GRP_TXT` means the payload did not decrypt, hence the `encrypted_*` labels (decryptable ones become `contact_msg_recv` / `channel_msg_recv`).
+
+## Raw Packet Capture
+
+- When `RAW_PACKET_CAPTURE_ENABLED` is set (Compose derives it from `FEATURE_PACKETS`), every packet on the `packets` feed is also stored verbatim in the `raw_packets` table — one row per observer reception, independent of structured classification. The `status` and `internal` feeds carry no on-air `raw` hex and are **not** captured as raw packets.
+- Capture reuses the single decode the normalizer already performs (the decoder caches per raw hex), so it adds only an insert plus an observer upsert to the ingest path.
+- The `/packets` API and Packets page apply channel-visibility rules: channel-message packets on a channel above the viewer's role are returned **metadata-only with the payload redacted** (`redacted=true`, `raw_hex`/`decoded` nulled), not hidden. Non-channel and visible-channel packets are returned in full.
 
 ## Channel Keys
 

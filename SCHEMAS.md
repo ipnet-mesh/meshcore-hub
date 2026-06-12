@@ -461,6 +461,28 @@ Notification that routing path to a node has changed.
 
 ---
 
+### Per-Payload-Type Classifications
+
+Packets on the LetsMesh `packets` feed that no structured handler claims are classified by their MeshCore payload type rather than the generic `letsmesh_packet`. These are informational (logged to `events_log`, captured to `raw_packets`), with no dedicated table:
+
+| Payload type | `event_type` | Notes |
+|---|---|---|
+| `0x00 REQ` | `req` | Encrypted request, metadata only |
+| `0x01 RESPONSE` | `response` | Response with no structured content |
+| `0x02 TXT_MSG` | `encrypted_direct` | Direct text that did not decrypt |
+| `0x03 ACK` | `ack` | Acknowledgment |
+| `0x04 ADVERT` | `advert` | Advert lacking identity metadata |
+| `0x05 GRP_TXT` | `encrypted_channel` | Channel text with unknown key |
+| `0x06 GRP_DATA` | `grp_data` | Group datagram |
+| `0x07 ANON_REQ` | `anon_req` | Anonymous request |
+| `0x08 PATH` | `path` | Returned path (unparsed) |
+| `0x09 TRACE` | `trace` | Trace (unparsed) |
+| `0x0A MULTIPART` | `multipart` | Fragment of a sequence (no reassembly) |
+| `0x0B CONTROL` | `control` | Control packet not matched to contact/status |
+| `0x0F RAW_CUSTOM` | `raw_custom` | Custom-encrypted, opaque |
+
+`letsmesh_packet` remains as the safety-net label when the payload type cannot be resolved.
+
 ### Other Informational Events
 
 The following events are logged but have varying or device-specific payloads:
@@ -475,6 +497,39 @@ The following events are logged but have varying or device-specific payloads:
 - **MESSAGES_WAITING**: Notification of queued messages
 - **NO_MORE_MSGS**: End of message queue
 - **RX_LOG_DATA**: Receive log data
+
+---
+
+## Raw Packets
+
+When `RAW_PACKET_CAPTURE_ENABLED` is set (Compose derives it from `FEATURE_PACKETS`), the collector stores **every** inbound packet from the LetsMesh `packets` feed exactly as received, independent of how it is classified. One row is written per observer reception (no deduplication), reusing the decode the normalizer already performs.
+
+**Database Table**: `raw_packets`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID | Primary key |
+| `observer_node_id` | FK `nodes.id` (SET NULL) | Receiving interface, from the MQTT topic public key |
+| `packet_hash` | string(32) | LetsMesh packet hash; links to structured records, groups multi-observer receptions |
+| `raw_hex` | text | On-air bytes from `payload["raw"]` |
+| `packet_type` | integer | Wire packet type |
+| `payload_type` | integer | Decoder payload type |
+| `event_type` | string(50) | How the collector classified the packet (`advertisement`, `channel_msg_recv`, `letsmesh_packet`, …) |
+| `channel_idx` | integer | `int(channelHash, 16)` for channel-message packets, else NULL; drives visibility redaction |
+| `source_pubkey_prefix` | string(12) | Sender prefix from decoder `sourceHash` / `senderPublicKey` |
+| `route_type` | string(20) | `flood`, `transport_flood`, `direct`, `transport_direct` |
+| `path_len` | integer | Hop count |
+| `snr` | float | Signal-to-noise ratio reported by the observer |
+| `decoded` | JSON | Decoder summary (so detail views need no re-decode) |
+| `received_at` | datetime | When received by the observing interface |
+
+**Linking from structured tables**: `advertisements` and `messages` carry a nullable `packet_hash` (the LetsMesh wire hash) populated at ingest. Because the structured tables are deduplicated across observers, one row links to *all* the per-observer `raw_packets` sharing that hash — reachable via `GET /api/v1/packets?packet_hash=<hash>`. Only rows ingested while capture was enabled have a populated `packet_hash` (no backfill).
+
+**REST API**: `GET /api/v1/packets`, `GET /api/v1/packets/{id}`
+
+**`RawPacketRead` shape** mirrors the columns above plus a `redacted: bool` field and observer details (`observed_by`, `observer_name`, `observer_tag_name`). Channel-message packets on a channel above the requesting role's visibility level are returned with `redacted=true` and `raw_hex`/`decoded`/`source_pubkey_prefix` nulled; non-channel and visible-channel packets are returned in full. Responses are cached in Redis with a role-aware key.
+
+Filters: `search` (hash/raw_hex/observer, bounded to a recent window when no `since` given), `event_type`, `packet_type`, `channel_idx`, `route_type`, `public_key`/`pubkey_prefix`, `observed_by`, `decryptable`, `min_snr`/`max_snr`, `min_path_len`/`max_path_len`, `redacted`, `since`/`until`, `sort`/`order`, `limit`/`offset`.
 
 ---
 

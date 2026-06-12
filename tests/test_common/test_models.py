@@ -14,6 +14,7 @@ from meshcore_hub.common.models import (
     Telemetry,
     EventLog,
     EventObserver,
+    RawPacket,
     add_event_observer,
 )
 
@@ -65,6 +66,66 @@ class TestNodeModel:
 
         assert len(node.tags) == 1
         assert node.tags[0].key == "altitude"
+
+
+class TestRawPacketModel:
+    """Tests for RawPacket model."""
+
+    def test_create_raw_packet(self, db_session) -> None:
+        """Test creating a raw packet with defaults."""
+        packet = RawPacket(
+            packet_hash="abc123",
+            raw_hex="0011223344",
+            packet_type=5,
+            payload_type=4,
+            event_type="channel_msg_recv",
+            channel_idx=42,
+            source_pubkey_prefix="01AB2186C4D5",
+            route_type="flood",
+            path_len=2,
+            snr=12.5,
+            decoded={"payloadType": 4},
+        )
+        db_session.add(packet)
+        db_session.commit()
+
+        assert packet.id is not None
+        assert packet.received_at is not None
+        assert packet.created_at is not None
+        assert packet.updated_at is not None
+        assert packet.event_type == "channel_msg_recv"
+        assert packet.channel_idx == 42
+        assert packet.decoded == {"payloadType": 4}
+
+    def test_raw_packet_nullable_columns(self, db_session) -> None:
+        """Test that the optional columns accept None."""
+        packet = RawPacket()
+        db_session.add(packet)
+        db_session.commit()
+
+        assert packet.id is not None
+        assert packet.observer_node_id is None
+        assert packet.packet_hash is None
+        assert packet.raw_hex is None
+        assert packet.channel_idx is None
+        assert packet.source_pubkey_prefix is None
+        assert packet.decoded is None
+
+    def test_raw_packet_indexes(self) -> None:
+        """Test that the expected indexes are declared on the table."""
+        index_names = {idx.name for idx in RawPacket.__table__.indexes}  # type: ignore[attr-defined]
+        for expected in (
+            "ix_raw_packets_received_at",
+            "ix_raw_packets_event_type",
+            "ix_raw_packets_packet_hash",
+            "ix_raw_packets_channel_idx",
+            "ix_raw_packets_source_pubkey_prefix",
+            "ix_raw_packets_observer_node_id",
+            "ix_raw_packets_event_type_received_at",
+            "ix_raw_packets_channel_idx_received_at",
+            "ix_raw_packets_source_pubkey_prefix_received_at",
+        ):
+            assert expected in index_names
 
 
 class TestMessageModel:

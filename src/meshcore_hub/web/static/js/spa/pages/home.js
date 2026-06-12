@@ -4,7 +4,7 @@ import {
     getConfig, errorAlert, pageColors, renderStatCard, t,
 } from '../components.js';
 import {
-    iconDashboard, iconNodes, iconAdvertisements, iconMessages, iconMembers, iconMap,
+    iconDashboard, iconNodes, iconAdvertisements, iconMessages, iconPackets, iconMembers, iconMap,
     iconPage, iconInfo, iconChart, iconAntenna, iconUsers, iconChannel,
     iconSettings, iconFrequency, iconBandwidth, iconSpreadingFactor, iconCodingRate, iconTxPower,
 } from '../icons.js';
@@ -105,17 +105,23 @@ function renderHeroSection({ networkName, logoUrl, logoInvertLight, networkCity,
                     label: t('entities.messages'),
                     colorVar: '--color-messages',
                 }) : nothing}
-                ${features.members !== false ? renderNavCard({
-                    href: '/members',
-                    icon: iconMembers('w-full h-full'),
-                    label: t('entities.members'),
-                    colorVar: '--color-members',
+                ${features.packets === true ? renderNavCard({
+                    href: '/packets',
+                    icon: iconPackets('w-full h-full'),
+                    label: t('entities.packets'),
+                    colorVar: '--color-packets',
                 }) : nothing}
                 ${features.map !== false ? renderNavCard({
                     href: '/map',
                     icon: iconMap('w-full h-full'),
                     label: t('entities.map'),
                     colorVar: '--color-map',
+                }) : nothing}
+                ${features.members !== false ? renderNavCard({
+                    href: '/members',
+                    icon: iconMembers('w-full h-full'),
+                    label: t('entities.members'),
+                    colorVar: '--color-members',
                 }) : nothing}
             </div>
             ${features.pages !== false && customPages.length > 0 ? html`

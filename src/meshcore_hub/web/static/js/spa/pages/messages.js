@@ -9,6 +9,22 @@ import {
     observerIcons, observerDetailRow, toggleObserverDetail, toggleCardObserverDetail
 } from '../components.js';
 import { createAutoRefresh } from '../auto-refresh.js';
+import { iconPackets } from '../icons.js';
+
+function packetLink(packetHash, navigate) {
+    if (!packetHash) {
+        return nothing;
+    }
+    const icon = iconPackets('h-5 w-5 nav-icon-packets');
+    const title = t('packets.view_raw');
+    const url = `/packets?packet_hash=${packetHash}`;
+    if (navigate) {
+        return html`<span class="inline-flex cursor-pointer" title="${title}"
+            @click=${(e) => { e.preventDefault(); e.stopPropagation(); navigate(url); }}>${icon}</span>`;
+    }
+    return html`<a href="${url}" class="inline-flex" title="${title}"
+            @click=${(e) => e.stopPropagation()}>${icon}</a>`;
+}
 
 export async function render(container, params, router) {
     const { signal } = params || {};
@@ -25,6 +41,8 @@ export async function render(container, params, router) {
     const order = query.order || 'desc';
 
     const config = getConfig();
+    const features = config.features || {};
+    const packetsEnabled = features.packets === true;
     let channelLabels = new Map();
     const tz = config.timezone || '';
     const tzBadge = tz && tz !== 'UTC' ? html`<span class="text-sm opacity-60">${tz}</span>` : nothing;
@@ -265,6 +283,7 @@ ${displayContent}`, container);
                     </div>
                     <div class="flex items-center gap-2 flex-shrink-0">
                         ${receiversBlock}
+                        ${packetsEnabled ? packetLink(msg.packet_hash) : nothing}
                     </div>
                 </div>
                 <p class="text-sm mt-2 break-words whitespace-pre-wrap">${displayMessage}</p>
@@ -294,7 +313,7 @@ ${displayContent}`, container);
                 });
 
             const tableRows = messages.length === 0
-                ? html`<tr><td colspan="5" class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.messages').toLowerCase() })}</td></tr>`
+                ? html`<tr><td colspan=${packetsEnabled ? 6 : 5} class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.messages').toLowerCase() })}</td></tr>`
                 : messages.map(msg => {
                     const isChannel = msg.message_type === 'channel';
                     const typeIcon = isChannel ? '\u{1F4FB}' : '\u{1F464}';
@@ -321,6 +340,7 @@ ${displayContent}`, container);
                     </td>
                     <td class="break-words max-w-md" style="white-space: pre-wrap;">${displayMessage}</td>
                     <td>${receiversBlock}</td>
+                    ${packetsEnabled ? html`<td>${packetLink(msg.packet_hash)}</td>` : nothing}
                 </tr>${observerDetailRow(msg.observers || [])}`;
                 });
 
@@ -427,6 +447,7 @@ ${mobileSortSelect({
                 ${sortable(t('common.from'), 'from')}
                 ${sortable(t('entities.message'), 'message')}
                 <th>${t('common.observers')}</th>
+                ${packetsEnabled ? html`<th></th>` : nothing}
             </tr>
         </thead>
         <tbody>
