@@ -113,6 +113,11 @@ class RawPacket(Base, UUIDMixin, TimestampMixin):
             "source_pubkey_prefix",
             "received_at",
         ),
+        Index(
+            "ix_raw_packets_packet_hash_received_at",
+            "packet_hash",
+            "received_at",
+        ),
     )
 
     def __repr__(self) -> str:

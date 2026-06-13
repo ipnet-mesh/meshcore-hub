@@ -227,12 +227,19 @@
     "col_source": "Source",
     "col_route_type": "Route Type",
     "col_raw": "Raw",
+    "receptions_title": "Receptions",
+    "receptions_count": "Receptions",
+    "reception_singular": "path",
+    "reception_plural": "paths",
+    "col_path": "Path",
+    "col_receptions": "Receptions",
     "sort": {
       "newest": "Time (newest)",
       "oldest": "Time (oldest)",
       "event_az": "Event (A–Z)",
       "snr_high": "SNR (highest)",
-      "path_high": "Hops (most)"
+      "path_high": "Hops (most)",
+      "receptions_high": "Receptions (most)"
     }
   },
   "map": {
