@@ -226,12 +226,12 @@ class TestPacketsFeatureFlag:
         html = client.get("/").text
         assert 'href="/packets"' in html
 
-    def test_packets_disabled_by_default_in_settings(self) -> None:
-        """The declared default for feature_packets is False (env-independent)."""
+    def test_packets_enabled_by_default_in_settings(self) -> None:
+        """The declared default for feature_packets is True (env-independent)."""
         from meshcore_hub.common.config import WebSettings
 
         # Check the field default directly so a local .env cannot mask it.
-        assert WebSettings.model_fields["feature_packets"].default is False
+        assert WebSettings.model_fields["feature_packets"].default is True
 
 
 class TestFeatureFlagsIndividual:

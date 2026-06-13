@@ -14,6 +14,7 @@ export async function render(container, params, router) {
     const search = query.search || '';
     const adv_type = query.adv_type || '';
     const adopted_by = query.adopted_by || '';
+    const pubkey_prefix = query.pubkey_prefix || '';
     const page = parseInt(query.page, 10) || 1;
     const limit = parseInt(query.limit, 10) || 20;
     const offset = (page - 1) * limit;
@@ -56,6 +57,7 @@ ${displayContent}`, container);
         try {
             const apiParams = { limit, offset, search, adv_type, sort, order };
             if (adopted_by) apiParams.adopted_by = adopted_by;
+            if (pubkey_prefix) apiParams.pubkey_prefix = pubkey_prefix;
             const fetches = [apiGet('/api/v1/nodes', apiParams, { signal })];
             if (config.oidc_enabled) {
                 fetches.push(apiGet('/api/v1/user/profiles', { limit: 500 }, { signal }));
@@ -125,7 +127,7 @@ ${displayContent}`, container);
                 });
 
             const paginationBlock = pagination(page, totalPages, '/nodes', {
-                search, adv_type, adopted_by, limit, sort, order,
+                search, adv_type, adopted_by, pubkey_prefix, limit, sort, order,
             });
 
             const filterFields = [
@@ -182,7 +184,7 @@ ${displayContent}`, container);
                 defaultOpen: isFilterOpen,
             });
 
-            const headerParams = { search, adv_type, adopted_by, limit };
+            const headerParams = { search, adv_type, adopted_by, pubkey_prefix, limit };
             const sortable = (label, sortKey) => sortableTableHeader(label, {
                 sortKey, currentSort: sort, currentOrder: order,
                 navigate, basePath: '/nodes', params: headerParams,

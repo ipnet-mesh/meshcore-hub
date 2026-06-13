@@ -681,7 +681,7 @@ Key variables:
 - `WEB_AUTO_REFRESH_SECONDS` - Auto-refresh interval in seconds for list pages (default: `30`, `0` to disable)
 - `WEB_DEBUG` - Enable debug mode in the web dashboard (default: `false`)
 - `TZ` - Timezone for web dashboard date/time display (default: `UTC`, e.g., `America/New_York`, `Europe/London`)
-- `FEATURE_DASHBOARD`, `FEATURE_NODES`, `FEATURE_ADVERTISEMENTS`, `FEATURE_MESSAGES`, `FEATURE_MAP`, `FEATURE_MEMBERS`, `FEATURE_PAGES`, `FEATURE_CHANNELS`, `FEATURE_RADIO_CONFIG` - Feature flags to enable/disable specific web dashboard pages (default: all `true`). Dependencies: Dashboard auto-disables when all of Nodes/Advertisements/Messages are disabled. Map auto-disables when Nodes is disabled. `FEATURE_PACKETS` - enables the Packets page (default: `false`); in Compose it also drives `RAW_PACKET_CAPTURE_ENABLED` on the collector.
+- `FEATURE_DASHBOARD`, `FEATURE_NODES`, `FEATURE_ADVERTISEMENTS`, `FEATURE_MESSAGES`, `FEATURE_MAP`, `FEATURE_MEMBERS`, `FEATURE_PAGES`, `FEATURE_CHANNELS`, `FEATURE_RADIO_CONFIG` - Feature flags to enable/disable specific web dashboard pages (default: all `true`). Dependencies: Dashboard auto-disables when all of Nodes/Advertisements/Messages are disabled. Map auto-disables when Nodes is disabled. `FEATURE_PACKETS` - enables the Packets page (default: `true`); in Compose it also drives `RAW_PACKET_CAPTURE_ENABLED` on the collector.
 - `NETWORK_DOMAIN` - Network domain name (default: none)
 - `NETWORK_NAME` - Network display name (default: `MeshCore Network`)
 - `NETWORK_CITY` - Network city location (default: none)
@@ -770,9 +770,9 @@ When enabled, the collector automatically deletes event data older than the rete
 | Variable | Description |
 |----------|-------------|
 | `RAW_PACKET_CAPTURE_ENABLED` | Capture every packets-feed packet into `raw_packets` (default: false). In Compose, derived from `FEATURE_PACKETS`. |
-| `RAW_PACKET_RETENTION_DAYS` | Days to retain raw packets (default: falls back to `DATA_RETENTION_DAYS`). |
+| `RAW_PACKET_RETENTION_DAYS` | Days to retain raw packets before cleanup (default: `7`, independent of `DATA_RETENTION_DAYS`). |
 
-When enabled, the collector writes one `RawPacket` row per observer reception from the LetsMesh `packets` feed, reusing the decode the normalizer already performs (decoder per-hex cache). The `/packets` API serves these with channel-visibility redaction (restricted-channel packets returned metadata-only) and a role-aware Redis cache key. The web Packets page is gated behind `FEATURE_PACKETS` (default off). Raw-packet retention cleanup runs whenever data cleanup runs, regardless of the capture flag.
+When enabled, the collector writes one `RawPacket` row per observer reception from the LetsMesh `packets` feed, reusing the decode the normalizer already performs (decoder per-hex cache). The `/packets` API serves these with channel-visibility redaction (restricted-channel packets returned metadata-only) and a role-aware Redis cache key. A companion `/api/v1/packet-groups` endpoint deduplicates by `packet_hash` (one row per transmission, with all per-observer receptions and routing paths) and backs the SPA packet-detail page at `/packets/hash/:hash`. The web Packets page is gated behind `FEATURE_PACKETS` (default on). The Adverts/Messages list rows link directly to that packet-detail page; path-hash badges there look up matching nodes via `GET /api/v1/nodes?pubkey_prefix=<hex>` (case-insensitive `startswith` on `public_key`). Raw-packet retention cleanup runs whenever data cleanup runs, regardless of the capture flag.
 
 **Node Cleanup:**
 

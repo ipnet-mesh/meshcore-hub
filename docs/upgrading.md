@@ -20,9 +20,9 @@ This creates the `raw_packets` table and its indexes. On Docker deployments the 
 
 | Variable                     | Default                | Description                                                                                  |
 | ---------------------------- | ---------------------- | -------------------------------------------------------------------------------------------- |
-| `FEATURE_PACKETS`            | `false`                | Show the Packets page and nav entry. Off by default.                                          |
+| `FEATURE_PACKETS`            | `true`                 | Show the Packets page and nav entry. On by default.                                           |
 | `RAW_PACKET_CAPTURE_ENABLED` | `false`                | Collector-side capture of raw packets. In Compose this is **derived from `FEATURE_PACKETS`**. |
-| `RAW_PACKET_RETENTION_DAYS`  | = `DATA_RETENTION_DAYS` | Days to retain raw packets, independent of the global retention window.                       |
+| `RAW_PACKET_RETENTION_DAYS`  | `7`                    | Days to retain raw packets, independent of the global retention window.                       |
 
 **Capture ↔ page split:** capture runs in the collector while the page is served by the web app — two separate processes with separate settings. Docker Compose links them: setting `FEATURE_PACKETS=true` enables **both** capture (`RAW_PACKET_CAPTURE_ENABLED=${FEATURE_PACKETS}` on the collector) and the page. Advanced operators running the processes directly can set the two flags independently.
 
@@ -32,15 +32,30 @@ This creates the `raw_packets` table and its indexes. On Docker deployments the 
 
 **Caching:** `/packets` responses are cached in Redis (when enabled) using a **role-aware** cache key and honour the existing `REDIS_CACHE_TTL`, so redacted responses are never served across roles.
 
-The `advertisements` and `messages` tables gain a nullable `packet_hash` column (added by the same `db upgrade`) so each event can link to its captured raw packets. When `FEATURE_PACKETS` is on, the Adverts and Messages list pages show a packet icon linking to the raw packets for that transmission. Only events ingested while capture was enabled carry the hash (no backfill), so the link is hidden for older rows.
+The `advertisements` and `messages` tables gain a nullable `packet_hash` column (added by the same `db upgrade`) so each event can link to its captured raw packets. When `FEATURE_PACKETS` is on, the entire Adverts/Messages list row links to that transmission's deduplicated packet-detail page (see below). Only events ingested while capture was enabled carry the hash (no backfill), so non-capturing rows are not clickable.
 
-**No action required** to keep current behaviour — the feature is off by default.
+**On by default:** as of v0.13.0 `FEATURE_PACKETS` defaults to `true` (was `false`). To keep the page hidden and capture off, set `FEATURE_PACKETS=false`.
 
 ### Finer-Grained Packet Classification
 
 Packets the collector previously could not categorise were all emitted as a single `letsmesh_packet` event. They are now classified by their MeshCore payload type — `req`, `response`, `ack`, `encrypted_direct`, `encrypted_channel`, `grp_data`, `anon_req`, `multipart`, `control`, `raw_custom`, plus `advert`/`path`/`trace` for malformed variants. `letsmesh_packet` remains only as a safety net for packets whose payload type can't be resolved.
 
 **Action only if you consume `event_type`:** any external webhook filter, saved query, or dashboard keyed on `letsmesh_packet` should be updated to the specific type(s) it cares about. No database migration or config change is involved.
+
+### Deduplicated Packet Detail & Node Path Lookup
+
+The Packets experience is now centred on a **deduplicated packet-detail page** (`/packets/hash/:hash`, backed by `GET /api/v1/packet-groups`): one entry per `packet_hash`, listing every observer reception with its SNR and full routing path. Each hop renders as a **path-hash badge**; clicking a badge opens a popover that looks up the node(s) whose public key starts with that 1–3 byte hex prefix (via the new `pubkey_prefix` query param on `GET /api/v1/nodes`) and links to each node's detail page, capped at 8 with a link through to the prefix-filtered Nodes page.
+
+Adverts and Messages list rows (desktop and mobile) now link **directly** to this packet-detail page instead of a filtered packet list. The old per-row packet icon, the inline observer-expansion row, and the `/packets` packet-hash filter chip have been removed; the observer-count column remains.
+
+**Defaults changed in this release:**
+
+- `FEATURE_PACKETS` now defaults to `true` (page on, and capture on in Compose).
+- `RAW_PACKET_RETENTION_DAYS` now defaults to `7` days, independent of `DATA_RETENTION_DAYS` (previously fell back to it). Lower it on busy meshes or constrained storage.
+
+Because raw packets are pruned after 7 days, opening an old advert/message's packet link may 404 once the underlying packets have been cleaned up; the detail page now shows a friendly "Packet not found — it may have been cleaned up due to data retention" message instead of a generic error.
+
+**No migration or action required** beyond the defaults above; override either variable in your `.env` to restore prior behaviour.
 
 ## v0.12.0
 

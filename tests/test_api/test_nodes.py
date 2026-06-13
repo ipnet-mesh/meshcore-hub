@@ -168,6 +168,48 @@ class TestListNodesFilters:
         assert room_node.public_key in room_keys
         assert name_only_room_node.public_key not in room_keys
 
+    def test_filter_by_pubkey_prefix(self, client_no_auth, api_db_session):
+        """pubkey_prefix returns only nodes whose public key starts with it."""
+        from datetime import datetime, timezone
+
+        from meshcore_hub.common.models import Node
+
+        match_a = Node(
+            public_key="ab" + "0" * 62, first_seen=datetime.now(timezone.utc)
+        )
+        match_b = Node(
+            public_key="ab" + "1" * 62, first_seen=datetime.now(timezone.utc)
+        )
+        non_match = Node(
+            public_key="cd" + "0" * 62, first_seen=datetime.now(timezone.utc)
+        )
+        api_db_session.add_all([match_a, match_b, non_match])
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/nodes?pubkey_prefix=ab")
+        assert response.status_code == 200
+        keys = {item["public_key"] for item in response.json()["items"]}
+        assert match_a.public_key in keys
+        assert match_b.public_key in keys
+        assert non_match.public_key not in keys
+
+    def test_filter_by_pubkey_prefix_is_case_insensitive(
+        self, client_no_auth, api_db_session
+    ):
+        """An uppercase prefix matches lowercase-stored public keys."""
+        from datetime import datetime, timezone
+
+        from meshcore_hub.common.models import Node
+
+        node = Node(public_key="ab" + "0" * 62, first_seen=datetime.now(timezone.utc))
+        api_db_session.add(node)
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/nodes?pubkey_prefix=AB")
+        assert response.status_code == 200
+        keys = {item["public_key"] for item in response.json()["items"]}
+        assert node.public_key in keys
+
     def test_filter_by_observer_true(
         self, client_no_auth, api_db_session, receiver_node
     ):

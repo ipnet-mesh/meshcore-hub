@@ -69,6 +69,7 @@ flowchart LR
 ## Features
 
 - **Event Persistence**: Store messages, advertisements, telemetry, and trace data
+- **Raw Packet Inspection**: Capture, browse, and search raw wire packets; a deduplicated packet view shows every observer reception and routing path, with clickable path-hash badges that look up the matching nodes
 - **REST API**: Query historical data with filtering and pagination
 - **Node Tagging**: Add custom metadata to nodes for organization
 - **Web Dashboard**: Visualize network status, node locations, and message history
@@ -374,6 +375,8 @@ The collector automatically cleans up old event data and inactive nodes:
 | `DATA_RETENTION_INTERVAL_HOURS` | `24`    | Hours between cleanup runs               |
 | `NODE_CLEANUP_ENABLED`          | `true`  | Enable removal of inactive nodes         |
 | `NODE_CLEANUP_DAYS`             | `30`    | Remove nodes not seen for this many days |
+| `RAW_PACKET_CAPTURE_ENABLED`    | `false` | Capture raw packets into `raw_packets`. In Compose, derived from `FEATURE_PACKETS` |
+| `RAW_PACKET_RETENTION_DAYS`     | `7`     | Days to retain raw packets (independent of `DATA_RETENTION_DAYS`) |
 
 ### API Settings
 
@@ -478,6 +481,7 @@ Control which pages are visible in the web dashboard. Disabled features are full
 | `FEATURE_PAGES`          | `true`  | Enable custom markdown pages                          |
 | `FEATURE_CHANNELS`       | `true`  | Enable the `/channels` page                          |
 | `FEATURE_RADIO_CONFIG`   | `true`  | Show radio config panel on home page                 |
+| `FEATURE_PACKETS`        | `true`  | Enable the `/packets` raw-packet browser. In Compose this also drives `RAW_PACKET_CAPTURE_ENABLED` on the collector |
 
 **Dependencies:** Dashboard auto-disables when all of Nodes/Advertisements/Messages are disabled. Map auto-disables when Nodes is disabled. Members auto-disables when OIDC is disabled (set via `OIDC_ENABLED`).
 
