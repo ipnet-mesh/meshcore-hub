@@ -299,6 +299,83 @@ class TestListPacketGroups:
         assert "limit=10" in key
 
 
+class TestPathHashBytes:
+    """Tests for the derived path_hash_bytes field on the list endpoint."""
+
+    def test_one_byte_path(self, client_no_auth, api_db_session):
+        api_db_session.add(
+            RawPacket(
+                raw_hex="AA",
+                packet_hash="H1",
+                decoded={"path": ["aa", "bb"]},
+                received_at=_now(),
+            )
+        )
+        api_db_session.commit()
+        item = client_no_auth.get("/api/v1/packet-groups").json()["items"][0]
+        assert item["path_hash_bytes"] == 1
+
+    def test_two_byte_path(self, client_no_auth, api_db_session):
+        api_db_session.add(
+            RawPacket(
+                raw_hex="AA",
+                packet_hash="H1",
+                decoded={"path": ["aabb"]},
+                received_at=_now(),
+            )
+        )
+        api_db_session.commit()
+        item = client_no_auth.get("/api/v1/packet-groups").json()["items"][0]
+        assert item["path_hash_bytes"] == 2
+
+    def test_mixed_path_uses_max(self, client_no_auth, api_db_session):
+        api_db_session.add(
+            RawPacket(
+                raw_hex="AA",
+                packet_hash="H1",
+                decoded={"path": ["aa", "aabb"]},
+                received_at=_now(),
+            )
+        )
+        api_db_session.commit()
+        item = client_no_auth.get("/api/v1/packet-groups").json()["items"][0]
+        assert item["path_hash_bytes"] == 2
+
+    def test_no_path_returns_none(self, client_no_auth, api_db_session):
+        api_db_session.add(
+            RawPacket(raw_hex="AA", packet_hash="H1", received_at=_now())
+        )
+        api_db_session.commit()
+        item = client_no_auth.get("/api/v1/packet-groups").json()["items"][0]
+        assert item["path_hash_bytes"] is None
+
+    def test_redacted_path_width_hidden(self, client_no_auth, api_db_session):
+        adm_key = "FFEEDDCCBBAA99887766554433221100"
+        adm_idx = int(Channel.compute_channel_hash(adm_key), 16)
+        api_db_session.add(
+            Channel(
+                name="Adm",
+                key_hex=adm_key,
+                channel_hash=Channel.compute_channel_hash(adm_key),
+                visibility="admin",
+                enabled=True,
+            )
+        )
+        api_db_session.add(
+            RawPacket(
+                raw_hex="SECRET",
+                packet_hash="ADM_HASH",
+                channel_idx=adm_idx,
+                decoded={"path": ["aabb"]},
+                received_at=_now(),
+            )
+        )
+        api_db_session.commit()
+        item = client_no_auth.get("/api/v1/packet-groups").json()["items"][0]
+        assert item["redacted"] is True
+        assert item["path_hash_bytes"] is None
+
+
 class TestGetPacketGroup:
     """Tests for GET /packet-groups/{hash} (detail)."""
 
@@ -523,6 +600,28 @@ class TestExtractPathHashes:
 
         decoded = {"payload": {"decoded": {"pathHashes": ["AA", "BB"]}}}
         assert _extract_path_hashes(decoded) == ["AA", "BB"]
+
+    def test_extracts_top_level_path(self):
+        from meshcore_hub.api.routes.packet_groups import _extract_path_hashes
+
+        # Normal (flood/advertisement) packets carry the routing path here.
+        decoded = {"path": ["16", "69", "23"], "pathLength": 3}
+        assert _extract_path_hashes(decoded) == ["16", "69", "23"]
+
+    def test_top_level_path_takes_precedence(self):
+        from meshcore_hub.api.routes.packet_groups import _extract_path_hashes
+
+        decoded = {
+            "path": ["16", "69"],
+            "payload": {"decoded": {"pathHashes": ["AA"]}},
+        }
+        assert _extract_path_hashes(decoded) == ["16", "69"]
+
+    def test_empty_top_level_path_falls_back(self):
+        from meshcore_hub.api.routes.packet_groups import _extract_path_hashes
+
+        decoded = {"path": [], "payload": {"decoded": {"pathHashes": ["AA"]}}}
+        assert _extract_path_hashes(decoded) == ["AA"]
 
     def test_none_input(self):
         from meshcore_hub.api.routes.packet_groups import _extract_path_hashes

@@ -1,7 +1,7 @@
 """add packet_hash_received_at composite index
 
-Revision ID: a1b2c3d4e5f6
-Revises: e9f0c4079540
+Revision ID: c3d4e5f6a7b8
+Revises: e8eb47c49062
 Create Date: 2026-06-13 07:30:00.000000+00:00
 
 """
@@ -10,8 +10,8 @@ from typing import Sequence, Union
 
 from alembic import op
 
-revision: str = "a1b2c3d4e5f6"
-down_revision: Union[str, None] = "e9f0c4079540"
+revision: str = "c3d4e5f6a7b8"
+down_revision: Union[str, None] = "e8eb47c49062"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

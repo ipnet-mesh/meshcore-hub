@@ -149,9 +149,10 @@ class CollectorSettings(CommonSettings):
         description="Capture every inbound packets-feed packet into raw_packets",
     )
     raw_packet_retention_days: Optional[int] = Field(
-        default=None,
+        default=7,
         description=(
-            "Days to retain raw packets (defaults to DATA_RETENTION_DAYS when unset)"
+            "Days to retain raw packets before cleanup (default 7, independent of "
+            "DATA_RETENTION_DAYS)"
         ),
         ge=1,
     )
@@ -432,7 +433,7 @@ class WebSettings(CommonSettings):
         default=True, description="Enable the /channels page"
     )
     feature_packets: bool = Field(
-        default=False, description="Enable the /packets page (off by default)"
+        default=True, description="Enable the /packets page (on by default)"
     )
     feature_pages: bool = Field(
         default=True, description="Enable custom markdown pages"

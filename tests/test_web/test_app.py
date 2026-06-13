@@ -10,6 +10,7 @@ from meshcore_hub.web.app import (
     _AUTHENTICATED,
     _OPEN,
     _build_config_json,
+    _build_endpoint_access,
     check_api_access,
     create_app,
 )
@@ -247,6 +248,21 @@ class TestCheckApiAccess:
             frozenset({"operator"}),
             user_id="user-1",
             mapping=mapping,
+        )
+
+    def test_built_mapping_allows_anonymous_packet_groups(self) -> None:
+        """The real mapping exposes packet-groups as open (regression for 403).
+
+        ``v1/packet-groups`` is not a prefix of ``v1/packets`` ("packets" vs
+        "packet-"), so it needs its own entry or the proxy denies it.
+        """
+        mapping = _build_endpoint_access(role_admin="admin")
+        assert check_api_access(
+            "v1/packet-groups", "GET", False, frozenset(), mapping=mapping
+        )
+        # Detail route is covered by prefix match.
+        assert check_api_access(
+            "v1/packet-groups/abc123", "GET", False, frozenset(), mapping=mapping
         )
 
 

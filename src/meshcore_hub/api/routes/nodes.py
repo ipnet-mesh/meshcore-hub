@@ -51,6 +51,9 @@ def list_nodes(
     search: Optional[str] = Query(
         None, description="Search in name tag, node name, or public key"
     ),
+    pubkey_prefix: Optional[str] = Query(
+        None, description="Filter to nodes whose public key starts with this hex prefix"
+    ),
     adv_type: Optional[str] = Query(None, description="Filter by advertisement type"),
     adopted_by: Optional[str] = Query(
         None, description="Filter by adopting user profile UUID"
@@ -88,6 +91,11 @@ def list_nodes(
                 ),
             )
         )
+
+    if pubkey_prefix:
+        # Public keys are stored lowercase; lowercase the prefix for a
+        # case-insensitive startswith match (path-hash badges are hex prefixes).
+        query = query.where(Node.public_key.startswith(pubkey_prefix.lower()))
 
     if adv_type:
         normalized_adv_type = adv_type.strip().lower()

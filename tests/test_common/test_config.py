@@ -51,12 +51,12 @@ class TestCollectorSettings:
         assert settings.database_url == "postgresql://user@host/db"
         assert settings.effective_database_url == "postgresql://user@host/db"
 
-    def test_raw_packet_retention_defaults_to_global(self) -> None:
-        """Unset raw_packet_retention_days resolves to data_retention_days."""
+    def test_raw_packet_retention_defaults_to_7(self) -> None:
+        """Unset raw_packet_retention_days defaults to 7, independent of global."""
         settings = CollectorSettings(_env_file=None, data_retention_days=12)
 
-        assert settings.raw_packet_retention_days is None
-        assert settings.effective_raw_packet_retention_days == 12
+        assert settings.raw_packet_retention_days == 7
+        assert settings.effective_raw_packet_retention_days == 7
 
     def test_raw_packet_retention_explicit_override(self) -> None:
         """An explicit raw_packet_retention_days wins over the global value."""

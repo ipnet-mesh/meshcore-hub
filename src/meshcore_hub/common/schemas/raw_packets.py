@@ -98,6 +98,13 @@ class GroupedPacketRead(BaseModel):
     source_pubkey_prefix: Optional[str] = Field(default=None)
     reception_count: int = Field(..., description="Total rows (paths × observers)")
     observer_count: int = Field(..., description="Distinct observer nodes")
+    path_hash_bytes: Optional[int] = Field(
+        default=None,
+        description=(
+            "Widest path-hash prefix width in bytes (1/2/3) for the "
+            "representative reception"
+        ),
+    )
     receptions: list[PacketReceptionInfo] = Field(
         default_factory=list,
         description="Individual receptions (populated for detail, empty for list)",

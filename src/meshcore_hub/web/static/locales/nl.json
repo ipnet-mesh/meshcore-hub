@@ -173,6 +173,13 @@
     "col_source": "Bron",
     "col_route_type": "Routetype",
     "col_raw": "Ruw",
+    "hops_hidden": "{{count}} hops verborgen",
+    "path_nodes_title": "Knooppunten voor {{hash}}",
+    "path_no_nodes": "Geen knooppunten gevonden",
+    "path_nodes_more": "+{{count}} meer — alle bekijken →",
+    "not_found_retention": "Pakket niet gevonden — mogelijk opgeschoond door dataretentie.",
+    "path_width_bytes": "{{count}}B",
+    "path_width_title": "Breedte pad-hash (bytes)",
     "sort": {
       "newest": "Tijd (nieuwste)",
       "oldest": "Tijd (oudste)",

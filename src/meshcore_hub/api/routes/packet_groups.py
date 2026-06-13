@@ -34,13 +34,29 @@ def _group_key_builder(request: Request) -> str:
 
 
 def _extract_path_hashes(decoded: dict[str, Any] | None) -> list[str] | None:
-    """Extract pathHashes from decoded.payload.decoded.pathHashes."""
+    """Extract the routing path (per-hop node hash bytes) from a decoded packet.
+
+    The path lives at the top level as ``decoded.path`` for normal packets
+    (flood/advertisement/etc.). Trace-style packets instead carry it at
+    ``decoded.payload.decoded.pathHashes``, so that is used as a fallback.
+    """
     if not decoded:
         return None
+    path = decoded.get("path")
+    if isinstance(path, list) and path:
+        return path
     payload = decoded.get("payload") or {}
     inner = payload.get("decoded") or {}
     hashes = inner.get("pathHashes")
     return hashes if isinstance(hashes, list) else None
+
+
+def _path_hash_byte_width(path_hashes: Optional[list[str]]) -> Optional[int]:
+    """Widest path-hash prefix width in bytes (each hash is hex: 2/4/6 chars)."""
+    if not path_hashes:
+        return None
+    widths = [len(h) // 2 for h in path_hashes if isinstance(h, str) and h]
+    return max(widths) if widths else None
 
 
 def _get_tag_name(node: Optional[Node]) -> Optional[str]:
@@ -145,7 +161,9 @@ def list_packet_groups(
     group_query = group_query.offset(offset).limit(limit)
 
     group_rows = session.execute(group_query).all()
-    hashes = [r.packet_hash for r in group_rows]
+    # packet_hash is never None here (group_query filters is_not(None)); the
+    # explicit guard + annotation narrows the type for downstream dict lookups.
+    hashes: list[str] = [r.packet_hash for r in group_rows if r.packet_hash is not None]
 
     if not hashes:
         return GroupedPacketList(items=[], total=total, limit=limit, offset=offset)
@@ -177,6 +195,20 @@ def list_packet_groups(
 
     group_counts = {r.packet_hash: r for r in group_rows}
 
+    # ── Phase 3: path-hash width — load decoded only for representative rows ───
+    rep_id_to_hash = {rep.id: h for h, rep in representative.items()}
+    width_by_hash: dict[str, Optional[int]] = {}
+    if rep_id_to_hash:
+        decoded_rows = session.execute(
+            select(RawPacket.id, RawPacket.decoded).where(
+                RawPacket.id.in_(rep_id_to_hash.keys())
+            )
+        ).all()
+        for rid, decoded in decoded_rows:
+            h = rep_id_to_hash.get(rid)
+            if h is not None:
+                width_by_hash[h] = _path_hash_byte_width(_extract_path_hashes(decoded))
+
     items = []
     for h in hashes:
         rep = representative.get(h)
@@ -199,6 +231,7 @@ def list_packet_groups(
                 ),
                 reception_count=grp.reception_count,
                 observer_count=grp.observer_count,
+                path_hash_bytes=(None if is_redacted else width_by_hash.get(h)),
                 receptions=[],
                 first_seen=grp.first_seen,
                 redacted=is_redacted,

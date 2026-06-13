@@ -7,6 +7,7 @@ import {
     renderFilterCard, autoSubmit, submitOnEnter
 } from '../components.js';
 import { createAutoRefresh } from '../auto-refresh.js';
+import { iconSatelliteDish, iconPath } from '../icons.js';
 
 const EVENT_TYPES = [
     'advertisement', 'channel_msg_recv', 'contact_msg_recv',
@@ -32,14 +33,20 @@ function channelLabel(packet, channelNames) {
 function receptionBadge(packet) {
     const rc = packet.reception_count ?? 1;
     const oc = packet.observer_count ?? 1;
-    return html`<span class="badge badge-sm badge-ghost font-mono">${rc} × ${oc}</span>`;
+    const pb = packet.path_hash_bytes;
+    return html`<span class="inline-flex items-center gap-1">
+        ${iconSatelliteDish('h-4 w-4 opacity-70')}
+        <span class="badge badge-sm badge-primary" title=${t('common.observers')}>${oc}</span>
+        ${iconPath('h-4 w-4 opacity-70')}
+        <span class="badge badge-sm badge-primary" title=${t('packets.reception_plural')}>${rc}</span>
+        ${pb ? html`<span class="badge badge-sm badge-ghost" title=${t('packets.path_width_title')}>${t('packets.path_width_bytes', { count: pb })}</span>` : nothing}
+    </span>`;
 }
 
 export async function render(container, params, router) {
     const { signal } = params || {};
     const query = params.query || {};
     const search = query.search || '';
-    const packet_hash = query.packet_hash || '';
     const event_type = query.event_type || '';
     const channel_idx = query.channel_idx || '';
     const page = parseInt(query.page, 10) || 1;
@@ -83,7 +90,6 @@ ${displayContent}`, container);
     async function fetchAndRenderData() {
         try {
             const apiParams = { limit, offset, search, sort, order };
-            if (packet_hash) apiParams.packet_hash = packet_hash;
             if (event_type) apiParams.event_type = event_type;
             if (channel_idx !== '') apiParams.channel_idx = channel_idx;
 
@@ -139,7 +145,7 @@ ${displayContent}`, container);
                 </tr>`);
 
             const paginationBlock = pagination(page, totalPages, '/packets', {
-                search, packet_hash, event_type, channel_idx, limit, sort, order,
+                search, event_type, channel_idx, limit, sort, order,
             });
 
             const filterFields = [
@@ -178,23 +184,13 @@ ${displayContent}`, container);
                 defaultOpen: isFilterOpen,
             });
 
-            const headerParams = { search, packet_hash, event_type, channel_idx, limit };
+            const headerParams = { search, event_type, channel_idx, limit };
             const sortable = (label, sortKey) => sortableTableHeader(label, {
                 sortKey, currentSort: sort, currentOrder: order,
                 navigate, basePath: '/packets', params: headerParams,
             });
 
-            const packetHashChip = packet_hash
-                ? html`<div class="flex items-center gap-2 mb-3">
-                    <span class="badge badge-neutral inline-flex items-center">
-                        <code class="font-mono text-xs leading-none">${packet_hash}</code>
-                    </span>
-                    <a href="/packets" class="btn btn-xs btn-ghost">${t('common.clear_filters')}</a>
-                </div>`
-                : nothing;
-
             renderPage(html`${filterCard}
-${packetHashChip}
 
 ${mobileSortSelect({
     currentSort: sort, currentOrder: order,

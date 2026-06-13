@@ -1,30 +1,13 @@
 import { apiGet, isAbortError } from '../api.js';
 import {
     html, litRender, nothing, t,
-    getConfig, formatDateTime, formatDateTimeShort, formatRelativeTime,
+    getConfig, formatDateTime, formatDateTimeShort,
     warningBadge,
     pagination, sortableTableHeader, mobileSortSelect,
     renderFilterCard, autoSubmit, submitOnEnter, copyToClipboard, renderNodeDisplay,
-    observerIcons, observerDetailRow, toggleObserverDetail, toggleCardObserverDetail
+    observerIcons
 } from '../components.js';
 import { createAutoRefresh } from '../auto-refresh.js';
-import { iconPackets } from '../icons.js';
-
-function packetLink(packetHash, navigate) {
-    if (!packetHash) {
-        return nothing;
-    }
-    const icon = iconPackets('h-5 w-5 nav-icon-packets');
-    const title = t('packets.view_raw');
-    const url = `/packets?packet_hash=${packetHash}`;
-    if (navigate) {
-        // Inside a card that is itself an <a>: use a span to avoid nested anchors.
-        return html`<span class="inline-flex cursor-pointer" title="${title}"
-            @click=${(e) => { e.preventDefault(); e.stopPropagation(); navigate(url); }}>${icon}</span>`;
-    }
-    return html`<a href="${url}" class="inline-flex" title="${title}"
-            @click=${(e) => e.stopPropagation()}>${icon}</a>`;
-}
 
 function routeTypeBadge(routeType) {
     if (!routeType) {
@@ -60,6 +43,17 @@ export async function render(container, params, router) {
     const tz = config.timezone || '';
     const tzBadge = tz && tz !== 'UTC' ? html`<span class="text-sm opacity-60">${tz}</span>` : nothing;
     const navigate = (url) => router.navigate(url);
+    // For links nested inside a row/card whose own @click navigates elsewhere:
+    // suppress the row handler and drive SPA navigation explicitly (the router
+    // listens on document, so stopPropagation alone would force a full reload).
+    const stopAndNavigate = (url) => (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        navigate(url);
+    };
+    // Packet-detail target for a row/card, or null when not navigable.
+    const packetDetailUrl = (packetHash) =>
+        (packetsEnabled && packetHash) ? `/packets/hash/${packetHash}` : null;
 
     let lastContent = nothing;
     let lastTotal = null;
@@ -143,54 +137,38 @@ ${displayContent}`, container);
                     const adDescription = ad.node_tag_description;
                     let receiversBlock = nothing;
                     if (ad.observers && ad.observers.length >= 1) {
-                        receiversBlock = html`<span @click=${toggleCardObserverDetail} class="cursor-pointer">${observerIcons(ad.observers)}</span>`;
+                        receiversBlock = observerIcons(ad.observers);
                     } else if (ad.observed_by) {
                         receiversBlock = html`<span class="opacity-50 text-xs">\u{1F4E1}</span>`;
                     }
-                    return html`<a href="/nodes/${ad.public_key}" class="card bg-base-100 shadow-sm block">
+                    const detailUrl = packetDetailUrl(ad.packet_hash);
+                    return html`<div class="card bg-base-100 shadow-sm block ${detailUrl ? 'cursor-pointer' : ''}"
+                @click=${detailUrl ? () => navigate(detailUrl) : undefined}>
             <div class="card-body p-3">
                 <div class="flex items-center justify-between gap-2">
-                    ${renderNodeDisplay({
-                        name: adName,
-                        description: adDescription,
-                        publicKey: ad.public_key,
-                        advType: ad.adv_type,
-                        size: 'sm'
-                    })}
+                    <a href="/nodes/${ad.public_key}" class="min-w-0" @click=${stopAndNavigate(`/nodes/${ad.public_key}`)}>
+                        ${renderNodeDisplay({
+                            name: adName,
+                            description: adDescription,
+                            publicKey: ad.public_key,
+                            advType: ad.adv_type,
+                            size: 'sm'
+                        })}
+                    </a>
                     <div class="text-right flex-shrink-0">
                         <div class="text-xs opacity-60">${formatDateTimeShort(ad.received_at)}</div>
                         <div class="flex items-center justify-end gap-1">
                             ${routeTypeBadge(ad.route_type)}
                             ${receiversBlock}
-                            ${packetsEnabled ? packetLink(ad.packet_hash, navigate) : nothing}
                         </div>
                     </div>
                 </div>
-                ${ad.observers && ad.observers.length > 0 ? html`
-                    <div class="observer-detail-card hidden mt-2">
-                        <table class="table table-xs w-full">
-                            <thead><tr><th>Observer</th><th>${t('common.snr_db')}</th><th>Received</th></tr></thead>
-                            <tbody>
-                                ${ad.observers.map(o => {
-                                    const dn = o.tag_name || o.name || o.public_key.slice(0, 12);
-                                    const snrD = o.snr != null ? `${Number(o.snr).toFixed(1)}` : '\u2014';
-                                    const timeD = formatRelativeTime(o.observed_at);
-                                    return html`<tr>
-                                        <td>\u{1F4E1} <a href="/nodes/${o.public_key}" class="link link-hover">${dn}</a></td>
-                                        <td>${snrD}</td>
-                                        <td><span title=${formatDateTime(o.observed_at)}>${timeD}</span></td>
-                                    </tr>`;
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                ` : nothing}
             </div>
-        </a>`;
+        </div>`;
                 });
 
             const tableRows = advertisements.length === 0
-                ? html`<tr><td colspan=${packetsEnabled ? 6 : 5} class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.advertisements').toLowerCase() })}</td></tr>`
+                ? html`<tr><td colspan="5" class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.advertisements').toLowerCase() })}</td></tr>`
                 : advertisements.map(ad => {
                     const adName = ad.node_tag_name || ad.node_name || ad.name;
                     const adDescription = ad.node_tag_description;
@@ -202,9 +180,11 @@ ${displayContent}`, container);
                     } else {
                         receiversBlock = html`<span class="opacity-50">-</span>`;
                     }
-                    return html`<tr class="hover cursor-pointer" @click=${toggleObserverDetail}>
+                    const detailUrl = packetDetailUrl(ad.packet_hash);
+                    return html`<tr class="${detailUrl ? 'hover cursor-pointer' : ''}"
+                    @click=${detailUrl ? () => navigate(detailUrl) : undefined}>
                     <td>
-                        <a href="/nodes/${ad.public_key}" class="link link-hover">
+                        <a href="/nodes/${ad.public_key}" class="link link-hover" @click=${stopAndNavigate(`/nodes/${ad.public_key}`)}>
                             ${renderNodeDisplay({
                                 name: adName,
                                 description: adDescription,
@@ -222,8 +202,7 @@ ${displayContent}`, container);
                     <td>${routeTypeBadge(ad.route_type)}</td>
                     <td class="text-sm whitespace-nowrap">${formatDateTime(ad.received_at)}</td>
                     <td>${receiversBlock}</td>
-                    ${packetsEnabled ? html`<td>${packetLink(ad.packet_hash)}</td>` : nothing}
-                </tr>${observerDetailRow(ad.observers || [], null, { hidePath: true })}`;
+                </tr>`;
                 });
 
             const paginationBlock = pagination(page, totalPages, '/advertisements', {
@@ -320,7 +299,6 @@ ${mobileSortSelect({
                 <th>${t('advertisements.col_route_type')}</th>
                 ${sortable(t('common.time'), 'time')}
                 <th>${t('common.observers')}</th>
-                ${packetsEnabled ? html`<th></th>` : nothing}
             </tr>
         </thead>
         <tbody>

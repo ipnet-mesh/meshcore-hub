@@ -1,30 +1,14 @@
 import { apiGet, isAbortError } from '../api.js';
 import {
     html, litRender, nothing, t,
-    getConfig, formatDateTime, formatDateTimeShort, formatRelativeTime,
+    getConfig, formatDateTime, formatDateTimeShort,
     getChannelLabelsMap, resolveChannelLabel,
-    truncateKey, warningBadge,
+    warningBadge,
     pagination, sortableTableHeader, mobileSortSelect, timezoneIndicator,
     renderFilterCard, autoSubmit, submitOnEnter,
-    observerIcons, observerDetailRow, toggleObserverDetail, toggleCardObserverDetail
+    observerIcons
 } from '../components.js';
 import { createAutoRefresh } from '../auto-refresh.js';
-import { iconPackets } from '../icons.js';
-
-function packetLink(packetHash, navigate) {
-    if (!packetHash) {
-        return nothing;
-    }
-    const icon = iconPackets('h-5 w-5 nav-icon-packets');
-    const title = t('packets.view_raw');
-    const url = `/packets?packet_hash=${packetHash}`;
-    if (navigate) {
-        return html`<span class="inline-flex cursor-pointer" title="${title}"
-            @click=${(e) => { e.preventDefault(); e.stopPropagation(); navigate(url); }}>${icon}</span>`;
-    }
-    return html`<a href="${url}" class="inline-flex" title="${title}"
-            @click=${(e) => e.stopPropagation()}>${icon}</a>`;
-}
 
 export async function render(container, params, router) {
     const { signal } = params || {};
@@ -47,6 +31,9 @@ export async function render(container, params, router) {
     const tz = config.timezone || '';
     const tzBadge = tz && tz !== 'UTC' ? html`<span class="text-sm opacity-60">${tz}</span>` : nothing;
     const navigate = (url) => router.navigate(url);
+    // Packet-detail target for a row/card, or null when not navigable.
+    const packetDetailUrl = (packetHash) =>
+        (packetsEnabled && packetHash) ? `/packets/hash/${packetHash}` : null;
 
     function channelInfo(msg) {
         if (msg.message_type !== 'channel') {
@@ -261,11 +248,13 @@ ${displayContent}`, container);
                         : sender;
                     let receiversBlock = nothing;
                     if (msg.observers && msg.observers.length >= 1) {
-                        receiversBlock = html`<span @click=${toggleCardObserverDetail} class="cursor-pointer">${observerIcons(msg.observers)}</span>`;
+                        receiversBlock = observerIcons(msg.observers);
                     } else if (msg.observed_by) {
                         receiversBlock = html`<span class="opacity-50 text-xs">\u{1F4E1}</span>`;
                     }
-                    return html`<div class="card bg-base-100 shadow-sm">
+                    const detailUrl = packetDetailUrl(msg.packet_hash);
+                    return html`<div class="card bg-base-100 shadow-sm ${detailUrl ? 'cursor-pointer' : ''}"
+                @click=${detailUrl ? () => navigate(detailUrl) : undefined}>
             <div class="card-body p-3">
                 <div class="flex items-start justify-between gap-2">
                     <div class="flex items-center gap-2 min-w-0">
@@ -283,37 +272,15 @@ ${displayContent}`, container);
                     </div>
                     <div class="flex items-center gap-2 flex-shrink-0">
                         ${receiversBlock}
-                        ${packetsEnabled ? packetLink(msg.packet_hash) : nothing}
                     </div>
                 </div>
                 <p class="text-sm mt-2 break-words whitespace-pre-wrap">${displayMessage}</p>
-                ${msg.observers && msg.observers.length > 0 ? html`
-                    <div class="observer-detail-card hidden mt-2">
-                        <table class="table table-xs w-full">
-                            <thead><tr><th>Observer</th><th>${t('common.snr_db')}</th><th>${t('common.hops')}</th><th>Received</th></tr></thead>
-                            <tbody>
-                                ${msg.observers.map(o => {
-                                    const dn = o.tag_name || o.name || truncateKey(o.public_key, 12);
-                                    const snrD = o.snr != null ? `${Number(o.snr).toFixed(1)}` : '\u2014';
-                                    const pathD = o.path_len != null ? `${o.path_len}` : '\u2014';
-                                    const timeD = formatRelativeTime(o.observed_at);
-                                    return html`<tr>
-                                        <td>\u{1F4E1} <a href="/nodes/${o.public_key}" class="link link-hover">${dn}</a></td>
-                                        <td>${snrD}</td>
-                                        <td>${pathD}</td>
-                                        <td><span title=${formatDateTime(o.observed_at)}>${timeD}</span></td>
-                                    </tr>`;
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                ` : nothing}
             </div>
         </div>`;
                 });
 
             const tableRows = messages.length === 0
-                ? html`<tr><td colspan=${packetsEnabled ? 6 : 5} class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.messages').toLowerCase() })}</td></tr>`
+                ? html`<tr><td colspan="5" class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.messages').toLowerCase() })}</td></tr>`
                 : messages.map(msg => {
                     const isChannel = msg.message_type === 'channel';
                     const typeIcon = isChannel ? '\u{1F4FB}' : '\u{1F464}';
@@ -332,7 +299,9 @@ ${displayContent}`, container);
                     } else {
                         receiversBlock = html`<span class="opacity-50">-</span>`;
                     }
-                    return html`<tr class="hover cursor-pointer" @click=${toggleObserverDetail}>
+                    const detailUrl = packetDetailUrl(msg.packet_hash);
+                    return html`<tr class="${detailUrl ? 'hover cursor-pointer' : ''}"
+                    @click=${detailUrl ? () => navigate(detailUrl) : undefined}>
                     <td class="text-lg" title=${typeTitle}>${typeIcon}</td>
                     <td class="text-sm whitespace-nowrap">${formatDateTime(msg.received_at)}</td>
                     <td class="text-sm whitespace-nowrap">
@@ -340,8 +309,7 @@ ${displayContent}`, container);
                     </td>
                     <td class="break-words max-w-md" style="white-space: pre-wrap;">${displayMessage}</td>
                     <td>${receiversBlock}</td>
-                    ${packetsEnabled ? html`<td>${packetLink(msg.packet_hash)}</td>` : nothing}
-                </tr>${observerDetailRow(msg.observers || [])}`;
+                </tr>`;
                 });
 
             const paginationBlock = pagination(page, totalPages, '/messages', {
@@ -447,7 +415,6 @@ ${mobileSortSelect({
                 ${sortable(t('common.from'), 'from')}
                 ${sortable(t('entities.message'), 'message')}
                 <th>${t('common.observers')}</th>
-                ${packetsEnabled ? html`<th></th>` : nothing}
             </tr>
         </thead>
         <tbody>
