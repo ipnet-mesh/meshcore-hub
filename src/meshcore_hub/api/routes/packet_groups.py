@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from sqlalchemy import func, or_, select
+from sqlalchemy import asc, desc, func, or_, select
 from sqlalchemy.orm import aliased, selectinload
 
 from meshcore_hub.api.auth import RequireRead
@@ -58,12 +58,16 @@ def list_packet_groups(
     _: RequireRead,
     session: DbSession,
     request: Request,
-    search: Optional[str] = Query(None, description="Search in packet hash or observer name"),
+    search: Optional[str] = Query(
+        None, description="Search in packet hash or observer name"
+    ),
     event_type: Optional[str] = Query(None, description="Filter by event type"),
     channel_idx: Optional[int] = Query(None, description="Filter by channel index"),
     since: Optional[datetime] = Query(None, description="Start timestamp"),
     until: Optional[datetime] = Query(None, description="End timestamp"),
-    sort: Optional[str] = Query(None, description="Sort column: time, event_type, reception_count"),
+    sort: Optional[str] = Query(
+        None, description="Sort column: time, event_type, reception_count"
+    ),
     order: Optional[str] = Query(None, description="asc or desc"),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
@@ -83,9 +87,13 @@ def list_packet_groups(
     # Default time window — keeps GROUP BY bounded when no explicit since/until.
     if since is None:
         if search:
-            since = datetime.now(timezone.utc) - timedelta(days=SEARCH_DEFAULT_WINDOW_DAYS)
+            since = datetime.now(timezone.utc) - timedelta(
+                days=SEARCH_DEFAULT_WINDOW_DAYS
+            )
         else:
-            since = datetime.now(timezone.utc) - timedelta(days=SEARCH_DEFAULT_WINDOW_DAYS)
+            since = datetime.now(timezone.utc) - timedelta(
+                days=SEARCH_DEFAULT_WINDOW_DAYS
+            )
 
     ObserverNode = aliased(Node)
 
@@ -125,13 +133,14 @@ def list_packet_groups(
     count_query = select(func.count()).select_from(group_query.subquery())
     total = session.execute(count_query).scalar() or 0
 
-    sort_col = {
+    sort_exprs: dict[str, Any] = {
         "time": func.min(RawPacket.received_at),
         "event_type": func.min(RawPacket.event_type),
         "reception_count": func.count(RawPacket.id),
-    }[sort]
+    }
+    sort_col = sort_exprs[sort]
     group_query = group_query.order_by(
-        sort_col.desc() if order == "desc" else sort_col.asc()
+        desc(sort_col) if order == "desc" else asc(sort_col)
     )
     group_query = group_query.offset(offset).limit(limit)
 
@@ -142,17 +151,21 @@ def list_packet_groups(
         return GroupedPacketList(items=[], total=total, limit=limit, offset=offset)
 
     # ── Phase 2: Lightweight metadata fetch — no raw_hex, no decoded ──────────
-    meta_query = select(
-        RawPacket.id,
-        RawPacket.packet_hash,
-        RawPacket.event_type,
-        RawPacket.channel_idx,
-        RawPacket.packet_type,
-        RawPacket.payload_type,
-        RawPacket.route_type,
-        RawPacket.source_pubkey_prefix,
-        RawPacket.received_at,
-    ).where(RawPacket.packet_hash.in_(hashes)).order_by(RawPacket.received_at.asc())
+    meta_query = (
+        select(
+            RawPacket.id,
+            RawPacket.packet_hash,
+            RawPacket.event_type,
+            RawPacket.channel_idx,
+            RawPacket.packet_type,
+            RawPacket.payload_type,
+            RawPacket.route_type,
+            RawPacket.source_pubkey_prefix,
+            RawPacket.received_at,
+        )
+        .where(RawPacket.packet_hash.in_(hashes))
+        .order_by(RawPacket.received_at.asc())
+    )
 
     meta_rows = session.execute(meta_query).all()
 
@@ -244,8 +257,7 @@ def get_packet_group(
     for row in rows:
         packet = row[0]
         is_redacted = (
-            packet.channel_idx is not None
-            and packet.channel_idx not in visible_indices
+            packet.channel_idx is not None and packet.channel_idx not in visible_indices
         )
         observer_node = nodes_by_id.get(row.observer_id) if row.observer_id else None
         receptions.append(
@@ -256,7 +268,9 @@ def get_packet_group(
                 observer_tag_name=_get_tag_name(observer_node),
                 snr=packet.snr,
                 path_len=packet.path_len,
-                path_hashes=None if is_redacted else _extract_path_hashes(packet.decoded),
+                path_hashes=(
+                    None if is_redacted else _extract_path_hashes(packet.decoded)
+                ),
                 received_at=packet.received_at,
                 redacted=is_redacted,
             )
@@ -281,7 +295,9 @@ def get_packet_group(
         packet_type=first_packet.packet_type,
         payload_type=first_packet.payload_type,
         route_type=first_packet.route_type,
-        source_pubkey_prefix=None if all_redacted else first_packet.source_pubkey_prefix,
+        source_pubkey_prefix=(
+            None if all_redacted else first_packet.source_pubkey_prefix
+        ),
         reception_count=len(receptions),
         observer_count=unique_observers,
         receptions=receptions,

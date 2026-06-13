@@ -73,11 +73,14 @@ class PacketReceptionInfo(BaseModel):
     packet_id: str = Field(..., description="Raw packet UUID")
     observed_by: Optional[str] = Field(default=None, description="Observer public key")
     observer_name: Optional[str] = Field(default=None, description="Observer node name")
-    observer_tag_name: Optional[str] = Field(default=None, description="Observer name from tags")
+    observer_tag_name: Optional[str] = Field(
+        default=None, description="Observer name from tags"
+    )
     snr: Optional[float] = Field(default=None, description="SNR at this observer")
     path_len: Optional[int] = Field(default=None, description="Hop count")
     path_hashes: Optional[list[str]] = Field(
-        default=None, description="Hop node hash sequence from decoded.payload.decoded.pathHashes"
+        default=None,
+        description="Hop node hash sequence from decoded.payload.decoded.pathHashes",
     )
     received_at: datetime = Field(..., description="When received")
     redacted: bool = Field(default=False)
@@ -99,10 +102,18 @@ class GroupedPacketRead(BaseModel):
         default_factory=list,
         description="Individual receptions (populated for detail, empty for list)",
     )
-    first_seen: datetime = Field(..., description="Earliest received_at across all receptions")
-    redacted: bool = Field(default=False, description="True when all receptions are redacted")
-    raw_hex: Optional[str] = Field(default=None, description="Representative raw hex (null for list view)")
-    decoded: Optional[dict[str, Any]] = Field(default=None, description="Representative decoded JSON (null for list view)")
+    first_seen: datetime = Field(
+        ..., description="Earliest received_at across all receptions"
+    )
+    redacted: bool = Field(
+        default=False, description="True when all receptions are redacted"
+    )
+    raw_hex: Optional[str] = Field(
+        default=None, description="Representative raw hex (null for list view)"
+    )
+    decoded: Optional[dict[str, Any]] = Field(
+        default=None, description="Representative decoded JSON (null for list view)"
+    )
 
 
 class GroupedPacketList(BaseModel):
