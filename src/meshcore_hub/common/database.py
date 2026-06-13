@@ -30,22 +30,31 @@ def _to_async_url(database_url: str) -> str:
 def create_database_engine(
     database_url: str,
     echo: bool = False,
+    schema: str | None = None,
 ) -> Engine:
     """Create a SQLAlchemy database engine.
 
     Args:
         database_url: SQLAlchemy database URL
         echo: Enable SQL query logging
+        schema: Postgres schema to scope connections to via search_path. Ignored for
+            SQLite (which has no schema concept).
 
     Returns:
         SQLAlchemy Engine instance
     """
-    connect_args = {}
+    connect_args: dict[str, Any] = {}
     engine_kwargs: dict[str, Any] = {}
 
     # SQLite-specific configuration
     if database_url.startswith("sqlite"):
         connect_args["check_same_thread"] = False
+
+    # Scope Postgres connections to the configured schema via search_path. This keeps
+    # the models schema-agnostic (no hardcoded schema=) so the same code serves SQLite,
+    # single-instance Postgres, and multiple schema-isolated instances on one cluster.
+    if schema and database_url.startswith(("postgresql", "postgres")):
+        connect_args["options"] = f"-csearch_path={schema}"
 
     # Size the pool above the default Starlette threadpool (~40 threads) so
     # concurrent request handlers don't block waiting for a connection. Applies
@@ -126,15 +135,20 @@ class DatabaseManager:
     to avoid leaking connections when only sync operations are needed.
     """
 
-    def __init__(self, database_url: str, echo: bool = False):
+    def __init__(
+        self, database_url: str, echo: bool = False, schema: str | None = None
+    ):
         """Initialize the database manager.
 
         Args:
             database_url: SQLAlchemy database URL
             echo: Enable SQL query logging
+            schema: Postgres schema to scope connections to (search_path); ignored for
+                SQLite
         """
         self.database_url = database_url
         self._echo = echo
+        self._schema = schema
 
         # Ensure parent directory exists for SQLite databases
         if database_url.startswith("sqlite:///"):
@@ -144,7 +158,7 @@ class DatabaseManager:
             db_path = Path(database_url.replace("sqlite:///", ""))
             db_path.parent.mkdir(parents=True, exist_ok=True)
 
-        self.engine = create_database_engine(database_url, echo=echo)
+        self.engine = create_database_engine(database_url, echo=echo, schema=schema)
         self.session_factory = create_session_factory(self.engine)
 
         # Lazy-initialized async engine (created on first async_session call)
@@ -159,7 +173,14 @@ class DatabaseManager:
         from sqlalchemy.ext.asyncio import async_sessionmaker
 
         async_url = _to_async_url(self.database_url)
-        self._async_engine = create_async_engine(async_url, echo=self._echo)
+        async_connect_args: dict[str, Any] = {}
+        # asyncpg sets search_path via server_settings (not the libpq -c options
+        # string the sync psycopg2 engine uses).
+        if self._schema and self.database_url.startswith(("postgresql", "postgres")):
+            async_connect_args["server_settings"] = {"search_path": self._schema}
+        self._async_engine = create_async_engine(
+            async_url, echo=self._echo, connect_args=async_connect_args
+        )
 
         # Apply the same SQLite pragmas as the sync engine (see
         # create_database_engine) for the async engine's connections.
