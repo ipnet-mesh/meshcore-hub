@@ -85,6 +85,101 @@ def db_upgrade(revision: str, database_url: str | None) -> None:
     click.echo("Database upgrade complete.")
 
 
+@db.command("migrate-to-postgres")
+@click.option(
+    "--source",
+    type=str,
+    default=None,
+    help="Source SQLite URL (default: sqlite:///{DATA_HOME}/collector/meshcore.db)",
+)
+@click.option(
+    "--target",
+    type=str,
+    default=None,
+    help="Target Postgres URL (default: the configured DATABASE_* connection)",
+)
+@click.option("--batch-size", type=int, default=2000, help="Rows per insert batch")
+@click.option(
+    "--truncate",
+    is_flag=True,
+    default=False,
+    help="Delete existing rows from target tables before loading",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Report source/target row counts without writing",
+)
+@click.option(
+    "--no-replication-role",
+    is_flag=True,
+    default=False,
+    help="Don't disable FK triggers via session_replication_role (managed Postgres)",
+)
+def db_migrate_to_postgres(
+    source: str | None,
+    target: str | None,
+    batch_size: int,
+    truncate: bool,
+    dry_run: bool,
+    no_replication_role: bool,
+) -> None:
+    """Copy data from an existing SQLite database into PostgreSQL.
+
+    Run 'db upgrade' against the target first to create the schema. This command
+    only moves data and never modifies the source.
+    """
+    from pathlib import Path
+
+    from meshcore_hub.common.config import CollectorSettings
+    from meshcore_hub.common.db_migrate import migrate_sqlite_to_postgres
+
+    settings = CollectorSettings()
+    source_url = (
+        source or f"sqlite:///{Path(settings.data_home) / 'collector' / 'meshcore.db'}"
+    )
+    target_url = target or settings.effective_database_url
+    target_schema = settings.effective_database_schema
+
+    click.echo(f"Source: {source_url}")
+    click.echo(f"Target: {target_url} (schema: {target_schema})")
+    if dry_run:
+        click.echo("Mode: dry-run (no writes)")
+
+    try:
+        result = migrate_sqlite_to_postgres(
+            source_url,
+            target_url,
+            target_schema=target_schema,
+            batch_size=batch_size,
+            truncate=truncate,
+            dry_run=dry_run,
+            disable_replication_role=no_replication_role,
+        )
+    except (RuntimeError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    click.echo("")
+    if dry_run:
+        # Preview only: the target is expected to be empty, so no OK/MISMATCH judgement.
+        click.echo("table (source rows -> current target rows)")
+        for t in result.tables:
+            click.echo(f"  {t.name:28} {t.source_rows:>8} -> {t.target_rows:>8}")
+        click.echo("")
+        click.echo("Dry run complete.")
+        return
+
+    click.echo("table (source -> target)")
+    for t in result.tables:
+        status = "OK" if t.ok else "MISMATCH"
+        click.echo(f"  {t.name:28} {t.source_rows:>8} -> {t.target_rows:>8}  {status}")
+    if not result.ok:
+        raise click.ClickException("Row-count mismatch between source and target")
+    click.echo("")
+    click.echo("Migration complete.")
+
+
 @db.command("downgrade")
 @click.option(
     "--revision",
