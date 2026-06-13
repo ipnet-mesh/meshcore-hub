@@ -12,9 +12,45 @@ function field(label, value) {
     </div>`;
 }
 
+// Centre-truncation thresholds for long paths. Counts hops, not characters,
+// so variable-length hashes (1–3 bytes) truncate predictably.
+const PATH_MAX_BADGES = 16;
+const PATH_HEAD = 7;
+const PATH_TAIL = 7;
+
+// Render a single path-hash as a badge. The `path-hash-badge` class and
+// `data-path-hash` attribute are hooks for a future on-hover JSON lookup of
+// candidate nodes matching the hash (not wired up yet).
+function pathBadge(hash) {
+    return html`<span class="badge badge-sm badge-ghost font-mono text-xs path-hash-badge cursor-help" data-path-hash=${hash}>${hash}</span>`;
+}
+
+const pathArrow = html`<span class="opacity-40 text-xs">→</span>`;
+
+// Join badges with arrow separators into a flex-wrap container so long paths
+// wrap onto multiple lines (growing in height, not width) on narrow screens.
+function pathRow(badges) {
+    const parts = [];
+    badges.forEach((b, i) => {
+        if (i > 0) parts.push(pathArrow);
+        parts.push(b);
+    });
+    return html`<span class="flex flex-wrap items-center gap-1">${parts}</span>`;
+}
+
 function formatPath(pathHashes, pathLen) {
     if (pathHashes && pathHashes.length > 0) {
-        return html`<code class="font-mono text-xs">${pathHashes.join(' → ')}</code>`;
+        if (pathHashes.length <= PATH_MAX_BADGES) {
+            return pathRow(pathHashes.map(pathBadge));
+        }
+        const hidden = pathHashes.length - PATH_HEAD - PATH_TAIL;
+        const ellipsis = html`<span class="badge badge-sm badge-ghost cursor-help" title=${t('packets.hops_hidden', { count: hidden })}>…</span>`;
+        const badges = [
+            ...pathHashes.slice(0, PATH_HEAD).map(pathBadge),
+            ellipsis,
+            ...pathHashes.slice(-PATH_TAIL).map(pathBadge),
+        ];
+        return pathRow(badges);
     }
     if (pathLen != null) {
         return html`${pathLen} ${t('common.hops').toLowerCase()}`;
@@ -136,7 +172,7 @@ ${content}`, container);
                             <tbody>
                                 ${recs.map(r => html`
                                 <tr>
-                                    <td>${formatPath(r.path_hashes, r.path_len)}</td>
+                                    <td class="max-w-[60vw] sm:max-w-md whitespace-normal align-top">${formatPath(r.path_hashes, r.path_len)}</td>
                                     <td class="text-sm">${r.path_len != null ? r.path_len : '—'}</td>
                                     <td class="text-sm">${r.snr != null ? Number(r.snr).toFixed(1) : '—'}</td>
                                     <td class="text-xs opacity-60">

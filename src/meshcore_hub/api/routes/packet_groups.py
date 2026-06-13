@@ -34,9 +34,17 @@ def _group_key_builder(request: Request) -> str:
 
 
 def _extract_path_hashes(decoded: dict[str, Any] | None) -> list[str] | None:
-    """Extract pathHashes from decoded.payload.decoded.pathHashes."""
+    """Extract the routing path (per-hop node hash bytes) from a decoded packet.
+
+    The path lives at the top level as ``decoded.path`` for normal packets
+    (flood/advertisement/etc.). Trace-style packets instead carry it at
+    ``decoded.payload.decoded.pathHashes``, so that is used as a fallback.
+    """
     if not decoded:
         return None
+    path = decoded.get("path")
+    if isinstance(path, list) and path:
+        return path
     payload = decoded.get("payload") or {}
     inner = payload.get("decoded") or {}
     hashes = inner.get("pathHashes")

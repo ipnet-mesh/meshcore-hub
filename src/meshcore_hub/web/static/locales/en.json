@@ -233,6 +233,7 @@
     "reception_plural": "paths",
     "col_path": "Path",
     "col_receptions": "Receptions",
+    "hops_hidden": "{{count}} hops hidden",
     "sort": {
       "newest": "Time (newest)",
       "oldest": "Time (oldest)",

@@ -524,6 +524,28 @@ class TestExtractPathHashes:
         decoded = {"payload": {"decoded": {"pathHashes": ["AA", "BB"]}}}
         assert _extract_path_hashes(decoded) == ["AA", "BB"]
 
+    def test_extracts_top_level_path(self):
+        from meshcore_hub.api.routes.packet_groups import _extract_path_hashes
+
+        # Normal (flood/advertisement) packets carry the routing path here.
+        decoded = {"path": ["16", "69", "23"], "pathLength": 3}
+        assert _extract_path_hashes(decoded) == ["16", "69", "23"]
+
+    def test_top_level_path_takes_precedence(self):
+        from meshcore_hub.api.routes.packet_groups import _extract_path_hashes
+
+        decoded = {
+            "path": ["16", "69"],
+            "payload": {"decoded": {"pathHashes": ["AA"]}},
+        }
+        assert _extract_path_hashes(decoded) == ["16", "69"]
+
+    def test_empty_top_level_path_falls_back(self):
+        from meshcore_hub.api.routes.packet_groups import _extract_path_hashes
+
+        decoded = {"path": [], "payload": {"decoded": {"pathHashes": ["AA"]}}}
+        assert _extract_path_hashes(decoded) == ["AA"]
+
     def test_none_input(self):
         from meshcore_hub.api.routes.packet_groups import _extract_path_hashes
 

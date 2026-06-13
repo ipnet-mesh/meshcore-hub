@@ -173,6 +173,7 @@
     "col_source": "Bron",
     "col_route_type": "Routetype",
     "col_raw": "Ruw",
+    "hops_hidden": "{{count}} hops verborgen",
     "sort": {
       "newest": "Tijd (nieuwste)",
       "oldest": "Tijd (oudste)",
