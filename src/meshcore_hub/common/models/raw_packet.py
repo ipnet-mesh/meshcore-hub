@@ -3,8 +3,7 @@
 from datetime import datetime
 from typing import Any, Optional
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String, Text
-from sqlalchemy.dialects.sqlite import JSON
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from meshcore_hub.common.models.base import Base, TimestampMixin, UUIDMixin, utc_now

@@ -11,6 +11,22 @@ from sqlalchemy.orm import Session, sessionmaker
 from meshcore_hub.common.models.base import Base
 
 
+def _to_async_url(database_url: str) -> str:
+    """Map a sync database URL to its async-driver equivalent.
+
+    Leaves an already driver-qualified URL (``dialect+driver://``) untouched so an
+    explicit driver choice is respected.
+    """
+    scheme = database_url.split("://", 1)[0]
+    if "+" in scheme:
+        return database_url
+    if scheme == "sqlite":
+        return database_url.replace("sqlite://", "sqlite+aiosqlite://", 1)
+    if scheme in ("postgresql", "postgres"):
+        return database_url.replace(f"{scheme}://", "postgresql+asyncpg://", 1)
+    return database_url
+
+
 def create_database_engine(
     database_url: str,
     echo: bool = False,
@@ -142,7 +158,7 @@ class DatabaseManager:
 
         from sqlalchemy.ext.asyncio import async_sessionmaker
 
-        async_url = self.database_url.replace("sqlite://", "sqlite+aiosqlite://")
+        async_url = _to_async_url(self.database_url)
         self._async_engine = create_async_engine(async_url, echo=self._echo)
 
         # Apply the same SQLite pragmas as the sync engine (see
