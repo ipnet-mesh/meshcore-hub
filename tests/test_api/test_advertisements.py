@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 
+from meshcore_hub.common.hash_utils import compute_advertisement_hash
 from meshcore_hub.common.models import Advertisement, EventObserver
 
 
@@ -215,21 +216,54 @@ class TestListAdvertisementsFilters:
         api_db_session.commit()
 
         # Create two advertisements, each observed by a different receiver
+        now = datetime.now(timezone.utc)
+        ad1_hash = compute_advertisement_hash(
+            public_key="ad1pubad1pubad1pubad1pubad1pubad",
+            name="AD1",
+            adv_type="CLIENT",
+            received_at=now,
+        )
+        ad2_hash = compute_advertisement_hash(
+            public_key="ad2pubad2pubad2pubad2pubad2pubad",
+            name="AD2",
+            adv_type="CLIENT",
+            received_at=now,
+        )
         ad1 = Advertisement(
             public_key="ad1pubad1pubad1pubad1pubad1pubad",
             name="AD1",
             adv_type="CLIENT",
-            received_at=datetime.now(timezone.utc),
+            received_at=now,
             observer_node_id=receiver_node.id,
+            event_hash=ad1_hash,
         )
         ad2 = Advertisement(
             public_key="ad2pubad2pubad2pubad2pubad2pubad",
             name="AD2",
             adv_type="CLIENT",
-            received_at=datetime.now(timezone.utc),
+            received_at=now,
             observer_node_id=second_receiver.id,
+            event_hash=ad2_hash,
         )
         api_db_session.add_all([ad1, ad2])
+        api_db_session.commit()
+
+        api_db_session.add_all(
+            [
+                EventObserver(
+                    event_type="advertisement",
+                    event_hash=ad1_hash,
+                    observer_node_id=receiver_node.id,
+                    observed_at=datetime.now(timezone.utc),
+                ),
+                EventObserver(
+                    event_type="advertisement",
+                    event_hash=ad2_hash,
+                    observer_node_id=second_receiver.id,
+                    observed_at=datetime.now(timezone.utc),
+                ),
+            ]
+        )
         api_db_session.commit()
 
         # Filter by both receivers
@@ -248,6 +282,64 @@ class TestListAdvertisementsFilters:
         data = response.json()
         assert len(data["items"]) == 1
         assert data["items"][0]["name"] == "AD1"
+
+    def test_filter_by_observed_by_secondary_observer(
+        self,
+        client_no_auth,
+        api_db_session,
+    ):
+        """Secondary observer (only in event_observers) sees the ad."""
+        from meshcore_hub.common.models import Node
+
+        primary_node = Node(
+            public_key="p1advp1advp1advp1advp1advp1advp",
+            name="PrimaryObserver",
+            first_seen=datetime.now(timezone.utc),
+        )
+        secondary_node = Node(
+            public_key="s1advs1advs1advs1advs1advs1advs1",
+            name="SecondaryObserver",
+            first_seen=datetime.now(timezone.utc),
+        )
+        api_db_session.add_all([primary_node, secondary_node])
+        api_db_session.commit()
+
+        now = datetime.now(timezone.utc)
+        event_hash = compute_advertisement_hash(
+            public_key="secobssecobssecobssecobssecobsse",
+            name="SecondaryObsAd",
+            adv_type="CLIENT",
+            received_at=now,
+        )
+        advert = Advertisement(
+            public_key="secobssecobssecobssecobssecobsse",
+            name="SecondaryObsAd",
+            adv_type="CLIENT",
+            received_at=now,
+            observer_node_id=primary_node.id,
+            event_hash=event_hash,
+        )
+        api_db_session.add(advert)
+        api_db_session.commit()
+
+        api_db_session.add(
+            EventObserver(
+                event_type="advertisement",
+                event_hash=event_hash,
+                observer_node_id=secondary_node.id,
+                observed_at=datetime.now(timezone.utc),
+            )
+        )
+        api_db_session.commit()
+
+        response = client_no_auth.get(
+            f"/api/v1/advertisements?observed_by={secondary_node.public_key}"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["items"]) == 1
+        assert data["items"][0]["name"] == "SecondaryObsAd"
+        assert data["items"][0]["observed_by"] == primary_node.public_key
 
     def test_filter_by_since(self, client_no_auth, api_db_session):
         """Test filtering advertisements by since timestamp."""

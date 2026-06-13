@@ -73,6 +73,63 @@ class TestListTelemetryFilters:
         data = response.json()
         assert len(data["items"]) == 1
 
+    def test_filter_by_observed_by_secondary_observer(
+        self,
+        client_no_auth,
+        api_db_session,
+    ):
+        """Secondary observer (only in event_observers) sees the telemetry."""
+        from meshcore_hub.common.hash_utils import compute_telemetry_hash
+        from meshcore_hub.common.models import EventObserver, Node, Telemetry
+
+        primary_node = Node(
+            public_key="p1telp1telp1telp1telp1telp1telp1",
+            name="PrimaryObserver",
+            first_seen=datetime.now(timezone.utc),
+        )
+        secondary_node = Node(
+            public_key="s1tels1tels1tels1tels1tels1tels1",
+            name="SecondaryObserver",
+            first_seen=datetime.now(timezone.utc),
+        )
+        api_db_session.add_all([primary_node, secondary_node])
+        api_db_session.commit()
+
+        now = datetime.now(timezone.utc)
+        node_pk = "secobstelsecobstelsecobsteltel"
+        event_hash = compute_telemetry_hash(
+            node_public_key=node_pk,
+            parsed_data={"temperature": 42.0},
+            received_at=now,
+        )
+        telemetry = Telemetry(
+            node_public_key=node_pk,
+            parsed_data={"temperature": 42.0},
+            received_at=now,
+            observer_node_id=primary_node.id,
+            event_hash=event_hash,
+        )
+        api_db_session.add(telemetry)
+        api_db_session.commit()
+
+        api_db_session.add(
+            EventObserver(
+                event_type="telemetry",
+                event_hash=event_hash,
+                observer_node_id=secondary_node.id,
+                observed_at=datetime.now(timezone.utc),
+            )
+        )
+        api_db_session.commit()
+
+        response = client_no_auth.get(
+            f"/api/v1/telemetry?observed_by={secondary_node.public_key}"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["items"]) == 1
+        assert data["items"][0]["observed_by"] == primary_node.public_key
+
     def test_filter_by_since(self, client_no_auth, api_db_session):
         """Test filtering telemetry by since timestamp."""
         from meshcore_hub.common.models import Telemetry

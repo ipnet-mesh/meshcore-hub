@@ -106,6 +106,58 @@ class TestListTracePathsFilters:
         data = response.json()
         assert len(data["items"]) == 1
 
+    def test_filter_by_observed_by_secondary_observer(
+        self,
+        client_no_auth,
+        api_db_session,
+    ):
+        """Secondary observer (only in event_observers) sees the trace path."""
+        from meshcore_hub.common.hash_utils import compute_trace_hash
+        from meshcore_hub.common.models import EventObserver, Node, TracePath
+
+        primary_node = Node(
+            public_key="p1trcp1trcp1trcp1trcp1trcp1trcp",
+            name="PrimaryObserver",
+            first_seen=datetime.now(timezone.utc),
+        )
+        secondary_node = Node(
+            public_key="s1trcs1trcs1trcs1trcs1trcs1trcs1",
+            name="SecondaryObserver",
+            first_seen=datetime.now(timezone.utc),
+        )
+        api_db_session.add_all([primary_node, secondary_node])
+        api_db_session.commit()
+
+        event_hash = compute_trace_hash(initiator_tag=55555)
+        trace = TracePath(
+            initiator_tag=55555,
+            path_hashes=["cc", "dd"],
+            hop_count=2,
+            received_at=datetime.now(timezone.utc),
+            observer_node_id=primary_node.id,
+            event_hash=event_hash,
+        )
+        api_db_session.add(trace)
+        api_db_session.commit()
+
+        api_db_session.add(
+            EventObserver(
+                event_type="trace",
+                event_hash=event_hash,
+                observer_node_id=secondary_node.id,
+                observed_at=datetime.now(timezone.utc),
+            )
+        )
+        api_db_session.commit()
+
+        response = client_no_auth.get(
+            f"/api/v1/trace-paths?observed_by={secondary_node.public_key}"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["items"]) == 1
+        assert data["items"][0]["observed_by"] == primary_node.public_key
+
     def test_filter_by_since(self, client_no_auth, api_db_session):
         """Test filtering trace paths by since timestamp."""
         from meshcore_hub.common.models import TracePath

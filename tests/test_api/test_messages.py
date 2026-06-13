@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from meshcore_hub.common.hash_utils import compute_message_hash
 from meshcore_hub.common.models import EventObserver, Message, Node, NodeTag, Channel
 
 
@@ -289,12 +290,15 @@ class TestListMessagesFilters:
         api_db_session.commit()
 
         # Create two messages, each observed by a different receiver
+        msg1_hash = compute_message_hash(text="Msg from receiver A", channel_idx=17)
+        msg2_hash = compute_message_hash(text="Msg from receiver B", channel_idx=17)
         msg1 = Message(
             message_type="channel",
             channel_idx=17,
             text="Msg from receiver A",
             received_at=datetime.now(timezone.utc),
             observer_node_id=receiver_node.id,
+            event_hash=msg1_hash,
         )
         msg2 = Message(
             message_type="channel",
@@ -302,8 +306,27 @@ class TestListMessagesFilters:
             text="Msg from receiver B",
             received_at=datetime.now(timezone.utc),
             observer_node_id=second_receiver.id,
+            event_hash=msg2_hash,
         )
         api_db_session.add_all([msg1, msg2])
+        api_db_session.commit()
+
+        api_db_session.add_all(
+            [
+                EventObserver(
+                    event_type="message",
+                    event_hash=msg1_hash,
+                    observer_node_id=receiver_node.id,
+                    observed_at=datetime.now(timezone.utc),
+                ),
+                EventObserver(
+                    event_type="message",
+                    event_hash=msg2_hash,
+                    observer_node_id=second_receiver.id,
+                    observed_at=datetime.now(timezone.utc),
+                ),
+            ]
+        )
         api_db_session.commit()
 
         # Filter by both receivers
@@ -322,6 +345,58 @@ class TestListMessagesFilters:
         data = response.json()
         assert len(data["items"]) == 1
         assert data["items"][0]["text"] == "Msg from receiver A"
+
+    def test_filter_by_observed_by_secondary_observer(
+        self,
+        client_no_auth,
+        api_db_session,
+    ):
+        """Secondary observer (only in event_observers) sees the message."""
+        primary_node = Node(
+            public_key="p1msgp1msgp1msgp1msgp1msgp1msgp",
+            name="PrimaryObserver",
+            first_seen=datetime.now(timezone.utc),
+        )
+        secondary_node = Node(
+            public_key="s1msgs1msgs1msgs1msgs1msgs1msgs1",
+            name="SecondaryObserver",
+            first_seen=datetime.now(timezone.utc),
+        )
+        api_db_session.add_all([primary_node, secondary_node])
+        api_db_session.commit()
+
+        event_hash = compute_message_hash(
+            text="Secondary observer test", channel_idx=17
+        )
+        msg = Message(
+            message_type="channel",
+            channel_idx=17,
+            text="Secondary observer test",
+            received_at=datetime.now(timezone.utc),
+            observer_node_id=primary_node.id,
+            event_hash=event_hash,
+        )
+        api_db_session.add(msg)
+        api_db_session.commit()
+
+        api_db_session.add(
+            EventObserver(
+                event_type="message",
+                event_hash=event_hash,
+                observer_node_id=secondary_node.id,
+                observed_at=datetime.now(timezone.utc),
+            )
+        )
+        api_db_session.commit()
+
+        response = client_no_auth.get(
+            f"/api/v1/messages?observed_by={secondary_node.public_key}"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["items"]) == 1
+        assert data["items"][0]["text"] == "Secondary observer test"
+        assert data["items"][0]["observed_by"] == primary_node.public_key
 
     def test_filter_by_since(self, client_no_auth, api_db_session):
         """Test filtering messages by since timestamp."""

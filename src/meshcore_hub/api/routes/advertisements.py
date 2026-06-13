@@ -10,7 +10,10 @@ from sqlalchemy.orm import aliased, selectinload
 from meshcore_hub.api.auth import RequireRead
 from meshcore_hub.api.cache import cached
 from meshcore_hub.api.dependencies import DbSession
-from meshcore_hub.api.observer_utils import fetch_observers_for_events
+from meshcore_hub.api.observer_utils import (
+    fetch_observers_for_events,
+    observed_by_filter_clause,
+)
 from meshcore_hub.common.models import Advertisement, Node, NodeTag, UserProfileNode
 from meshcore_hub.common.schemas.messages import (
     AdvertisementList,
@@ -113,7 +116,11 @@ def list_advertisements(
         query = query.where(Advertisement.public_key == public_key)
 
     if observed_by:
-        query = query.where(ObserverNode.public_key.in_(observed_by))
+        query = query.where(
+            observed_by_filter_clause(
+                "advertisement", Advertisement.event_hash, observed_by
+            )
+        )
 
     if adopted_by:
         query = query.where(

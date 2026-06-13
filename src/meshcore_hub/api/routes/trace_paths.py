@@ -9,7 +9,10 @@ from sqlalchemy.orm import aliased
 
 from meshcore_hub.api.auth import RequireRead
 from meshcore_hub.api.dependencies import DbSession
-from meshcore_hub.api.observer_utils import fetch_observers_for_events
+from meshcore_hub.api.observer_utils import (
+    fetch_observers_for_events,
+    observed_by_filter_clause,
+)
 from meshcore_hub.common.models import Node, TracePath
 from meshcore_hub.common.schemas.messages import TracePathList, TracePathRead
 
@@ -38,7 +41,9 @@ def list_trace_paths(
     )
 
     if observed_by:
-        query = query.where(ObserverNode.public_key == observed_by)
+        query = query.where(
+            observed_by_filter_clause("trace", TracePath.event_hash, [observed_by])
+        )
 
     if since:
         query = query.where(TracePath.received_at >= since)

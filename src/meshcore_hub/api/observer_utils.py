@@ -2,11 +2,39 @@
 
 from collections.abc import Iterable
 
-from sqlalchemy import or_, select
+from sqlalchemy import ColumnElement, or_, select
+from sqlalchemy.sql.expression import SQLColumnExpression
 
 from meshcore_hub.api.dependencies import DbSession
 from meshcore_hub.common.models import EventObserver, Node, NodeTag
 from meshcore_hub.common.schemas.messages import ObserverInfo
+
+
+def observed_by_filter_clause(
+    event_type: str,
+    event_hash_col: SQLColumnExpression[str | None],
+    observer_public_keys: list[str],
+) -> ColumnElement[bool]:
+    """Return a WHERE clause matching events observed by any of the given
+    observer node public keys, via the event_observers junction table.
+
+    Args:
+        event_type: Type of event ('message', 'advertisement', 'telemetry', 'trace')
+        event_hash_col: The event_hash column of the event table being filtered
+            (e.g. ``Message.event_hash``).
+        observer_public_keys: Observer node public keys to filter by.
+
+    Returns:
+        A SQLAlchemy boolean expression suitable for ``query.where(...)``.
+    """
+    return event_hash_col.in_(
+        select(EventObserver.event_hash)
+        .join(Node, EventObserver.observer_node_id == Node.id)
+        .where(
+            EventObserver.event_type == event_type,
+            Node.public_key.in_(observer_public_keys),
+        )
+    )
 
 
 def fetch_observers_for_events(
