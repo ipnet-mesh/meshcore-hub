@@ -33,4 +33,6 @@ api_router.include_router(user_profiles_router, prefix="/user", tags=["User"])
 api_router.include_router(adoptions_router, prefix="/adoptions", tags=["Adoptions"])
 api_router.include_router(channels_router, prefix="/channels", tags=["Channels"])
 api_router.include_router(raw_packets_router, prefix="/packets", tags=["Packets"])
-api_router.include_router(packet_groups_router, prefix="/packet-groups", tags=["Packet Groups"])
+api_router.include_router(
+    packet_groups_router, prefix="/packet-groups", tags=["Packet Groups"]
+)
