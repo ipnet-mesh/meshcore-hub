@@ -21,6 +21,7 @@ const pages = {
     advertisements: () => import('./pages/advertisements.js'),
     packets: () => import('./pages/packets.js'),
     packetDetail: () => import('./pages/packet-detail.js'),
+    packetGroupDetail: () => import('./pages/packet-group-detail.js'),
     map: () => import('./pages/map.js'),
     members: () => import('./pages/members.js'),
     channels: () => import('./pages/channels.js'),
@@ -87,6 +88,7 @@ if (features.advertisements !== false) {
 }
 if (features.packets === true) {
     router.addRoute('/packets', pageHandler(pages.packets));
+    router.addRoute('/packets/hash/:hash', pageHandler(pages.packetGroupDetail));
     router.addRoute('/packets/:id', pageHandler(pages.packetDetail));
 }
 if (features.map !== false) {
