@@ -17,6 +17,7 @@ from meshcore_hub.api.channel_visibility import (
 from meshcore_hub.api.dependencies import DbSession
 from meshcore_hub.api.observer_utils import (
     fetch_observers_for_events,
+    observed_by_filter_clause,
     resolve_sender_names,
 )
 from meshcore_hub.common.models import Message, Node
@@ -84,7 +85,9 @@ def list_messages(
         query = query.where(Message.channel_idx == channel_idx)
 
     if observed_by:
-        query = query.where(ObserverNode.public_key.in_(observed_by))
+        query = query.where(
+            observed_by_filter_clause("message", Message.event_hash, observed_by)
+        )
 
     if since:
         query = query.where(Message.received_at >= since)

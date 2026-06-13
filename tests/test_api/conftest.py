@@ -22,6 +22,7 @@ from meshcore_hub.common.models import (
     Advertisement,
     Base,
     Channel,
+    EventObserver,
     Message,
     Node,
     NodeTag,
@@ -310,6 +311,7 @@ def receiver_node(api_db_session):
 @pytest.fixture
 def sample_message_with_receiver(api_db_session, receiver_node):
     """Create a message with a receiver node."""
+    event_hash = "deadbeefdeadbeefdeadbeefdeadbe01"
     message = Message(
         message_type="channel",
         channel_idx=17,
@@ -317,16 +319,28 @@ def sample_message_with_receiver(api_db_session, receiver_node):
         text="Channel message with receiver",
         received_at=datetime.now(timezone.utc),
         observer_node_id=receiver_node.id,
+        event_hash=event_hash,
     )
     api_db_session.add(message)
     api_db_session.commit()
     api_db_session.refresh(message)
+
+    api_db_session.add(
+        EventObserver(
+            event_type="message",
+            event_hash=event_hash,
+            observer_node_id=receiver_node.id,
+            observed_at=datetime.now(timezone.utc),
+        )
+    )
+    api_db_session.commit()
     return message
 
 
 @pytest.fixture
 def sample_advertisement_with_receiver(api_db_session, sample_node, receiver_node):
     """Create an advertisement with source and receiver nodes."""
+    event_hash = "deadbeefdeadbeefdeadbeefdeadbe02"
     advert = Advertisement(
         public_key=sample_node.public_key,
         name="SourceNode",
@@ -334,41 +348,76 @@ def sample_advertisement_with_receiver(api_db_session, sample_node, receiver_nod
         received_at=datetime.now(timezone.utc),
         node_id=sample_node.id,
         observer_node_id=receiver_node.id,
+        event_hash=event_hash,
     )
     api_db_session.add(advert)
     api_db_session.commit()
     api_db_session.refresh(advert)
+
+    api_db_session.add(
+        EventObserver(
+            event_type="advertisement",
+            event_hash=event_hash,
+            observer_node_id=receiver_node.id,
+            observed_at=datetime.now(timezone.utc),
+        )
+    )
+    api_db_session.commit()
     return advert
 
 
 @pytest.fixture
 def sample_telemetry_with_receiver(api_db_session, receiver_node):
     """Create a telemetry record with a receiver node."""
+    event_hash = "deadbeefdeadbeefdeadbeefdeadbe03"
     telemetry = Telemetry(
         node_public_key="xyz789xyz789xyz789xyz789xyz789xy",
         parsed_data={"battery_level": 50.0},
         received_at=datetime.now(timezone.utc),
         observer_node_id=receiver_node.id,
+        event_hash=event_hash,
     )
     api_db_session.add(telemetry)
     api_db_session.commit()
     api_db_session.refresh(telemetry)
+
+    api_db_session.add(
+        EventObserver(
+            event_type="telemetry",
+            event_hash=event_hash,
+            observer_node_id=receiver_node.id,
+            observed_at=datetime.now(timezone.utc),
+        )
+    )
+    api_db_session.commit()
     return telemetry
 
 
 @pytest.fixture
 def sample_trace_path_with_receiver(api_db_session, receiver_node):
     """Create a trace path with a receiver node."""
+    event_hash = "deadbeefdeadbeefdeadbeefdeadbe04"
     trace = TracePath(
         initiator_tag=99999,
         path_hashes=["aaa111", "bbb222"],
         hop_count=2,
         received_at=datetime.now(timezone.utc),
         observer_node_id=receiver_node.id,
+        event_hash=event_hash,
     )
     api_db_session.add(trace)
     api_db_session.commit()
     api_db_session.refresh(trace)
+
+    api_db_session.add(
+        EventObserver(
+            event_type="trace",
+            event_hash=event_hash,
+            observer_node_id=receiver_node.id,
+            observed_at=datetime.now(timezone.utc),
+        )
+    )
+    api_db_session.commit()
     return trace
 
 

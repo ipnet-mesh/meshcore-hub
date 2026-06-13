@@ -9,7 +9,10 @@ from sqlalchemy.orm import aliased
 
 from meshcore_hub.api.auth import RequireRead
 from meshcore_hub.api.dependencies import DbSession
-from meshcore_hub.api.observer_utils import fetch_observers_for_events
+from meshcore_hub.api.observer_utils import (
+    fetch_observers_for_events,
+    observed_by_filter_clause,
+)
 from meshcore_hub.common.models import Node, Telemetry
 from meshcore_hub.common.schemas.messages import TelemetryList, TelemetryRead
 
@@ -42,7 +45,9 @@ def list_telemetry(
         query = query.where(Telemetry.node_public_key == node_public_key)
 
     if observed_by:
-        query = query.where(ObserverNode.public_key == observed_by)
+        query = query.where(
+            observed_by_filter_clause("telemetry", Telemetry.event_hash, [observed_by])
+        )
 
     if since:
         query = query.where(Telemetry.received_at >= since)
