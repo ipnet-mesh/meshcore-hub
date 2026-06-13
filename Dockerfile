@@ -55,7 +55,7 @@ ARG BUILD_VERSION=dev
 # Set version in _version.py and install the package
 RUN sed -i "s|__version__ = \"dev\"|__version__ = \"${BUILD_VERSION}\"|" src/meshcore_hub/_version.py && \
     pip install --upgrade pip && \
-    pip install .
+    pip install ".[postgres]"
 
 # =============================================================================
 # Stage 3: Runtime - Final production image
