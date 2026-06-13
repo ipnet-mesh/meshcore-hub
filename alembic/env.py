@@ -20,25 +20,22 @@ target_metadata = Base.metadata
 
 
 def get_database_url() -> str:
-    """Get database URL from environment or config."""
+    """Get the database URL using the same resolution as the app.
+
+    Delegates to CommonSettings.effective_database_url so DATABASE_BACKEND=postgres
+    (+ DATABASE_* components) and an explicit DATABASE_URL are honoured identically to
+    the running services — otherwise migrations would silently target SQLite.
+    """
     from pathlib import Path
 
-    # First try explicit DATABASE_URL environment variable
-    url = os.environ.get("DATABASE_URL")
-    if url:
-        # Ensure directory exists for sqlite URLs
-        if url.startswith("sqlite:///"):
-            db_path = Path(url.replace("sqlite:///", ""))
-            db_path.parent.mkdir(parents=True, exist_ok=True)
-        return url
-    # Try DATA_HOME environment variable
-    data_home = os.environ.get("DATA_HOME")
-    if data_home:
-        db_path = Path(data_home) / "collector" / "meshcore.db"
+    from meshcore_hub.common.config import CommonSettings
+
+    url = CommonSettings().effective_database_url
+    # Ensure the parent directory exists for SQLite file URLs.
+    if url.startswith("sqlite:///"):
+        db_path = Path(url.replace("sqlite:///", ""))
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        return f"sqlite:///{db_path}"
-    # Fall back to alembic.ini
-    return config.get_main_option("sqlalchemy.url", "sqlite:///./meshcore.db")
+    return url
 
 
 def get_schema(url: str) -> str | None:

@@ -10,7 +10,6 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import sqlite
 
 # revision identifiers, used by Alembic.
 revision: str = "e9f0c4079540"
@@ -34,7 +33,7 @@ def upgrade() -> None:
         sa.Column("route_type", sa.String(length=20), nullable=True),
         sa.Column("path_len", sa.Integer(), nullable=True),
         sa.Column("snr", sa.Float(), nullable=True),
-        sa.Column("decoded", sqlite.JSON(), nullable=True),
+        sa.Column("decoded", sa.JSON(), nullable=True),
         sa.Column("received_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("id", sa.String(), nullable=False),
         sa.Column(

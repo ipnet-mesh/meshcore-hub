@@ -148,6 +148,36 @@ services:
       retries: 3
 
   # ==========================================================================
+  # PostgreSQL - optional database backend (alternative to default SQLite)
+  # Enable with: DATABASE_BACKEND=postgres (+ DATABASE_* vars) AND the
+  # 'postgres' profile, e.g. `docker compose --profile core --profile postgres up`.
+  # POSTGRES_* init vars derive from the same DATABASE_* values (single source
+  # of truth); the schema itself is created by `db upgrade` (alembic).
+  # ==========================================================================
+  postgres:
+    image: postgres:17-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-hub}-postgres
+    profiles:
+      - postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${DATABASE_USER:-meshcorehub}
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD:-}
+      - POSTGRES_DB=${DATABASE_NAME:-meshcorehub}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${DATABASE_USER:-meshcorehub} -d ${DATABASE_NAME:-meshcorehub}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ==========================================================================
   # Collector - MQTT subscriber and database storage
   # ==========================================================================
   collector:
@@ -179,6 +209,14 @@ services:
       - CHANNEL_REFRESH_INTERVAL_SECONDS=${CHANNEL_REFRESH_INTERVAL_SECONDS:-300}
       - DATA_HOME=/data
       - SEED_HOME=/seed
+      # Database backend (SQLite default; set DATABASE_BACKEND=postgres to switch)
+      - DATABASE_BACKEND=${DATABASE_BACKEND:-sqlite}
+      - DATABASE_HOST=${DATABASE_HOST:-postgres}
+      - DATABASE_PORT=${DATABASE_PORT:-5432}
+      - DATABASE_NAME=${DATABASE_NAME:-meshcorehub}
+      - DATABASE_SCHEMA=${DATABASE_SCHEMA:-meshcorehub}
+      - DATABASE_USER=${DATABASE_USER:-meshcorehub}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD:-}
       # Webhook configuration
       - WEBHOOK_ADVERTISEMENT_URL=${WEBHOOK_ADVERTISEMENT_URL:-}
       - WEBHOOK_ADVERTISEMENT_SECRET=${WEBHOOK_ADVERTISEMENT_SECRET:-}
@@ -240,6 +278,14 @@ services:
       - MQTT_TRANSPORT=${MQTT_TRANSPORT:-websockets}
       - MQTT_WS_PATH=${MQTT_WS_PATH:-/}
       - DATA_HOME=/data
+      # Database backend (SQLite default; set DATABASE_BACKEND=postgres to switch)
+      - DATABASE_BACKEND=${DATABASE_BACKEND:-sqlite}
+      - DATABASE_HOST=${DATABASE_HOST:-postgres}
+      - DATABASE_PORT=${DATABASE_PORT:-5432}
+      - DATABASE_NAME=${DATABASE_NAME:-meshcorehub}
+      - DATABASE_SCHEMA=${DATABASE_SCHEMA:-meshcorehub}
+      - DATABASE_USER=${DATABASE_USER:-meshcorehub}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD:-}
       - API_HOST=0.0.0.0
       - API_PORT=8000
       # Worker processes for multi-core concurrency (1 = single process).
@@ -374,10 +420,23 @@ services:
       - core
       - migrate
     restart: "no"
+    # Wait for postgres only when it's running (postgres profile active);
+    # required:false means SQLite deployments don't pull it in or block on it.
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
     volumes:
       - data:/data
     environment:
       - DATA_HOME=/data
+      - DATABASE_BACKEND=${DATABASE_BACKEND:-sqlite}
+      - DATABASE_HOST=${DATABASE_HOST:-postgres}
+      - DATABASE_PORT=${DATABASE_PORT:-5432}
+      - DATABASE_NAME=${DATABASE_NAME:-meshcorehub}
+      - DATABASE_SCHEMA=${DATABASE_SCHEMA:-meshcorehub}
+      - DATABASE_USER=${DATABASE_USER:-meshcorehub}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD:-}
     command: ["db", "upgrade"]
 
   # ==========================================================================
@@ -417,3 +476,5 @@ volumes:
     name: ${COMPOSE_PROJECT_NAME:-hub}_observer_data
   redis_data:
     name: ${COMPOSE_PROJECT_NAME:-hub}_redis_data
+  postgres_data:
+    name: ${COMPOSE_PROJECT_NAME:-hub}_postgres_data
