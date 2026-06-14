@@ -1,11 +1,20 @@
 """Shared pytest fixtures for all tests."""
 
+import dotenv
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from meshcore_hub.common import config as config_module
 from meshcore_hub.common.models import Base
+
+# The CLI entrypoint (meshcore_hub.__main__) calls load_dotenv() at import time so
+# deployments can drop a .env in place. Importing it during collection (e.g. from
+# test_main.py) would otherwise leak a developer's repo-root .env straight into
+# os.environ for the whole session — bypassing _ignore_dotenv, which only stops
+# pydantic-settings from reading the file. conftest.py is imported before any test
+# module is collected, so neutralising load_dotenv here binds first.
+dotenv.load_dotenv = lambda *args, **kwargs: False
 
 
 def _settings_classes():
