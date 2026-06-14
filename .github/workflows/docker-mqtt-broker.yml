@@ -43,7 +43,7 @@ jobs:
 
       - name: Cache last-built upstream SHA
         id: cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .last-upstream-sha
           key: mqtt-broker-upstream-${{ steps.check.outputs.upstream_sha }}
