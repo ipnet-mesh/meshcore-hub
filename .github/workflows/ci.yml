@@ -3,13 +3,33 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - ".env.example"
+      - "LICENSE"
+      - "FUNDING.yml"
   pull_request:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - ".env.example"
+      - "LICENSE"
+      - "FUNDING.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
 
@@ -17,6 +37,7 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version-file: ".python-version"
+          cache: pip
 
       - name: Run pre-commit
         uses: pre-commit/action@v3.0.1
@@ -24,6 +45,7 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
 
@@ -31,6 +53,7 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version-file: ".python-version"
+          cache: pip
 
       - name: Install dependencies
         run: |
@@ -39,7 +62,7 @@ jobs:
 
       - name: Run tests with pytest
         run: |
-          pytest --cov=meshcore_hub --cov-report=xml --cov-report=term-missing --junitxml=junit.xml -o junit_family=legacy
+          pytest -nauto --cov=meshcore_hub --cov-report=xml --cov-report=term-missing --junitxml=junit.xml -o junit_family=legacy
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
@@ -60,7 +83,9 @@ jobs:
   build:
     name: Build Package
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [lint, test]
+    if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v6
 
@@ -68,6 +93,7 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version-file: ".python-version"
+          cache: pip
 
       - name: Install build tools
         run: |

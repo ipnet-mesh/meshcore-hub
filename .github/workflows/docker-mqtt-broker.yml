@@ -15,38 +15,79 @@ env:
   UPSTREAM_REPO: michaelhart/meshcore-mqtt-broker
   IMAGE_NAME: ipnet-mesh/meshcore-mqtt-broker
 
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
 jobs:
   build:
     name: Build and Push MQTT Broker
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
+    timeout-minutes: 60
 
     steps:
+      - name: Check upstream for new commits
+        id: check
+        run: |
+          set -euo pipefail
+          UPSTREAM_SHA="$(git ls-remote "https://github.com/${UPSTREAM_REPO}.git" "refs/heads/${{ inputs.ref || 'main' }}" | awk '{print $1}')"
+          if [ -z "${UPSTREAM_SHA}" ]; then
+            UPSTREAM_SHA="$(git ls-remote "https://github.com/${UPSTREAM_REPO}.git" "${{ inputs.ref || 'main' }}" | awk '{print $1}')"
+          fi
+          echo "upstream_sha=${UPSTREAM_SHA}" >> "$GITHUB_OUTPUT"
+          echo "Latest upstream SHA: ${UPSTREAM_SHA}"
+
+      - name: Cache last-built upstream SHA
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: .last-upstream-sha
+          key: mqtt-broker-upstream-${{ steps.check.outputs.upstream_sha }}
+
+      - name: Decide whether to build
+        id: decide
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Persist upstream SHA for cache write
+        if: steps.decide.outputs.changed == 'true'
+        run: echo "${{ steps.check.outputs.upstream_sha }}" > .last-upstream-sha
+
       - name: Checkout this repo (sparse)
+        if: steps.decide.outputs.changed == 'true'
         uses: actions/checkout@v6
         with:
+          persist-credentials: false
           sparse-checkout: |
             etc/docker/meshcore-mqtt-broker
 
       - name: Checkout upstream source
+        if: steps.decide.outputs.changed == 'true'
         uses: actions/checkout@v6
         with:
+          persist-credentials: false
           repository: ${{ env.UPSTREAM_REPO }}
           ref: ${{ inputs.ref || 'main' }}
           path: upstream
 
       - name: Copy Dockerfile into upstream source
+        if: steps.decide.outputs.changed == 'true'
         run: cp etc/docker/meshcore-mqtt-broker/Dockerfile upstream/Dockerfile
 
       - name: Set up QEMU
+        if: steps.decide.outputs.changed == 'true'
         uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
+        if: steps.decide.outputs.changed == 'true'
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to Container Registry
+        if: steps.decide.outputs.changed == 'true'
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
@@ -54,6 +95,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract metadata
+        if: steps.decide.outputs.changed == 'true'
         id: meta
         uses: docker/metadata-action@v6
         with:
@@ -63,6 +105,7 @@ jobs:
             type=sha
 
       - name: Build and push Docker image
+        if: steps.decide.outputs.changed == 'true'
         uses: docker/build-push-action@v7
         with:
           context: ./upstream
@@ -73,3 +116,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Skip build (unchanged)
+        if: steps.decide.outputs.changed != 'true'
+        run: echo "Upstream ${{ steps.check.outputs.upstream_sha }} already built; skipping."
