@@ -175,6 +175,32 @@ class TestConfigJsonXssEscaping:
         assert parsed["role_names"]["test"] == "test"
 
 
+class TestApiProxyQueryParams:
+    """The proxy must forward repeated query params without collapsing them."""
+
+    def test_repeated_query_params_all_forwarded(
+        self, client: TestClient, mock_http_client: MockHttpClient
+    ) -> None:
+        # Multi-valued observer filter: the backend must receive BOTH values.
+        # dict(request.query_params) would drop "A" and only forward "B",
+        # making OR-filtered messages disappear when a second observer is added.
+        client.get("/api/v1/messages?observed_by=A&observed_by=B")
+
+        forwarded = mock_http_client.last_request_params
+        pairs = list(forwarded)  # list of (key, value) tuples
+        assert ("observed_by", "A") in pairs
+        assert ("observed_by", "B") in pairs
+
+    def test_single_query_param_forwarded(
+        self, client: TestClient, mock_http_client: MockHttpClient
+    ) -> None:
+        client.get("/api/v1/messages?observed_by=A&limit=10")
+
+        pairs = list(mock_http_client.last_request_params)
+        assert ("observed_by", "A") in pairs
+        assert ("limit", "10") in pairs
+
+
 class TestCheckApiAccess:
     """Unit tests for check_api_access with _OPEN, _AUTHENTICATED, and role-based levels."""
 
