@@ -719,8 +719,11 @@ def create_app(
         client: httpx.AsyncClient = request.app.state.http_client
         url = f"/api/{path}"
 
-        # Forward query parameters
-        params = dict(request.query_params)
+        # Forward query parameters. Use multi_items() (a list of (key, value)
+        # tuples) rather than dict(...), which would collapse repeated keys to
+        # the last value and drop all but one value of multi-valued filters such
+        # as observed_by (?observed_by=A&observed_by=B).
+        params = request.query_params.multi_items()
 
         # Forward body for write methods
         body = None
