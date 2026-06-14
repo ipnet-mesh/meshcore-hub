@@ -88,6 +88,8 @@
     "filter_member_label": "Member",
     "filter_operator_label": "Operator",
     "filter_observer_label": "Observer",
+    "filter_observer_enable": "Click to show this observer",
+    "filter_observer_disable": "Click to hide this observer",
     "node_type": "Node Type",
     "show": "Show",
     "search_placeholder": "Search by name, ID, or public key...",

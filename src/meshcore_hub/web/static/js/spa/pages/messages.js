@@ -4,9 +4,9 @@ import {
     getConfig, formatDateTime, formatDateTimeShort,
     getChannelLabelsMap, resolveChannelLabel,
     warningBadge,
-    pagination, sortableTableHeader, mobileSortSelect, timezoneIndicator,
-    renderFilterCard, autoSubmit, submitOnEnter,
-    observerIcons
+    pagination, sortableTableHeader, mobileSortSelect,
+    renderFilterCard, autoSubmit,
+    observerIcons, getDisabledObservers, toggleObserver, observerFilterBadges
 } from '../components.js';
 import { createAutoRefresh } from '../auto-refresh.js';
 
@@ -15,14 +15,14 @@ export async function render(container, params, router) {
     const query = params.query || {};
     const message_type = query.message_type || '';
     const channel_idx = query.channel_idx || '';
-    const observed_by = query.observed_by
-        ? (Array.isArray(query.observed_by) ? query.observed_by : [query.observed_by])
-        : [];
     const page = parseInt(query.page, 10) || 1;
     const limit = parseInt(query.limit, 10) || 50;
     const offset = (page - 1) * limit;
     const sort = query.sort || 'time';
     const order = query.order || 'desc';
+
+    // Observer filter is sourced from localStorage (shared toggle badges), not the URL.
+    let disabledObservers = getDisabledObservers();
 
     const config = getConfig();
     const features = config.features || {};
@@ -210,10 +210,10 @@ ${displayContent}`, container);
 
     async function fetchAndRenderData() {
         try {
-            const apiParams = { limit, offset, message_type, channel_idx, sort, order };
-            if (observed_by.length > 0) apiParams.observed_by = observed_by;
-            const [data, nodesData, channelsData] = await Promise.all([
-                apiGet('/api/v1/messages', apiParams, { signal }),
+            // Phase 1: fetch the observer node list (and channels) first. The messages
+            // API filters observers by inclusion only, so we need the full observer list
+            // to translate the stored "disabled" set into an explicit include-list.
+            const [nodesData, channelsData] = await Promise.all([
                 apiGet('/api/v1/nodes', { limit: 500, observer: true }, { signal }),
                 apiGet('/api/v1/channels', {}, { signal }),
             ]);
@@ -224,15 +224,44 @@ ${displayContent}`, container);
                     .filter(([idx]) => Number.isInteger(idx)),
             );
             channelLabels = new Map([...builtinLabels, ...customLabels]);
-            const messages = dedupeBySignature(data.items || []);
             const allNodes = nodesData.items || [];
 
             const sortedNodes = allNodes.map(n => {
                 const tagName = n.tags?.find(t => t.key === 'name')?.value;
                 return { ...n, _sortName: (tagName || n.name || '').toLowerCase(), _displayName: tagName || n.name || n.public_key.slice(0, 12) + '...' };
             }).sort((a, b) => a._sortName.localeCompare(b._sortName));
+
+            const enabledObserverKeys = sortedNodes
+                .filter(n => !disabledObservers.has(n.public_key))
+                .map(n => n.public_key);
+            // Only constrain when some current observer is actually hidden (a stale
+            // disabled key that no longer matches a node should not filter anything).
+            const observerFilterActive = enabledObserverKeys.length < sortedNodes.length;
+
+            const onObserverToggle = (pubkey) => {
+                disabledObservers = toggleObserver(pubkey, sortedNodes.length);
+                if (page > 1) {
+                    // Re-scoping the data invalidates the current page; reset to page 1.
+                    const sp = new URLSearchParams(window.location.search);
+                    sp.delete('page');
+                    const qs = sp.toString();
+                    navigate(qs ? `/messages?${qs}` : '/messages');
+                } else {
+                    fetchAndRenderData();
+                }
+            };
+
+            // Phase 2: fetch the messages with the resolved observer filter.
+            const apiParams = { limit, offset, message_type, channel_idx, sort, order };
+            if (observerFilterActive) apiParams.observed_by = enabledObserverKeys;
+            const data = await apiGet('/api/v1/messages', apiParams, { signal });
+            const messages = dedupeBySignature(data.items || []);
             const total = data.total || 0;
             const totalPages = Math.ceil(total / limit);
+
+            const observerBadges = (extraClass) => observerFilterBadges({
+                nodes: sortedNodes, disabled: disabledObservers, onToggle: onObserverToggle, extraClass,
+            });
 
             const mobileCards = messages.length === 0
                 ? html`<div class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.messages').toLowerCase() })}</div>`
@@ -313,26 +342,8 @@ ${displayContent}`, container);
                 });
 
             const paginationBlock = pagination(page, totalPages, '/messages', {
-                message_type, channel_idx, observed_by, limit, sort, order,
+                message_type, channel_idx, limit, sort, order,
             });
-
-            const observerFilter = sortedNodes.length > 0
-                ? html`
-                <div class="flex flex-col gap-1">
-                    <label class="flex items-center py-1">
-                        <span class="opacity-80 text-sm">${t('common.filter_observer_label')}</span>
-                    </label>
-                    <select name="observed_by" multiple size="3"
-                            class="select select-bordered select-sm w-full max-w-xs">
-                        ${sortedNodes.map(n => html`
-                            <option value=${n.public_key}
-                                    ?selected=${observed_by.includes(n.public_key)}>
-                                ${n._displayName}
-                            </option>
-                        `)}
-                    </select>
-                </div>`
-                : nothing;
 
             const filterFields = [
                 () => html`
@@ -362,11 +373,7 @@ ${displayContent}`, container);
                 </select>
             </div>`,
             ];
-            if (sortedNodes.length > 0) {
-                filterFields.push(() => observerFilter);
-            }
-
-            const hasActiveFilters = message_type !== '' || channel_idx !== '' || observed_by.length > 0;
+            const hasActiveFilters = message_type !== '' || channel_idx !== '';
             const existingDetails = container.querySelector('details.collapse');
             const isFilterOpen = existingDetails ? existingDetails.open : hasActiveFilters;
 
@@ -378,13 +385,15 @@ ${displayContent}`, container);
                 defaultOpen: isFilterOpen,
             });
 
-            const headerParams = { message_type, channel_idx, observed_by, limit };
+            const headerParams = { message_type, channel_idx, limit };
             const sortable = (label, sortKey) => sortableTableHeader(label, {
                 sortKey, currentSort: sort, currentOrder: order,
                 navigate, basePath: '/messages', params: headerParams,
             });
 
             renderPage(html`${filterCard}
+
+${observerBadges('hidden lg:flex mb-4')}
 
 ${mobileSortSelect({
     currentSort: sort, currentOrder: order,
@@ -401,6 +410,8 @@ ${mobileSortSelect({
         { value: 'message:desc', label: t('messages.sort.message_za') },
     ],
 })}
+
+${observerBadges('flex lg:hidden mb-4')}
 
 <div class="lg:hidden space-y-3">
     ${mobileCards}

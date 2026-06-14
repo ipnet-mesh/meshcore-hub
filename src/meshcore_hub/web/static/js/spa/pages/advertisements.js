@@ -5,7 +5,7 @@ import {
     warningBadge,
     pagination, sortableTableHeader, mobileSortSelect,
     renderFilterCard, autoSubmit, submitOnEnter, copyToClipboard, renderNodeDisplay,
-    observerIcons
+    observerIcons, getDisabledObservers, toggleObserver, observerFilterBadges
 } from '../components.js';
 import { createAutoRefresh } from '../auto-refresh.js';
 
@@ -26,9 +26,6 @@ export async function render(container, params, router) {
     const { signal } = params || {};
     const query = params.query || {};
     const search = query.search || '';
-    const observed_by = query.observed_by
-        ? (Array.isArray(query.observed_by) ? query.observed_by : [query.observed_by])
-        : [];
     const adopted_by = query.adopted_by || '';
     const route_type = query.route_type || 'flood,transport_flood';
     const page = parseInt(query.page, 10) || 1;
@@ -36,6 +33,9 @@ export async function render(container, params, router) {
     const offset = (page - 1) * limit;
     const sort = query.sort || 'time';
     const order = query.order || 'desc';
+
+    // Observer filter is sourced from localStorage (shared toggle badges), not the URL.
+    let disabledObservers = getDisabledObservers();
 
     const config = getConfig();
     const features = config.features || {};
@@ -84,27 +84,22 @@ ${displayContent}`, container);
 
     async function fetchAndRenderData() {
         try {
-            const apiParams = { limit, offset, search, sort, order, route_type };
-            if (observed_by.length > 0) apiParams.observed_by = observed_by;
-            if (adopted_by) apiParams.adopted_by = adopted_by;
-            const fetches = [
-                apiGet('/api/v1/advertisements', apiParams, { signal }),
+            // Phase 1: fetch the observer node list (and operator profiles) first.
+            // The advertisements API filters observers by inclusion only, so we need
+            // the full observer list to translate the stored "disabled" set into an
+            // explicit include-list before fetching the data.
+            const metaFetches = [
                 apiGet('/api/v1/nodes', { limit: 500, observer: true }, { signal }),
             ];
             if (config.oidc_enabled) {
-                fetches.push(apiGet('/api/v1/user/profiles', { limit: 500 }, { signal }));
+                metaFetches.push(apiGet('/api/v1/user/profiles', { limit: 500 }, { signal }));
             }
-            const results = await Promise.all(fetches);
-            const data = results[0];
-            const nodesData = results[1];
+            const metaResults = await Promise.all(metaFetches);
+            const nodesData = metaResults[0];
             const operatorRole = config.role_names?.operator || 'operator';
             const profiles = config.oidc_enabled
-                ? (results[2]?.items || []).filter(p => p.roles && p.roles.includes(operatorRole))
+                ? (metaResults[1]?.items || []).filter(p => p.roles && p.roles.includes(operatorRole))
                 : [];
-
-            const advertisements = data.items || [];
-            const total = data.total || 0;
-            const totalPages = Math.ceil(total / limit);
             const allNodes = nodesData.items || [];
 
             const sortedNodes = allNodes.map(n => {
@@ -112,23 +107,39 @@ ${displayContent}`, container);
                 return { ...n, _sortName: (tagName || n.name || '').toLowerCase(), _displayName: tagName || n.name || n.public_key.slice(0, 12) + '...' };
             }).sort((a, b) => a._sortName.localeCompare(b._sortName));
 
-            const nodesFilter = sortedNodes.length > 0
-                ? html`
-                <div class="flex flex-col gap-1">
-                    <label class="flex items-center py-1">
-                        <span class="opacity-80 text-sm">${t('common.filter_observer_label')}</span>
-                    </label>
-                    <select name="observed_by" multiple size="2"
-                            class="select select-bordered select-sm w-full max-w-xs">
-                        ${sortedNodes.map(n => html`
-                            <option value=${n.public_key}
-                                    ?selected=${observed_by.includes(n.public_key)}>
-                                ${n._displayName}
-                            </option>
-                        `)}
-                    </select>
-                </div>`
-                : nothing;
+            const enabledObserverKeys = sortedNodes
+                .filter(n => !disabledObservers.has(n.public_key))
+                .map(n => n.public_key);
+            // Only constrain when some current observer is actually hidden (a stale
+            // disabled key that no longer matches a node should not filter anything).
+            const observerFilterActive = enabledObserverKeys.length < sortedNodes.length;
+
+            const onObserverToggle = (pubkey) => {
+                disabledObservers = toggleObserver(pubkey, sortedNodes.length);
+                if (page > 1) {
+                    // Re-scoping the data invalidates the current page; reset to page 1.
+                    const sp = new URLSearchParams(window.location.search);
+                    sp.delete('page');
+                    const qs = sp.toString();
+                    navigate(qs ? `/advertisements?${qs}` : '/advertisements');
+                } else {
+                    fetchAndRenderData();
+                }
+            };
+
+            // Phase 2: fetch the advertisements with the resolved observer filter.
+            const apiParams = { limit, offset, search, sort, order, route_type };
+            if (observerFilterActive) apiParams.observed_by = enabledObserverKeys;
+            if (adopted_by) apiParams.adopted_by = adopted_by;
+            const data = await apiGet('/api/v1/advertisements', apiParams, { signal });
+
+            const advertisements = data.items || [];
+            const total = data.total || 0;
+            const totalPages = Math.ceil(total / limit);
+
+            const observerBadges = (extraClass) => observerFilterBadges({
+                nodes: sortedNodes, disabled: disabledObservers, onToggle: onObserverToggle, extraClass,
+            });
 
             const mobileCards = advertisements.length === 0
                 ? html`<div class="text-center py-8 opacity-70">${t('common.no_entity_found', { entity: t('entities.advertisements').toLowerCase() })}</div>`
@@ -206,7 +217,7 @@ ${displayContent}`, container);
                 });
 
             const paginationBlock = pagination(page, totalPages, '/advertisements', {
-                search, observed_by, adopted_by, route_type, limit, sort, order,
+                search, adopted_by, route_type, limit, sort, order,
             });
 
             const filterFields = [
@@ -248,11 +259,7 @@ ${displayContent}`, container);
                 </select>
             </div>`);
             }
-            if (sortedNodes.length > 0) {
-                filterFields.push(() => nodesFilter);
-            }
-
-            const hasActiveFilters = search !== '' || observed_by.length > 0 || (config.oidc_enabled && adopted_by !== '') || route_type !== 'flood,transport_flood';
+            const hasActiveFilters = search !== '' || (config.oidc_enabled && adopted_by !== '') || route_type !== 'flood,transport_flood';
             const existingDetails = container.querySelector('details.collapse');
             const isFilterOpen = existingDetails ? existingDetails.open : hasActiveFilters;
 
@@ -264,13 +271,15 @@ ${displayContent}`, container);
                 defaultOpen: isFilterOpen,
             });
 
-            const headerParams = { search, observed_by, adopted_by, route_type, limit };
+            const headerParams = { search, adopted_by, route_type, limit };
             const sortable = (label, sortKey) => sortableTableHeader(label, {
                 sortKey, currentSort: sort, currentOrder: order,
                 navigate, basePath: '/advertisements', params: headerParams,
             });
 
             renderPage(html`${filterCard}
+
+${observerBadges('hidden lg:flex mb-4')}
 
 ${mobileSortSelect({
     currentSort: sort, currentOrder: order,
@@ -285,6 +294,8 @@ ${mobileSortSelect({
         { value: 'public_key:desc', label: t('advertisements.sort.key_desc') },
     ],
 })}
+
+${observerBadges('flex lg:hidden mb-4')}
 
 <div class="lg:hidden space-y-3">
     ${mobileCards}
