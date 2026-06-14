@@ -332,6 +332,8 @@ services:
       - NETWORK_CONTACT_YOUTUBE=${NETWORK_CONTACT_YOUTUBE:-}
       - NETWORK_WELCOME_TEXT=${NETWORK_WELCOME_TEXT:-}
       - NETWORK_ANNOUNCEMENT=${NETWORK_ANNOUNCEMENT:-}
+      - SYSTEM_ANNOUNCEMENT=${SYSTEM_ANNOUNCEMENT:-}
+      - SYSTEM_MAINTENANCE=${SYSTEM_MAINTENANCE:-false}
       - CONTENT_HOME=/content
       - TZ=${TZ:-UTC}
       # Feature flags (set to false to disable specific pages)
