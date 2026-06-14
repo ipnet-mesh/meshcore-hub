@@ -1,15 +1,10 @@
-ifneq (,$(wildcard ./.env))
-    include .env
-    export
-endif
-
 COMPOSE_PROJECT_NAME ?= hub
 PROFILES ?= mqtt core
 COMPOSE_FILES = -f docker-compose.yml -f docker-compose.dev.yml
 VOLUMES = $(COMPOSE_PROJECT_NAME)_data $(COMPOSE_PROJECT_NAME)_mqtt_data \
           $(COMPOSE_PROJECT_NAME)_observer_data
 
-.PHONY: build up down logs backup restore
+.PHONY: build up down logs backup restore test test-cov test-unit
 
 build:
 	docker compose $(COMPOSE_FILES) --profile all build --no-cache
@@ -38,3 +33,14 @@ restore:
 	echo "Restoring $$vol from $(FILE)..."; \
 	docker run --rm -v $$vol:/data -v $(PWD)/backup:/backup \
 		alpine sh -c "cd / && tar xzf /backup/$$(basename $(FILE))"
+
+# --- Tests ---------------------------------------------------------------
+# Coverage is opt-in (use test-cov). Dev loop runs in parallel across cores.
+test:
+	pytest -nauto --no-cov
+
+test-cov:
+	pytest --cov=meshcore_hub --cov-report=term-missing
+
+test-unit:
+	pytest -nauto --no-cov tests/test_common/ tests/test_api/ tests/test_collector/ tests/test_web/

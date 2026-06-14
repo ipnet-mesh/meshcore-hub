@@ -5,6 +5,7 @@ import hashlib
 import pytest
 from pydantic import ValidationError
 from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from meshcore_hub.common.models import Base, Channel, ChannelVisibility
@@ -118,7 +119,7 @@ class TestChannelModel:
         db_session.commit()
         db_session.add(ch2)
 
-        with pytest.raises(Exception, match=""):
+        with pytest.raises(IntegrityError):
             db_session.commit()
 
     def test_channel_default_values(self, db_session) -> None:

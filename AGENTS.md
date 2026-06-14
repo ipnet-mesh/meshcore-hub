@@ -40,9 +40,16 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile core ex
 
 ## Tests & Quality
 
+Coverage is **opt-in**; add `--cov=meshcore_hub` (or `make test-cov`) when you want it. The dev loop defaults to no coverage and parallel across CPU cores.
+
 ```bash
-# Canonical: run tests and surface the pass/fail summary
-pytest --no-cov 2>&1 | grep -iE "passed|failed" | tail -3
+# Canonical: run tests in parallel, no coverage, surface the pass/fail summary
+pytest -nauto --no-cov 2>&1 | grep -iE "passed|failed" | tail -3
+
+# Makefile shorthands
+make test        # pytest -nauto --no-cov (parallel dev loop)
+make test-cov    # full run with coverage report
+make test-unit   # parallel, fast unit suites only (skips e2e)
 
 # Targeted by component (run only what you changed)
 pytest --no-cov tests/test_web/        # templates, static JS, web routes

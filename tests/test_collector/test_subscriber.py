@@ -49,8 +49,9 @@ class TestSubscriber:
 
     def test_stop_disconnects_mqtt(self, subscriber, mock_mqtt_client):
         """Test that stop disconnects MQTT."""
-        subscriber.start()
-        subscriber.stop()
+        with patch("meshcore_hub.collector.subscriber.time.sleep"):
+            subscriber.start()
+            subscriber.stop()
 
         mock_mqtt_client.stop.assert_called_once()
         mock_mqtt_client.disconnect.assert_called_once()
@@ -1229,13 +1230,14 @@ class TestChannelKeyRefresh:
             mock_mqtt_client, db_manager, channel_refresh_interval_seconds=300
         )
         subscriber._running = True
-        subscriber._start_channel_refresh_scheduler()
+        with patch("meshcore_hub.collector.subscriber.time.sleep"):
+            subscriber._start_channel_refresh_scheduler()
 
-        assert subscriber._channel_refresh_thread is not None
-        assert subscriber._channel_refresh_thread.daemon is True
+            assert subscriber._channel_refresh_thread is not None
+            assert subscriber._channel_refresh_thread.daemon is True
 
-        subscriber._running = False
-        subscriber._channel_refresh_thread.join(timeout=2.0)
+            subscriber._running = False
+            subscriber._channel_refresh_thread.join(timeout=2.0)
 
     def test_channel_refresh_scheduler_disabled(self, mock_mqtt_client, db_manager):
         """Test channel refresh scheduler is disabled when interval is 0."""
@@ -1255,10 +1257,11 @@ class TestChannelKeyRefresh:
             mock_mqtt_client, db_manager, channel_refresh_interval_seconds=300
         )
         subscriber._running = True
-        subscriber._start_channel_refresh_scheduler()
-        subscriber._running = False
+        with patch("meshcore_hub.collector.subscriber.time.sleep"):
+            subscriber._start_channel_refresh_scheduler()
+            subscriber._running = False
 
-        subscriber._stop_channel_refresh_scheduler()
+            subscriber._stop_channel_refresh_scheduler()
         assert subscriber._channel_refresh_thread is not None
         assert not subscriber._channel_refresh_thread.is_alive()
 
