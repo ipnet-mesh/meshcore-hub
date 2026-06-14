@@ -545,6 +545,88 @@ export function observerIcons(observers) {
     return html`<span class="badge badge-sm badge-primary cursor-help observer-badge" title=${tooltip}>${observers.length}</span>`;
 }
 
+// --- Observer filter (localStorage-backed toggle badges) ---
+
+// Shared across the Adverts and Messages pages. We persist the *disabled* set
+// so any newly-discovered observer node defaults to enabled automatically.
+const OBSERVER_FILTER_KEY = 'meshcore-observers-disabled';
+
+/**
+ * Read the set of disabled (deselected) observer public keys from localStorage.
+ * @returns {Set<string>}
+ */
+export function getDisabledObservers() {
+    try {
+        const raw = localStorage.getItem(OBSERVER_FILTER_KEY);
+        if (!raw) return new Set();
+        const arr = JSON.parse(raw);
+        return Array.isArray(arr) ? new Set(arr) : new Set();
+    } catch {
+        return new Set();
+    }
+}
+
+/**
+ * Persist the set of disabled observer public keys to localStorage.
+ * @param {Set<string>} disabled
+ */
+export function setDisabledObservers(disabled) {
+    try {
+        localStorage.setItem(OBSERVER_FILTER_KEY, JSON.stringify([...disabled]));
+    } catch {
+        // Ignore quota/availability errors — filtering still works in-memory.
+    }
+}
+
+/**
+ * Toggle an observer's enabled state, enforcing that at least one observer
+ * stays enabled. Returns the updated disabled set (persisted).
+ * @param {string} pubkey - Observer public key to toggle
+ * @param {number} totalObserverCount - Total number of observer nodes
+ * @returns {Set<string>}
+ */
+export function toggleObserver(pubkey, totalObserverCount) {
+    const disabled = getDisabledObservers();
+    if (disabled.has(pubkey)) {
+        disabled.delete(pubkey);
+    } else {
+        // Block disabling the last enabled observer.
+        if (totalObserverCount - disabled.size <= 1) {
+            return disabled;
+        }
+        disabled.add(pubkey);
+    }
+    setDisabledObservers(disabled);
+    return disabled;
+}
+
+/**
+ * Render a row of clickable observer filter badges.
+ * @param {Array<Object>} options.nodes - Observer nodes (with public_key and _displayName)
+ * @param {Set<string>} options.disabled - Currently disabled observer public keys
+ * @param {Function} options.onToggle - Called with a public_key when a badge is clicked
+ * @param {string} [options.extraClass] - Wrapper classes; must set the display
+ *   (e.g. 'hidden lg:flex' or 'flex lg:hidden') since the base omits it to avoid conflicts
+ * @returns {TemplateResult|nothing}
+ */
+export function observerFilterBadges({ nodes, disabled, onToggle, extraClass = 'flex' }) {
+    if (!nodes || nodes.length === 0) return nothing;
+    return html`<div class="flex-wrap items-center gap-2 ${extraClass}">
+        <span class="opacity-80 text-sm">${t('common.filter_observer_label')}:</span>
+        ${nodes.map(n => {
+            const enabled = !disabled.has(n.public_key);
+            const cls = enabled ? 'badge badge-primary' : 'badge badge-ghost opacity-50';
+            const title = enabled
+                ? t('common.filter_observer_disable')
+                : t('common.filter_observer_enable');
+            return html`<button type="button"
+                class="${cls} cursor-pointer"
+                title=${title}
+                @click=${() => onToggle(n.public_key)}>${n._displayName}</button>`;
+        })}
+    </div>`;
+}
+
 // --- Form Helpers ---
 
 /**
