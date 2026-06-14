@@ -18,7 +18,22 @@ Investigation findings:
 - The frontend correctly sends repeated params: `?observed_by=A&observed_by=B`
   (`web/static/js/spa/api.js` appends each array item; `pages/messages.js:263`).
 
-**Root cause — cache key collision.** The cached-response key is built by
+**Primary root cause — the web proxy collapses repeated params.** The SPA calls
+the backend through the web API proxy (`src/meshcore_hub/web/app.py:696`
+`api_proxy`). It forwarded query params with:
+
+```python
+params = dict(request.query_params)   # collapses repeated keys to LAST value
+```
+
+`dict(QueryParams)` keeps only the last value of a repeated key, so
+`?observed_by=A&observed_by=B` was forwarded to the backend as `observed_by=B`
+only. The backend then filtered to B's events, dropping the A-only message — the
+exact reported symptom, and independent of caching. Fix: forward
+`request.query_params.multi_items()` (a list of `(key, value)` tuples; httpx
+preserves them as repeated params).
+
+**Secondary root cause — cache key collision.** The cached-response key is built by
 `sorted_query_string` (`src/meshcore_hub/api/cache.py:15`):
 
 ```python

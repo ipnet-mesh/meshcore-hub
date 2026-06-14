@@ -28,6 +28,9 @@ class MockHttpClient:
     def __init__(self) -> None:
         """Initialize mock client with default responses."""
         self._responses: dict[str, dict[str, Any]] = {}
+        # Records the params forwarded by the most recent request() call so
+        # tests can assert how the proxy forwards query parameters.
+        self.last_request_params: Any = None
         self._default_responses()
 
     def _default_responses(self) -> None:
@@ -265,6 +268,7 @@ class MockHttpClient:
         headers: dict | None = None,
     ) -> Response:
         """Mock generic request (used by API proxy)."""
+        self.last_request_params = params
         key = f"{method.upper()}:{url}"
         if key in self._responses:
             return self._create_response(key)
