@@ -65,7 +65,7 @@ FROM python:3.14-slim AS runtime
 # Labels
 LABEL org.opencontainers.image.title="MeshCore Hub" \
       org.opencontainers.image.description="Python monorepo for managing MeshCore mesh networks" \
-      org.opencontainers.image.source="https://github.com/meshcore-dev/meshcore-hub"
+      org.opencontainers.image.source="https://github.com/ipnet-mesh/meshcore-hub"
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
