@@ -13,11 +13,17 @@ logger = logging.getLogger(__name__)
 
 
 def sorted_query_string(request: Request) -> str:
-    """Build a deterministic query string from request params, sorted by key."""
-    params = list(request.query_params.items())
+    """Build a deterministic query string from request params, sorted by key.
+
+    Uses multi_items() so repeated query params (e.g. observed_by) are all
+    preserved; items() keeps only the last value of a repeated key, which would
+    collapse different filter sets onto the same cache key and serve stale
+    responses. Sorting by the full (key, value) tuple keeps the result
+    order-independent (observed_by=A&observed_by=B == observed_by=B&observed_by=A).
+    """
+    params = sorted(request.query_params.multi_items())
     if not params:
         return ""
-    params.sort(key=lambda p: p[0])
     return urlencode(params)
 
 

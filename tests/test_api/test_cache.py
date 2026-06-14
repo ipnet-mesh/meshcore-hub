@@ -48,6 +48,56 @@ class TestSortedQueryString:
         assert "search=" in result
         assert "foo" in result
 
+    def test_repeated_param_preserves_all_values(self):
+        # Repeated keys (e.g. observed_by) must all appear in the key; using
+        # items() instead of multi_items() would drop all but the last value.
+        scope = {
+            "type": "http",
+            "query_string": b"observed_by=A&observed_by=B",
+            "headers": [],
+        }
+        request = Request(scope)
+        result = sorted_query_string(request)
+        assert "observed_by=A" in result
+        assert "observed_by=B" in result
+
+    def test_repeated_param_order_independent(self):
+        # A&B and B&A describe the same OR filter and must map to one cache key.
+        ab = Request(
+            {
+                "type": "http",
+                "query_string": b"observed_by=A&observed_by=B",
+                "headers": [],
+            }
+        )
+        ba = Request(
+            {
+                "type": "http",
+                "query_string": b"observed_by=B&observed_by=A",
+                "headers": [],
+            }
+        )
+        assert sorted_query_string(ab) == sorted_query_string(ba)
+
+    def test_repeated_param_distinct_from_single(self):
+        # The collision that caused the bug: {A, B} must not share a cache key
+        # with {B} alone.
+        both = Request(
+            {
+                "type": "http",
+                "query_string": b"observed_by=A&observed_by=B",
+                "headers": [],
+            }
+        )
+        single = Request(
+            {
+                "type": "http",
+                "query_string": b"observed_by=B",
+                "headers": [],
+            }
+        )
+        assert sorted_query_string(both) != sorted_query_string(single)
+
 
 class TestNullCache:
     def test_get_returns_none(self):
