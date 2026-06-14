@@ -103,11 +103,18 @@ export async function render(container, params, router) {
         return { sender: null, text };
     }
 
+    // Collapse any run of newlines (and the whitespace around them) into a
+    // single space so multi-line messages don't blow up the table/card layout.
+    function collapseNewlines(text) {
+        if (!text || typeof text !== 'string') return text;
+        return text.replace(/\s*\n\s*/g, ' ');
+    }
+
     function messageTextWithSender(msg, text) {
         const parsed = parseSenderFromText(text || '-');
         const explicitSender = msg.sender_tag_name || msg.sender_name || (msg.pubkey_prefix || '').slice(0, 12) || null;
         const sender = explicitSender || parsed.sender;
-        const body = (parsed.text || text || '-').trim() || '-';
+        const body = collapseNewlines((parsed.text || text || '-').trim()) || '-';
         if (!sender) {
             return body;
         }
