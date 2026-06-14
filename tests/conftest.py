@@ -47,6 +47,89 @@ def _ignore_dotenv(monkeypatch):
         monkeypatch.setattr(cls, "model_config", cfg)
 
 
+def _settings_classes():
+    """CommonSettings and every subclass (recursively)."""
+    seen: set[type] = set()
+    stack = [config_module.CommonSettings]
+    while stack:
+        cls = stack.pop()
+        if cls in seen:
+            continue
+        seen.add(cls)
+        stack.extend(cls.__subclasses__())
+    return seen
+
+
+def _cli_envvars() -> set[str]:
+    """Collect Click envvar names from CLI commands (best-effort).
+
+    CLI options read env vars via ``envvar=`` independently of pydantic
+    Settings, so ``_settings_classes`` alone misses them (e.g. ``API_WORKERS``).
+    """
+    import importlib
+
+    import click
+
+    envvars: set[str] = set()
+
+    def _collect(cmd: click.BaseCommand) -> None:
+        if isinstance(cmd, click.Group):
+            for subcmd in cmd.commands.values():
+                _collect(subcmd)
+        if isinstance(cmd, click.Command):
+            for param in cmd.params:
+                if isinstance(param, click.Option) and param.envvar:
+                    ev = param.envvar
+                    if isinstance(ev, str):
+                        envvars.add(ev)
+                    else:
+                        envvars.update(ev)
+
+    for module_path in (
+        "meshcore_hub.api.cli",
+        "meshcore_hub.collector.cli",
+        "meshcore_hub.web.cli",
+    ):
+        try:
+            mod = importlib.import_module(module_path)
+            for attr in vars(mod).values():
+                if isinstance(attr, click.BaseCommand):
+                    _collect(attr)
+        except Exception:
+            pass
+
+    return envvars
+
+
+@pytest.fixture(autouse=True)
+def _ignore_dotenv(monkeypatch):
+    """Stop pydantic-settings and Click from reading ``.env`` or leaked env vars.
+
+    Three-pronged defence:
+
+    1. Disable ``env_file`` on every settings subclass so pydantic-settings
+       won't read the ``.env`` file itself.
+    2. Delete any env vars matching a settings field name from ``os.environ``
+       for the duration of the test.
+    3. Delete any env vars matching a Click CLI ``envvar=`` name (e.g.
+       ``API_WORKERS``) that aren't settings fields.
+
+    This catches vars exported into the shell via direnv, Makefile, CI, etc.
+    before pytest started. Tests must depend only on defaults and explicit
+    env overrides (``monkeypatch.setenv``).
+    """
+    for cls in _settings_classes():
+        cfg = dict(cls.model_config)
+        cfg["env_file"] = None
+        monkeypatch.setattr(cls, "model_config", cfg)
+
+        for field_name in cls.model_fields:
+            monkeypatch.delenv(field_name.upper(), raising=False)
+
+    for ev in _cli_envvars():
+        monkeypatch.delenv(ev, raising=False)
+
+
 @pytest.fixture
 def db_engine():
     """Create an in-memory SQLite database engine for testing."""

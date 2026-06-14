@@ -56,6 +56,7 @@ dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.1.0",
+    "pytest-xdist>=3.5.0",
     "black>=23.0.0",
     "flake8>=6.1.0",
     "mypy>=1.5.0",
@@ -137,6 +138,10 @@ module = [
 ]
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
+# Single-file mypy checks (e.g. pre-commit commit hook) lack full project
+# context and report false-positive unused-ignore on type:ignore comments
+# that are required in full-project mode.
+warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
 module = [
@@ -156,8 +161,9 @@ addopts = [
     "-ra",
     "-q",
     "--strict-markers",
-    "--cov=meshcore_hub",
-    "--cov-report=term-missing",
+]
+markers = [
+    "e2e: end-to-end tests requiring Docker services (skipped unless --e2e)",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",
