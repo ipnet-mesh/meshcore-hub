@@ -414,6 +414,132 @@ class TestFlashBannerMarkdown:
         assert "<b>bold</b>" in response.text
 
 
+class TestSystemAnnouncementBanner:
+    """Tests for the non-dismissable system announcement banner."""
+
+    def test_system_banner_present_when_set(
+        self, mock_http_client: MockHttpClient
+    ) -> None:
+        """System banner HTML is present and Markdown-rendered when set."""
+        app = create_app(
+            api_url="http://localhost:8000",
+            api_key="test-api-key",
+            system_announcement="**Outage** at 22:00",
+            features=ALL_FEATURES_ENABLED,
+        )
+        app.state.http_client = mock_http_client
+        client = TestClient(app, raise_server_exceptions=True)
+
+        html = client.get("/").text
+        assert 'id="system-banner"' in html
+        assert "<strong>Outage</strong> at 22:00" in html
+
+    def test_system_banner_absent_when_none(self, client: TestClient) -> None:
+        """System banner HTML is absent when not set."""
+        assert 'id="system-banner"' not in client.get("/").text
+
+    def test_system_banner_absent_for_empty_string(
+        self, mock_http_client: MockHttpClient
+    ) -> None:
+        """System banner is not shown for an empty string."""
+        app = create_app(
+            api_url="http://localhost:8000",
+            api_key="test-api-key",
+            system_announcement="",
+            features=ALL_FEATURES_ENABLED,
+        )
+        app.state.http_client = mock_http_client
+        client = TestClient(app, raise_server_exceptions=True)
+
+        assert 'id="system-banner"' not in client.get("/").text
+
+    def test_system_banner_not_dismissable(
+        self, mock_http_client: MockHttpClient
+    ) -> None:
+        """System banner has no dismiss button or sessionStorage script."""
+        app = create_app(
+            api_url="http://localhost:8000",
+            api_key="test-api-key",
+            system_announcement="Heads up",
+            features=ALL_FEATURES_ENABLED,
+        )
+        app.state.http_client = mock_http_client
+        client = TestClient(app, raise_server_exceptions=True)
+
+        html = client.get("/").text
+        banner = html[html.index('id="system-banner"') :]
+        banner = banner[: banner.index("</div>")]
+        assert "Dismiss" not in banner
+        assert "sessionStorage" not in banner
+
+    def test_system_banner_stacked_above_network_banner(
+        self, mock_http_client: MockHttpClient
+    ) -> None:
+        """System banner is rendered above the network announcement banner."""
+        app = create_app(
+            api_url="http://localhost:8000",
+            api_key="test-api-key",
+            system_announcement="System notice",
+            network_announcement="Network notice",
+            features=ALL_FEATURES_ENABLED,
+        )
+        app.state.http_client = mock_http_client
+        client = TestClient(app, raise_server_exceptions=True)
+
+        html = client.get("/").text
+        assert html.index('id="system-banner"') < html.index('id="flash-banner"')
+
+
+class TestSystemMaintenance:
+    """Tests for maintenance mode behaviour."""
+
+    def test_maintenance_disables_all_features(self) -> None:
+        """All feature flags are forced off in maintenance mode."""
+        app = create_app(
+            api_url="http://localhost:8000",
+            api_key="test-api-key",
+            system_maintenance=True,
+            features=ALL_FEATURES_ENABLED,
+        )
+        assert all(value is False for value in app.state.features.values())
+
+    def test_maintenance_nav_only_home(self, mock_http_client: MockHttpClient) -> None:
+        """Desktop nav contains only Home (no feature links) in maintenance."""
+        app = create_app(
+            api_url="http://localhost:8000",
+            api_key="test-api-key",
+            system_maintenance=True,
+            features=ALL_FEATURES_ENABLED,
+        )
+        app.state.http_client = mock_http_client
+        client = TestClient(app, raise_server_exceptions=True)
+
+        html = client.get("/dashboard").text
+        assert 'href="/dashboard"' not in html
+        assert 'href="/nodes"' not in html
+        assert 'href="/messages"' not in html
+
+    def test_maintenance_flag_in_config_json(
+        self, mock_http_client: MockHttpClient
+    ) -> None:
+        """The SPA config JSON exposes system_maintenance so the SPA can gate."""
+        app = create_app(
+            api_url="http://localhost:8000",
+            api_key="test-api-key",
+            system_maintenance=True,
+            features=ALL_FEATURES_ENABLED,
+        )
+        app.state.http_client = mock_http_client
+        client = TestClient(app, raise_server_exceptions=True)
+
+        assert '"system_maintenance": true' in client.get("/").text
+
+    def test_maintenance_off_by_default(self, client: TestClient) -> None:
+        """Without maintenance, nav links render normally (regression)."""
+        html = client.get("/").text
+        assert '"system_maintenance": false' in html
+
+
 class TestRolelessUserProfileUpdate:
     """Integration test: role-less OIDC user can PUT their own profile through the proxy."""
 

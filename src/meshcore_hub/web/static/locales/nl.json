@@ -217,6 +217,10 @@
   "not_found": {
     "description": "De pagina die u zoekt bestaat niet of is verplaatst."
   },
+  "maintenance": {
+    "title": "Site in onderhoud",
+    "message": "We voeren gepland onderhoud uit en zijn zo weer terug. Bedankt voor uw geduld."
+  },
   "custom_page": {
     "failed_to_load": "Pagina laden mislukt"
   },
