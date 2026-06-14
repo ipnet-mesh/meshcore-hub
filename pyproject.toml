@@ -33,7 +33,7 @@ dependencies = [
     # 0.137.0 regressed include_router: routed endpoints no longer appear in
     # app.routes (they still serve, but introspection breaks). Pin below it
     # until a fixed release lands. See test_app_factory metrics route checks.
-    "fastapi>=0.100.0,<0.137.0",
+    "fastapi>=0.137.0,<0.138.0",
     "starlette>=0.40.0,<1.0.0",
     "uvicorn[standard]>=0.23.0",
     "paho-mqtt>=2.0.0",
