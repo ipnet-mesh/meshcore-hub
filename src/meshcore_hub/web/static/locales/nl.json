@@ -100,7 +100,10 @@
     "unnamed": "Naamloos",
     "unnamed_node": "Naamloos knooppunt",
     "all_operators": "Alle Operators",
-    "filter_operator_label": "Operator"
+    "filter_operator_label": "Operator",
+    "filter_observer_label": "Waarnemer",
+    "filter_observer_enable": "Klik om deze waarnemer te tonen",
+    "filter_observer_disable": "Klik om deze waarnemer te verbergen"
   },
   "links": {
     "website": "Website",
@@ -213,6 +216,10 @@
   },
   "not_found": {
     "description": "De pagina die u zoekt bestaat niet of is verplaatst."
+  },
+  "maintenance": {
+    "title": "Site in onderhoud",
+    "message": "We voeren gepland onderhoud uit en zijn zo weer terug. Bedankt voor uw geduld."
   },
   "custom_page": {
     "failed_to_load": "Pagina laden mislukt"

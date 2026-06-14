@@ -460,6 +460,16 @@ class WebSettings(CommonSettings):
         default=None,
         description="Markdown announcement text for flash banner (empty = no banner)",
     )
+    system_announcement: Optional[str] = Field(
+        default=None,
+        description="Markdown system announcement banner, non-dismissable, shown "
+        "above the network announcement (empty = no banner)",
+    )
+    system_maintenance: bool = Field(
+        default=False,
+        description="Enable maintenance mode: disables site functionality and "
+        "prevents all API calls",
+    )
 
     # Feature flags (control which pages are visible in the web dashboard)
     feature_dashboard: bool = Field(

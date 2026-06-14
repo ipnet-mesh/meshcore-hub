@@ -88,6 +88,8 @@
     "filter_member_label": "Member",
     "filter_operator_label": "Operator",
     "filter_observer_label": "Observer",
+    "filter_observer_enable": "Click to show this observer",
+    "filter_observer_disable": "Click to hide this observer",
     "node_type": "Node Type",
     "show": "Show",
     "search_placeholder": "Search by name, ID, or public key...",
@@ -287,6 +289,10 @@
   },
   "not_found": {
     "description": "The page you're looking for doesn't exist or has been moved."
+  },
+  "maintenance": {
+    "title": "Site Under Maintenance",
+    "message": "We're performing scheduled maintenance and will be back shortly. Thank you for your patience."
   },
   "custom_page": {
     "failed_to_load": "Failed to load page"

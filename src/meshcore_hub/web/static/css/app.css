@@ -444,7 +444,8 @@ footer.footer {
    Flash Banner
    ========================================================================== */
 
-#flash-banner {
+#flash-banner,
+#system-banner {
     display: flex;
     align-items: center;
     justify-content: center;

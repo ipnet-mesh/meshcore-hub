@@ -146,6 +146,18 @@ class TestWebSettings:
 
         assert settings.network_announcement is None
 
+    def test_system_announcement_default_none(self) -> None:
+        """Test that system_announcement defaults to None."""
+        settings = WebSettings(_env_file=None)
+
+        assert settings.system_announcement is None
+
+    def test_system_maintenance_default_false(self) -> None:
+        """Test that system_maintenance defaults to False."""
+        settings = WebSettings(_env_file=None)
+
+        assert settings.system_maintenance is False
+
     def test_feature_channels_default_true(self) -> None:
         """Test that feature_channels defaults to True."""
         settings = WebSettings(_env_file=None)

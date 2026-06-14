@@ -322,6 +322,7 @@ def _build_config_json(app: FastAPI, request: Request) -> str:
         "logo_invert_light": app.state.logo_invert_light,
         "debug": app.state.web_debug,
         "locale_version": getattr(app.state, "locale_version", ""),
+        "system_maintenance": app.state.system_maintenance,
     }
 
     role_names = {
@@ -373,6 +374,8 @@ def create_app(
     network_contact_youtube: str | None = None,
     network_welcome_text: str | None = None,
     network_announcement: str | None = None,
+    system_announcement: str | None = None,
+    system_maintenance: bool | None = None,
     features: dict[str, bool] | None = None,
 ) -> FastAPI:
     """Create and configure the web dashboard application.
@@ -398,6 +401,8 @@ def create_app(
         network_contact_youtube: YouTube channel URL
         network_welcome_text: Welcome text for homepage
         network_announcement: Markdown announcement text for flash banner
+        system_announcement: Markdown text for the non-dismissable system banner
+        system_maintenance: Enable maintenance mode (disables functionality)
         features: Feature flags dict (default: all enabled from settings)
 
     Returns:
@@ -537,6 +542,24 @@ def create_app(
     else:
         app.state.network_announcement = None
 
+    raw_system_announcement = (
+        system_announcement
+        if system_announcement is not None
+        else settings.system_announcement
+    )
+    if raw_system_announcement:
+        import markdown
+
+        app.state.system_announcement = markdown.markdown(raw_system_announcement)
+    else:
+        app.state.system_announcement = None
+
+    app.state.system_maintenance = (
+        system_maintenance
+        if system_maintenance is not None
+        else settings.system_maintenance
+    )
+
     # Store feature flags with automatic dependencies:
     # - Dashboard requires at least one of nodes/advertisements/messages
     # - Map requires nodes (map displays node locations)
@@ -556,6 +579,10 @@ def create_app(
         overrides["members"] = False
     if overrides:
         effective_features = {**effective_features, **overrides}
+    # Maintenance mode disables every feature so the server-rendered nav
+    # collapses to just the static Home link and no API-backed page is exposed.
+    if app.state.system_maintenance:
+        effective_features = dict.fromkeys(effective_features, False)
     app.state.features = effective_features
 
     # Set up templates (for SPA shell only)
@@ -1180,6 +1207,8 @@ def create_app(
                 "network_contact_youtube": request.app.state.network_contact_youtube,
                 "network_welcome_text": request.app.state.network_welcome_text,
                 "network_announcement": request.app.state.network_announcement,
+                "system_announcement": request.app.state.system_announcement,
+                "system_maintenance": request.app.state.system_maintenance,
                 "oidc_enabled": request.app.state.oidc_enabled,
                 "features": features,
                 "custom_pages": custom_pages,

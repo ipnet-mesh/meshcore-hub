@@ -322,6 +322,8 @@ def web_app(mock_http_client: MockHttpClient, monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setenv("WEB_DATETIME_LOCALE", "en-US")
     monkeypatch.setenv("OIDC_ENABLED", "false")
     monkeypatch.setenv("NETWORK_ANNOUNCEMENT", "")
+    monkeypatch.setenv("SYSTEM_ANNOUNCEMENT", "")
+    monkeypatch.setenv("SYSTEM_MAINTENANCE", "false")
     app = create_app(
         api_url="http://localhost:8000",
         api_key="test-api-key",
