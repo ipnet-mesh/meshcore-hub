@@ -30,36 +30,6 @@ def _settings_classes():
     return seen
 
 
-@pytest.fixture(autouse=True)
-def _ignore_dotenv(monkeypatch):
-    """Stop pydantic-settings from reading the repo-root ``.env`` during tests.
-
-    Settings classes set ``env_file=".env"`` so deployments can drop a file in
-    place. Tests must depend only on defaults and explicit env overrides
-    (``monkeypatch.setenv``), never on whatever a developer happens to have in
-    their local ``.env`` — otherwise e.g. ``DATABASE_BACKEND=postgres`` there
-    leaks into unrelated tests. Each settings subclass carries its own merged
-    ``model_config`` dict, so patch every one.
-    """
-    for cls in _settings_classes():
-        cfg = dict(cls.model_config)
-        cfg["env_file"] = None
-        monkeypatch.setattr(cls, "model_config", cfg)
-
-
-def _settings_classes():
-    """CommonSettings and every subclass (recursively)."""
-    seen: set[type] = set()
-    stack = [config_module.CommonSettings]
-    while stack:
-        cls = stack.pop()
-        if cls in seen:
-            continue
-        seen.add(cls)
-        stack.extend(cls.__subclasses__())
-    return seen
-
-
 def _cli_envvars() -> set[str]:
     """Collect Click envvar names from CLI commands (best-effort).
 
