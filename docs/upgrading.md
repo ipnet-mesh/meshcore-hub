@@ -57,6 +57,21 @@ Because raw packets are pruned after 7 days, opening an old advert/message's pac
 
 **No migration or action required** beyond the defaults above; override either variable in your `.env` to restore prior behaviour.
 
+### System Announcement Banner & Maintenance Mode
+
+Two new operator-only web settings, both applied at startup (set the variable, then restart the `web` service):
+
+| Variable              | Default | Description                                                                                                   |
+| --------------------- | ------- | ------------------------------------------------------------------------------------------------------------- |
+| `SYSTEM_ANNOUNCEMENT` | _(none)_ | Markdown system notice shown as a **non-dismissable** banner above the existing `NETWORK_ANNOUNCEMENT` banner. |
+| `SYSTEM_MAINTENANCE`  | `false` | Maintenance mode: nav shows only Home, the profile menu is hidden, and every page renders a maintenance notice. |
+
+**`SYSTEM_ANNOUNCEMENT`** stacks above `NETWORK_ANNOUNCEMENT` (order: navbar → system → network). Unlike the network banner it has no close button and cannot be dismissed — it stays until you unset the variable and restart. Use it for downtime/maintenance windows and alerts. Markdown (bold, italic, links, inline code) is supported, same as `NETWORK_ANNOUNCEMENT`.
+
+**`SYSTEM_MAINTENANCE=true`** disables almost all site functionality so that the dashboard makes **no backend API calls**. This lets you take the API service and database offline for upgrades/maintenance while leaving the `web` component running to show users a friendly "Site Under Maintenance" page (site logo, name, and a translatable message). Set it before maintenance, restart `web`, and unset it (or `false`) + restart when done.
+
+**No migration or action required** — both variables are optional and default to off. They are passed through in `docker-compose.yml` automatically; just add them to your `.env`.
+
 ## v0.12.0
 
 ### Multi-Worker API (`API_WORKERS`)
