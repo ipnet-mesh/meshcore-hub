@@ -21,7 +21,7 @@ class Message(Base, UUIDMixin, TimestampMixin):
         text: Message content
         path_len: Number of hops
         txt_type: Message type indicator
-        signature: Message signature (8 hex chars)
+        signature: Message signature (hex), or the packet_hash fallback
         snr: Signal-to-noise ratio
         sender_timestamp: Sender's timestamp
         received_at: When received by interface
@@ -60,7 +60,7 @@ class Message(Base, UUIDMixin, TimestampMixin):
         nullable=True,
     )
     signature: Mapped[Optional[str]] = mapped_column(
-        String(8),
+        String(32),
         nullable=True,
     )
     snr: Mapped[Optional[float]] = mapped_column(
