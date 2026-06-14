@@ -2,7 +2,7 @@
 
 This guide covers upgrading from a previous MeshCore Hub release to the current version. Check the relevant version section below before upgrading.
 
-## v0.13.0
+## v0.14.0
 
 ### Optional PostgreSQL Backend
 
@@ -72,6 +72,8 @@ Downtime is required while writers are stopped; the source SQLite file is never 
 > **Why not pgloader?** pgloader infers the target schema from SQLite's *dynamic* typing and produces wrong Postgres types (e.g. `is_observer` as `bigint` not `boolean`, JSON columns as `text`, no `timestamptz`), and no `alembic_version` consistent with the migration history. The built-in command reuses the ORM models, so types convert correctly and the schema is created by `db upgrade`.
 
 > **Managed Postgres / non-superuser roles:** the migration disables foreign-key triggers during the copy via `session_replication_role = replica`, which requires a superuser. When the target role is not a superuser (typical for managed Postgres), the command automatically falls back to copying in parent-first order instead. Pass `--no-replication-role` to force the fallback explicitly.
+
+## v0.13.0
 
 ### Raw Packets (capture, browse, and search wire packets)
 
