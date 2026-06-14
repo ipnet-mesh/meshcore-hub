@@ -6,6 +6,9 @@
 /backup/
 /content/
 
+# Direnv
+.direnv
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -148,7 +151,6 @@ celerybeat.pid
 # Environments
 .env
 .env.backup
-.envrc
 .venv
 env/
 venv/
