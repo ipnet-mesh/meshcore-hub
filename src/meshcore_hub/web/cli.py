@@ -145,6 +145,19 @@ import click
     help="Markdown announcement text for flash banner",
 )
 @click.option(
+    "--system-announcement",
+    type=str,
+    default=None,
+    envvar="SYSTEM_ANNOUNCEMENT",
+    help="Markdown text for the non-dismissable system announcement banner",
+)
+@click.option(
+    "--system-maintenance/--no-system-maintenance",
+    default=None,
+    help="Enable maintenance mode (disables site functionality). "
+    "Defaults to the SYSTEM_MAINTENANCE environment variable.",
+)
+@click.option(
     "--reload",
     is_flag=True,
     default=False,
@@ -173,6 +186,8 @@ def web(
     network_contact_youtube: str | None,
     network_welcome_text: str | None,
     network_announcement: str | None,
+    system_announcement: str | None,
+    system_maintenance: bool | None,
     reload: bool,
 ) -> None:
     """Run the web dashboard.
@@ -272,6 +287,8 @@ def web(
             network_contact_youtube=network_contact_youtube,
             network_welcome_text=network_welcome_text,
             network_announcement=network_announcement,
+            system_announcement=system_announcement,
+            system_maintenance=system_maintenance,
         )
 
         click.echo("\nStarting web dashboard...")

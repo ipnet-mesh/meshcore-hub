@@ -290,6 +290,10 @@
   "not_found": {
     "description": "The page you're looking for doesn't exist or has been moved."
   },
+  "maintenance": {
+    "title": "Site Under Maintenance",
+    "message": "We're performing scheduled maintenance and will be back shortly. Thank you for your patience."
+  },
   "custom_page": {
     "failed_to_load": "Failed to load page"
   },

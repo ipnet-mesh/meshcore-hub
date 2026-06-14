@@ -28,6 +28,7 @@ const pages = {
     customPage: () => import('./pages/custom-page.js'),
     notFound: () => import('./pages/not-found.js'),
     profile: () => import('./pages/profile.js'),
+    maintenance: () => import('./pages/maintenance.js'),
 };
 
 // Main app container
@@ -63,7 +64,16 @@ function pageHandler(loader) {
     };
 }
 
+// Maintenance mode: every route renders the maintenance page and no
+// API-backed page module is ever loaded.
+const maintenanceMode = config.system_maintenance === true;
+
 // Register routes (conditionally based on feature flags)
+if (maintenanceMode) {
+    const maintenanceHandler = pageHandler(pages.maintenance);
+    router.addRoute('/', maintenanceHandler);
+    router.setNotFound(maintenanceHandler);
+} else {
 router.addRoute('/', pageHandler(pages.home));
 
 if (features.dashboard !== false) {
@@ -109,6 +119,7 @@ if (config.oidc_enabled) {
 
 // 404 handler
 router.setNotFound(pageHandler(pages.notFound));
+}
 
 /**
  * Update the active state of navigation links.
