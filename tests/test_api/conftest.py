@@ -4,7 +4,6 @@ import os
 import tempfile
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -33,20 +32,27 @@ from meshcore_hub.common.models import (
 )
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def test_db_path():
-    """Create a temporary database file path."""
+    """Session-scoped temporary database file path.
+
+    One file per pytest session; the engine below builds schema on it once.
+    """
     fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
     yield path
-    # Cleanup
     if os.path.exists(path):
         os.unlink(path)
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def api_db_engine(test_db_path):
-    """Create a SQLite database engine for API testing."""
+    """Session-scoped SQLite engine. Schema is built once per pytest session.
+
+    Previously this was function-scoped and rebuilt ~15 tables for every test,
+    costing ~0.2s/test. Promoting it to session scope eliminates that. Per-test
+    isolation is handled by truncation in ``api_db_session``.
+    """
     db_url = f"sqlite:///{test_db_path}"
     engine = create_engine(
         db_url,
@@ -65,18 +71,33 @@ def api_db_engine(test_db_path):
     engine.dispose()
 
 
+def _truncate_all(engine) -> None:
+    """Delete rows from every table in child-first order (FK-safe)."""
+    with engine.begin() as conn:
+        for table in reversed(Base.metadata.sorted_tables):
+            conn.execute(table.delete())
+
+
 @pytest.fixture
 def api_db_session(api_db_engine):
-    """Create a database session for API testing."""
+    """Per-test session bound to the shared session-scoped engine.
+
+    Rows are truncated at teardown so each test starts with empty tables
+    without paying schema-build cost. Tests must ``commit()`` their seed
+    data before invoking the test client (the sample_* fixtures already do).
+    """
     Session = sessionmaker(bind=api_db_engine)
     session = Session()
     yield session
     session.close()
+    _truncate_all(api_db_engine)
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def mock_mqtt():
-    """Create a mock MQTT client."""
+    """Session-scoped mock MQTT client (no per-test state)."""
+    from unittest.mock import MagicMock
+
     mock = MagicMock()
     mock.connect.return_value = None
     mock.start_background.return_value = None
@@ -86,9 +107,11 @@ def mock_mqtt():
     return mock
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def mock_db_manager(api_db_engine):
-    """Create a mock database manager using the test engine."""
+    """Session-scoped mock database manager backed by the shared engine."""
+    from unittest.mock import MagicMock
+
     manager = MagicMock(spec=DatabaseManager)
     Session = sessionmaker(bind=api_db_engine)
     manager.get_session = lambda: Session()
@@ -109,95 +132,83 @@ def mock_db_manager(api_db_engine):
     return manager
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
+def _isolate_db_global(monkeypatch: pytest.MonkeyPatch, mock_db_manager) -> None:
+    """Pin ``meshcore_hub.api.app._db_manager`` to the mock for every test.
+
+    Function-scoped autouse so tests that mutate the global (e.g. the lifespan
+    tests in ``test_cache.py``) cannot leak state to siblings. ``monkeypatch``
+    restores the prior value on exit.
+    """
+    import meshcore_hub.api.app as app_module
+
+    monkeypatch.setattr(app_module, "_db_manager", mock_db_manager)
+
+
+def _wire_overrides(app, api_db_engine, mock_mqtt, mock_db_manager) -> None:
+    """Install the standard DB/MQTT dependency overrides on ``app``."""
+    Session = sessionmaker(bind=api_db_engine)
+
+    def override_get_db_manager(request=None):
+        return mock_db_manager
+
+    def override_get_db_session():
+        session = Session()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    def override_get_mqtt_client(request=None):
+        return mock_mqtt
+
+    app.dependency_overrides[get_db_manager] = override_get_db_manager
+    app.dependency_overrides[get_db_session] = override_get_db_session
+    app.dependency_overrides[get_mqtt_client] = override_get_mqtt_client
+
+
+@pytest.fixture(scope="module")
 def app_no_auth(test_db_path, api_db_engine, mock_mqtt, mock_db_manager):
-    """Create a FastAPI app with no authentication required."""
+    """Module-scoped FastAPI app with no authentication.
+
+    Built once per test module; ``create_app`` is the second-most expensive
+    setup step (~0.3s), so sharing it across a module is a major win. The
+    ``_isolate_db_global`` autouse fixture handles the global ``_db_manager``
+    so this fixture doesn't need a ``with patch(...)`` context.
+    """
     db_url = f"sqlite:///{test_db_path}"
-
-    # Patch the global db_manager to avoid lifespan issues
-    with patch("meshcore_hub.api.app._db_manager", mock_db_manager):
-        app = create_app(
-            database_url=db_url,
-            read_key=None,
-            admin_key=None,
-        )
-
-        # Create session maker for this test engine
-        Session = sessionmaker(bind=api_db_engine)
-
-        def override_get_db_manager(request=None):
-            return mock_db_manager
-
-        def override_get_db_session():
-            session = Session()
-            try:
-                yield session
-            finally:
-                session.close()
-
-        def override_get_mqtt_client(request=None):
-            return mock_mqtt
-
-        app.dependency_overrides[get_db_manager] = override_get_db_manager
-        app.dependency_overrides[get_db_session] = override_get_db_session
-        app.dependency_overrides[get_mqtt_client] = override_get_mqtt_client
-
-        yield app
+    app = create_app(
+        database_url=db_url,
+        read_key=None,
+        admin_key=None,
+    )
+    _wire_overrides(app, api_db_engine, mock_mqtt, mock_db_manager)
+    yield app
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def app_with_auth(test_db_path, api_db_engine, mock_mqtt, mock_db_manager):
-    """Create a FastAPI app with authentication enabled."""
+    """Module-scoped FastAPI app with authentication enabled."""
     db_url = f"sqlite:///{test_db_path}"
-
-    with patch("meshcore_hub.api.app._db_manager", mock_db_manager):
-        app = create_app(
-            database_url=db_url,
-            read_key="test-read-key",
-            admin_key="test-admin-key",
-        )
-
-        Session = sessionmaker(bind=api_db_engine)
-
-        def override_get_db_manager(request=None):
-            return mock_db_manager
-
-        def override_get_db_session():
-            session = Session()
-            try:
-                yield session
-            finally:
-                session.close()
-
-        def override_get_mqtt_client(request=None):
-            return mock_mqtt
-
-        app.dependency_overrides[get_db_manager] = override_get_db_manager
-        app.dependency_overrides[get_db_session] = override_get_db_session
-        app.dependency_overrides[get_mqtt_client] = override_get_mqtt_client
-
-        yield app
+    app = create_app(
+        database_url=db_url,
+        read_key="test-read-key",
+        admin_key="test-admin-key",
+    )
+    _wire_overrides(app, api_db_engine, mock_mqtt, mock_db_manager)
+    yield app
 
 
 @pytest.fixture
-def client_no_auth(app_no_auth, mock_db_manager):
-    """Create a test client with no authentication.
-
-    Uses raise_server_exceptions=False to skip lifespan events.
-    """
-    # Don't use context manager to skip lifespan
-    client = TestClient(app_no_auth, raise_server_exceptions=True)
-    yield client
+def client_no_auth(app_no_auth) -> TestClient:
+    """Test client with no authentication."""
+    return TestClient(app_no_auth, raise_server_exceptions=True)
 
 
 @pytest.fixture
-def client_with_auth(app_with_auth, mock_db_manager):
-    """Create a test client with authentication enabled.
-
-    Uses raise_server_exceptions=False to skip lifespan events.
-    """
-    client = TestClient(app_with_auth, raise_server_exceptions=True)
-    yield client
+def client_with_auth(app_with_auth) -> TestClient:
+    """Test client with authentication enabled."""
+    return TestClient(app_with_auth, raise_server_exceptions=True)
 
 
 @pytest.fixture
