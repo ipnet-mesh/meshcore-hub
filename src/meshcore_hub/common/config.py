@@ -3,7 +3,7 @@
 from enum import Enum
 from typing import Optional
 
-from pydantic import Field, field_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,6 +24,13 @@ class MQTTTransport(str, Enum):
     WEBSOCKETS = "websockets"
 
 
+class DatabaseBackend(str, Enum):
+    """Database backend selector."""
+
+    SQLITE = "sqlite"
+    POSTGRES = "postgres"
+
+
 class CommonSettings(BaseSettings):
     """Common settings shared by all components."""
 
@@ -38,6 +45,88 @@ class CommonSettings(BaseSettings):
         default="./data",
         description="Base directory for service data (e.g., ./data or /data)",
     )
+
+    # Database backend selection and connection components.
+    # SQLite is the zero-config default; set DATABASE_BACKEND=postgres (plus the
+    # DATABASE_* component vars) to use Postgres. An explicit DATABASE_URL overrides
+    # everything (managed/external Postgres, tests).
+    database_backend: DatabaseBackend = Field(
+        default=DatabaseBackend.SQLITE,
+        description="Database backend: 'sqlite' (default) or 'postgres'",
+    )
+    database_url: Optional[str] = Field(
+        default=None,
+        description=(
+            "Explicit SQLAlchemy database URL; overrides DATABASE_BACKEND/component vars. "
+            "Default: sqlite:///{data_home}/collector/meshcore.db"
+        ),
+    )
+    database_host: Optional[str] = Field(
+        default=None,
+        description="Postgres host (required when DATABASE_BACKEND=postgres)",
+    )
+    database_port: int = Field(default=5432, description="Postgres port")
+    database_name: str = Field(
+        default="meshcorehub", description="Postgres database name"
+    )
+    database_schema: str = Field(
+        default="meshcorehub",
+        description="Postgres schema (namespace); override per instance on a shared cluster",
+    )
+    database_user: str = Field(default="meshcorehub", description="Postgres role/user")
+    database_password: Optional[str] = Field(
+        default=None,
+        description="Postgres password (required when DATABASE_BACKEND=postgres)",
+    )
+
+    @property
+    def effective_database_url(self) -> str:
+        """Resolve the SQLAlchemy database URL.
+
+        Precedence: explicit DATABASE_URL > postgres (assembled from components) >
+        SQLite default under DATA_HOME. Fails fast for a misconfigured postgres backend
+        rather than silently falling back to SQLite.
+        """
+        if self.database_url:
+            return self.database_url
+        if self.database_backend == DatabaseBackend.POSTGRES:
+            missing = [
+                name
+                for name, value in (
+                    ("DATABASE_HOST", self.database_host),
+                    ("DATABASE_NAME", self.database_name),
+                    ("DATABASE_USER", self.database_user),
+                    ("DATABASE_PASSWORD", self.database_password),
+                )
+                if not value
+            ]
+            if missing:
+                raise ValueError(
+                    "DATABASE_BACKEND=postgres requires: " + ", ".join(missing)
+                )
+            from urllib.parse import quote_plus
+
+            user = quote_plus(self.database_user)
+            password = quote_plus(self.database_password or "")
+            return (
+                f"postgresql+psycopg2://{user}:{password}"
+                f"@{self.database_host}:{self.database_port}/{self.database_name}"
+            )
+        from pathlib import Path
+
+        db_path = Path(self.data_home) / "collector" / "meshcore.db"
+        return f"sqlite:///{db_path}"
+
+    @property
+    def effective_database_schema(self) -> Optional[str]:
+        """Postgres schema to scope connections to, or None for SQLite.
+
+        Returns the schema only when the effective URL is Postgres; SQLite has no
+        schema concept, so callers leave search_path untouched.
+        """
+        if self.effective_database_url.startswith(("postgresql", "postgres")):
+            return self.database_schema
+        return None
 
     # Logging
     log_level: LogLevel = Field(default=LogLevel.INFO, description="Logging level")
@@ -68,11 +157,7 @@ class CommonSettings(BaseSettings):
 class CollectorSettings(CommonSettings):
     """Settings for the Collector component."""
 
-    # Database - default uses data_home/collector/meshcore.db
-    database_url: Optional[str] = Field(
-        default=None,
-        description="SQLAlchemy database URL (default: sqlite:///{data_home}/collector/meshcore.db)",
-    )
+    # Database config (backend selector + connection) is inherited from CommonSettings.
 
     # Seed home directory - contains initial data files (node_tags.yaml)
     seed_home: str = Field(
@@ -172,16 +257,6 @@ class CollectorSettings(CommonSettings):
         return str(Path(self.data_home) / "collector")
 
     @property
-    def effective_database_url(self) -> str:
-        """Get the effective database URL, using default if not set."""
-        if self.database_url:
-            return self.database_url
-        from pathlib import Path
-
-        db_path = Path(self.data_home) / "collector" / "meshcore.db"
-        return f"sqlite:///{db_path}"
-
-    @property
     def effective_seed_home(self) -> str:
         """Get the effective seed home directory."""
         from pathlib import Path
@@ -202,13 +277,6 @@ class CollectorSettings(CommonSettings):
 
         return str(Path(self.effective_seed_home) / "channels.yaml")
 
-    @field_validator("database_url")
-    @classmethod
-    def validate_database_url(cls, v: Optional[str]) -> Optional[str]:
-        """Validate database URL format."""
-        # None is allowed - will use default
-        return v
-
 
 class APISettings(CommonSettings):
     """Settings for the API component."""
@@ -217,11 +285,7 @@ class APISettings(CommonSettings):
     api_host: str = Field(default="0.0.0.0", description="API server host")
     api_port: int = Field(default=8000, description="API server port")
 
-    # Database - default uses data_home/collector/meshcore.db (same as collector)
-    database_url: Optional[str] = Field(
-        default=None,
-        description="SQLAlchemy database URL (default: sqlite:///{data_home}/collector/meshcore.db)",
-    )
+    # Database config (backend selector + connection) is inherited from CommonSettings.
 
     # Authentication
     api_read_key: Optional[str] = Field(default=None, description="Read-only API key")
@@ -251,23 +315,6 @@ class APISettings(CommonSettings):
         default=30,
         description="Cache TTL for dashboard endpoints (seconds)",
     )
-
-    @property
-    def effective_database_url(self) -> str:
-        """Get the effective database URL, using default if not set."""
-        if self.database_url:
-            return self.database_url
-        from pathlib import Path
-
-        db_path = Path(self.data_home) / "collector" / "meshcore.db"
-        return f"sqlite:///{db_path}"
-
-    @field_validator("database_url")
-    @classmethod
-    def validate_database_url(cls, v: Optional[str]) -> Optional[str]:
-        """Validate database URL format."""
-        # None is allowed - will use default
-        return v
 
 
 class WebSettings(CommonSettings):

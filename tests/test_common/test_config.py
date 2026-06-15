@@ -1,5 +1,7 @@
 """Tests for configuration settings."""
 
+import pytest
+
 from meshcore_hub.common.config import (
     CommonSettings,
     CollectorSettings,
@@ -258,3 +260,71 @@ class TestWebSettings:
 
         assert settings.feature_radio_config is False
         assert settings.features["radio_config"] is False
+
+
+class TestDatabaseBackendResolution:
+    """Tests for DATABASE_BACKEND selection and URL/schema resolution."""
+
+    def test_default_backend_is_sqlite_unchanged(self) -> None:
+        """No DB env vars -> the same SQLite path and no schema as before."""
+        settings = CollectorSettings(_env_file=None, data_home="/data")
+
+        assert settings.database_backend.value == "sqlite"
+        assert (
+            settings.effective_database_url == "sqlite:////data/collector/meshcore.db"
+        )
+        assert settings.effective_database_schema is None
+
+    def test_postgres_backend_assembles_url_and_schema(self) -> None:
+        """Postgres backend assembles a URL from components and exposes the schema."""
+        settings = APISettings(
+            _env_file=None,
+            database_backend="postgres",
+            database_host="pg",
+            database_password="pw",
+        )
+
+        assert settings.effective_database_url == (
+            "postgresql+psycopg2://meshcorehub:pw@pg:5432/meshcorehub"
+        )
+        assert settings.effective_database_schema == "meshcorehub"
+
+    def test_postgres_password_is_url_encoded(self) -> None:
+        """Special characters in the password are percent-encoded."""
+        settings = APISettings(
+            _env_file=None,
+            database_backend="postgres",
+            database_host="pg",
+            database_password="s3cr3t/p@ss",
+        )
+
+        assert "s3cr3t%2Fp%40ss" in settings.effective_database_url
+
+    def test_postgres_schema_override_per_instance(self) -> None:
+        """DATABASE_SCHEMA isolates instances sharing one database."""
+        settings = APISettings(
+            _env_file=None,
+            database_backend="postgres",
+            database_host="pg",
+            database_password="pw",
+            database_schema="stg",
+        )
+
+        assert settings.effective_database_schema == "stg"
+
+    def test_postgres_missing_required_vars_fails_fast(self) -> None:
+        """Misconfigured postgres backend raises rather than silently using SQLite."""
+        settings = APISettings(_env_file=None, database_backend="postgres")
+
+        with pytest.raises(ValueError, match="DATABASE_BACKEND=postgres requires"):
+            _ = settings.effective_database_url
+
+    def test_explicit_url_overrides_backend(self) -> None:
+        """An explicit DATABASE_URL wins even when a backend is selected."""
+        settings = CollectorSettings(
+            _env_file=None,
+            database_backend="postgres",
+            database_url="postgresql+psycopg2://u:p@h/db",
+        )
+
+        assert settings.effective_database_url == "postgresql+psycopg2://u:p@h/db"

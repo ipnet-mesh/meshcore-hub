@@ -32,14 +32,22 @@ depends_on = None
 def upgrade() -> None:
     conn = op.get_bind()
 
+    # Aggregate the duplicate ids per lowercased key. SQLite uses GROUP_CONCAT;
+    # Postgres uses STRING_AGG. HAVING references COUNT(*) directly (not the alias)
+    # since Postgres does not allow SELECT aliases in HAVING.
+    if conn.dialect.name == "postgresql":
+        id_agg = "STRING_AGG(id, ',')"
+    else:
+        id_agg = "GROUP_CONCAT(id)"
+
     # Find groups of duplicate nodes (same lowercase public_key, different actual case)
-    duplicates = conn.execute(text("""
+    duplicates = conn.execute(text(f"""
         SELECT LOWER(public_key) AS lower_pk,
-               GROUP_CONCAT(id) AS ids,
+               {id_agg} AS ids,
                COUNT(*) AS cnt
         FROM nodes
         GROUP BY LOWER(public_key)
-        HAVING cnt > 1
+        HAVING COUNT(*) > 1
         """)).fetchall()
 
     for row in duplicates:

@@ -1,5 +1,6 @@
 """Database connection and session management."""
 
+import os
 from contextlib import asynccontextmanager, contextmanager
 from typing import Any, AsyncGenerator, Generator
 
@@ -11,25 +12,69 @@ from sqlalchemy.orm import Session, sessionmaker
 from meshcore_hub.common.models.base import Base
 
 
+def _resolve_pg_schema(database_url: str, schema: str | None) -> str | None:
+    """Resolve the Postgres schema to scope a connection to (search_path).
+
+    Returns None for SQLite (no schema concept). For Postgres, an explicit ``schema``
+    wins; otherwise it falls back to the ``DATABASE_SCHEMA`` env var. The CLI's
+    ``load_dotenv()`` and Docker both populate that var, so runtime entrypoints don't
+    need to thread the schema through every constructor.
+    """
+    if not database_url.startswith(("postgresql", "postgres")):
+        return None
+    if schema:
+        return schema
+    return os.environ.get("DATABASE_SCHEMA")
+
+
+def _to_async_url(database_url: str) -> str:
+    """Map a sync database URL to its async-driver equivalent.
+
+    Postgres always maps to asyncpg for the async engine, even when the sync URL
+    names a sync driver (e.g. ``postgresql+psycopg2://``, which is what the config
+    assembler produces) — otherwise async sessions would try to use the sync driver.
+    SQLite maps to aiosqlite unless a driver is already specified.
+    """
+    scheme = database_url.split("://", 1)[0]
+    dialect = scheme.split("+", 1)[0]
+    if dialect in ("postgresql", "postgres"):
+        return database_url.replace(f"{scheme}://", "postgresql+asyncpg://", 1)
+    if dialect == "sqlite":
+        if "+" in scheme:
+            return database_url
+        return database_url.replace("sqlite://", "sqlite+aiosqlite://", 1)
+    return database_url
+
+
 def create_database_engine(
     database_url: str,
     echo: bool = False,
+    schema: str | None = None,
 ) -> Engine:
     """Create a SQLAlchemy database engine.
 
     Args:
         database_url: SQLAlchemy database URL
         echo: Enable SQL query logging
+        schema: Postgres schema to scope connections to via search_path. Defaults to
+            the DATABASE_SCHEMA env var when not given. Ignored for SQLite.
 
     Returns:
         SQLAlchemy Engine instance
     """
-    connect_args = {}
+    connect_args: dict[str, Any] = {}
     engine_kwargs: dict[str, Any] = {}
 
     # SQLite-specific configuration
     if database_url.startswith("sqlite"):
         connect_args["check_same_thread"] = False
+
+    # Scope Postgres connections to the configured schema via search_path. This keeps
+    # the models schema-agnostic (no hardcoded schema=) so the same code serves SQLite,
+    # single-instance Postgres, and multiple schema-isolated instances on one cluster.
+    resolved_schema = _resolve_pg_schema(database_url, schema)
+    if resolved_schema:
+        connect_args["options"] = f"-csearch_path={resolved_schema}"
 
     # Size the pool above the default Starlette threadpool (~40 threads) so
     # concurrent request handlers don't block waiting for a connection. Applies
@@ -110,15 +155,20 @@ class DatabaseManager:
     to avoid leaking connections when only sync operations are needed.
     """
 
-    def __init__(self, database_url: str, echo: bool = False):
+    def __init__(
+        self, database_url: str, echo: bool = False, schema: str | None = None
+    ):
         """Initialize the database manager.
 
         Args:
             database_url: SQLAlchemy database URL
             echo: Enable SQL query logging
+            schema: Postgres schema to scope connections to (search_path). Defaults to
+                the DATABASE_SCHEMA env var when not given; ignored for SQLite.
         """
         self.database_url = database_url
         self._echo = echo
+        self._schema = _resolve_pg_schema(database_url, schema)
 
         # Ensure parent directory exists for SQLite databases
         if database_url.startswith("sqlite:///"):
@@ -128,7 +178,7 @@ class DatabaseManager:
             db_path = Path(database_url.replace("sqlite:///", ""))
             db_path.parent.mkdir(parents=True, exist_ok=True)
 
-        self.engine = create_database_engine(database_url, echo=echo)
+        self.engine = create_database_engine(database_url, echo=echo, schema=schema)
         self.session_factory = create_session_factory(self.engine)
 
         # Lazy-initialized async engine (created on first async_session call)
@@ -142,8 +192,16 @@ class DatabaseManager:
 
         from sqlalchemy.ext.asyncio import async_sessionmaker
 
-        async_url = self.database_url.replace("sqlite://", "sqlite+aiosqlite://")
-        self._async_engine = create_async_engine(async_url, echo=self._echo)
+        async_url = _to_async_url(self.database_url)
+        async_connect_args: dict[str, Any] = {}
+        # asyncpg sets search_path via server_settings (not the libpq -c options
+        # string the sync psycopg2 engine uses). self._schema is already resolved
+        # (explicit arg or DATABASE_SCHEMA env) and None for SQLite.
+        if self._schema:
+            async_connect_args["server_settings"] = {"search_path": self._schema}
+        self._async_engine = create_async_engine(
+            async_url, echo=self._echo, connect_args=async_connect_args
+        )
 
         # Apply the same SQLite pragmas as the sync engine (see
         # create_database_engine) for the async engine's connections.
