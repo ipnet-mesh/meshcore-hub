@@ -29,6 +29,11 @@ services:
       - default
       - proxy-net
 
+  migrate:
+    networks:
+      - default
+      - proxy-net
+
 networks:
   proxy-net:
     external: true
