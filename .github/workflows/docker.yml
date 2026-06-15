@@ -69,6 +69,16 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Delete old untagged package versions
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: ${{ github.event.repository.name }}
+          package-type: container
+          delete-only-untagged-versions: "true"
+          min-versions-to-keep: 10
+
       - name: Test Docker image
         if: github.event_name == 'pull_request'
         run: |

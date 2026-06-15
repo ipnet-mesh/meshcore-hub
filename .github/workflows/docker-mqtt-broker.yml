@@ -117,6 +117,16 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Delete old untagged package versions
+        if: steps.decide.outputs.changed == 'true'
+        continue-on-error: true
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: meshcore-mqtt-broker
+          package-type: container
+          delete-only-untagged-versions: "true"
+          min-versions-to-keep: 10
+
       - name: Skip build (unchanged)
         if: steps.decide.outputs.changed != 'true'
         run: echo "Upstream ${{ steps.check.outputs.upstream_sha }} already built; skipping."
