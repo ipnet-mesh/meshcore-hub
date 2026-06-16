@@ -96,7 +96,7 @@ if (features.messages !== false) {
 if (features.advertisements !== false) {
     router.addRoute('/advertisements', pageHandler(pages.advertisements));
 }
-if (features.packets === true) {
+if (features.packets !== false) {
     router.addRoute('/packets', pageHandler(pages.packets));
     router.addRoute('/packets/hash/:hash', pageHandler(pages.packetGroupDetail));
     router.addRoute('/packets/:id', pageHandler(pages.packetDetail));
@@ -178,7 +178,7 @@ function updatePageTitle(pathname) {
     if (features.channels !== false) titles['/channels'] = composePageTitle('entities.channels');
     if (features.messages !== false) titles['/messages'] = composePageTitle('entities.messages');
     if (features.advertisements !== false) titles['/advertisements'] = composePageTitle('entities.advertisements');
-    if (features.packets === true) titles['/packets'] = composePageTitle('entities.packets');
+    if (features.packets !== false) titles['/packets'] = composePageTitle('entities.packets');
     if (features.map !== false) titles['/map'] = composePageTitle('entities.map');
     if (features.members !== false) titles['/members'] = composePageTitle('entities.members');
     titles['/profile'] = composePageTitle('links.profile');
@@ -232,7 +232,7 @@ function renderMobileNav(config) {
     if (features.messages !== false) {
         items.push(html`<li><a href="/messages" data-nav-link>${iconMessages('h-5 w-5 nav-icon-messages')} ${t('entities.messages')}</a></li>`);
     }
-    if (features.packets === true) {
+    if (features.packets !== false) {
         items.push(html`<li><a href="/packets" data-nav-link>${iconPackets('h-5 w-5 nav-icon-packets')} ${t('entities.packets')}</a></li>`);
     }
     if (features.map !== false) {
