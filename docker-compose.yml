@@ -182,6 +182,7 @@ services:
   # ==========================================================================
   collector:
     image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
+    pull_policy: daily
     build:
       context: .
       dockerfile: Dockerfile
@@ -252,6 +253,7 @@ services:
   # ==========================================================================
   api:
     image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
+    pull_policy: daily
     build:
       context: .
       dockerfile: Dockerfile
@@ -321,6 +323,7 @@ services:
   # ==========================================================================
   web:
     image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
+    pull_policy: daily
     build:
       context: .
       dockerfile: Dockerfile
@@ -413,6 +416,7 @@ services:
   # ==========================================================================
   migrate:
     image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
+    pull_policy: daily
     build:
       context: .
       dockerfile: Dockerfile
@@ -449,6 +453,7 @@ services:
   # ==========================================================================
   seed:
     image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
+    pull_policy: daily
     build:
       context: .
       dockerfile: Dockerfile
