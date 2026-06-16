@@ -64,6 +64,10 @@ dev = [
     "beautifulsoup4>=4.12.0",
     "types-paho-mqtt>=1.6.0",
     "types-PyYAML>=6.0.0",
+    # Postgres drivers needed to run the dual-backend test suite
+    # (TEST_DATABASE_BACKEND=postgres) locally.
+    "asyncpg>=0.28.0",
+    "psycopg2-binary>=2.9.0",
 ]
 postgres = [
     "asyncpg>=0.28.0",

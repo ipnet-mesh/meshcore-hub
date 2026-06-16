@@ -1,6 +1,6 @@
 """Dashboard API routes."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Request
 from sqlalchemy import and_, case, func, or_, select
@@ -58,6 +58,21 @@ def _flood_only_filter(
         ad_model.route_type.in_(_FLOOD_ROUTE_TYPES),
         ad_model.route_type.is_(None),
     )
+
+
+def _date_bucket_key(value: str | date | None) -> str | None:
+    """Coerce a DB-returned date bucket key to a canonical ``%Y-%m-%d`` string.
+
+    SQLite's ``func.date()`` returns a ``str``; Postgres returns a
+    ``datetime.date``. This normalizes both to the same string key so dict
+    lookups by ``"%Y-%m-%d"`` succeed on either backend. ``None`` passes
+    through unchanged.
+    """
+    if isinstance(value, str):
+        return value
+    if isinstance(value, date):
+        return value.strftime("%Y-%m-%d")
+    return value
 
 
 @router.get("/stats", response_model=DashboardStats)
@@ -309,8 +324,9 @@ def get_activity(
 
     results = session.execute(query).all()
 
-    # Build a dict of date -> count from results (date is already a string)
-    counts_by_date = {row.date: row.count for row in results}
+    # Build a dict of date -> count, normalizing the key to a string so it
+    # works on both SQLite (func.date() returns str) and Postgres (returns date).
+    counts_by_date = {_date_bucket_key(row.date): row.count for row in results}
 
     # Generate all dates in the range, filling in zeros for missing days
     data = []
@@ -374,7 +390,7 @@ def get_message_activity(
     )
 
     results = session.execute(query).all()
-    counts_by_date = {row.date: row.count for row in results}
+    counts_by_date = {_date_bucket_key(row.date): row.count for row in results}
 
     # Generate all dates in the range, filling in zeros for missing days
     data = []
@@ -432,8 +448,9 @@ def get_node_count_history(
         .where(Node.created_at < end_date)
         .group_by(date_expr)
     )
-    new_by_date: dict[str, int] = {
-        row[0]: row[1] for row in session.execute(per_day_query).all()
+    new_by_date = {
+        _date_bucket_key(row.date): row._mapping["count"]
+        for row in session.execute(per_day_query).all()
     }
 
     data = []

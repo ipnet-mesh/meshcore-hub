@@ -1,10 +1,11 @@
 """Tests for dashboard API routes."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
 
+from meshcore_hub.api.routes.dashboard import _date_bucket_key
 from meshcore_hub.common.models import (
     Advertisement,
     Message,
@@ -13,6 +14,31 @@ from meshcore_hub.common.models import (
     Channel,
 )
 from meshcore_hub.common.models import UserProfile
+
+
+class TestDateBucketKey:
+    """Unit tests for the _date_bucket_key dialect-neutral normalization helper."""
+
+    def test_str_passthrough(self) -> None:
+        """SQLite returns str — pass through unchanged."""
+        assert _date_bucket_key("2026-06-15") == "2026-06-15"
+
+    def test_date_object_normalized(self) -> None:
+        """Postgres returns datetime.date — coerce to %Y-%m-%d string."""
+        assert _date_bucket_key(date(2026, 1, 5)) == "2026-01-05"
+
+    def test_datetime_object_normalized(self) -> None:
+        """Postgres may return datetime.datetime — coerce to %Y-%m-%d string."""
+        dt = datetime(2026, 6, 15, 14, 30, 0, tzinfo=timezone.utc)
+        assert _date_bucket_key(dt) == "2026-06-15"
+
+    def test_none_passthrough(self) -> None:
+        """None passes through unchanged (no collision with string lookups)."""
+        assert _date_bucket_key(None) is None
+
+    def test_zero_padded_date(self) -> None:
+        """Single-digit months/days are zero-padded."""
+        assert _date_bucket_key(date(2026, 1, 5)) == "2026-01-05"
 
 
 class TestDashboardStats:
@@ -231,9 +257,16 @@ class TestDashboardActivity:
         response = client_no_auth.get("/api/v1/dashboard/activity")
         assert response.status_code == 200
         data = response.json()
-        # At least one day should have a count > 0
         total_count = sum(point["count"] for point in data["data"])
         assert total_count >= 1
+        # The seeded advertisement was yesterday — its bucket must be non-zero.
+        # This catches the Postgres flatline bug where func.date() returns a
+        # date object that never matches the string key.
+        yesterday_str = (datetime.now(timezone.utc) - timedelta(days=1)).strftime(
+            "%Y-%m-%d"
+        )
+        yesterday_point = next(p for p in data["data"] if p["date"] == yesterday_str)
+        assert yesterday_point["count"] >= 1
 
 
 class TestMessageActivity:
@@ -291,9 +324,14 @@ class TestMessageActivity:
         response = client_no_auth.get("/api/v1/dashboard/message-activity")
         assert response.status_code == 200
         data = response.json()
-        # At least one day should have a count > 0
         total_count = sum(point["count"] for point in data["data"])
         assert total_count >= 1
+        # The seeded message was yesterday — its bucket must be non-zero.
+        yesterday_str = (datetime.now(timezone.utc) - timedelta(days=1)).strftime(
+            "%Y-%m-%d"
+        )
+        yesterday_point = next(p for p in data["data"] if p["date"] == yesterday_str)
+        assert yesterday_point["count"] >= 1
 
 
 class TestNodeCountHistory:
@@ -356,6 +394,16 @@ class TestNodeCountHistory:
         # At least one day should have a count > 0 (cumulative)
         # The last day should have count >= 1
         assert data["data"][-1]["count"] >= 1
+        # The node was created yesterday — the cumulative count should step
+        # up at yesterday's bucket and stay >= 1 for all subsequent days.
+        yesterday_str = (datetime.now(timezone.utc) - timedelta(days=1)).strftime(
+            "%Y-%m-%d"
+        )
+        yesterday_idx = next(
+            i for i, p in enumerate(data["data"]) if p["date"] == yesterday_str
+        )
+        assert data["data"][yesterday_idx]["count"] >= 1
+        assert all(p["count"] >= 1 for p in data["data"][yesterday_idx:])
 
     def test_node_count_is_cumulative_with_baseline(
         self, client_no_auth, api_db_session
@@ -770,3 +818,88 @@ class TestDashboardChannelVisibility:
         assert str(pub_idx) in data["channel_message_counts"]
         assert str(mem_idx) in data["channel_message_counts"]
         assert str(adm_idx) not in data["channel_message_counts"]
+
+
+class TestDashboardDateBucketRegression:
+    """Regression tests for the Postgres date-bucket flatline bug.
+
+    These tests seed data at deterministic UTC timestamps and assert the
+    specific date buckets have non-zero counts. On SQLite (where
+    func.date() returns str) these always passed. On Postgres (where
+    func.date() returns date) these would have failed before the
+    _date_bucket_key fix, because the dict lookup by string key would
+    miss the date-object key.
+
+    Run against Postgres with::
+
+        TEST_DATABASE_BACKEND=postgres \\
+        TEST_POSTGRES_URL=postgresql+psycopg2://postgres:postgres@localhost:55432/test \\
+        pytest tests/test_api/test_dashboard.py -k Regression
+    """
+
+    def test_activity_nonzero_on_seeded_day(self, client_no_auth, api_db_session):
+        """Activity chart shows non-zero count for the seeded day."""
+        two_days_ago = (datetime.now(timezone.utc) - timedelta(days=2)).replace(
+            hour=12, minute=0, second=0, microsecond=0
+        )
+        api_db_session.add(
+            Advertisement(
+                public_key="a" * 64,
+                name="RegressionNode",
+                adv_type="REPEATER",
+                route_type="flood",
+                received_at=two_days_ago,
+            )
+        )
+        api_db_session.commit()
+
+        data = client_no_auth.get("/api/v1/dashboard/activity").json()
+        seeded_str = two_days_ago.strftime("%Y-%m-%d")
+        seeded_point = next(p for p in data["data"] if p["date"] == seeded_str)
+        assert seeded_point["count"] == 1
+
+    def test_message_activity_nonzero_on_seeded_day(
+        self, client_no_auth, api_db_session
+    ):
+        """Message activity chart shows non-zero count for the seeded day."""
+        two_days_ago = (datetime.now(timezone.utc) - timedelta(days=2)).replace(
+            hour=12, minute=0, second=0, microsecond=0
+        )
+        api_db_session.add(
+            Message(
+                message_type="direct",
+                pubkey_prefix="abc123",
+                text="regression test",
+                received_at=two_days_ago,
+            )
+        )
+        api_db_session.commit()
+
+        data = client_no_auth.get("/api/v1/dashboard/message-activity").json()
+        seeded_str = two_days_ago.strftime("%Y-%m-%d")
+        seeded_point = next(p for p in data["data"] if p["date"] == seeded_str)
+        assert seeded_point["count"] == 1
+
+    def test_node_count_steps_up_on_seeded_day(self, client_no_auth, api_db_session):
+        """Node count chart steps up on the seeded creation day."""
+        two_days_ago = (datetime.now(timezone.utc) - timedelta(days=2)).replace(
+            hour=12, minute=0, second=0, microsecond=0
+        )
+        api_db_session.add(
+            Node(
+                public_key="b" * 64,
+                name="RegressionNode",
+                created_at=two_days_ago,
+            )
+        )
+        api_db_session.commit()
+
+        data = client_no_auth.get("/api/v1/dashboard/node-count").json()
+        seeded_str = two_days_ago.strftime("%Y-%m-%d")
+        seeded_idx = next(
+            i for i, p in enumerate(data["data"]) if p["date"] == seeded_str
+        )
+        # Before the seeded day: 0 nodes. On/after: 1.
+        assert data["data"][seeded_idx]["count"] == 1
+        if seeded_idx > 0:
+            assert data["data"][seeded_idx - 1]["count"] == 0
