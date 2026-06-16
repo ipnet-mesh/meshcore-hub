@@ -69,12 +69,19 @@ def create_database_engine(
     if database_url.startswith("sqlite"):
         connect_args["check_same_thread"] = False
 
-    # Scope Postgres connections to the configured schema via search_path. This keeps
-    # the models schema-agnostic (no hardcoded schema=) so the same code serves SQLite,
+    # Scope Postgres connections to the configured schema via search_path and pin
+    # the session timezone to UTC so func.date(<timestamptz>) truncates on the UTC
+    # day boundary — matching SQLite, which stores UTC text. This keeps the models
+    # schema-agnostic (no hardcoded schema=) so the same code serves SQLite,
     # single-instance Postgres, and multiple schema-isolated instances on one cluster.
     resolved_schema = _resolve_pg_schema(database_url, schema)
-    if resolved_schema:
-        connect_args["options"] = f"-csearch_path={resolved_schema}"
+    is_postgres = database_url.startswith(("postgresql", "postgres"))
+    if is_postgres:
+        options_parts: list[str] = []
+        if resolved_schema:
+            options_parts.append(f"-csearch_path={resolved_schema}")
+        options_parts.append("-ctimezone=UTC")
+        connect_args["options"] = " ".join(options_parts)
 
     # Size the pool above the default Starlette threadpool (~40 threads) so
     # concurrent request handlers don't block waiting for a connection. Applies
@@ -194,11 +201,17 @@ class DatabaseManager:
 
         async_url = _to_async_url(self.database_url)
         async_connect_args: dict[str, Any] = {}
-        # asyncpg sets search_path via server_settings (not the libpq -c options
-        # string the sync psycopg2 engine uses). self._schema is already resolved
-        # (explicit arg or DATABASE_SCHEMA env) and None for SQLite.
-        if self._schema:
-            async_connect_args["server_settings"] = {"search_path": self._schema}
+        # asyncpg sets search_path and timezone via server_settings (not the libpq
+        # -c options string the sync psycopg2 engine uses). self._schema is already
+        # resolved (explicit arg or DATABASE_SCHEMA env) and None for SQLite.
+        # Timezone is pinned to UTC unconditionally for Postgres so day boundaries
+        # match SQLite's UTC-text truncation.
+        is_postgres = self.database_url.startswith(("postgresql", "postgres"))
+        if is_postgres:
+            server_settings: dict[str, str] = {"timezone": "UTC"}
+            if self._schema:
+                server_settings["search_path"] = self._schema
+            async_connect_args["server_settings"] = server_settings
         self._async_engine = create_async_engine(
             async_url, echo=self._echo, connect_args=async_connect_args
         )

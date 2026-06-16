@@ -4,10 +4,12 @@ import os
 import tempfile
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from typing import Generator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event as sa_event
+from sqlalchemy import create_engine, event as sa_event, text
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import sessionmaker
 
 from meshcore_hub.api.app import create_app
@@ -16,7 +18,7 @@ from meshcore_hub.api.dependencies import (
     get_mqtt_client,
     get_db_manager,
 )
-from meshcore_hub.common.database import DatabaseManager
+from meshcore_hub.common.database import DatabaseManager, create_database_engine
 from meshcore_hub.common.models import (
     Advertisement,
     Base,
@@ -46,24 +48,110 @@ def test_db_path():
 
 
 @pytest.fixture(scope="session")
-def api_db_engine(test_db_path):
-    """Session-scoped SQLite engine. Schema is built once per pytest session.
+def db_backend() -> str:
+    """Active test database backend (``sqlite`` or ``postgres``).
 
-    Previously this was function-scoped and rebuilt ~15 tables for every test,
-    costing ~0.2s/test. Promoting it to session scope eliminates that. Per-test
-    isolation is handled by truncation in ``api_db_session``.
+    Controlled by ``TEST_DATABASE_BACKEND`` env var (default: ``sqlite``).
+    When ``postgres``, ``TEST_POSTGRES_URL`` must also be set.
     """
-    db_url = f"sqlite:///{test_db_path}"
-    engine = create_engine(
-        db_url,
-        connect_args={"check_same_thread": False},
-    )
+    backend = os.environ.get("TEST_DATABASE_BACKEND", "sqlite").lower()
+    if backend not in ("sqlite", "postgres"):
+        raise ValueError(
+            f"TEST_DATABASE_BACKEND must be 'sqlite' or 'postgres', got: {backend}"
+        )
+    return backend
 
-    @sa_event.listens_for(engine, "connect")
-    def set_sqlite_pragma(dbapi_connection: object, connection_record: object) -> None:
-        cursor = dbapi_connection.cursor()  # type: ignore[attr-defined]
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
+
+@pytest.fixture(scope="session")
+def db_url(db_backend: str, test_db_path: str, request) -> Generator[str, None, None]:
+    """Database URL for the active backend.
+
+    For Postgres, each pytest-xdist worker gets its own database (e.g.
+    ``test_gw0``) to avoid truncation races between parallel workers.
+    """
+    if db_backend == "postgres":
+        env_url = os.environ.get("TEST_POSTGRES_URL")
+        if not env_url:
+            pytest.skip(
+                "TEST_DATABASE_BACKEND=postgres but TEST_POSTGRES_URL is not set; "
+                "e.g. TEST_POSTGRES_URL=postgresql+psycopg2://postgres:postgres@localhost:55432/test"
+            )
+        assert env_url is not None
+
+        worker_id = "master"
+        if hasattr(request.config, "workerinput"):
+            worker_id = request.config.workerinput["workerid"]
+
+        base_url = make_url(env_url)
+        worker_db = f"{base_url.database}_{worker_id}"
+        worker_url = base_url.set(database=worker_db).render_as_string(
+            hide_password=False
+        )
+
+        admin_url = base_url.set(database="postgres")
+        admin_engine = create_engine(
+            admin_url.render_as_string(hide_password=False),
+            isolation_level="AUTOCOMMIT",
+        )
+        try:
+            with admin_engine.connect() as conn:
+                exists = conn.execute(
+                    text("SELECT 1 FROM pg_database WHERE datname = :name"),
+                    {"name": worker_db},
+                ).scalar()
+                if not exists:
+                    conn.execute(text(f'CREATE DATABASE "{worker_db}"'))
+        finally:
+            admin_engine.dispose()
+
+        yield worker_url
+
+        admin_engine = create_engine(
+            admin_url.render_as_string(hide_password=False),
+            isolation_level="AUTOCOMMIT",
+        )
+        try:
+            with admin_engine.connect() as conn:
+                conn.execute(
+                    text(
+                        "SELECT pg_terminate_backend(pid) "
+                        "FROM pg_stat_activity "
+                        "WHERE datname = :name AND pid <> pg_backend_pid()"
+                    ),
+                    {"name": worker_db},
+                )
+                conn.execute(text(f'DROP DATABASE IF EXISTS "{worker_db}"'))
+        finally:
+            admin_engine.dispose()
+    else:
+        yield f"sqlite:///{test_db_path}"
+
+
+@pytest.fixture(scope="session")
+def api_db_engine(db_url: str, db_backend: str):
+    """Session-scoped database engine. Schema is built once per pytest session.
+
+    For Postgres, uses the production ``create_database_engine`` factory so the
+    test exercises the same ``connect_args`` (including ``-ctimezone=UTC``).
+    Each xdist worker has its own database (see ``db_url``), so no locking
+    is needed.
+    """
+    if db_backend == "postgres":
+        engine = create_database_engine(db_url)
+        Base.metadata.drop_all(engine)
+    else:
+        engine = create_engine(
+            db_url,
+            connect_args={"check_same_thread": False},
+        )
+
+        @sa_event.listens_for(engine, "connect")
+        def set_sqlite_pragma(
+            dbapi_connection: object, connection_record: object
+        ) -> None:
+            cursor = dbapi_connection.cursor()  # type: ignore[attr-defined]
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
 
     Base.metadata.create_all(engine)
     yield engine
@@ -168,7 +256,7 @@ def _wire_overrides(app, api_db_engine, mock_mqtt, mock_db_manager) -> None:
 
 
 @pytest.fixture(scope="module")
-def app_no_auth(test_db_path, api_db_engine, mock_mqtt, mock_db_manager):
+def app_no_auth(db_url, api_db_engine, mock_mqtt, mock_db_manager):
     """Module-scoped FastAPI app with no authentication.
 
     Built once per test module; ``create_app`` is the second-most expensive
@@ -176,7 +264,6 @@ def app_no_auth(test_db_path, api_db_engine, mock_mqtt, mock_db_manager):
     ``_isolate_db_global`` autouse fixture handles the global ``_db_manager``
     so this fixture doesn't need a ``with patch(...)`` context.
     """
-    db_url = f"sqlite:///{test_db_path}"
     app = create_app(
         database_url=db_url,
         read_key=None,
@@ -187,9 +274,8 @@ def app_no_auth(test_db_path, api_db_engine, mock_mqtt, mock_db_manager):
 
 
 @pytest.fixture(scope="module")
-def app_with_auth(test_db_path, api_db_engine, mock_mqtt, mock_db_manager):
+def app_with_auth(db_url, api_db_engine, mock_mqtt, mock_db_manager):
     """Module-scoped FastAPI app with authentication enabled."""
-    db_url = f"sqlite:///{test_db_path}"
     app = create_app(
         database_url=db_url,
         read_key="test-read-key",

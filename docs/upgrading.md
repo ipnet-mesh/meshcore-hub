@@ -73,6 +73,21 @@ Downtime is required while writers are stopped; the source SQLite file is never 
 
 > **Managed Postgres / non-superuser roles:** the migration disables foreign-key triggers during the copy via `session_replication_role = replica`, which requires a superuser. When the target role is not a superuser (typical for managed Postgres), the command automatically falls back to copying in parent-first order instead. Pass `--no-replication-role` to force the fallback explicitly.
 
+### Dashboard Chart Fix (Postgres)
+
+After enabling Postgres, the dashboard charts (activity, message-activity, node-count) may render as flat zeros. This is a known issue caused by a dialect mismatch in the date-bucketing query — `func.date()` returns a `str` on SQLite but a `datetime.date` on Postgres, causing the dict lookup to miss. A fix normalizes the key to a canonical `"%Y-%m-%d"` string and pins the Postgres session timezone to UTC.
+
+The fix takes effect **after one `REDIS_CACHE_TTL_DASHBOARD` period** (default 30 seconds) — stale all-zero cached responses expire automatically. For operators who have configured a substantially longer TTL, either wait one TTL period or flush the three dashboard cache key prefixes:
+
+```bash
+redis-cli -h <redis-host> DEL \
+  "$(echo -n 'hub:dashboard:activity*' | xargs redis-cli KEYS)" \
+  "$(echo -n 'hub:dashboard:message-activity*' | xargs redis-cli KEYS)" \
+  "$(echo -n 'hub:dashboard:node-count*' | xargs redis-cli KEYS)"
+```
+
+No database migration or configuration change is required — the fix is automatic.
+
 ## v0.13.0
 
 ### Raw Packets (capture, browse, and search wire packets)
