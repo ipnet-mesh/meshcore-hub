@@ -3,7 +3,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Path, Query, Request
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, nullslast, or_, select
 from sqlalchemy.orm import selectinload
 
 from meshcore_hub.api.auth import RequireRead
@@ -179,9 +179,8 @@ def list_nodes(
             Node.public_key.desc() if order == "desc" else Node.public_key.asc()
         )
     elif sort == "last_seen":
-        query = query.order_by(
-            Node.last_seen.desc() if order == "desc" else Node.last_seen.asc()
-        )
+        order_col = Node.last_seen.desc() if order == "desc" else Node.last_seen.asc()
+        query = query.order_by(nullslast(order_col))
     else:
         _col = func.coalesce(name_tag_subq, Node.name, Node.public_key)
         query = query.order_by(_col.desc() if order == "desc" else _col.asc())

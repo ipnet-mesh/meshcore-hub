@@ -723,6 +723,115 @@ class TestNodeSort:
         assert items[0]["name"] == "Alpha"
         assert items[1]["name"] is None
 
+    def test_sort_last_seen_nulls_last_desc(self, client_no_auth, api_db_session):
+        """Default sort (last_seen DESC) sinks NULL last_seen nodes to the end."""
+        from datetime import datetime, timedelta, timezone
+
+        from meshcore_hub.common.models import Node
+
+        now = datetime.now(timezone.utc)
+        node_old = Node(
+            public_key="aa" * 32,
+            name="Old",
+            adv_type="CLIENT",
+            first_seen=now,
+            last_seen=now - timedelta(days=1),
+        )
+        node_new = Node(
+            public_key="bb" * 32,
+            name="New",
+            adv_type="CLIENT",
+            first_seen=now,
+            last_seen=now,
+        )
+        node_null = Node(
+            public_key="cc" * 32,
+            name="Null",
+            adv_type="CLIENT",
+            first_seen=now,
+        )
+        api_db_session.add_all([node_old, node_new, node_null])
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/nodes")
+        assert response.status_code == 200
+        items = response.json()["items"]
+        assert len(items) == 3
+        assert items[-1]["name"] == "Null"
+        assert items[-1]["last_seen"] is None
+
+    def test_sort_last_seen_nulls_last_asc(self, client_no_auth, api_db_session):
+        """sort=last_seen&order=asc still sinks NULL last_seen nodes to the end."""
+        from datetime import datetime, timedelta, timezone
+
+        from meshcore_hub.common.models import Node
+
+        now = datetime.now(timezone.utc)
+        node_old = Node(
+            public_key="aa" * 32,
+            name="Old",
+            adv_type="CLIENT",
+            first_seen=now,
+            last_seen=now - timedelta(days=1),
+        )
+        node_new = Node(
+            public_key="bb" * 32,
+            name="New",
+            adv_type="CLIENT",
+            first_seen=now,
+            last_seen=now,
+        )
+        node_null = Node(
+            public_key="cc" * 32,
+            name="Null",
+            adv_type="CLIENT",
+            first_seen=now,
+        )
+        api_db_session.add_all([node_old, node_new, node_null])
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/nodes?sort=last_seen&order=asc")
+        assert response.status_code == 200
+        items = response.json()["items"]
+        assert len(items) == 3
+        assert items[-1]["name"] == "Null"
+        assert items[-1]["last_seen"] is None
+
+    def test_sort_last_seen_all_null(self, client_no_auth, api_db_session):
+        """All nodes with NULL last_seen are returned without error, both directions."""
+        from datetime import datetime, timezone
+
+        from meshcore_hub.common.models import Node
+
+        now = datetime.now(timezone.utc)
+        node_a = Node(
+            public_key="aa" * 32,
+            name="Alpha",
+            adv_type="CLIENT",
+            first_seen=now,
+        )
+        node_b = Node(
+            public_key="bb" * 32,
+            name="Bravo",
+            adv_type="CLIENT",
+            first_seen=now,
+        )
+        node_c = Node(
+            public_key="cc" * 32,
+            name="Charlie",
+            adv_type="CLIENT",
+            first_seen=now,
+        )
+        api_db_session.add_all([node_a, node_b, node_c])
+        api_db_session.commit()
+
+        for order in ("desc", "asc"):
+            response = client_no_auth.get(f"/api/v1/nodes?sort=last_seen&order={order}")
+            assert response.status_code == 200
+            items = response.json()["items"]
+            assert len(items) == 3
+            assert all(item["last_seen"] is None for item in items)
+
 
 class TestTagValidation:
     """Unit tests for validate_and_coerce_tag_value."""
