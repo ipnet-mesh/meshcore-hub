@@ -39,7 +39,7 @@ export async function render(container, params, router) {
 
     const config = getConfig();
     const features = config.features || {};
-    const packetsEnabled = features.packets === true;
+    const packetsEnabled = features.packets !== false;
     const tz = config.timezone || '';
     const tzBadge = tz && tz !== 'UTC' ? html`<span class="text-sm opacity-60">${tz}</span>` : nothing;
     const navigate = (url) => router.navigate(url);

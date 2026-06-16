@@ -105,7 +105,7 @@ function renderHeroSection({ networkName, logoUrl, logoInvertLight, networkCity,
                     label: t('entities.messages'),
                     colorVar: '--color-messages',
                 }) : nothing}
-                ${features.packets === true ? renderNavCard({
+                ${features.packets !== false ? renderNavCard({
                     href: '/packets',
                     icon: iconPackets('w-full h-full'),
                     label: t('entities.packets'),
