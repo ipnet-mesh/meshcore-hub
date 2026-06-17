@@ -36,8 +36,6 @@ Downtime is required while writers are stopped; the source SQLite file is never 
    It defaults the source to `sqlite:///{DATA_HOME}/collector/meshcore.db` and the target to your configured `DATABASE_*` connection. It copies every table in foreign-key order through the ORM (so SQLite's dynamically typed values are converted correctly — `0/1` → `boolean`, JSON text → `json`, naive datetimes → UTC `timestamptz`), then prints a per-table source-vs-target row-count reconciliation and fails on any mismatch. Use `--dry-run` to preview counts first, and `--truncate` to overwrite a non-empty target.
 5. **Start the stack on Postgres** with `DATABASE_BACKEND=postgres` set (see [database.md](database.md) for the env vars and `postgres` compose profile).
 
-> **Why not pgloader?** pgloader infers the target schema from SQLite's *dynamic* typing and produces wrong Postgres types (e.g. `is_observer` as `bigint` not `boolean`, JSON columns as `text`, no `timestamptz`), and no `alembic_version` consistent with the migration history. The built-in command reuses the ORM models, so types convert correctly and the schema is created by `db upgrade`.
-
 > **Managed Postgres / non-superuser roles:** the migration disables foreign-key triggers during the copy via `session_replication_role = replica`, which requires a superuser. When the target role is not a superuser (typical for managed Postgres), the command automatically falls back to copying in parent-first order instead. Pass `--no-replication-role` to force the fallback explicitly.
 
 ### Dashboard Chart Fix (Postgres)
