@@ -11,12 +11,6 @@ on:
       - "FUNDING.yml"
   pull_request:
     branches: [main]
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
-      - ".env.example"
-      - "LICENSE"
-      - "FUNDING.yml"
 
 permissions:
   contents: read
@@ -85,7 +79,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: [lint, test]
-    if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v6
 
