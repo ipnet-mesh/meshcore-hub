@@ -66,9 +66,12 @@ pre-commit run --all-files
 
 ## Database & Ops
 
+The default backend is **SQLite** (zero-config, file at `${DATA_HOME}/collector/meshcore.db`). **PostgreSQL** is also supported via `DATABASE_BACKEND=postgres` — see `docs/database.md` for the full backend reference, production provisioning, and schema-per-instance setup. Migrations are backend-agnostic; the commands below work for both.
+
 ```bash
 # --- LOCAL (venv): sync the volume DB to ./meshcore.db, then author a migration
 # Volume name is ${COMPOSE_PROJECT_NAME:-hub}_data (default: hub_data)
+# (SQLite only — for Postgres, point the migration env at the cluster directly)
 docker run -it --rm -v hub_data:/data -v "$PWD":/pwd ubuntu cp /data/collector/meshcore.db /pwd/meshcore.db
 meshcore-hub db revision --autogenerate -m "description"
 

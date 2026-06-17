@@ -6,45 +6,12 @@ This guide covers upgrading from a previous MeshCore Hub release to the current 
 
 ### Optional PostgreSQL Backend
 
-MeshCore Hub can now run on **PostgreSQL** as an alternative to the default SQLite database. SQLite remains the zero-config default — Postgres is entirely opt-in and **no action is required** to keep using SQLite. Switch to Postgres to scale writes and run the stack across multiple hosts (SQLite's file locking does not work over network filesystems and caps you at a single host). Existing operators can migrate their live SQLite data into Postgres with a single command (downtime required while writers are stopped).
+MeshCore Hub can now run on **PostgreSQL** as an alternative to the default SQLite database. SQLite remains the zero-config default — Postgres is entirely opt-in and **no action is required** to keep using SQLite. Switch to Postgres to scale writes and run the stack across multiple hosts (SQLite's file locking does not work over network filesystems and caps you at a single host).
 
-#### Enabling Postgres
+> [!NOTE]
+> As of v0.14, SQLite is **deprecated** in favour of PostgreSQL. SQLite continues to work as the default, but support will be removed in a future release (at least 3 months out). Existing SQLite deployments can migrate with the command below.
 
-Set `DATABASE_BACKEND=postgres` and the `DATABASE_*` connection variables, then activate the compose `postgres` profile:
-
-| Variable            | Default       | Description                                                                                  |
-| ------------------- | ------------- | -------------------------------------------------------------------------------------------- |
-| `DATABASE_BACKEND`  | `sqlite`      | `sqlite` (default) or `postgres`. Explicit switch — Postgres is never used implicitly.        |
-| `DATABASE_HOST`     | `postgres`    | Postgres hostname (`postgres` is the bundled container's service name).                       |
-| `DATABASE_PORT`     | `5432`        | Postgres port.                                                                                |
-| `DATABASE_NAME`     | `meshcorehub` | Database name. The bundled container is initialised with this name.                           |
-| `DATABASE_SCHEMA`   | `meshcorehub` | Postgres schema (search_path). **Set a distinct value per instance** on a shared cluster.     |
-| `DATABASE_USER`     | `meshcorehub` | Role name. The bundled container is initialised with this user.                              |
-| `DATABASE_PASSWORD` | _(none)_      | **Required** for Postgres. Generate one, e.g. `openssl rand -base64 32`.                      |
-
-```bash
-# Start the stack on Postgres (bundled container)
-docker compose -f docker-compose.yml -f docker-compose.dev.yml \
-  --profile postgres --profile core up -d
-```
-
-The bundled `postgres` container derives its `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` from the same `DATABASE_USER` / `DATABASE_PASSWORD` / `DATABASE_NAME` values — one source of truth. For a **managed/external** Postgres, point `DATABASE_HOST` at it (and skip the `postgres` profile). Advanced users can instead set a full `DATABASE_URL` (e.g. `postgresql+psycopg2://user:pass@host:5432/db`), which takes precedence over the component variables.
-
-#### Schema-per-instance (`search_path`)
-
-Each Hub instance is isolated to its own Postgres **schema** via the connection's `search_path`, not its own database. This lets several instances (e.g. `prod`, `stg`) share **one** Postgres cluster without colliding — each gets its own tables and its own `alembic_version`. Give every instance a distinct `DATABASE_SCHEMA` (e.g. `meshcorehub_prod`, `meshcorehub_stg`). The schema is created automatically on `db upgrade` if it does not exist.
-
-#### Provisioning the role and database
-
-The bundled container provisions the role and database for you on first start. For a managed/external Postgres, create them once before pointing Hub at it:
-
-```sql
-CREATE ROLE meshcorehub LOGIN PASSWORD 'your-password';
-CREATE DATABASE meshcorehub OWNER meshcorehub;
--- The schema is created by `db upgrade`; the role just needs CREATE on the database.
-```
-
-No admin/bootstrap credentials are needed at runtime — Hub only ever connects as `DATABASE_USER`.
+For the **backend setup reference** — the `DATABASE_*` environment variables, the bundled Docker `postgres` profile, production role/database provisioning, managed/external Postgres (`DATABASE_URL`), and schema-per-instance (`search_path`) isolation for multiple instances sharing one cluster — see [database.md](database.md). The remainder of this section covers the upgrade-time migration of live SQLite data into Postgres.
 
 #### Migrating an existing SQLite database to Postgres
 
@@ -67,9 +34,7 @@ Downtime is required while writers are stopped; the source SQLite file is never 
      run --rm migrate meshcore-hub db migrate-to-postgres
    ```
    It defaults the source to `sqlite:///{DATA_HOME}/collector/meshcore.db` and the target to your configured `DATABASE_*` connection. It copies every table in foreign-key order through the ORM (so SQLite's dynamically typed values are converted correctly — `0/1` → `boolean`, JSON text → `json`, naive datetimes → UTC `timestamptz`), then prints a per-table source-vs-target row-count reconciliation and fails on any mismatch. Use `--dry-run` to preview counts first, and `--truncate` to overwrite a non-empty target.
-5. **Start the stack on Postgres** with `DATABASE_BACKEND=postgres` set (see *Enabling Postgres* above).
-
-> **Why not pgloader?** pgloader infers the target schema from SQLite's *dynamic* typing and produces wrong Postgres types (e.g. `is_observer` as `bigint` not `boolean`, JSON columns as `text`, no `timestamptz`), and no `alembic_version` consistent with the migration history. The built-in command reuses the ORM models, so types convert correctly and the schema is created by `db upgrade`.
+5. **Start the stack on Postgres** with `DATABASE_BACKEND=postgres` set (see [database.md](database.md) for the env vars and `postgres` compose profile).
 
 > **Managed Postgres / non-superuser roles:** the migration disables foreign-key triggers during the copy via `session_replication_role = replica`, which requires a superuser. When the target role is not a superuser (typical for managed Postgres), the command automatically falls back to copying in parent-first order instead. Pass `--no-replication-role` to force the fallback explicitly.
 
