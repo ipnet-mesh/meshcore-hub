@@ -8,7 +8,7 @@
 Python 3.14+ platform for managing and orchestrating MeshCore mesh networks.
 
 > [!WARNING]
-> **BREAKING CHANGES** - The latest release replaces Mosquitto with a JWT-based MQTT broker, removes the proprietary receiver service in favor of [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture), and renames `receiver_node_id` to `observer_node_id` in the database. If upgrading from a previous version, see [docs/upgrading.md](docs/upgrading.md) for migration steps.
+> **DEPRECATION NOTICE** — v0.14 adds PostgreSQL support (`DATABASE_BACKEND=postgres`); SQLite remains the zero-config default. SQLite support will be maintained for at least the next few releases (~3 months), then removed in favour of PostgreSQL-only. See [docs/database.md](docs/database.md) to switch backends and [docs/upgrading.md](docs/upgrading.md) to migrate.
 
 ![MeshCore Hub Web Dashboard](docs/images/web.png)
 
@@ -231,6 +231,8 @@ TRAEFIK_PRIORITY=20
 
 This ensures `beta.example.com` (priority 20) is matched before the production wildcard `*.example.com` (priority 10). For other services on the same network (e.g., an MQTT broker at `mqtt.example.com`), use an even higher priority (e.g., 30).
 
+> **Shared Postgres cluster:** the setup above runs each instance in its own directory with its own volumes (the default SQLite path). To instead run several instances (e.g. `prod` + `stg`) against **one** PostgreSQL cluster — isolated via a per-instance schema (`search_path`) — see [docs/database.md](docs/database.md#schema-per-instance-search_path).
+
 #### Scaling the API
 
 The API is read-mostly and holds no per-process state — the response cache lives in Redis and authentication is stateless — so it scales across multiple worker processes. Set `API_WORKERS` to run more than one worker in a single container:
@@ -244,7 +246,7 @@ Each worker is an independent process sharing one listening socket, so the kerne
 
 Pick a worker count around the number of CPU cores available to the container; start with `2`–`4` and measure under realistic load.
 
-**SQLite caveat:** all workers share the same SQLite file on the same host. WAL mode (enabled automatically) allows concurrent readers alongside the single writer (the collector), so reads scale — but **writes do not**, and this does not extend across multiple hosts (a network filesystem breaks SQLite locking). To scale the API across hosts, switch to PostgreSQL (`DATABASE_BACKEND=postgres`); the API requires no code changes for this. See [Database Backend](#database-backend).
+**SQLite caveat:** all workers share one SQLite file on the same host (WAL mode lets concurrent readers coexist with the single writer), but writes do not scale and this does not extend across hosts. To scale the API across hosts, switch to PostgreSQL (`DATABASE_BACKEND=postgres`) — the API requires no code changes. See [docs/database.md](docs/database.md) for backend setup and the SQLite → Postgres migration runbook.
 
 > Prefer `API_WORKERS` over running multiple `api` containers (`--scale api=N`): the `api` service uses a fixed `container_name`, and one process-managed container per stack keeps logs, health checks, and monitoring simple.
 
@@ -346,31 +348,11 @@ All components are configured via environment variables. Create a `.env` file or
 
 > **Note:** `MQTT_PREFIX` also accepts the legacy alias `MQTT_TOPIC_PREFIX` for backward compatibility.
 
-### Database Backend
+### Database
 
-MeshCore Hub defaults to **SQLite** (zero-config, single host). Set `DATABASE_BACKEND=postgres` to switch to **PostgreSQL** for write scaling and multi-host deployments. Postgres is opt-in — leave these unset to keep using SQLite.
+MeshCore Hub defaults to **SQLite** (zero-config, single host). Set `DATABASE_BACKEND=postgres` to switch to **PostgreSQL** for write scaling, multi-host deployments, and multiple instances sharing one cluster via schema-per-instance. Postgres is opt-in — leave the `DATABASE_*` variables unset to keep using SQLite.
 
-| Variable            | Default       | Description                                                                              |
-| ------------------- | ------------- | --------------------------------------------------------------------------------------- |
-| `DATABASE_BACKEND`  | `sqlite`      | `sqlite` or `postgres`. Explicit switch — Postgres is never selected implicitly.         |
-| `DATABASE_HOST`     | `postgres`    | Postgres hostname (`postgres` = bundled container service name)                          |
-| `DATABASE_PORT`     | `5432`        | Postgres port                                                                            |
-| `DATABASE_NAME`     | `meshcorehub` | Database name                                                                            |
-| `DATABASE_SCHEMA`   | `meshcorehub` | Schema (search_path). Set a distinct value per instance on a shared cluster             |
-| `DATABASE_USER`     | `meshcorehub` | Role name                                                                                |
-| `DATABASE_PASSWORD` | _(none)_      | **Required** for Postgres                                                                |
-| `DATABASE_URL`      | _(none)_      | Advanced: full SQLAlchemy URL; overrides all of the above                                |
-
-**Docker:** Postgres is bundled behind the `postgres` profile. The container's credentials/name are derived from the `DATABASE_*` values (single source of truth).
-
-```bash
-docker compose --profile postgres --profile core up    # Start on Postgres
-docker compose --profile core up                        # Start on SQLite (default)
-```
-
-**Schema-per-instance:** several instances (e.g. `prod`, `stg`) can share one Postgres cluster, each isolated to its own schema via `search_path` — give each a distinct `DATABASE_SCHEMA`. The schema is created automatically on `db upgrade`.
-
-See [docs/upgrading.md](docs/upgrading.md#optional-postgresql-backend) for the setup reference and the SQLite → Postgres data-migration runbook.
+See [docs/database.md](docs/database.md) for the full backend reference: environment variables, the bundled Docker profile, production role/database provisioning, schema-per-instance isolation, and the SQLite → PostgreSQL migration runbook.
 
 ### Collector Settings
 
@@ -680,6 +662,7 @@ meshcore-hub/
 │   ├── images/              # Screenshots and images
 │   ├── hosting/             # Reverse proxy hosting guides
 │   ├── content.md           # Custom content setup guide
+│   ├── database.md          # Database backends (SQLite/PostgreSQL) reference
 │   ├── i18n.md              # Translation reference guide
 │   ├── letsmesh.md          # LetsMesh packet decoding details
 │   ├── seeding.md           # Seed data format and import guide
@@ -692,6 +675,7 @@ meshcore-hub/
 ## Documentation
 
 - [SCHEMAS.md](SCHEMAS.md) - MeshCore event schemas
+- [docs/database.md](docs/database.md) - Database backends (SQLite/PostgreSQL) and migration
 - [docs/upgrading.md](docs/upgrading.md) - Upgrade guide for breaking changes
 - [docs/letsmesh.md](docs/letsmesh.md) - LetsMesh packet decoding details
 - [docs/seeding.md](docs/seeding.md) - Seed data format and import guide
