@@ -106,9 +106,4 @@ environment:
   - CONTENT_HOME=/content
 ```
 
-To customize the content path, set `CONTENT_HOME` in your `.env` file:
-
-```bash
-# .env
-CONTENT_HOME=./content
-```
+The `CONTENT_HOME` variable (default `./content`) is documented in [configuration.md → Web Dashboard](configuration.md#web-dashboard).

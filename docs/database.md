@@ -7,7 +7,7 @@ MeshCore Hub supports two database backends: **SQLite** (the zero-config default
 
 ## SQLite (default)
 
-SQLite needs no configuration. The database file is created automatically on first run and lives under [`DATA_HOME`](../README.md):
+SQLite needs no configuration. The database file is created automatically on first run and lives under `DATA_HOME` (see [configuration.md → Common](configuration.md#common)):
 
 ```
 ${DATA_HOME}/collector/meshcore.db
@@ -19,22 +19,7 @@ In Docker Compose this is the `hub_data` volume (`${COMPOSE_PROJECT_NAME:-hub}_d
 
 ## PostgreSQL
 
-Set `DATABASE_BACKEND=postgres` and fill in the `DATABASE_*` connection variables. Postgres is never selected implicitly — the explicit switch avoids a silent backend change.
-
-### Environment variables
-
-| Variable            | Default       | Description                                                                              |
-| ------------------- | ------------- | --------------------------------------------------------------------------------------- |
-| `DATABASE_BACKEND`  | `sqlite`      | `sqlite` or `postgres`. Explicit switch — Postgres is never selected implicitly.         |
-| `DATABASE_HOST`     | `postgres`    | Postgres hostname (`postgres` = bundled container service name)                          |
-| `DATABASE_PORT`     | `5432`        | Postgres port                                                                            |
-| `DATABASE_NAME`     | `meshcorehub` | Database name                                                                            |
-| `DATABASE_SCHEMA`   | `meshcorehub` | Schema (search_path). Set a distinct value per instance on a shared cluster             |
-| `DATABASE_USER`     | `meshcorehub` | Role name                                                                                |
-| `DATABASE_PASSWORD` | _(none)_      | **Required** for Postgres. Generate one, e.g. `openssl rand -base64 32`                  |
-| `DATABASE_URL`      | _(none)_      | Advanced: full SQLAlchemy URL; overrides all of the above                                |
-
-The bundled `postgres` container derives its `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` from the same `DATABASE_USER` / `DATABASE_PASSWORD` / `DATABASE_NAME` values — one source of truth.
+Set `DATABASE_BACKEND=postgres` and fill in the `DATABASE_*` connection variables. Postgres is never selected implicitly — the explicit switch avoids a silent backend change. For the full variable reference, see [configuration.md → Database](configuration.md#database).
 
 ### Docker (bundled container)
 
@@ -101,7 +86,7 @@ DATABASE_SCHEMA=meshcorehub_stg
 
 The schema is created automatically on `db upgrade` if it does not exist, so no manual `CREATE SCHEMA` is required. Connect both instances to the same `DATABASE_HOST` / `DATABASE_NAME` / `DATABASE_USER`; only `DATABASE_SCHEMA` (and `COMPOSE_PROJECT_NAME`) differ.
 
-> **Note:** This is the database-level isolation for instances sharing a Postgres cluster. For running multiple instances on the same Docker host (separate volumes, Traefik routing), see [Multi-Instance Deployments](../README.md#multi-instance-deployments) in the README.
+> **Note:** This is the database-level isolation for instances sharing a Postgres cluster. For running multiple instances on the same Docker host (separate volumes, Traefik routing), see [Multi-Instance Deployments](deployment.md#multi-instance-deployments).
 
 ## Migrating from SQLite to PostgreSQL
 

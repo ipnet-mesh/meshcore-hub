@@ -67,24 +67,7 @@ The SPA receives the user's roles array in `window.__APP_CONFIG__.roles`. Client
 
 ## Configuration
 
-All OIDC settings are environment variables. Set `OIDC_ENABLED=true` to activate.
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OIDC_ENABLED` | `false` | Enable OIDC authentication |
-| `OIDC_CLIENT_ID` | _(none)_ | OAuth2 client ID from your IdP |
-| `OIDC_CLIENT_SECRET` | _(none)_ | OAuth2 client secret from your IdP |
-| `OIDC_DISCOVERY_URL` | _(none)_ | IdP base URL — `.well-known/openid-configuration` is appended automatically (e.g. `https://auth.example.com/oidc`) |
-| `OIDC_REDIRECT_URI` | _(auto)_ | Override callback URL (auto-derived from request if not set) |
-| `OIDC_POST_LOGOUT_REDIRECT_URI` | _(auto)_ | Post-logout redirect URI (falls back to `OIDC_REDIRECT_URI` base or request URL) |
-| `OIDC_SCOPES` | `openid email profile` | OAuth scopes to request. The `openid` scope is required. Quotes are stripped automatically. |
-| `OIDC_ROLES_CLAIM` | `roles` | ID token claim name containing user roles |
-| `OIDC_ROLE_ADMIN` | `admin` | IdP role name that grants admin access |
-| `OIDC_ROLE_OPERATOR` | `operator` | IdP role name for operator access (future use) |
-| `OIDC_ROLE_MEMBER` | `member` | IdP role name for member access |
-| `OIDC_SESSION_SECRET` | _(none)_ | Secret for signing session cookies (generate with `openssl rand -hex 32`) |
-| `OIDC_SESSION_MAX_AGE` | `86400` | Session cookie lifetime in seconds (default: 24 hours) |
-| `OIDC_COOKIE_SECURE` | `false` | Set to `true` to require HTTPS for session cookies |
+All OIDC settings are environment variables. Set `OIDC_ENABLED=true` to activate. For the full variable reference (`OIDC_CLIENT_ID`, `OIDC_SCOPES`, `OIDC_ROLE_*`, `OIDC_SESSION_*`, etc.), see [configuration.md → Auth](configuration.md#auth).
 
 ## Local Development (No HTTPS)
 

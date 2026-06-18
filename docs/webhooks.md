@@ -4,19 +4,7 @@ The collector can forward certain events to external HTTP endpoints. This is use
 
 ## Configuration
 
-| Variable                         | Default  | Description                              |
-| -------------------------------- | -------- | ---------------------------------------- |
-| `WEBHOOK_ADVERTISEMENT_URL`      | _(none)_ | Webhook URL for advertisement events     |
-| `WEBHOOK_ADVERTISEMENT_SECRET`   | _(none)_ | Secret sent as `X-Webhook-Secret` header |
-| `WEBHOOK_MESSAGE_URL`            | _(none)_ | Webhook URL for all message events       |
-| `WEBHOOK_MESSAGE_SECRET`         | _(none)_ | Secret for message webhook               |
-| `WEBHOOK_CHANNEL_MESSAGE_URL`    | _(none)_ | Override URL for channel messages only   |
-| `WEBHOOK_CHANNEL_MESSAGE_SECRET` | _(none)_ | Secret for channel message webhook       |
-| `WEBHOOK_DIRECT_MESSAGE_URL`     | _(none)_ | Override URL for direct messages only    |
-| `WEBHOOK_DIRECT_MESSAGE_SECRET`  | _(none)_ | Secret for direct message webhook        |
-| `WEBHOOK_TIMEOUT`                | `10.0`   | Request timeout in seconds               |
-| `WEBHOOK_MAX_RETRIES`            | `3`      | Max retry attempts on failure            |
-| `WEBHOOK_RETRY_BACKOFF`          | `2.0`    | Exponential backoff multiplier           |
+Webhook behaviour is configured via `WEBHOOK_*` environment variables. For the full variable reference (URLs, secrets, timeout, retries, backoff), see [configuration.md → Webhooks](configuration.md#webhooks). The sections below describe how the configured values behave.
 
 ### URL Routing
 
@@ -30,10 +18,7 @@ Each webhook URL can optionally have a corresponding secret. When configured, th
 
 ### Retries
 
-Failed webhook deliveries are retried with exponential backoff:
-
-- **`WEBHOOK_MAX_RETRIES`** — Maximum number of retry attempts (default: 3).
-- **`WEBHOOK_RETRY_BACKOFF`** — Backoff multiplier applied between retries (default: 2.0). For example, with the default settings, retries occur at approximately 2s, 4s, and 8s.
+Failed webhook deliveries are retried with exponential backoff controlled by `WEBHOOK_MAX_RETRIES` (default `3`) and `WEBHOOK_RETRY_BACKOFF` (default `2.0`). With the defaults, retries occur at approximately 2s, 4s, and 8s.
 
 ## Payload Format
 

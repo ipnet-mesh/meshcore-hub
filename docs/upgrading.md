@@ -17,7 +17,7 @@ For the **backend setup reference** — the `DATABASE_*` environment variables, 
 
 Downtime is required while writers are stopped; the source SQLite file is never modified.
 
-1. **Back up first.** Copy your `meshcore.db` (or back up the `hub_data` volume — see [Backup & Restore](../README.md#backup--restore)).
+1. **Back up first.** Copy your `meshcore.db` (or back up the `hub_data` volume — see [Backup & Restore](maintenance.md)).
 2. **Stop the writers** (collector and api):
    ```bash
    docker compose -f docker-compose.yml -f docker-compose.dev.yml stop collector api
@@ -139,7 +139,7 @@ The API can now run multiple worker processes in a single container for multi-co
 
 **Important:** with more than one worker, configuration must come from **environment variables** — CLI flags passed to `meshcore-hub api` are not propagated to forked worker processes. Docker Compose deployments already configure everything via env, so they are unaffected. Enabling Redis (`REDIS_ENABLED=true`) is recommended so all workers share one response cache.
 
-While on SQLite, all workers share the same database file on the same host (WAL mode allows concurrent reads alongside the collector's single writer). Writes do not scale and this does not extend across multiple hosts; switch `DATABASE_URL` to PostgreSQL to scale beyond a single host. See [Scaling the API](../README.md#scaling-the-api) for details.
+While on SQLite, all workers share the same database file on the same host (WAL mode allows concurrent reads alongside the collector's single writer). Writes do not scale and this does not extend across multiple hosts; switch `DATABASE_URL` to PostgreSQL to scale beyond a single host. See [Scaling the API](deployment.md#scaling-the-api) for details.
 
 ### Read-Path Query Optimisations
 
