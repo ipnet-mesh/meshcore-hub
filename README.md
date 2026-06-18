@@ -149,356 +149,21 @@ open http://localhost:8080
 
 This starts all services: MQTT broker, collector, API, web dashboard, and packet capture. The `observer` profile runs [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) to observe MeshCore RF traffic and publish decoded packets to MQTT.
 
-> **ARM / Raspberry Pi:** The `observer` service Docker image (`ghcr.io/agessaman/meshcore-packet-capture`) does not support 32-bit ARM (`armv7l`) architectures. Modern Raspberry Pi models (3, 4, 5) using a 64-bit OS are fully supported. If you are running a 32-bit ARM system, install [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) natively and configure it to publish to your MQTT broker instead of using the `--profile observer` Docker profile.
-
 ## Deployment
 
-### Production Setup
-
-For production deployments, use `docker-compose.prod.yml` which connects services to an external proxy network. No ports are exposed directly — all traffic goes through your reverse proxy.
-
-**Prerequisites:**
-
-1. A reverse proxy (Nginx Proxy Manager, Caddy, Traefik, etc.)
-2. Docker network for proxy communication
-
-**Steps:**
-
-```bash
-# Create proxy network (once)
-docker network create proxy-net
-
-# Download compose files and config
-mkdir meshcore-hub && cd meshcore-hub
-wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/docker-compose.yml
-wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/docker-compose.prod.yml
-wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/.env.example
-cp .env.example .env
-# Edit .env: set COMPOSE_PROJECT_NAME, MQTT credentials, API keys, etc.
-
-# Start core services
-docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile core up -d
-
-# Or include local MQTT broker
-docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile mqtt --profile core up -d
-
-# Or include packet capture on the same host
-docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile mqtt --profile core --profile observer up -d
-```
-
-Configure your reverse proxy to forward to the containers:
-
-| Service        | Container                     | Port | Path                             |
-| -------------- | ----------------------------- | ---- | -------------------------------- |
-| Web Dashboard  | `{COMPOSE_PROJECT_NAME}-web`  | 8080 | `/`                              |
-| API            | `{COMPOSE_PROJECT_NAME}-api`  | 8000 | `/api`, `/metrics`, `/health`    |
-| MQTT WebSocket | `{COMPOSE_PROJECT_NAME}-mqtt` | 1883 | `/` (only if using local broker) |
-
-> **Important:** Do not host under a subpath (e.g., `/meshcore`). Proxy at `/`.
-
-#### Reverse Proxy
-
-MeshCore Hub is designed to run behind a reverse proxy in production. A Traefik override file is provided with pre-configured labels:
-
-```bash
-# Download the Traefik override
-wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/refs/heads/main/docker-compose.traefik.yml
-
-# Set your domain in .env
-echo "TRAEFIK_DOMAIN=meshcore.example.com" >> .env
-
-# Start with Traefik labels
-docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml --profile core up -d
-```
-
-This routes the web dashboard and API to `TRAEFIK_DOMAIN` with automatic TLS.
-
-#### Multi-Instance Deployments
-
-To run multiple Hub instances (e.g., production + staging) on the same Docker host, set `TRAEFIK_PRIORITY` to control which router wins when domains overlap. Higher values are matched first:
-
-```bash
-# Production (.env)
-COMPOSE_PROJECT_NAME=hub
-TRAEFIK_DOMAIN=example.com
-TRAEFIK_PRIORITY=10
-
-# Staging (.env) — separate directory with its own config
-COMPOSE_PROJECT_NAME=hub-beta
-TRAEFIK_DOMAIN=beta.example.com
-TRAEFIK_PRIORITY=20
-```
-
-This ensures `beta.example.com` (priority 20) is matched before the production wildcard `*.example.com` (priority 10). For other services on the same network (e.g., an MQTT broker at `mqtt.example.com`), use an even higher priority (e.g., 30).
-
-> **Shared Postgres cluster:** the setup above runs each instance in its own directory with its own volumes (the default SQLite path). To instead run several instances (e.g. `prod` + `stg`) against **one** PostgreSQL cluster — isolated via a per-instance schema (`search_path`) — see [docs/database.md](docs/database.md#schema-per-instance-search_path).
-
-#### Scaling the API
-
-The API is read-mostly and holds no per-process state — the response cache lives in Redis and authentication is stateless — so it scales across multiple worker processes. Set `API_WORKERS` to run more than one worker in a single container:
-
-```bash
-# .env
-API_WORKERS=4
-```
-
-Each worker is an independent process sharing one listening socket, so the kernel balances connections across them and CPU-bound work (JSON serialisation, validation) spreads over multiple cores. Workers read their configuration from **environment variables** (CLI flags are not propagated to forked workers), which is how Docker Compose already supplies config. Enabling Redis (`REDIS_ENABLED=true`) is recommended so all workers share one cache.
-
-Pick a worker count around the number of CPU cores available to the container; start with `2`–`4` and measure under realistic load.
-
-**SQLite caveat:** all workers share one SQLite file on the same host (WAL mode lets concurrent readers coexist with the single writer), but writes do not scale and this does not extend across hosts. To scale the API across hosts, switch to PostgreSQL (`DATABASE_BACKEND=postgres`) — the API requires no code changes. See [docs/database.md](docs/database.md) for backend setup and the SQLite → Postgres migration runbook.
-
-> Prefer `API_WORKERS` over running multiple `api` containers (`--scale api=N`): the `api` service uses a fixed `container_name`, and one process-managed container per stack keeps logs, health checks, and monitoring simple.
+For production deployments (reverse-proxy setup, Traefik overrides, multi-instance routing on a shared Docker host, and API scaling with `API_WORKERS`), see [docs/deployment.md](docs/deployment.md).
 
 ### Adding Remote Observers
 
-Other operators can run their own [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) instance and publish decoded packets to your MeshCore Hub. They can also optionally contribute to the LetsMesh and MeshRank networks.
-
-> **Prerequisite:** Your MQTT broker must be accessible to remote observers. In production, this means exposing the WebSocket listener via a reverse proxy with TLS (e.g., `wss://mqtt.example.com/mqtt`).
-
-#### Example: Contribute to MeshCore Hub, LetsMesh, and MeshRank
-
-A ready-made Docker Compose setup is provided in `contrib/packetcapture/`. Download it and configure:
-
-```bash
-mkdir meshcore-observer && cd meshcore-observer
-
-wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/main/contrib/packetcapture/docker-compose.yml
-wget https://raw.githubusercontent.com/ipnet-mesh/meshcore-hub/main/contrib/packetcapture/.env.example
-
-cp .env.example .env
-```
-
-Edit `.env` and update the following variables:
-
-| Variable | Description |
-|----------|-------------|
-| `SERIAL_PORT` | Device path for your MeshCore companion device (e.g. `/dev/ttyUSB0`, or `/dev/serial/by-id/...` for a stable path) |
-| `IATA` | 3-letter area code for your location (e.g. `STN`, `SEA`) |
-| `ORIGIN` | Observer identifier (default: `observer`) |
-| `IPNET_ENABLE` | Set `true` to contribute packets to IPNet MeshCore Hub (default: `true`) |
-| `LETSMESH_ENABLE` | Set `true` to contribute to LetsMesh (default: `false`) |
-| `LETSMESH_REGION` | LetsMesh region: `eu` or `us` (default: `eu`) |
-| `MESHRANK_ENABLE` | Set `true` to contribute to MeshRank (default: `false`) |
-| `MESHRANK_UPLINK_KEY` | Your MeshRank uplink key (required if MeshRank enabled) |
-| `CUSTOM_ENABLE` | Set `true` to publish to a custom MQTT broker (default: `false`) |
-| `CUSTOM_MQTT_SERVER` | Custom MQTT broker hostname |
-| `CUSTOM_MQTT_PORT` | Custom MQTT broker port (default: `8883`) |
-| `CUSTOM_MQTT_USE_TLS` | `true` for TLS, `false` for plain (default: `true`) |
-| `CUSTOM_MQTT_USERNAME` | Username for custom broker auth |
-| `CUSTOM_MQTT_PASSWORD` | Password for custom broker auth |
-
-Then start the observer:
-
-```bash
-docker compose up -d
-```
-
-> **Local network (no TLS):** Set `CUSTOM_MQTT_SERVER` to the Hub's LAN IP (e.g. `192.168.1.100`), `CUSTOM_MQTT_PORT=1883`, and `CUSTOM_MQTT_USE_TLS=false`.
+Other operators can run their own [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) instance and publish decoded packets to your MeshCore Hub, with optional contribution to the LetsMesh and MeshRank networks. For the ready-made Docker Compose setup and the `PACKETCAPTURE_*` configuration reference, see [docs/observer.md](docs/observer.md).
 
 ### Backup & Restore
 
-#### Using Makefile
-
-```bash
-# Back up all volumes to backup/
-make backup
-
-# Restore a specific volume
-make restore FILE=backup/hub_data-20260414-120000.tar.gz
-```
-
-#### Using shell commands
-
-```bash
-# Back up the database volume
-source .env 2>/dev/null || true
-mkdir -p backup
-vol=${COMPOSE_PROJECT_NAME:-hub}_data
-docker run --rm -v $vol:/data -v $(pwd)/backup:/backup \
-  alpine tar czf /backup/$vol-$(date +%Y%m%d-%H%M%S).tar.gz -C / data
-
-# Restore a specific volume (volume name derived from tarball filename)
-source .env 2>/dev/null || true
-FILE=backup/${COMPOSE_PROJECT_NAME:-hub}_data-20260414-120000.tar.gz
-vol=$(basename "$FILE" | sed 's/-[0-9]\{8\}-[0-9]\{6\}\.tar\.gz//')
-docker run --rm -v $vol:/data -v $(pwd)/backup:/backup \
-  alpine sh -c "cd / && tar xzf /backup/$(basename $FILE)"
-```
-
-> **Note:** Replace `hub` with your `COMPOSE_PROJECT_NAME` if using a different instance name. Monitoring infrastructure (Prometheus, Alertmanager) manages its own data — consult your monitoring stack's documentation for backup procedures.
+For backing up and restoring Docker volumes (Makefile and shell variants), see [docs/maintenance.md](docs/maintenance.md).
 
 ## Configuration
 
-All components are configured via environment variables. Create a `.env` file or export variables:
-
-### Common Settings
-
-| Variable         | Default      | Description                                                 |
-| ---------------- | ------------ | ----------------------------------------------------------- |
-| `LOG_LEVEL`      | `INFO`       | Logging level (DEBUG, INFO, WARNING, ERROR)                 |
-| `DATA_HOME`      | `./data`     | Base directory for runtime data                             |
-| `SEED_HOME`      | `./seed`     | Directory containing seed data files                        |
-| `MQTT_HOST`      | `localhost`  | MQTT broker hostname                                        |
-| `MQTT_PORT`      | `1883`       | MQTT broker port                                            |
-| `MQTT_USERNAME`  | _(none)_     | MQTT username (optional)                                    |
-| `MQTT_PASSWORD`  | _(none)_     | MQTT password (optional)                                    |
-| `MQTT_PREFIX`    | `meshcore`   | Topic prefix for all MQTT messages                          |
-| `MQTT_TLS`       | `false`      | Enable TLS/SSL for MQTT connection                          |
-
-> **Note:** `MQTT_PREFIX` also accepts the legacy alias `MQTT_TOPIC_PREFIX` for backward compatibility.
-
-### Database
-
-MeshCore Hub defaults to **SQLite** (zero-config, single host). Set `DATABASE_BACKEND=postgres` to switch to **PostgreSQL** for write scaling, multi-host deployments, and multiple instances sharing one cluster via schema-per-instance. Postgres is opt-in — leave the `DATABASE_*` variables unset to keep using SQLite.
-
-See [docs/database.md](docs/database.md) for the full backend reference: environment variables, the bundled Docker profile, production role/database provisioning, schema-per-instance isolation, and the SQLite → PostgreSQL migration runbook.
-
-### Collector Settings
-
-| Variable                           | Default | Description                                              |
-| ---------------------------------- | ------- | -------------------------------------------------------- |
-| `CHANNEL_REFRESH_INTERVAL_SECONDS` | `300`   | Seconds between channel key refresh from database (min 10) |
-
-#### LetsMesh Packet Decoding
-
-For details on how the collector normalizes and decodes LetsMesh packets, see [docs/letsmesh.md](docs/letsmesh.md).
-
-### OIDC Authentication
-
-The web dashboard supports OIDC/OAuth2 authentication. When enabled (`OIDC_ENABLED=true`), the admin interface requires users to authenticate with an identity provider (e.g. LogTo, Keycloak) and have the `admin` role assigned. See [docs/auth.md](docs/auth.md) for setup instructions, configuration reference, and IdP-specific guides.
-
-### Webhooks
-
-The collector can forward events (advertisements, messages) to external HTTP endpoints via webhooks with configurable URLs, secrets, retries, and timeouts. See [docs/webhooks.md](docs/webhooks.md) for the full configuration reference and payload format.
-
-### Data Retention
-
-The collector automatically cleans up old event data and inactive nodes:
-
-| Variable                        | Default | Description                              |
-| ------------------------------- | ------- | ---------------------------------------- |
-| `DATA_RETENTION_ENABLED`        | `true`  | Enable automatic cleanup of old events   |
-| `DATA_RETENTION_DAYS`           | `30`    | Days to retain event data                |
-| `DATA_RETENTION_INTERVAL_HOURS` | `24`    | Hours between cleanup runs               |
-| `NODE_CLEANUP_ENABLED`          | `true`  | Enable removal of inactive nodes         |
-| `NODE_CLEANUP_DAYS`             | `30`    | Remove nodes not seen for this many days |
-| `RAW_PACKET_CAPTURE_ENABLED`    | `false` | Capture raw packets into `raw_packets`. In Compose, derived from `FEATURE_PACKETS` |
-| `RAW_PACKET_RETENTION_DAYS`     | `7`     | Days to retain raw packets (independent of `DATA_RETENTION_DAYS`) |
-
-### API Settings
-
-| Variable            | Default   | Description                                             |
-| ------------------- | --------- | ------------------------------------------------------- |
-| `API_HOST`          | `0.0.0.0` | API bind address                                        |
-| `API_PORT`          | `8000`    | API port                                                |
-| `API_WORKERS`       | `1`       | Number of worker processes (increase for multi-core concurrency; see [Scaling the API](#scaling-the-api)) |
-| `API_READ_KEY`      | _(none)_  | Read-only API key                                       |
-| `API_ADMIN_KEY`     | _(none)_  | Admin API key                                           |
-| `METRICS_ENABLED`   | `true`    | Enable Prometheus metrics endpoint at `/metrics`        |
-| `METRICS_CACHE_TTL` | `60`      | Seconds to cache metrics output (reduces database load) |
-| `CORS_ORIGINS`      | _(none)_  | Comma-separated list of allowed CORS origins for the API (optional, only needed when the web dashboard runs on a different origin) |
-
-### Redis Caching
-
-Optional Redis-backed caching for API responses. When disabled or unavailable, the API queries the database directly.
-
-**Docker:** Redis is included in the `cache` profile. Disabled by default — set `REDIS_ENABLED=true` to enable.
-
-```bash
-docker compose --profile cache up    # Start with bundled Redis
-docker compose --profile core up     # Start without Redis
-```
-
-**Bare-metal:** Install Redis separately, then set `REDIS_ENABLED=true` and `REDIS_HOST=localhost`.
-
-**Multi-instance:** Use different `REDIS_KEY_PREFIX` values per instance to share one Redis without key collisions.
-
-| Variable                     | Default     | Description                                    |
-| ---------------------------- | ----------- | ---------------------------------------------- |
-| `REDIS_ENABLED`              | `false`     | Enable Redis API response caching              |
-| `REDIS_HOST`                 | `localhost` | Redis server host (`redis` in Docker)          |
-| `REDIS_PORT`                 | `6379`      | Redis server port                              |
-| `REDIS_DB`                   | `0`         | Redis database number                          |
-| `REDIS_PASSWORD`             | _(none)_    | Redis password (optional)                      |
-| `REDIS_KEY_PREFIX`           | `hub`       | Cache key prefix for multi-instance isolation  |
-| `REDIS_CACHE_TTL`            | `30`        | Default cache TTL in seconds                   |
-| `REDIS_CACHE_TTL_DASHBOARD`  | `30`        | Cache TTL for dashboard endpoints in seconds   |
-
-### Web Dashboard Settings
-
-| Variable                   | Default                 | Description                                                                                                                                                                                                                                  |
-| -------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `WEB_HOST`                 | `0.0.0.0`               | Web server bind address                                                                                                                                                                                                                      |
-| `WEB_PORT`                 | `8080`                  | Web server port                                                                                                                                                                                                                              |
-| `API_BASE_URL`             | `http://localhost:8000` | API endpoint URL                                                                                                                                                                                                                             |
-| `API_KEY`                  | _(none)_                | API key for web dashboard queries (optional)                                                                                                                                                                                                 |
-| `WEB_THEME`                | `dark`                  | Default theme (`dark` or `light`). Users can override via theme toggle in navbar.                                                                                                                                                            |
-| `WEB_LOCALE`               | `en`                    | Locale/language for the web dashboard (e.g., `en`, `es`, `fr`)                                                                                                                                                                               |
-| `WEB_DATETIME_LOCALE`      | `en-US`                 | Locale used for date formatting in the web dashboard (e.g., `en-US` for MM/DD/YYYY, `en-GB` for DD/MM/YYYY).                                                                                                                                 |
-| `WEB_AUTO_REFRESH_SECONDS` | `30`                    | Auto-refresh interval in seconds for list pages (0 to disable)                                                                                                                                                                               |
-| `WEB_DEBUG`                | `false`                 | Enable debug mode in the web dashboard (shows extra diagnostic info)                                                                                                                                                                          |
-| `OIDC_ENABLED`             | `false`                 | Enable OIDC authentication for the web dashboard                                                                                                                                                                                              |
-| `OIDC_CLIENT_ID`           | _(none)_                | OIDC client ID (from IdP, required when OIDC_ENABLED=true)                                                                                                                                                                                    |
-| `OIDC_CLIENT_SECRET`       | _(none)_                | OIDC client secret (from IdP, required when OIDC_ENABLED=true)                                                                                                                                                                                |
-| `OIDC_DISCOVERY_URL`       | _(none)_                | IdP base URL — `.well-known/openid-configuration` is appended automatically (required when OIDC_ENABLED=true)                                                                                                                                |
-| `OIDC_REDIRECT_URI`        | _(auto-derived)_        | Explicit callback URL (overrides auto-derivation from request)                                                                                                                                                                                |
-| `OIDC_POST_LOGOUT_REDIRECT_URI` | _(auto-derived)_  | Post-logout redirect URI (must match Sign-out redirect URIs in IdP). Falls back to `OIDC_REDIRECT_URI` base or `request.base_url`                                                                                                           |
-| `OIDC_SCOPES`              | `openid email profile`  | OAuth scopes to request. The `openid` scope is required for ID tokens. Quotes are stripped automatically.  |
-| `OIDC_ROLES_CLAIM`         | `roles`                 | ID token claim name containing user roles                                                                                                                                                                                                     |
-| `OIDC_ROLE_ADMIN`          | `admin`                 | IdP role name granting admin access                                                                                                                                                                                                           |
-| `OIDC_ROLE_OPERATOR`       | `operator`              | IdP role name for operator access (future use)                                                                                                                                                                                                |
-| `OIDC_ROLE_MEMBER`         | `member`                | IdP role name for member access                                                                                                                                                                                                               |
-| `OIDC_SESSION_SECRET`      | _(none)_                | Secret for signing session cookies (required when OIDC_ENABLED=true)                                                                                                                                                                          |
-| `OIDC_SESSION_MAX_AGE`     | `86400`                 | Session cookie lifetime in seconds (default 24 hours)                                                                                                                                                                                         |
-| `OIDC_COOKIE_SECURE`       | `false`                 | HTTPS-only session cookies (enable in production)                                                                                                                                                                                             |
-| `TZ`                       | `UTC`                   | Timezone for displaying dates/times (e.g., `America/New_York`, `Europe/London`)                                                                                                                                                              |
-| `NETWORK_DOMAIN`           | _(none)_                | Network domain name (optional)                                                                                                                                                                                                               |
-| `NETWORK_NAME`             | `MeshCore Network`      | Display name for the network                                                                                                                                                                                                                 |
-| `NETWORK_CITY`             | _(none)_                | City where network is located                                                                                                                                                                                                                |
-| `NETWORK_COUNTRY`          | _(none)_                | Country code (ISO 3166-1 alpha-2)                                                                                                                                                                                                            |
-| `NETWORK_RADIO_PROFILE`          | `EU/UK Narrow`           | Radio profile name                                                                                          |
-| `NETWORK_RADIO_FREQUENCY`        | `869.618`                | Radio frequency in MHz (raw number, units applied on display)                                               |
-| `NETWORK_RADIO_BANDWIDTH`        | `62.5`                   | Radio bandwidth in kHz (raw number, units applied on display)                                               |
-| `NETWORK_RADIO_SPREADING_FACTOR` | `8`                      | Radio spreading factor                                                                                      |
-| `NETWORK_RADIO_CODING_RATE`      | `8`                      | Radio coding rate                                                                                           |
-| `NETWORK_RADIO_TX_POWER`         | `22`                     | Radio TX power in dBm (raw number, units applied on display)                                                |
-| `NETWORK_WELCOME_TEXT`     | _(none)_                | Custom welcome text for homepage                                                                                                                                                                                                             |
-| `NETWORK_CONTACT_EMAIL`    | _(none)_                | Contact email address                                                                                                                                                                                                                        |
-| `NETWORK_CONTACT_DISCORD`  | _(none)_                | Discord server link                                                                                                                                                                                                                          |
-| `NETWORK_CONTACT_GITHUB`   | _(none)_                | GitHub repository URL                                                                                                                                                                                                                        |
-| `NETWORK_CONTACT_YOUTUBE`  | _(none)_                | YouTube channel URL                                                                                                                                                                                                                          |
-| `NETWORK_ANNOUNCEMENT`     | _(none)_                | Markdown announcement shown as a dismissable flash banner on every page                                                                                                                                                                      |
-| `SYSTEM_ANNOUNCEMENT`      | _(none)_                | Markdown system notice shown as a non-dismissable banner above the network announcement                                                                                                                                                      |
-| `SYSTEM_MAINTENANCE`       | `false`                 | Maintenance mode: nav shows only Home, profile menu hidden, every page renders a maintenance notice, and no API calls are made                                                                                                               |
-| `CONTENT_HOME`             | `./content`             | Directory containing custom content (pages/, media/)                                                                                                                                                                                         |
-
-Timezone handling note:
-
-- API timestamps that omit an explicit timezone suffix are treated as UTC before rendering in the configured `TZ`.
-
-### Feature Flags
-
-Control which pages are visible in the web dashboard. Disabled features are fully hidden: removed from navigation, return 404 on their routes, and excluded from sitemap/robots.txt.
-
-| Variable                 | Default | Description                                           |
-| ------------------------ | ------- | ----------------------------------------------------- |
-| `FEATURE_DASHBOARD`      | `true`  | Enable the `/dashboard` page                          |
-| `FEATURE_NODES`          | `true`  | Enable the `/nodes` pages (list, detail, short links) |
-| `FEATURE_ADVERTISEMENTS` | `true`  | Enable the `/advertisements` page                     |
-| `FEATURE_MESSAGES`       | `true`  | Enable the `/messages` page                           |
-| `FEATURE_MAP`            | `true`  | Enable the `/map` page and `/map/data` endpoint       |
-| `FEATURE_MEMBERS`        | `true`  | Enable the `/members` page                            |
-| `FEATURE_PAGES`          | `true`  | Enable custom markdown pages                          |
-| `FEATURE_CHANNELS`       | `true`  | Enable the `/channels` page                          |
-| `FEATURE_RADIO_CONFIG`   | `true`  | Show radio config panel on home page                 |
-| `FEATURE_PACKETS`        | `true`  | Enable the `/packets` raw-packet browser. In Compose this also drives `RAW_PACKET_CAPTURE_ENABLED` on the collector |
-
-**Dependencies:** Dashboard auto-disables when all of Nodes/Advertisements/Messages are disabled. Map auto-disables when Nodes is disabled. Members auto-disables when OIDC is disabled (set via `OIDC_ENABLED`).
-
-### Custom Content
-
-The web dashboard supports custom markdown pages and media files (including custom logos) served from a configurable content directory. See [docs/content.md](docs/content.md) for the full setup guide including directory structure, frontmatter fields, and Docker volume mounting.
+All components are configured via environment variables. Copy `.env.example` to `.env` and override what you need. The full variable reference — grouped by feature (Common, Database, Caching, Collector, Webhooks, Auth, Data Retention, API, Web Dashboard, Feature Flags, Traefik, Prometheus & Alertmanager) — lives in [docs/configuration.md](docs/configuration.md); each section there links to the relevant feature doc for setup and operational details.
 
 ## Seed Data
 
@@ -661,10 +326,14 @@ meshcore-hub/
 ├── docs/                    # Documentation
 │   ├── images/              # Screenshots and images
 │   ├── hosting/             # Reverse proxy hosting guides
+│   ├── configuration.md     # Single source of truth for environment variables
 │   ├── content.md           # Custom content setup guide
 │   ├── database.md          # Database backends (SQLite/PostgreSQL) reference
+│   ├── deployment.md        # Production setup, scaling, Redis, multi-instance
 │   ├── i18n.md              # Translation reference guide
 │   ├── letsmesh.md          # LetsMesh packet decoding details
+│   ├── maintenance.md       # Backup and restore procedures
+│   ├── observer.md          # Remote observers and PACKETCAPTURE_* reference
 │   ├── seeding.md           # Seed data format and import guide
 │   ├── upgrading.md         # Upgrade guide for breaking changes
 │   └── webhooks.md          # Webhook configuration reference
@@ -675,6 +344,10 @@ meshcore-hub/
 ## Documentation
 
 - [SCHEMAS.md](SCHEMAS.md) - MeshCore event schemas
+- [docs/configuration.md](docs/configuration.md) - Single source of truth for environment variables
+- [docs/deployment.md](docs/deployment.md) - Production setup, reverse proxy, multi-instance, API scaling, Redis
+- [docs/observer.md](docs/observer.md) - Remote packet-capture observers and `PACKETCAPTURE_*` reference
+- [docs/maintenance.md](docs/maintenance.md) - Backup and restore procedures
 - [docs/database.md](docs/database.md) - Database backends (SQLite/PostgreSQL) and migration
 - [docs/upgrading.md](docs/upgrading.md) - Upgrade guide for breaking changes
 - [docs/letsmesh.md](docs/letsmesh.md) - LetsMesh packet decoding details
