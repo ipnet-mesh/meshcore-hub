@@ -1371,4 +1371,5 @@ class TestSpamRescoreScheduler:
         sub._start_spam_rescore_scheduler()
         assert called.wait(timeout=5.0)
         sub._stop_spam_rescore_scheduler()
+        assert sub._spam_rescore_thread is not None
         assert not sub._spam_rescore_thread.is_alive()
