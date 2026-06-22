@@ -1,8 +1,13 @@
 """Shared pytest fixtures for all tests."""
 
+import os
+import tempfile
+from typing import Generator
+
 import dotenv
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import sessionmaker
 
 from meshcore_hub.common import config as config_module
@@ -120,3 +125,97 @@ def db_session(db_engine):
     session = Session()
     yield session
     session.close()
+
+
+@pytest.fixture(scope="session")
+def test_db_path():
+    """Session-scoped temporary SQLite database file path.
+
+    One file per pytest session; engines below build schema on it once.
+    """
+    fd, path = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+    yield path
+    if os.path.exists(path):
+        os.unlink(path)
+
+
+@pytest.fixture(scope="session")
+def db_backend() -> str:
+    """Active test database backend (``sqlite`` or ``postgres``).
+
+    Controlled by ``TEST_DATABASE_BACKEND`` env var (default: ``sqlite``).
+    When ``postgres``, ``TEST_POSTGRES_URL`` must also be set.
+    """
+    backend = os.environ.get("TEST_DATABASE_BACKEND", "sqlite").lower()
+    if backend not in ("sqlite", "postgres"):
+        raise ValueError(
+            f"TEST_DATABASE_BACKEND must be 'sqlite' or 'postgres', got: {backend}"
+        )
+    return backend
+
+
+@pytest.fixture(scope="session")
+def db_url(db_backend: str, test_db_path: str, request) -> Generator[str, None, None]:
+    """Database URL for the active backend.
+
+    For Postgres, each pytest-xdist worker gets its own database (e.g.
+    ``test_gw0``) to avoid truncation races between parallel workers. Shared by
+    the API and collector suites so both exercise the same backend.
+    """
+    if db_backend == "postgres":
+        env_url = os.environ.get("TEST_POSTGRES_URL")
+        if not env_url:
+            pytest.skip(
+                "TEST_DATABASE_BACKEND=postgres but TEST_POSTGRES_URL is not set; "
+                "e.g. TEST_POSTGRES_URL=postgresql+psycopg2://postgres:postgres@localhost:55432/test"
+            )
+        assert env_url is not None
+
+        worker_id = "master"
+        if hasattr(request.config, "workerinput"):
+            worker_id = request.config.workerinput["workerid"]
+
+        base_url = make_url(env_url)
+        worker_db = f"{base_url.database}_{worker_id}"
+        worker_url = base_url.set(database=worker_db).render_as_string(
+            hide_password=False
+        )
+
+        admin_url = base_url.set(database="postgres")
+        admin_engine = create_engine(
+            admin_url.render_as_string(hide_password=False),
+            isolation_level="AUTOCOMMIT",
+        )
+        try:
+            with admin_engine.connect() as conn:
+                exists = conn.execute(
+                    text("SELECT 1 FROM pg_database WHERE datname = :name"),
+                    {"name": worker_db},
+                ).scalar()
+                if not exists:
+                    conn.execute(text(f'CREATE DATABASE "{worker_db}"'))
+        finally:
+            admin_engine.dispose()
+
+        yield worker_url
+
+        admin_engine = create_engine(
+            admin_url.render_as_string(hide_password=False),
+            isolation_level="AUTOCOMMIT",
+        )
+        try:
+            with admin_engine.connect() as conn:
+                conn.execute(
+                    text(
+                        "SELECT pg_terminate_backend(pid) "
+                        "FROM pg_stat_activity "
+                        "WHERE datname = :name AND pid <> pg_backend_pid()"
+                    ),
+                    {"name": worker_db},
+                )
+                conn.execute(text(f'DROP DATABASE IF EXISTS "{worker_db}"'))
+        finally:
+            admin_engine.dispose()
+    else:
+        yield f"sqlite:///{test_db_path}"

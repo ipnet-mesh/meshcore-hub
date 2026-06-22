@@ -153,6 +153,25 @@ class CommonSettings(BaseSettings):
         description="WebSocket path for MQTT transport (used when MQTT_TRANSPORT=websockets)",
     )
 
+    # Spam detection (shared operational switch + display threshold).
+    # The collector reads it to decide whether to score; the API reads it to
+    # decide whether to hide flagged messages. Bridged from FEATURE_SPAM_DETECTION
+    # in Compose so operators set a single var. Both default off (feature dark).
+    spam_detection_enabled: bool = Field(
+        default=False,
+        description=(
+            "Operational switch for spam scoring/hiding, read by collector + API "
+            "(bridged from FEATURE_SPAM_DETECTION in Compose)"
+        ),
+    )
+    spam_score_threshold: float = Field(
+        default=0.6,
+        description=(
+            "Score at/above which a message is treated as likely spam (hidden by "
+            "default in the API; logged at the collector)"
+        ),
+    )
+
 
 class CollectorSettings(CommonSettings):
     """Settings for the Collector component."""
@@ -240,6 +259,51 @@ class CollectorSettings(CommonSettings):
             "DATA_RETENTION_DAYS)"
         ),
         ge=1,
+    )
+
+    # Spam scoring tuning (only consulted when SPAM_DETECTION_ENABLED is true).
+    # The shared SPAM_DETECTION_ENABLED / SPAM_SCORE_THRESHOLD live on
+    # CommonSettings; these collector-only knobs tune the scorer + sweep.
+    spam_window_seconds: int = Field(
+        default=300,
+        description="Sliding window (seconds) for spam frequency counts",
+        ge=1,
+    )
+    spam_path_hops: int = Field(
+        default=3,
+        description="Number of leading origin-side hops that form the path prefix",
+        ge=1,
+    )
+    spam_min_path_hops: int = Field(
+        default=5,
+        description=(
+            "Minimum path_len before the path signal is applied; below this the "
+            "path_prefix is stored null (short local-mesh paths share prefixes)"
+        ),
+        ge=0,
+    )
+    spam_path_threshold: int = Field(
+        default=5,
+        description="Joint path+sender count that saturates the path signal",
+        ge=1,
+    )
+    spam_name_threshold: int = Field(
+        default=5,
+        description="Sender count that saturates the name signal",
+        ge=1,
+    )
+    spam_weight_path: float = Field(
+        default=0.7, description="Weight of the path signal in the combined score"
+    )
+    spam_weight_name: float = Field(
+        default=0.3, description="Weight of the name signal in the combined score"
+    )
+    spam_rescore_interval_seconds: int = Field(
+        default=120,
+        description=(
+            "Background re-scoring sweep cadence in seconds (0 disables the sweep)"
+        ),
+        ge=0,
     )
 
     @property
@@ -498,6 +562,13 @@ class WebSettings(CommonSettings):
     feature_radio_config: bool = Field(
         default=True, description="Enable radio config panel on home page"
     )
+    feature_spam_detection: bool = Field(
+        default=False,
+        description=(
+            "Expose the 'show potential spam' toggle on the messages page; in "
+            "Compose this also drives the backend SPAM_DETECTION_ENABLED switch"
+        ),
+    )
 
     # Content directory (contains pages/ and media/ subdirectories)
     content_home: Optional[str] = Field(
@@ -528,6 +599,7 @@ class WebSettings(CommonSettings):
             "packets": self.feature_packets,
             "pages": self.feature_pages,
             "radio_config": self.feature_radio_config,
+            "spam": self.feature_spam_detection,
         }
 
     @property

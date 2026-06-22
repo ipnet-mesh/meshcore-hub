@@ -1,15 +1,16 @@
-"""API test fixtures."""
+"""API test fixtures.
 
-import os
-import tempfile
+The ``db_backend`` / ``db_url`` / ``test_db_path`` fixtures that drive the
+SQLite-vs-Postgres switch live in the shared ``tests/conftest.py`` so the
+collector suite can reuse the same backend; they are inherited here.
+"""
+
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Generator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event as sa_event, text
-from sqlalchemy.engine.url import make_url
+from sqlalchemy import create_engine, event as sa_event
 from sqlalchemy.orm import sessionmaker
 
 from meshcore_hub.api.app import create_app
@@ -32,99 +33,6 @@ from meshcore_hub.common.models import (
     UserProfile,
     UserProfileNode,
 )
-
-
-@pytest.fixture(scope="session")
-def test_db_path():
-    """Session-scoped temporary database file path.
-
-    One file per pytest session; the engine below builds schema on it once.
-    """
-    fd, path = tempfile.mkstemp(suffix=".db")
-    os.close(fd)
-    yield path
-    if os.path.exists(path):
-        os.unlink(path)
-
-
-@pytest.fixture(scope="session")
-def db_backend() -> str:
-    """Active test database backend (``sqlite`` or ``postgres``).
-
-    Controlled by ``TEST_DATABASE_BACKEND`` env var (default: ``sqlite``).
-    When ``postgres``, ``TEST_POSTGRES_URL`` must also be set.
-    """
-    backend = os.environ.get("TEST_DATABASE_BACKEND", "sqlite").lower()
-    if backend not in ("sqlite", "postgres"):
-        raise ValueError(
-            f"TEST_DATABASE_BACKEND must be 'sqlite' or 'postgres', got: {backend}"
-        )
-    return backend
-
-
-@pytest.fixture(scope="session")
-def db_url(db_backend: str, test_db_path: str, request) -> Generator[str, None, None]:
-    """Database URL for the active backend.
-
-    For Postgres, each pytest-xdist worker gets its own database (e.g.
-    ``test_gw0``) to avoid truncation races between parallel workers.
-    """
-    if db_backend == "postgres":
-        env_url = os.environ.get("TEST_POSTGRES_URL")
-        if not env_url:
-            pytest.skip(
-                "TEST_DATABASE_BACKEND=postgres but TEST_POSTGRES_URL is not set; "
-                "e.g. TEST_POSTGRES_URL=postgresql+psycopg2://postgres:postgres@localhost:55432/test"
-            )
-        assert env_url is not None
-
-        worker_id = "master"
-        if hasattr(request.config, "workerinput"):
-            worker_id = request.config.workerinput["workerid"]
-
-        base_url = make_url(env_url)
-        worker_db = f"{base_url.database}_{worker_id}"
-        worker_url = base_url.set(database=worker_db).render_as_string(
-            hide_password=False
-        )
-
-        admin_url = base_url.set(database="postgres")
-        admin_engine = create_engine(
-            admin_url.render_as_string(hide_password=False),
-            isolation_level="AUTOCOMMIT",
-        )
-        try:
-            with admin_engine.connect() as conn:
-                exists = conn.execute(
-                    text("SELECT 1 FROM pg_database WHERE datname = :name"),
-                    {"name": worker_db},
-                ).scalar()
-                if not exists:
-                    conn.execute(text(f'CREATE DATABASE "{worker_db}"'))
-        finally:
-            admin_engine.dispose()
-
-        yield worker_url
-
-        admin_engine = create_engine(
-            admin_url.render_as_string(hide_password=False),
-            isolation_level="AUTOCOMMIT",
-        )
-        try:
-            with admin_engine.connect() as conn:
-                conn.execute(
-                    text(
-                        "SELECT pg_terminate_backend(pid) "
-                        "FROM pg_stat_activity "
-                        "WHERE datname = :name AND pid <> pg_backend_pid()"
-                    ),
-                    {"name": worker_db},
-                )
-                conn.execute(text(f'DROP DATABASE IF EXISTS "{worker_db}"'))
-        finally:
-            admin_engine.dispose()
-    else:
-        yield f"sqlite:///{test_db_path}"
 
 
 @pytest.fixture(scope="session")
@@ -283,6 +191,26 @@ def app_with_auth(db_url, api_db_engine, mock_mqtt, mock_db_manager):
     )
     _wire_overrides(app, api_db_engine, mock_mqtt, mock_db_manager)
     yield app
+
+
+@pytest.fixture(scope="module")
+def app_spam(db_url, api_db_engine, mock_mqtt, mock_db_manager):
+    """Module-scoped app with spam detection enabled (no auth)."""
+    app = create_app(
+        database_url=db_url,
+        read_key=None,
+        admin_key=None,
+        spam_detection_enabled=True,
+        spam_score_threshold=0.6,
+    )
+    _wire_overrides(app, api_db_engine, mock_mqtt, mock_db_manager)
+    yield app
+
+
+@pytest.fixture
+def client_spam(app_spam) -> TestClient:
+    """Test client with spam detection enabled."""
+    return TestClient(app_spam, raise_server_exceptions=True)
 
 
 @pytest.fixture

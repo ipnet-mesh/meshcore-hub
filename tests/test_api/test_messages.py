@@ -830,3 +830,73 @@ class TestMessageChannelVisibility:
         response = client_no_auth.get(f"/api/v1/messages/{msg.id}")
         assert response.status_code == 200
         assert response.json()["observers"] == []
+
+
+class TestSpamFiltering:
+    """Tests for spam-score hide/show behaviour (GET /messages)."""
+
+    @staticmethod
+    def _seed(api_db_session):
+        """Two clean messages + one likely-spam message."""
+        now = datetime.now(timezone.utc)
+        api_db_session.add_all(
+            [
+                Message(
+                    message_type="direct",
+                    pubkey_prefix="clean1",
+                    text="clean one",
+                    received_at=now,
+                    spam_score=0.0,
+                ),
+                Message(
+                    message_type="direct",
+                    pubkey_prefix="unscor1",
+                    text="unscored",
+                    received_at=now,
+                    spam_score=None,
+                ),
+                Message(
+                    message_type="direct",
+                    pubkey_prefix="spam1",
+                    text="buy now buy now",
+                    received_at=now,
+                    spam_score=0.95,
+                ),
+            ]
+        )
+        api_db_session.commit()
+
+    def test_spam_hidden_by_default(self, client_spam, api_db_session):
+        """With detection on, high-score rows are hidden by default."""
+        self._seed(api_db_session)
+        data = client_spam.get("/api/v1/messages").json()
+        texts = {item["text"] for item in data["items"]}
+        assert "buy now buy now" not in texts
+        assert "clean one" in texts
+        assert "unscored" in texts  # null score is never hidden
+        assert data["total"] == 2
+
+    def test_include_spam_shows_all(self, client_spam, api_db_session):
+        """include_spam=true returns the flagged row with its score."""
+        self._seed(api_db_session)
+        data = client_spam.get("/api/v1/messages?include_spam=true").json()
+        texts = {item["text"] for item in data["items"]}
+        assert "buy now buy now" in texts
+        assert data["total"] == 3
+        spam_item = next(i for i in data["items"] if i["text"] == "buy now buy now")
+        assert spam_item["spam_score"] == 0.95
+
+    def test_master_switch_off_returns_all(self, client_no_auth, api_db_session):
+        """With detection disabled, even high-score rows are returned."""
+        self._seed(api_db_session)
+        data = client_no_auth.get("/api/v1/messages").json()
+        texts = {item["text"] for item in data["items"]}
+        assert "buy now buy now" in texts
+        assert data["total"] == 3
+
+    def test_spam_score_in_response(self, client_no_auth, api_db_session):
+        """spam_score is surfaced on the message payload."""
+        self._seed(api_db_session)
+        data = client_no_auth.get("/api/v1/messages").json()
+        clean = next(i for i in data["items"] if i["text"] == "clean one")
+        assert clean["spam_score"] == 0.0

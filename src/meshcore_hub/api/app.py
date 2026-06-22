@@ -91,6 +91,8 @@ def create_app(
     redis_key_prefix: str = "hub",
     redis_cache_ttl: int = 30,
     redis_cache_ttl_dashboard: int = 30,
+    spam_detection_enabled: bool = False,
+    spam_score_threshold: float = 0.6,
 ) -> FastAPI:
     """Create and configure the FastAPI application.
 
@@ -152,6 +154,8 @@ def create_app(
     app.state.redis_key_prefix = redis_key_prefix
     app.state.redis_cache_ttl = redis_cache_ttl
     app.state.redis_cache_ttl_dashboard = redis_cache_ttl_dashboard
+    app.state.spam_detection_enabled = spam_detection_enabled
+    app.state.spam_score_threshold = spam_score_threshold
 
     # Configure CORS
     if cors_origins is None:
@@ -268,4 +272,6 @@ def create_app_from_env() -> FastAPI:
         redis_key_prefix=settings.redis_key_prefix,
         redis_cache_ttl=settings.redis_cache_ttl,
         redis_cache_ttl_dashboard=settings.redis_cache_ttl_dashboard,
+        spam_detection_enabled=settings.spam_detection_enabled,
+        spam_score_threshold=settings.spam_score_threshold,
     )

@@ -10,6 +10,12 @@ from sqlalchemy.exc import IntegrityError
 from meshcore_hub.common.database import DatabaseManager
 from meshcore_hub.common.hash_utils import compute_message_hash
 from meshcore_hub.common.models import Message, Node, add_event_observer
+from meshcore_hub.collector.spam import (
+    compute_path_prefix,
+    get_spam_config,
+    normalize_sender,
+    score_message,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +146,34 @@ def _handle_message(
                     )
             return
 
+        # Spam scoring (online): only on the first insert of an event_hash, and
+        # only when the feature is switched on. When off, the columns stay null
+        # exactly as before. Counts existing rows (priors), so the leading edge
+        # of a burst scores low until the background re-scoring sweep catches it.
+        cfg = get_spam_config()
+        spam_score: float | None = None
+        path_prefix: str | None = None
+        sender_normalized: str | None = None
+        spam_path_count = 0
+        spam_name_count = 0
+        if cfg.enabled:
+            sender_normalized = normalize_sender(payload.get("sender_name"))
+            if path_len is not None and path_len >= cfg.min_path_hops:
+                path_prefix = compute_path_prefix(
+                    payload.get("path_hashes"), cfg.path_hops
+                )
+            result = score_message(
+                session,
+                path_prefix=path_prefix,
+                sender_normalized=sender_normalized,
+                path_len=path_len,
+                received_at=now,
+                cfg=cfg,
+            )
+            spam_score = result.score
+            spam_path_count = result.path_count
+            spam_name_count = result.name_count
+
         # Create message record
         message = Message(
             observer_node_id=receiver_node.id if receiver_node else None,
@@ -155,6 +189,9 @@ def _handle_message(
             received_at=now,
             event_hash=event_hash,
             packet_hash=packet_hash,
+            path_prefix=path_prefix,
+            sender_normalized=sender_normalized,
+            spam_score=spam_score,
         )
         session.add(message)
 
@@ -192,13 +229,26 @@ def _handle_message(
                 )
             return
 
+    # Surface the spam score (and the signals that drove it) in the log so it is
+    # observable without querying the DB. Likely-spam (>= threshold) is logged at
+    # WARNING so it stands out; everything else stays at INFO.
+    spam_suffix = ""
+    is_spam = False
+    if cfg.enabled and spam_score is not None:
+        spam_suffix = (
+            f" [spam={spam_score:.2f} path={path_prefix or '-'} "
+            f"path_n={spam_path_count} sender={sender_normalized or '-'} "
+            f"name_n={spam_name_count}]"
+        )
+        is_spam = spam_score >= cfg.score_threshold
+
+    text_preview = f"{text[:30]}{'...' if len(text) > 30 else ''}"
     if message_type == "contact":
-        logger.info(
-            f"Stored contact message from {pubkey_prefix!r}: "
-            f"{text[:30]}{'...' if len(text) > 30 else ''}"
-        )
+        line = f"Stored contact message from {pubkey_prefix!r}{spam_suffix}: {text_preview}"
     else:
-        logger.info(
-            f"Stored channel {channel_idx} message: "
-            f"{text[:30]}{'...' if len(text) > 30 else ''}"
-        )
+        line = f"Stored channel {channel_idx} message{spam_suffix}: {text_preview}"
+
+    if is_spam:
+        logger.warning(line)
+    else:
+        logger.info(line)
