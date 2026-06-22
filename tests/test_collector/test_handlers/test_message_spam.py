@@ -3,7 +3,10 @@
 from sqlalchemy import select
 
 import meshcore_hub.collector.handlers.message as handler_module
-from meshcore_hub.collector.handlers.message import handle_channel_message
+from meshcore_hub.collector.handlers.message import (
+    handle_channel_message,
+    handle_contact_message,
+)
 from meshcore_hub.collector.spam import SpamConfig
 from meshcore_hub.common.models import Message
 
@@ -81,6 +84,26 @@ class TestHandlerSpamEnabled:
         # The last-inserted row saw 5 priors -> path+name saturate near threshold.
         latest = max(msgs, key=lambda m: m.sender_timestamp)
         assert latest.spam_score >= ENABLED_CFG.score_threshold
+
+    def test_contact_message_scored_and_logged(
+        self, db_manager, db_session, monkeypatch
+    ):
+        """Contact messages are scored too (covers the contact log branch)."""
+        _enable_spam(monkeypatch)
+        payload = {
+            "pubkey_prefix": "01ab2186c4d5",
+            "text": "buy now",
+            "sender_name": "bob1",
+            "path_len": 6,
+            "path_hashes": ["AA", "BB", "CC", "DD", "EE", "FF"],
+        }
+        handle_contact_message("a" * 64, "contact_msg_recv", payload, db_manager)
+
+        msg = db_session.execute(select(Message)).scalar_one()
+        assert msg.message_type == "contact"
+        assert msg.sender_normalized == "bob"
+        assert msg.path_prefix == "AA,BB,CC"
+        assert msg.spam_score == 0.0
 
     def test_short_path_stores_null_prefix(self, db_manager, db_session, monkeypatch):
         _enable_spam(monkeypatch)

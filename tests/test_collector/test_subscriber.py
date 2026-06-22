@@ -1290,3 +1290,85 @@ class TestChannelKeyRefresh:
         subscriber = Subscriber(mock_mqtt_client, db_manager)
 
         assert key_hex in subscriber._letsmesh_decoder._channel_keys
+
+
+class TestSpamRescoreScheduler:
+    """Tests for the background spam re-scoring sweep scheduler."""
+
+    @pytest.fixture
+    def mock_mqtt_client(self):
+        client = MagicMock()
+        client.topic_builder = MagicMock()
+        client.topic_builder.prefix = "meshcore"
+        return client
+
+    def test_disabled_does_not_start_thread(self, mock_mqtt_client, db_manager):
+        """With spam detection off (default), no sweep thread is created."""
+        sub = Subscriber(mock_mqtt_client, db_manager)
+        sub._start_spam_rescore_scheduler()
+        assert sub._spam_rescore_thread is None
+        # Stopping when never started is a no-op.
+        sub._stop_spam_rescore_scheduler()
+
+    def test_enabled_runs_sweep_and_stops(
+        self, mock_mqtt_client, db_manager, monkeypatch
+    ):
+        """Enabled scheduler spawns a thread, runs a sweep, and joins on stop."""
+        import threading
+
+        import meshcore_hub.collector.spam as spam_mod
+        from meshcore_hub.collector.spam import SpamConfig
+
+        cfg = SpamConfig(enabled=True, rescore_interval_seconds=1)
+        monkeypatch.setattr(spam_mod, "get_spam_config", lambda: cfg)
+        # Avoid the real 1s-per-tick sleep in the inner loop.
+        monkeypatch.setattr(
+            "meshcore_hub.collector.subscriber.time.sleep", lambda *_: None
+        )
+
+        sub = Subscriber(mock_mqtt_client, db_manager)
+        called = threading.Event()
+
+        def fake_rescore(session, sweep_cfg):
+            called.set()
+            sub._running = False  # break the loop after one sweep
+            return 1  # truthy -> exercises the "updated" log line
+
+        monkeypatch.setattr(spam_mod, "rescore_recent", fake_rescore)
+
+        sub._running = True
+        sub._start_spam_rescore_scheduler()
+        assert called.wait(timeout=5.0)
+        sub._stop_spam_rescore_scheduler()
+
+        assert sub._spam_rescore_thread is not None
+        assert not sub._spam_rescore_thread.is_alive()
+
+    def test_sweep_error_is_logged(self, mock_mqtt_client, db_manager, monkeypatch):
+        """An exception in the sweep is caught and logged, not propagated."""
+        import threading
+
+        import meshcore_hub.collector.spam as spam_mod
+        from meshcore_hub.collector.spam import SpamConfig
+
+        cfg = SpamConfig(enabled=True, rescore_interval_seconds=1)
+        monkeypatch.setattr(spam_mod, "get_spam_config", lambda: cfg)
+        monkeypatch.setattr(
+            "meshcore_hub.collector.subscriber.time.sleep", lambda *_: None
+        )
+
+        sub = Subscriber(mock_mqtt_client, db_manager)
+        called = threading.Event()
+
+        def boom(session, sweep_cfg):
+            sub._running = False  # break the loop before raising
+            called.set()
+            raise RuntimeError("sweep failed")
+
+        monkeypatch.setattr(spam_mod, "rescore_recent", boom)
+
+        sub._running = True
+        sub._start_spam_rescore_scheduler()
+        assert called.wait(timeout=5.0)
+        sub._stop_spam_rescore_scheduler()
+        assert not sub._spam_rescore_thread.is_alive()

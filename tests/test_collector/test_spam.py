@@ -5,6 +5,7 @@ fixture is configured for (SQLite by default, Postgres when
 ``TEST_DATABASE_BACKEND=postgres``).
 """
 
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -12,8 +13,10 @@ import pytest
 from meshcore_hub.collector.spam import (
     SpamConfig,
     compute_path_prefix,
+    get_spam_config,
     normalize_sender,
     rescore_recent,
+    reset_spam_config,
     score_message,
 )
 from meshcore_hub.common.models import Message
@@ -296,3 +299,82 @@ class TestRescoreRecent:
 
         assert first >= 1
         assert second == 0  # nothing changes on a second pass
+
+
+class TestConfigCache:
+    def test_get_and_reset_spam_config(self):
+        """get_spam_config caches; reset clears so it rebuilds."""
+        reset_spam_config()
+        first = get_spam_config()
+        second = get_spam_config()
+        assert first is second  # cached instance
+        reset_spam_config()
+        third = get_spam_config()
+        assert third is not first  # rebuilt after reset
+        # Default env -> feature disabled.
+        assert third.enabled is False
+        reset_spam_config()
+
+
+class TestCombineEdgeCases:
+    def test_zero_weights_score_zero(self, db_session):
+        """When both weights are 0 the eligible-path branch returns 0.0."""
+        now = datetime.now(timezone.utc)
+        for i in range(6):
+            db_session.add(
+                _make_message(
+                    now - timedelta(seconds=5 + i),
+                    path_prefix="AA,BB,CC",
+                    sender_normalized="bob",
+                )
+            )
+        db_session.commit()
+
+        cfg = replace(CFG, weight_path=0.0, weight_name=0.0)
+        result = score_message(
+            db_session,
+            path_prefix="AA,BB,CC",
+            sender_normalized="bob",
+            path_len=6,
+            received_at=now,
+            cfg=cfg,
+        )
+        assert result.score == 0.0
+
+
+class TestRescoreEdgeCases:
+    def test_default_now(self, db_session):
+        """rescore_recent computes 'now' itself when not provided."""
+        now = datetime.now(timezone.utc)
+        for i in range(6):
+            db_session.add(
+                _make_message(
+                    now - timedelta(seconds=5 * i),
+                    path_prefix="AA,BB,CC",
+                    sender_normalized="bob",
+                )
+            )
+        db_session.commit()
+
+        updated = rescore_recent(db_session, CFG)  # now defaulted internally
+        db_session.commit()
+        assert updated >= 1
+
+    def test_null_sender_reset_to_zero(self, db_session):
+        """A recent row with no sender_normalized is reset to 0.0."""
+        now = datetime.now(timezone.utc)
+        m = _make_message(
+            now - timedelta(seconds=10),
+            path_prefix=None,
+            sender_normalized=None,
+            path_len=2,
+        )
+        m.spam_score = 0.5  # stale non-zero score
+        db_session.add(m)
+        db_session.commit()
+
+        updated = rescore_recent(db_session, CFG, now=now)
+        db_session.commit()
+        assert updated == 1
+        db_session.refresh(m)
+        assert m.spam_score == 0.0
