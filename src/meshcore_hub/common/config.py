@@ -563,10 +563,11 @@ class WebSettings(CommonSettings):
         default=True, description="Enable radio config panel on home page"
     )
     feature_spam_detection: bool = Field(
-        default=False,
+        default=True,
         description=(
-            "Expose the 'show potential spam' toggle on the messages page; in "
-            "Compose this also drives the backend SPAM_DETECTION_ENABLED switch"
+            "Expose the 'show potential spam' toggle on the messages page (on by "
+            "default); in Compose this also drives the backend "
+            "SPAM_DETECTION_ENABLED switch"
         ),
     )
 

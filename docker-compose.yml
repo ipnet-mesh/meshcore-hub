@@ -240,8 +240,9 @@ services:
       - RAW_PACKET_CAPTURE_ENABLED=${FEATURE_PACKETS:-true}
       - RAW_PACKET_RETENTION_DAYS=${RAW_PACKET_RETENTION_DAYS:-7}
       # Spam detection (derived from FEATURE_SPAM_DETECTION so one var drives the
-      # backend switch and the web toggle together). Off by default.
-      - SPAM_DETECTION_ENABLED=${FEATURE_SPAM_DETECTION:-false}
+      # backend switch and the web toggle together). On by default; opt out with
+      # FEATURE_SPAM_DETECTION=false.
+      - SPAM_DETECTION_ENABLED=${FEATURE_SPAM_DETECTION:-true}
       - SPAM_SCORE_THRESHOLD=${SPAM_SCORE_THRESHOLD:-0.65}
       - SPAM_WINDOW_SECONDS=${SPAM_WINDOW_SECONDS:-300}
       - SPAM_PATH_HOPS=${SPAM_PATH_HOPS:-3}
@@ -315,8 +316,9 @@ services:
       - REDIS_CACHE_TTL=${REDIS_CACHE_TTL:-30}
       - REDIS_CACHE_TTL_DASHBOARD=${REDIS_CACHE_TTL_DASHBOARD:-30}
       # Spam detection: hide-filter switch + threshold (bridged from
-      # FEATURE_SPAM_DETECTION so it tracks the collector and web toggle).
-      - SPAM_DETECTION_ENABLED=${FEATURE_SPAM_DETECTION:-false}
+      # FEATURE_SPAM_DETECTION so it tracks the collector and web toggle). On by
+      # default; opt out with FEATURE_SPAM_DETECTION=false.
+      - SPAM_DETECTION_ENABLED=${FEATURE_SPAM_DETECTION:-true}
       - SPAM_SCORE_THRESHOLD=${SPAM_SCORE_THRESHOLD:-0.65}
     command: ["api"]
     healthcheck:
@@ -410,9 +412,9 @@ services:
       - FEATURE_RADIO_CONFIG=${FEATURE_RADIO_CONFIG:-true}
       # Packets page is on by default; this also drives collector capture.
       - FEATURE_PACKETS=${FEATURE_PACKETS:-true}
-      # Spam detection toggle is off by default; this also drives the backend
+      # Spam detection toggle is on by default; this also drives the backend
       # scoring/hide switch on the collector and api.
-      - FEATURE_SPAM_DETECTION=${FEATURE_SPAM_DETECTION:-false}
+      - FEATURE_SPAM_DETECTION=${FEATURE_SPAM_DETECTION:-true}
     command: ["web"]
     healthcheck:
       test:

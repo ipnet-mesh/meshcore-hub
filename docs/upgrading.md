@@ -10,7 +10,7 @@ Each message is now scored for spam likelihood **at ingest** and the score is st
 
 The scorer combines two windowed signals over a sliding time window: a **path signal** (joint count of the same origin-side path prefix + normalised sender) and a **name signal** (count of the same normalised sender, after stripping a trailing digit/space suffix so rotating `bob1`/`bob2`/`Bob 3` collapse to `bob`). When the path is too short to be useful — including the **zero-hop case** where an observer sits right next to the sender — the name signal stands on its own at full weight, so local/zero-hop spam can still be flagged. A background sweep re-scores recent rows with hindsight (a symmetric window) so the leading edge of a burst is caught once its peers arrive.
 
-**Off by default. No action required to upgrade** — leave `FEATURE_SPAM_DETECTION` unset and messages behave exactly as before (the new columns stay null and nothing is hidden).
+**On by default.** After upgrading, the collector scores new messages and the API hides likely-spam from the Messages page automatically — operators get protection without any configuration. To opt out, set `FEATURE_SPAM_DETECTION=false` and recreate the `collector`, `api`, and `web` services. Existing messages ingested before the upgrade keep null scores and are never hidden (no backfill), so only newly-ingested traffic is affected.
 
 **Database migration required:**
 
@@ -24,8 +24,8 @@ This adds three nullable columns to the `messages` table — `path_prefix`, `sen
 
 | Variable                  | Default | Description                                                                                                                  |
 | ------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `FEATURE_SPAM_DETECTION`  | `false` | The single operator switch. Shows the "show potential spam" toggle on the Messages page. In Compose this **derives** the backend `SPAM_DETECTION_ENABLED` for the collector and api. |
-| `SPAM_DETECTION_ENABLED`  | `false` | Backend operational switch read by the collector (scoring + sweep) and api (hide-filter). In Compose derived from `FEATURE_SPAM_DETECTION`; set directly only when running without Compose. |
+| `FEATURE_SPAM_DETECTION`  | `true`  | The single operator switch. Shows the "show potential spam" toggle on the Messages page. In Compose this **derives** the backend `SPAM_DETECTION_ENABLED` for the collector and api. Set to `false` to opt out. |
+| `SPAM_DETECTION_ENABLED`  | `true`  | Backend operational switch read by the collector (scoring + sweep) and api (hide-filter). In Compose derived from `FEATURE_SPAM_DETECTION`; set directly only when running without Compose. |
 | `SPAM_SCORE_THRESHOLD`    | `0.65`  | Score at/above which a message is treated as likely spam — hidden by default in the API, logged at WARNING by the collector. Read by collector + api. |
 
 **Scoring tuning (collector only; consulted only when detection is enabled):**
@@ -41,11 +41,11 @@ This adds three nullable columns to the `messages` table — `path_prefix`, `sen
 | `SPAM_WEIGHT_NAME`              | `0.25`  | Weight of the name signal                                          |
 | `SPAM_RESCORE_INTERVAL_SECONDS` | `120`   | Background re-scoring sweep cadence (`0` disables the sweep)       |
 
-**Feature ↔ backend split:** the UI toggle is served by the `web` app while scoring runs in the `collector` and the hide-filter in the `api` — separate processes with separate settings. Docker Compose links them: setting `FEATURE_SPAM_DETECTION=true` enables scoring + sweep on the collector, the hide-filter on the api (both via `SPAM_DETECTION_ENABLED=${FEATURE_SPAM_DETECTION}`), and the toggle in the web UI. Operators running the processes directly can set `SPAM_DETECTION_ENABLED` independently.
+**Feature ↔ backend split:** the UI toggle is served by the `web` app while scoring runs in the `collector` and the hide-filter in the `api` — separate processes with separate settings. Docker Compose links them: `FEATURE_SPAM_DETECTION` (default `true`) drives scoring + sweep on the collector, the hide-filter on the api (both via `SPAM_DETECTION_ENABLED=${FEATURE_SPAM_DETECTION}`), and the toggle in the web UI. Operators running the processes directly can set `SPAM_DETECTION_ENABLED` independently.
 
-**API:** message endpoints gain a `spam_score` field and an `include_spam` query parameter. By default the API hides rows scoring at/above `SPAM_SCORE_THRESHOLD`; `include_spam=true` returns them (rows with a null score — i.e. ingested before the feature was on, or while it was off — are always shown). With the feature off the filter is a no-op.
+**API:** message endpoints gain a `spam_score` field and an `include_spam` query parameter. By default the API hides rows scoring at/above `SPAM_SCORE_THRESHOLD`; `include_spam=true` returns them (rows with a null score — i.e. ingested before the upgrade, or while the feature was opted out — are always shown). With the feature opted out the filter is a no-op.
 
-To enable, set `FEATURE_SPAM_DETECTION=true` in your `.env` and recreate the `collector`, `api`, and `web` services. All variables are passed through `docker-compose.yml` automatically.
+The feature is on by default and all variables are passed through `docker-compose.yml` automatically — no configuration is needed to adopt it. To opt out, set `FEATURE_SPAM_DETECTION=false` in your `.env` and recreate the `collector`, `api`, and `web` services.
 
 ### Docker Compose `pull_policy` removed from base
 

@@ -130,11 +130,11 @@ The collector automatically cleans up old event data and inactive nodes. Retenti
 
 Scores each message's spam likelihood at ingest, stores the score on the message row, and hides likely-spam by default in the API (with a "show potential spam" toggle on the Messages page). Nothing is ever dropped — the design is reversible and the threshold can be retuned without reprocessing.
 
-Off by default. `FEATURE_SPAM_DETECTION` is the single switch operators set: in Compose it drives the backend `SPAM_DETECTION_ENABLED` for the **collector** (scoring + the background re-scoring sweep) and the **api** (the hide-filter), and exposes the UI toggle (see [Feature Flags](#feature-flags)). Set `SPAM_DETECTION_ENABLED` directly only when running services without Compose.
+On by default; opt out with `FEATURE_SPAM_DETECTION=false`. `FEATURE_SPAM_DETECTION` is the single switch operators set: in Compose it drives the backend `SPAM_DETECTION_ENABLED` for the **collector** (scoring + the background re-scoring sweep) and the **api** (the hide-filter), and exposes the UI toggle (see [Feature Flags](#feature-flags)). Set `SPAM_DETECTION_ENABLED` directly only when running services without Compose.
 
 | Variable | Default | Read by | Description |
 | --- | --- | --- | --- |
-| `SPAM_DETECTION_ENABLED` | `false` | collector, api | Operational switch for scoring + hiding. In Compose, derived from `FEATURE_SPAM_DETECTION` (`SPAM_DETECTION_ENABLED=${FEATURE_SPAM_DETECTION}`) |
+| `SPAM_DETECTION_ENABLED` | `true` | collector, api | Operational switch for scoring + hiding. In Compose, derived from `FEATURE_SPAM_DETECTION` (`SPAM_DETECTION_ENABLED=${FEATURE_SPAM_DETECTION}`) |
 | `SPAM_SCORE_THRESHOLD` | `0.65` | collector, api | Score at/above which a message is treated as likely spam (hidden by default; logged at `WARNING`) |
 | `SPAM_WINDOW_SECONDS` | `300` | collector | Sliding window (seconds) for frequency counts |
 | `SPAM_PATH_HOPS` | `3` | collector | Leading origin-side hops that form the `path_prefix` |
@@ -211,7 +211,7 @@ Control which pages are visible in the web dashboard. Disabled features are full
 | `FEATURE_CHANNELS` | `true` | Enable the `/channels` page |
 | `FEATURE_RADIO_CONFIG` | `true` | Show radio config panel on home page |
 | `FEATURE_PACKETS` | `true` | Enable the `/packets` raw-packet browser. In Compose this also drives `RAW_PACKET_CAPTURE_ENABLED` on the collector |
-| `FEATURE_SPAM_DETECTION` | `false` | Show the "show potential spam" toggle on `/messages`. In Compose this also drives `SPAM_DETECTION_ENABLED` on the collector + api — see [Spam Detection](#spam-detection) |
+| `FEATURE_SPAM_DETECTION` | `true` | Show the "show potential spam" toggle on `/messages`. In Compose this also drives `SPAM_DETECTION_ENABLED` on the collector + api — see [Spam Detection](#spam-detection) |
 
 **Dependencies:** Dashboard auto-disables when all of Nodes/Advertisements/Messages are disabled. Map auto-disables when Nodes is disabled. Members auto-disables when OIDC is disabled (set via `OIDC_ENABLED`).
 
