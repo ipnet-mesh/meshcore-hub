@@ -565,6 +565,12 @@ class TestSystemMaintenance:
         html = client.get("/").text
         assert '"system_maintenance": false' in html
 
+    def test_spam_score_threshold_in_config_json(self, client: TestClient) -> None:
+        """The SPA config exposes spam_score_threshold so the spam badge and the
+        API hide-filter agree on what counts as spam."""
+        html = client.get("/").text
+        assert '"spam_score_threshold": 0.65' in html
+
 
 class TestRolelessUserProfileUpdate:
     """Integration test: role-less OIDC user can PUT their own profile through the proxy."""

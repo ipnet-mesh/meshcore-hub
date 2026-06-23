@@ -323,6 +323,7 @@ def _build_config_json(app: FastAPI, request: Request) -> str:
         "debug": app.state.web_debug,
         "locale_version": getattr(app.state, "locale_version", ""),
         "system_maintenance": app.state.system_maintenance,
+        "spam_score_threshold": app.state.spam_score_threshold,
     }
 
     role_names = {
@@ -559,6 +560,12 @@ def create_app(
         if system_maintenance is not None
         else settings.system_maintenance
     )
+
+    # Threshold the SPA uses to badge a row as likely spam. Must match the API's
+    # SPAM_SCORE_THRESHOLD so a row is badged exactly when the API would hide it;
+    # otherwise rows scored between the two thresholds appear flagged but are
+    # never hidden by the "show potential spam" toggle.
+    app.state.spam_score_threshold = settings.spam_score_threshold
 
     # Store feature flags with automatic dependencies:
     # - Dashboard requires at least one of nodes/advertisements/messages

@@ -32,6 +32,11 @@ export async function render(container, params, router) {
     // returns everything anyway, so the include_spam param is a no-op.
     const spamEnabled = features.spam === true;
     const includeSpam = spamEnabled && includeSpamParam;
+    // Threshold the API hides on; the badge must use the same value so a row is
+    // badged exactly when it would be hidden (see web app config).
+    const spamThreshold = typeof config.spam_score_threshold === 'number'
+        ? config.spam_score_threshold
+        : 0.65;
     let channelLabels = new Map();
     const tz = config.timezone || '';
     const tzBadge = tz && tz !== 'UTC' ? html`<span class="text-sm opacity-60">${tz}</span>` : nothing;
@@ -132,7 +137,7 @@ export async function render(container, params, router) {
     // Small badge for rows the scorer flagged as likely spam. Only meaningful
     // when the spam feature is on (otherwise spam_score is null on every row).
     function spamBadge(msg) {
-        if (!spamEnabled || msg.spam_score == null || msg.spam_score < 0.6) {
+        if (!spamEnabled || msg.spam_score == null || msg.spam_score < spamThreshold) {
             return nothing;
         }
         return html`<span class="badge badge-warning badge-sm"
