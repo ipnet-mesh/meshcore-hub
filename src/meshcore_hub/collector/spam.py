@@ -43,12 +43,12 @@ class SpamConfig:
     enabled: bool = False
     window_seconds: int = 300
     path_hops: int = 3
-    min_path_hops: int = 5
-    path_threshold: int = 5
-    name_threshold: int = 5
-    weight_path: float = 0.7
-    weight_name: float = 0.3
-    score_threshold: float = 0.6
+    min_path_hops: int = 3
+    path_threshold: int = 6
+    name_threshold: int = 10
+    weight_path: float = 0.75
+    weight_name: float = 0.25
+    score_threshold: float = 0.65
     rescore_interval_seconds: int = 120
 
     @classmethod

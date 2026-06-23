@@ -165,7 +165,7 @@ class CommonSettings(BaseSettings):
         ),
     )
     spam_score_threshold: float = Field(
-        default=0.6,
+        default=0.65,
         description=(
             "Score at/above which a message is treated as likely spam (hidden by "
             "default in the API; logged at the collector)"
@@ -275,7 +275,7 @@ class CollectorSettings(CommonSettings):
         ge=1,
     )
     spam_min_path_hops: int = Field(
-        default=5,
+        default=3,
         description=(
             "Minimum path_len before the path signal is applied; below this the "
             "path_prefix is stored null (short local-mesh paths share prefixes)"
@@ -283,20 +283,20 @@ class CollectorSettings(CommonSettings):
         ge=0,
     )
     spam_path_threshold: int = Field(
-        default=5,
+        default=6,
         description="Joint path+sender count that saturates the path signal",
         ge=1,
     )
     spam_name_threshold: int = Field(
-        default=5,
+        default=10,
         description="Sender count that saturates the name signal",
         ge=1,
     )
     spam_weight_path: float = Field(
-        default=0.7, description="Weight of the path signal in the combined score"
+        default=0.75, description="Weight of the path signal in the combined score"
     )
     spam_weight_name: float = Field(
-        default=0.3, description="Weight of the name signal in the combined score"
+        default=0.25, description="Weight of the name signal in the combined score"
     )
     spam_rescore_interval_seconds: int = Field(
         default=120,

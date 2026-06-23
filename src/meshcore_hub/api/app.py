@@ -92,7 +92,7 @@ def create_app(
     redis_cache_ttl: int = 30,
     redis_cache_ttl_dashboard: int = 30,
     spam_detection_enabled: bool = False,
-    spam_score_threshold: float = 0.6,
+    spam_score_threshold: float = 0.65,
 ) -> FastAPI:
     """Create and configure the FastAPI application.
 

@@ -105,7 +105,7 @@ def list_messages(
     # filter — every message is returned regardless of any stored score, so
     # toggling the feature off instantly un-hides rows scored while it was on.
     spam_enabled = getattr(request.app.state, "spam_detection_enabled", False)
-    spam_threshold = getattr(request.app.state, "spam_score_threshold", 0.6)
+    spam_threshold = getattr(request.app.state, "spam_score_threshold", 0.65)
     if spam_enabled and not include_spam:
         query = query.where(
             or_(

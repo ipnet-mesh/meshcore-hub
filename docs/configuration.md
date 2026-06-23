@@ -135,14 +135,14 @@ Off by default. `FEATURE_SPAM_DETECTION` is the single switch operators set: in 
 | Variable | Default | Read by | Description |
 | --- | --- | --- | --- |
 | `SPAM_DETECTION_ENABLED` | `false` | collector, api | Operational switch for scoring + hiding. In Compose, derived from `FEATURE_SPAM_DETECTION` (`SPAM_DETECTION_ENABLED=${FEATURE_SPAM_DETECTION}`) |
-| `SPAM_SCORE_THRESHOLD` | `0.6` | collector, api | Score at/above which a message is treated as likely spam (hidden by default; logged at `WARNING`) |
+| `SPAM_SCORE_THRESHOLD` | `0.65` | collector, api | Score at/above which a message is treated as likely spam (hidden by default; logged at `WARNING`) |
 | `SPAM_WINDOW_SECONDS` | `300` | collector | Sliding window (seconds) for frequency counts |
 | `SPAM_PATH_HOPS` | `3` | collector | Leading origin-side hops that form the `path_prefix` |
-| `SPAM_MIN_PATH_HOPS` | `5` | collector | Minimum `path_len` before the path signal applies (short local-mesh paths share prefixes) |
-| `SPAM_PATH_THRESHOLD` | `5` | collector | Joint `(path_prefix, sender)` count that saturates the path signal |
-| `SPAM_NAME_THRESHOLD` | `5` | collector | Sender count that saturates the name signal |
-| `SPAM_WEIGHT_PATH` | `0.7` | collector | Weight of the path signal in the combined score |
-| `SPAM_WEIGHT_NAME` | `0.3` | collector | Weight of the name signal in the combined score |
+| `SPAM_MIN_PATH_HOPS` | `3` | collector | Minimum `path_len` before the path signal applies (short local-mesh paths share prefixes) |
+| `SPAM_PATH_THRESHOLD` | `6` | collector | Joint `(path_prefix, sender)` count that saturates the path signal |
+| `SPAM_NAME_THRESHOLD` | `10` | collector | Sender count that saturates the name signal |
+| `SPAM_WEIGHT_PATH` | `0.75` | collector | Weight of the path signal in the combined score |
+| `SPAM_WEIGHT_NAME` | `0.25` | collector | Weight of the name signal in the combined score |
 | `SPAM_RESCORE_INTERVAL_SECONDS` | `120` | collector | Background re-scoring sweep cadence in seconds (`0` disables the sweep) |
 
 ## API
