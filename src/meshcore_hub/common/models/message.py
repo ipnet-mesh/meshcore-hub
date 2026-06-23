@@ -26,6 +26,9 @@ class Message(Base, UUIDMixin, TimestampMixin):
         sender_timestamp: Sender's timestamp
         received_at: When received by interface
         created_at: Record creation timestamp
+        path_prefix: First N origin-side hop hashes joined (spam scoring signal)
+        sender_normalized: Lower-cased sender name with trailing digits stripped
+        spam_score: Likely-spam score 0.0-1.0 (null when scoring disabled)
     """
 
     __tablename__ = "messages"
@@ -87,12 +90,35 @@ class Message(Base, UUIDMixin, TimestampMixin):
         nullable=True,
         index=True,
     )
+    # Spam scoring: first N origin-side hop hashes joined (e.g. "16,69,23");
+    # null below the path-length gate so short paths don't pollute path counts.
+    path_prefix: Mapped[Optional[str]] = mapped_column(
+        String(48),
+        nullable=True,
+    )
+    # Spam scoring: lower-cased sender name with trailing digits stripped
+    # (e.g. "bob17" -> "bob"), so suffix rotation collapses to one identity.
+    sender_normalized: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    # Spam scoring: likely-spam score 0.0-1.0; null when scoring is disabled.
+    spam_score: Mapped[Optional[float]] = mapped_column(
+        Float,
+        nullable=True,
+    )
 
     __table_args__ = (
         Index("ix_messages_message_type", "message_type"),
         Index("ix_messages_pubkey_prefix", "pubkey_prefix"),
         Index("ix_messages_channel_idx", "channel_idx"),
         Index("ix_messages_received_at", "received_at"),
+        Index("ix_messages_path_prefix_received_at", "path_prefix", "received_at"),
+        Index(
+            "ix_messages_sender_normalized_received_at",
+            "sender_normalized",
+            "received_at",
+        ),
     )
 
     def __repr__(self) -> str:

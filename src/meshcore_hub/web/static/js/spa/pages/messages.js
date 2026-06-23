@@ -15,6 +15,7 @@ export async function render(container, params, router) {
     const query = params.query || {};
     const message_type = query.message_type || '';
     const channel_idx = query.channel_idx || '';
+    const includeSpamParam = query.include_spam === 'true' || query.include_spam === true;
     const page = parseInt(query.page, 10) || 1;
     const limit = parseInt(query.limit, 10) || 50;
     const offset = (page - 1) * limit;
@@ -27,6 +28,15 @@ export async function render(container, params, router) {
     const config = getConfig();
     const features = config.features || {};
     const packetsEnabled = features.packets !== false;
+    // Spam toggle is only shown when the feature is enabled; when off the API
+    // returns everything anyway, so the include_spam param is a no-op.
+    const spamEnabled = features.spam === true;
+    const includeSpam = spamEnabled && includeSpamParam;
+    // Threshold the API hides on; the badge must use the same value so a row is
+    // badged exactly when it would be hidden (see web app config).
+    const spamThreshold = typeof config.spam_score_threshold === 'number'
+        ? config.spam_score_threshold
+        : 0.65;
     let channelLabels = new Map();
     const tz = config.timezone || '';
     const tzBadge = tz && tz !== 'UTC' ? html`<span class="text-sm opacity-60">${tz}</span>` : nothing;
@@ -122,6 +132,16 @@ export async function render(container, params, router) {
             return body;
         }
         return `${sender}: ${body}`;
+    }
+
+    // Small badge for rows the scorer flagged as likely spam. Only meaningful
+    // when the spam feature is on (otherwise spam_score is null on every row).
+    function spamBadge(msg) {
+        if (!spamEnabled || msg.spam_score == null || msg.spam_score < spamThreshold) {
+            return nothing;
+        }
+        return html`<span class="badge badge-warning badge-sm"
+            title=${`${t('messages.spam.badge')} ${msg.spam_score.toFixed(2)}`}>${t('messages.spam.badge')}</span>`;
     }
 
     function dedupeBySignature(items) {
@@ -261,6 +281,7 @@ ${displayContent}`, container);
             // Phase 2: fetch the messages with the resolved observer filter.
             const apiParams = { limit, offset, message_type, channel_idx, sort, order };
             if (observerFilterActive) apiParams.observed_by = enabledObserverKeys;
+            if (includeSpam) apiParams.include_spam = true;
             const data = await apiGet('/api/v1/messages', apiParams, { signal });
             const messages = dedupeBySignature(data.items || []);
             const total = data.total || 0;
@@ -301,8 +322,9 @@ ${displayContent}`, container);
                             <div class="font-medium text-sm truncate">
                                 ${fromPrimary}
                             </div>
-                            <div class="text-xs opacity-60">
+                            <div class="text-xs opacity-60 flex items-center gap-1">
                                 ${formatDateTimeShort(msg.received_at)}
+                                ${spamBadge(msg)}
                             </div>
                         </div>
                     </div>
@@ -343,13 +365,19 @@ ${displayContent}`, container);
                     <td class="text-sm whitespace-nowrap">
                         <div>${fromPrimary}</div>
                     </td>
-                    <td class="break-words max-w-md" style="white-space: pre-wrap;">${displayMessage}</td>
+                    <td class="break-words max-w-md" style="white-space: pre-wrap;">
+                        <div class="flex items-start gap-2">
+                            <span>${displayMessage}</span>
+                            ${spamBadge(msg)}
+                        </div>
+                    </td>
                     <td>${receiversBlock}</td>
                 </tr>`;
                 });
 
+            const spamParam = includeSpam ? { include_spam: 'true' } : {};
             const paginationBlock = pagination(page, totalPages, '/messages', {
-                message_type, channel_idx, limit, sort, order,
+                message_type, channel_idx, limit, sort, order, ...spamParam,
             });
 
             const filterFields = [
@@ -380,7 +408,21 @@ ${displayContent}`, container);
                 </select>
             </div>`,
             ];
-            const hasActiveFilters = message_type !== '' || channel_idx !== '';
+            if (spamEnabled) {
+                filterFields.push(() => html`
+            <div class="flex flex-col gap-1">
+                <label class="flex items-center py-1">
+                    <span class="opacity-80 text-sm">${t('messages.spam.filter_label')}</span>
+                </label>
+                <label class="label cursor-pointer justify-start gap-2 py-1">
+                    <input type="checkbox" name="include_spam" value="true"
+                           class="checkbox checkbox-sm" ?checked=${includeSpam}
+                           @change=${autoSubmit} />
+                    <span class="text-sm">${t('messages.spam.show')}</span>
+                </label>
+            </div>`);
+            }
+            const hasActiveFilters = message_type !== '' || channel_idx !== '' || includeSpam;
             const existingDetails = container.querySelector('details.collapse');
             const isFilterOpen = existingDetails ? existingDetails.open : hasActiveFilters;
 
@@ -392,7 +434,7 @@ ${displayContent}`, container);
                 defaultOpen: isFilterOpen,
             });
 
-            const headerParams = { message_type, channel_idx, limit };
+            const headerParams = { message_type, channel_idx, limit, ...spamParam };
             const sortable = (label, sortKey) => sortableTableHeader(label, {
                 sortKey, currentSort: sort, currentOrder: order,
                 navigate, basePath: '/messages', params: headerParams,

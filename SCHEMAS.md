@@ -189,6 +189,11 @@ Group/broadcast messages on specific channels.
 - Additional channel labels are loaded from the `channels` database table via the collector's periodic refresh.
 - When decoder output includes a human sender (`payload.decoded.decrypted.sender`), message text is normalized to `Name: Message`; sender identity remains unknown when only hash/prefix metadata is available.
 
+**Spam scoring columns** (stored on `messages`, populated only when `SPAM_DETECTION_ENABLED` is set; otherwise null):
+- `path_prefix` (`string(48)`): first `SPAM_PATH_HOPS` origin-side hop hashes joined (e.g. `"16,69,23"`), derived from the decoded `path`. Stored null when `path_len` is below `SPAM_MIN_PATH_HOPS` so short local-mesh paths don't pollute path counts. Indexed with `received_at`.
+- `sender_normalized` (`string(255)`): the self-declared channel sender name (the part before the first `": "` in the body) lower-cased with the trailing digit/space suffix stripped (`bob17` → `bob`). Indexed with `received_at`.
+- `spam_score` (`float`): likely-spam score `0.0`–`1.0` computed at ingest from windowed joint `(path_prefix, sender_normalized)` and `sender_normalized` frequency counts, refined by a background re-scoring sweep. Messages at/above `SPAM_SCORE_THRESHOLD` are hidden from `GET /api/v1/messages` unless `include_spam=true`.
+
 **Compatibility ingest note (advertisements)**:
 - In LetsMesh upload compatibility mode, `status` feed payloads are persisted as informational `letsmesh_status` events and are not normalized to `ADVERTISEMENT`.
 - In LetsMesh upload compatibility mode, decoded payload type `4` is normalized to `ADVERTISEMENT` when node identity metadata is present.

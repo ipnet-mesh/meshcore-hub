@@ -2,6 +2,61 @@
 
 This guide covers upgrading from a previous MeshCore Hub release to the current version. Check the relevant version section below before upgrading.
 
+## v0.15.0
+
+### Spam Detection (score, hide, and toggle likely-spam messages)
+
+Each message is now scored for spam likelihood **at ingest** and the score is stored on the row. Likely-spam messages are **hidden by default** on the Messages page, with a "show potential spam" toggle to reveal them. Nothing is ever dropped — scoring is purely additive and the display layer filters on the stored score, so the feature is fully reversible. Scoring runs on both SQLite and PostgreSQL.
+
+The scorer combines two windowed signals over a sliding time window: a **path signal** (joint count of the same origin-side path prefix + normalised sender) and a **name signal** (count of the same normalised sender, after stripping a trailing digit/space suffix so rotating `bob1`/`bob2`/`Bob 3` collapse to `bob`). When the path is too short to be useful — including the **zero-hop case** where an observer sits right next to the sender — the name signal stands on its own at full weight, so local/zero-hop spam can still be flagged. A background sweep re-scores recent rows with hindsight (a symmetric window) so the leading edge of a burst is caught once its peers arrive.
+
+**On by default.** After upgrading, the collector scores new messages and the API hides likely-spam from the Messages page automatically — operators get protection without any configuration. To opt out, set `FEATURE_SPAM_DETECTION=false` and recreate the `collector`, `api`, and `web` services. Existing messages ingested before the upgrade keep null scores and are never hidden (no backfill), so only newly-ingested traffic is affected.
+
+**Database migration required:**
+
+```
+meshcore-hub db upgrade
+```
+
+This adds three nullable columns to the `messages` table — `path_prefix`, `sender_normalized`, `spam_score` — plus two composite indexes (`ix_messages_path_prefix_received_at`, `ix_messages_sender_normalized_received_at`). The migration is batch-mode and runs on both SQLite and Postgres. On Docker deployments it runs automatically on startup. **No backfill:** only messages ingested *after* enabling are scored; historical rows keep null scores and are never hidden.
+
+**New optional environment variables (all safe to omit):**
+
+| Variable                  | Default | Description                                                                                                                  |
+| ------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `FEATURE_SPAM_DETECTION`  | `true`  | The single operator switch. Shows the "show potential spam" toggle on the Messages page. In Compose this **derives** the backend `SPAM_DETECTION_ENABLED` for the collector and api. Set to `false` to opt out. |
+| `SPAM_DETECTION_ENABLED`  | `true`  | Backend operational switch read by the collector (scoring + sweep) and api (hide-filter). In Compose derived from `FEATURE_SPAM_DETECTION`; set directly only when running without Compose. |
+| `SPAM_SCORE_THRESHOLD`    | `0.65`  | Score at/above which a message is treated as likely spam — hidden by default in the API, logged at WARNING by the collector. Read by collector + api. |
+
+**Scoring tuning (collector only; consulted only when detection is enabled):**
+
+| Variable                        | Default | Description                                                        |
+| ------------------------------- | ------- | ------------------------------------------------------------------ |
+| `SPAM_WINDOW_SECONDS`           | `300`   | Sliding window for the frequency counts                            |
+| `SPAM_PATH_HOPS`                | `3`     | Leading origin-side hops that form the path prefix                 |
+| `SPAM_MIN_PATH_HOPS`            | `3`     | Minimum `path_len` before the path signal applies                  |
+| `SPAM_PATH_THRESHOLD`           | `6`     | Joint path+sender count that saturates the path signal             |
+| `SPAM_NAME_THRESHOLD`           | `10`    | Sender count that saturates the name signal                        |
+| `SPAM_WEIGHT_PATH`              | `0.75`  | Weight of the path signal                                          |
+| `SPAM_WEIGHT_NAME`              | `0.25`  | Weight of the name signal                                          |
+| `SPAM_RESCORE_INTERVAL_SECONDS` | `120`   | Background re-scoring sweep cadence (`0` disables the sweep)       |
+
+**Feature ↔ backend split:** the UI toggle is served by the `web` app while scoring runs in the `collector` and the hide-filter in the `api` — separate processes with separate settings. Docker Compose links them: `FEATURE_SPAM_DETECTION` (default `true`) drives scoring + sweep on the collector, the hide-filter on the api (both via `SPAM_DETECTION_ENABLED=${FEATURE_SPAM_DETECTION}`), and the toggle in the web UI. Operators running the processes directly can set `SPAM_DETECTION_ENABLED` independently.
+
+**API:** message endpoints gain a `spam_score` field and an `include_spam` query parameter. By default the API hides rows scoring at/above `SPAM_SCORE_THRESHOLD`; `include_spam=true` returns them (rows with a null score — i.e. ingested before the upgrade, or while the feature was opted out — are always shown). With the feature opted out the filter is a no-op.
+
+The feature is on by default and all variables are passed through `docker-compose.yml` automatically — no configuration is needed to adopt it. To opt out, set `FEATURE_SPAM_DETECTION=false` in your `.env` and recreate the `collector`, `api`, and `web` services.
+
+### Docker Compose `pull_policy` removed from base
+
+A `pull_policy: daily` that had been added to the five hub services (`collector`, `api`, `web`, `migrate`, `seed`) in the base `docker-compose.yml` has been removed. It caused `up` to pull the published image over a freshly built local image in development, clobbering local builds.
+
+- **Base** (`docker-compose.yml`) now sets **no** `pull_policy`, falling back to Compose's default `missing` (pull only when the image is absent).
+- **Dev** (`docker-compose.dev.yml`) sets `pull_policy: build` on all five hub services, so `make build && make up` always (re)builds from local source and never pulls.
+- **Prod** (`docker-compose.prod.yml`) is unchanged and inherits the default `missing` policy.
+
+**No action required** beyond pulling the updated compose files. **Production note:** image refreshes are no longer automatic on `up` — to move prod to a newer published image run `docker compose -f docker-compose.yml -f docker-compose.prod.yml pull` followed by `up -d`.
+
 ## v0.14.0
 
 ### Optional PostgreSQL Backend

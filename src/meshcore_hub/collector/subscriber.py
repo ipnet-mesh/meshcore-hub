@@ -98,6 +98,8 @@ class Subscriber(LetsMeshNormalizer):
         # Channel key refresh
         self._channel_refresh_interval_seconds = channel_refresh_interval_seconds
         self._channel_refresh_thread: Optional[threading.Thread] = None
+        # Background spam re-scoring sweep
+        self._spam_rescore_thread: Optional[threading.Thread] = None
         # Load initial channel keys from database
         self._include_test_channel = self._load_channel_keys_from_db()
         self._letsmesh_decoder = LetsMeshPacketDecoder(
@@ -512,6 +514,60 @@ class Subscriber(LetsMeshNormalizer):
             if self._channel_refresh_thread.is_alive():
                 logger.warning("Channel refresh thread did not stop cleanly")
 
+    def _start_spam_rescore_scheduler(self) -> None:
+        """Start background thread that re-scores recent messages with hindsight.
+
+        Disabled (not scheduled at all) when spam detection is off or the
+        interval is 0. Follows the same loop template as the channel-refresh
+        scheduler and uses synchronous sessions.
+        """
+        from meshcore_hub.collector.spam import get_spam_config
+
+        cfg = get_spam_config()
+        if not cfg.enabled or cfg.rescore_interval_seconds <= 0:
+            logger.info(
+                "Spam re-scoring sweep disabled (enabled=%s, interval=%ds)",
+                cfg.enabled,
+                cfg.rescore_interval_seconds,
+            )
+            return
+
+        interval = cfg.rescore_interval_seconds
+        logger.info("Starting spam re-scoring sweep (interval=%ds)", interval)
+
+        def run_rescore_loop() -> None:
+            """Periodically re-score recent messages with symmetric-window counts."""
+            from meshcore_hub.collector.spam import get_spam_config, rescore_recent
+
+            while self._running:
+                for _ in range(interval):
+                    if not self._running:
+                        break
+                    time.sleep(1)
+                if self._running:
+                    try:
+                        sweep_cfg = get_spam_config()
+                        with self.db.session_scope() as session:
+                            updated = rescore_recent(session, sweep_cfg)
+                        if updated:
+                            logger.info(
+                                "Spam re-scoring sweep updated %d rows", updated
+                            )
+                    except Exception as e:
+                        logger.error("Spam re-scoring error: %s", e, exc_info=True)
+
+        self._spam_rescore_thread = threading.Thread(
+            target=run_rescore_loop, daemon=True, name="spam-rescore"
+        )
+        self._spam_rescore_thread.start()
+
+    def _stop_spam_rescore_scheduler(self) -> None:
+        """Stop the spam re-scoring sweep thread."""
+        if self._spam_rescore_thread and self._spam_rescore_thread.is_alive():
+            self._spam_rescore_thread.join(timeout=5.0)
+            if self._spam_rescore_thread.is_alive():
+                logger.warning("Spam re-scoring thread did not stop cleanly")
+
     def start(self) -> None:
         """Start the subscriber."""
         logger.info("Starting collector subscriber")
@@ -579,6 +635,9 @@ class Subscriber(LetsMeshNormalizer):
         # Start channel key refresh scheduler
         self._start_channel_refresh_scheduler()
 
+        # Start background spam re-scoring sweep (no-op when disabled)
+        self._start_spam_rescore_scheduler()
+
         # Start health reporter for Docker health checks
         self._health_reporter = HealthReporter(
             component="collector",
@@ -616,6 +675,9 @@ class Subscriber(LetsMeshNormalizer):
 
         # Stop channel refresh scheduler
         self._stop_channel_refresh_scheduler()
+
+        # Stop spam re-scoring sweep
+        self._stop_spam_rescore_scheduler()
 
         # Stop webhook processor
         self._stop_webhook_processor()

@@ -200,6 +200,11 @@
     "type_channel": "Channel",
     "type_contact": "Contact",
     "type_public": "Public",
+    "spam": {
+      "filter_label": "Spam",
+      "show": "Show potential spam",
+      "badge": "Spam"
+    },
     "sort": {
       "newest": "Time (newest)",
       "oldest": "Time (oldest)",

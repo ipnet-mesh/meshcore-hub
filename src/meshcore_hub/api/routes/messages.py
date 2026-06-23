@@ -58,6 +58,9 @@ def list_messages(
     since: Optional[datetime] = Query(None, description="Start timestamp"),
     until: Optional[datetime] = Query(None, description="End timestamp"),
     search: Optional[str] = Query(None, description="Search in message text"),
+    include_spam: bool = Query(
+        False, description="Include messages scored as likely spam"
+    ),
     sort: Optional[str] = Query(None, description="Sort column"),
     order: Optional[str] = Query(None, description="Sort direction: asc or desc"),
     limit: int = Query(50, ge=1, le=100, description="Page size"),
@@ -97,6 +100,19 @@ def list_messages(
 
     if search:
         query = query.where(Message.text.ilike(f"%{search}%"))
+
+    # Spam hide-filter. Master switch: when spam detection is disabled, never
+    # filter — every message is returned regardless of any stored score, so
+    # toggling the feature off instantly un-hides rows scored while it was on.
+    spam_enabled = getattr(request.app.state, "spam_detection_enabled", False)
+    spam_threshold = getattr(request.app.state, "spam_score_threshold", 0.65)
+    if spam_enabled and not include_spam:
+        query = query.where(
+            or_(
+                Message.spam_score < spam_threshold,
+                Message.spam_score.is_(None),
+            )
+        )
 
     # Apply channel visibility filtering
     role = resolve_user_role(request)
@@ -204,6 +220,7 @@ def list_messages(
             "received_at": m.received_at,
             "created_at": m.created_at,
             "packet_hash": m.packet_hash,
+            "spam_score": m.spam_score,
             "observers": (
                 observers_by_hash.get(m.event_hash, []) if m.event_hash else []
             ),
@@ -271,6 +288,7 @@ def get_message(
         "received_at": message.received_at,
         "created_at": message.created_at,
         "packet_hash": message.packet_hash,
+        "spam_score": message.spam_score,
         "observers": observers,
     }
     return MessageRead(**data)

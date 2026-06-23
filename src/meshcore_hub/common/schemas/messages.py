@@ -61,6 +61,10 @@ class MessageRead(BaseModel):
     packet_hash: Optional[str] = Field(
         default=None, description="LetsMesh wire packet hash, links to raw packets"
     )
+    spam_score: Optional[float] = Field(
+        default=None,
+        description="Likely-spam score 0.0-1.0 (null when scoring disabled)",
+    )
     observers: list[ObserverInfo] = Field(
         default_factory=list, description="All observers that captured this message"
     )

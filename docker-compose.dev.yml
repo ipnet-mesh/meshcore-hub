@@ -7,7 +7,11 @@
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 
 services:
+  # Hub services (collector/api/web/migrate/seed) build from local source and
+  # never pull the published image in development (pull_policy: build), so
+  # `make build` + `make up` cannot clobber a local build with a registry pull.
   collector:
+    pull_policy: build
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -19,12 +23,20 @@ services:
       - "${MQTT_PORT:-1883}:${MQTT_PORT:-1883}"
 
   api:
+    pull_policy: build
     ports:
       - "${API_PORT:-8000}:8000"
 
   web:
+    pull_policy: build
     ports:
       - "${WEB_PORT:-8080}:8080"
+
+  migrate:
+    pull_policy: build
+
+  seed:
+    pull_policy: build
 
   redis:
     ports:

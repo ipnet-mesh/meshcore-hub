@@ -150,6 +150,13 @@ class LetsMeshNormalizer:
             path_len = self._extract_letsmesh_decoder_path_length(decoded_packet)
         normalized_payload["path_len"] = path_len
 
+        # Ordered origin-side hop hashes, used as a spam-scoring signal. The path
+        # is discarded for messages today; the trace handler already keeps it
+        # (see _build_letsmesh_trace_payload) using the same decoded.path source.
+        path_hashes = self._extract_message_path_hashes(decoded_packet)
+        if path_hashes:
+            normalized_payload["path_hashes"] = path_hashes
+
         sender_timestamp = self._parse_sender_timestamp(payload)
         if sender_timestamp is None:
             sender_timestamp = self._extract_letsmesh_decoder_sender_timestamp(
@@ -815,6 +822,26 @@ class LetsMeshNormalizer:
             return parsed if isinstance(parsed, dict) else None
 
         return None
+
+    def _extract_message_path_hashes(
+        self, decoded_packet: dict[str, Any] | None
+    ) -> list[str] | None:
+        """Extract the ordered hop hashes from a decoded message packet.
+
+        Mirrors ``api/routes/packet_groups.py::_extract_path_hashes``: the path
+        lives at the top level as ``decoded.path`` for normal packets, with
+        ``decoded.payload.decoded.pathHashes`` as the trace-style fallback. The
+        hashes are normalised (upper-cased, validated hex) so the stored
+        ``path_prefix`` is stable across observers.
+        """
+        if not decoded_packet:
+            return None
+        hashes = self._normalize_hash_list(decoded_packet.get("path"))
+        if hashes:
+            return hashes
+        payload = decoded_packet.get("payload") or {}
+        inner = payload.get("decoded") or {}
+        return self._normalize_hash_list(inner.get("pathHashes"))
 
     @staticmethod
     def _normalize_hash_list(value: Any) -> list[str] | None:

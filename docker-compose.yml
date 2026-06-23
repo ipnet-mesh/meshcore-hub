@@ -182,7 +182,6 @@ services:
   # ==========================================================================
   collector:
     image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
-    pull_policy: daily
     build:
       context: .
       dockerfile: Dockerfile
@@ -240,6 +239,19 @@ services:
       # capture and the web Packets page). Retention defaults to 7 days.
       - RAW_PACKET_CAPTURE_ENABLED=${FEATURE_PACKETS:-true}
       - RAW_PACKET_RETENTION_DAYS=${RAW_PACKET_RETENTION_DAYS:-7}
+      # Spam detection (derived from FEATURE_SPAM_DETECTION so one var drives the
+      # backend switch and the web toggle together). On by default; opt out with
+      # FEATURE_SPAM_DETECTION=false.
+      - SPAM_DETECTION_ENABLED=${FEATURE_SPAM_DETECTION:-true}
+      - SPAM_SCORE_THRESHOLD=${SPAM_SCORE_THRESHOLD:-0.65}
+      - SPAM_WINDOW_SECONDS=${SPAM_WINDOW_SECONDS:-300}
+      - SPAM_PATH_HOPS=${SPAM_PATH_HOPS:-3}
+      - SPAM_MIN_PATH_HOPS=${SPAM_MIN_PATH_HOPS:-3}
+      - SPAM_PATH_THRESHOLD=${SPAM_PATH_THRESHOLD:-6}
+      - SPAM_NAME_THRESHOLD=${SPAM_NAME_THRESHOLD:-10}
+      - SPAM_WEIGHT_PATH=${SPAM_WEIGHT_PATH:-0.75}
+      - SPAM_WEIGHT_NAME=${SPAM_WEIGHT_NAME:-0.25}
+      - SPAM_RESCORE_INTERVAL_SECONDS=${SPAM_RESCORE_INTERVAL_SECONDS:-120}
     command: ["collector"]
     healthcheck:
       test: ["CMD", "meshcore-hub", "health", "collector"]
@@ -253,7 +265,6 @@ services:
   # ==========================================================================
   api:
     image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
-    pull_policy: daily
     build:
       context: .
       dockerfile: Dockerfile
@@ -304,6 +315,11 @@ services:
       - REDIS_KEY_PREFIX=${REDIS_KEY_PREFIX:-hub}
       - REDIS_CACHE_TTL=${REDIS_CACHE_TTL:-30}
       - REDIS_CACHE_TTL_DASHBOARD=${REDIS_CACHE_TTL_DASHBOARD:-30}
+      # Spam detection: hide-filter switch + threshold (bridged from
+      # FEATURE_SPAM_DETECTION so it tracks the collector and web toggle). On by
+      # default; opt out with FEATURE_SPAM_DETECTION=false.
+      - SPAM_DETECTION_ENABLED=${FEATURE_SPAM_DETECTION:-true}
+      - SPAM_SCORE_THRESHOLD=${SPAM_SCORE_THRESHOLD:-0.65}
     command: ["api"]
     healthcheck:
       test:
@@ -323,7 +339,6 @@ services:
   # ==========================================================================
   web:
     image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
-    pull_policy: daily
     build:
       context: .
       dockerfile: Dockerfile
@@ -397,6 +412,9 @@ services:
       - FEATURE_RADIO_CONFIG=${FEATURE_RADIO_CONFIG:-true}
       # Packets page is on by default; this also drives collector capture.
       - FEATURE_PACKETS=${FEATURE_PACKETS:-true}
+      # Spam detection toggle is on by default; this also drives the backend
+      # scoring/hide switch on the collector and api.
+      - FEATURE_SPAM_DETECTION=${FEATURE_SPAM_DETECTION:-true}
     command: ["web"]
     healthcheck:
       test:
@@ -416,7 +434,6 @@ services:
   # ==========================================================================
   migrate:
     image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
-    pull_policy: daily
     build:
       context: .
       dockerfile: Dockerfile
@@ -453,7 +470,6 @@ services:
   # ==========================================================================
   seed:
     image: ghcr.io/ipnet-mesh/meshcore-hub:${IMAGE_VERSION:-latest}
-    pull_policy: daily
     build:
       context: .
       dockerfile: Dockerfile

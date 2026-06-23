@@ -126,6 +126,25 @@ The collector automatically cleans up old event data and inactive nodes. Retenti
 | `RAW_PACKET_CAPTURE_ENABLED` | `false` | Capture raw packets into `raw_packets`. In Compose, derived from `FEATURE_PACKETS` — see [letsmesh.md → Raw Packet Capture](letsmesh.md#raw-packet-capture) |
 | `RAW_PACKET_RETENTION_DAYS` | `7` | Days to retain raw packets (independent of `DATA_RETENTION_DAYS`) |
 
+## Spam Detection
+
+Scores each message's spam likelihood at ingest, stores the score on the message row, and hides likely-spam by default in the API (with a "show potential spam" toggle on the Messages page). Nothing is ever dropped — the design is reversible and the threshold can be retuned without reprocessing.
+
+On by default; opt out with `FEATURE_SPAM_DETECTION=false`. `FEATURE_SPAM_DETECTION` is the single switch operators set: in Compose it drives the backend `SPAM_DETECTION_ENABLED` for the **collector** (scoring + the background re-scoring sweep) and the **api** (the hide-filter), and exposes the UI toggle (see [Feature Flags](#feature-flags)). Set `SPAM_DETECTION_ENABLED` directly only when running services without Compose.
+
+| Variable | Default | Read by | Description |
+| --- | --- | --- | --- |
+| `SPAM_DETECTION_ENABLED` | `true` | collector, api | Operational switch for scoring + hiding. In Compose, derived from `FEATURE_SPAM_DETECTION` (`SPAM_DETECTION_ENABLED=${FEATURE_SPAM_DETECTION}`) |
+| `SPAM_SCORE_THRESHOLD` | `0.65` | collector, api | Score at/above which a message is treated as likely spam (hidden by default; logged at `WARNING`) |
+| `SPAM_WINDOW_SECONDS` | `300` | collector | Sliding window (seconds) for frequency counts |
+| `SPAM_PATH_HOPS` | `3` | collector | Leading origin-side hops that form the `path_prefix` |
+| `SPAM_MIN_PATH_HOPS` | `3` | collector | Minimum `path_len` before the path signal applies (short local-mesh paths share prefixes) |
+| `SPAM_PATH_THRESHOLD` | `6` | collector | Joint `(path_prefix, sender)` count that saturates the path signal |
+| `SPAM_NAME_THRESHOLD` | `10` | collector | Sender count that saturates the name signal |
+| `SPAM_WEIGHT_PATH` | `0.75` | collector | Weight of the path signal in the combined score |
+| `SPAM_WEIGHT_NAME` | `0.25` | collector | Weight of the name signal in the combined score |
+| `SPAM_RESCORE_INTERVAL_SECONDS` | `120` | collector | Background re-scoring sweep cadence in seconds (`0` disables the sweep) |
+
 ## API
 
 REST API server. For multi-worker scaling guidance (`API_WORKERS`), see [deployment.md → Scaling the API](deployment.md#scaling-the-api).
@@ -192,6 +211,7 @@ Control which pages are visible in the web dashboard. Disabled features are full
 | `FEATURE_CHANNELS` | `true` | Enable the `/channels` page |
 | `FEATURE_RADIO_CONFIG` | `true` | Show radio config panel on home page |
 | `FEATURE_PACKETS` | `true` | Enable the `/packets` raw-packet browser. In Compose this also drives `RAW_PACKET_CAPTURE_ENABLED` on the collector |
+| `FEATURE_SPAM_DETECTION` | `true` | Show the "show potential spam" toggle on `/messages`. In Compose this also drives `SPAM_DETECTION_ENABLED` on the collector + api — see [Spam Detection](#spam-detection) |
 
 **Dependencies:** Dashboard auto-disables when all of Nodes/Advertisements/Messages are disabled. Map auto-disables when Nodes is disabled. Members auto-disables when OIDC is disabled (set via `OIDC_ENABLED`).
 
