@@ -365,9 +365,9 @@ ${displayContent}`, container);
                     <td class="text-sm whitespace-nowrap">
                         <div>${fromPrimary}</div>
                     </td>
-                    <td class="break-words max-w-md" style="white-space: pre-wrap;">
+                    <td class="break-words max-w-md">
                         <div class="flex items-start gap-2">
-                            <span>${displayMessage}</span>
+                            <span style="white-space: pre-wrap;">${displayMessage}</span>
                             ${spamBadge(msg)}
                         </div>
                     </td>
