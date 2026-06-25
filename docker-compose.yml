@@ -239,6 +239,10 @@ services:
       # capture and the web Packets page). Retention defaults to 7 days.
       - RAW_PACKET_CAPTURE_ENABLED=${FEATURE_PACKETS:-true}
       - RAW_PACKET_RETENTION_DAYS=${RAW_PACKET_RETENTION_DAYS:-7}
+      # Observer ingestion filter (allow/deny remote observers by public key/prefix).
+      # Allowlist overrides denylist; both empty accepts all observers (default).
+      - OBSERVER_ALLOWLIST=${OBSERVER_ALLOWLIST:-}
+      - OBSERVER_DENYLIST=${OBSERVER_DENYLIST:-}
       # Spam detection (derived from FEATURE_SPAM_DETECTION so one var drives the
       # backend switch and the web toggle together). On by default; opt out with
       # FEATURE_SPAM_DETECTION=false.

@@ -6,6 +6,8 @@ This document covers the local packet-capture observer (the `observer` compose p
 
 > **Prerequisite:** Your MQTT broker must be accessible to remote observers. In production, this means exposing the WebSocket listener via a reverse proxy with TLS (e.g., `wss://mqtt.example.com/mqtt`).
 
+> **Restricting which observers are accepted:** because anyone with broker access can publish as an observer, Hub operators can gate ingestion by observer public key using `OBSERVER_ALLOWLIST` / `OBSERVER_DENYLIST`. See [configuration.md → Observer Ingestion Filters](configuration.md#observer-ingestion-filters).
+
 ## Example: Contribute to MeshCore Hub, LetsMesh, and MeshRank
 
 A ready-made Docker Compose setup is provided in `contrib/packetcapture/`. Download it and configure:

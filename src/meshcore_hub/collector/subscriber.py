@@ -23,6 +23,7 @@ from meshcore_hub.common.health import HealthReporter
 from meshcore_hub.common.mqtt import MQTTClient, MQTTConfig
 from meshcore_hub.collector.letsmesh_decoder import LetsMeshPacketDecoder
 from meshcore_hub.collector.letsmesh_normalizer import LetsMeshNormalizer
+from meshcore_hub.collector.observer_filter import ObserverFilter
 
 if TYPE_CHECKING:
     from meshcore_hub.collector.webhook import WebhookDispatcher
@@ -50,6 +51,7 @@ class Subscriber(LetsMeshNormalizer):
         channel_refresh_interval_seconds: int = 300,
         raw_packet_capture_enabled: bool = False,
         raw_packet_retention_days: int = 7,
+        observer_filter: Optional[ObserverFilter] = None,
     ):
         """Initialize subscriber.
 
@@ -65,6 +67,8 @@ class Subscriber(LetsMeshNormalizer):
             channel_refresh_interval_seconds: Seconds between channel key refresh
             raw_packet_capture_enabled: Capture every packets-feed packet to raw_packets
             raw_packet_retention_days: Days to retain raw packets
+            observer_filter: Allow/deny filter for observer-sourced events
+                (defaults to an inactive filter that accepts all observers)
         """
         self.mqtt = mqtt_client
         self.db = db_manager
@@ -95,6 +99,14 @@ class Subscriber(LetsMeshNormalizer):
             "enabled" if raw_packet_capture_enabled else "disabled",
             raw_packet_retention_days,
         )
+        # Observer ingestion filter (allow/deny by observer public key)
+        self._observer_filter = observer_filter or ObserverFilter()
+        if self._observer_filter.active:
+            logger.info(
+                "Observer filter active: %d allow, %d deny",
+                len(self._observer_filter.allowlist),
+                len(self._observer_filter.denylist),
+            )
         # Channel key refresh
         self._channel_refresh_interval_seconds = channel_refresh_interval_seconds
         self._channel_refresh_thread: Optional[threading.Thread] = None
@@ -213,6 +225,22 @@ class Subscriber(LetsMeshNormalizer):
             pattern: Subscription pattern
             payload: Message payload
         """
+        # Apply the observer allow/deny filter first, before any decode,
+        # raw-packet capture, or handler dispatch. Blocked observers' packets
+        # are dropped entirely and never touch the database. The cheap topic
+        # split below runs only when the filter is active, so the default
+        # (accept-all) path is unaffected.
+        if self._observer_filter.active:
+            parsed_topic = self.mqtt.topic_builder.parse_letsmesh_upload_topic(topic)
+            if parsed_topic:
+                observer_key, _feed = parsed_topic
+                if not self._observer_filter.is_allowed(observer_key):
+                    logger.debug(
+                        "Dropping event from blocked observer %s...",
+                        observer_key[:12],
+                    )
+                    return
+
         parsed: tuple[str, str, dict[str, Any]] | None
         parsed = self._normalize_letsmesh_event(topic, payload)
 
@@ -714,6 +742,7 @@ def create_subscriber(
     channel_refresh_interval_seconds: int = 300,
     raw_packet_capture_enabled: bool = False,
     raw_packet_retention_days: int = 7,
+    observer_filter: Optional[ObserverFilter] = None,
 ) -> Subscriber:
     """Create a configured subscriber instance.
 
@@ -769,6 +798,7 @@ def create_subscriber(
         channel_refresh_interval_seconds=channel_refresh_interval_seconds,
         raw_packet_capture_enabled=raw_packet_capture_enabled,
         raw_packet_retention_days=raw_packet_retention_days,
+        observer_filter=observer_filter,
     )
 
     # Register handlers
@@ -798,6 +828,7 @@ def run_collector(
     channel_refresh_interval_seconds: int = 300,
     raw_packet_capture_enabled: bool = False,
     raw_packet_retention_days: int = 7,
+    observer_filter: Optional[ObserverFilter] = None,
 ) -> None:
     """Run the collector (blocking).
 
@@ -838,6 +869,7 @@ def run_collector(
         channel_refresh_interval_seconds=channel_refresh_interval_seconds,
         raw_packet_capture_enabled=raw_packet_capture_enabled,
         raw_packet_retention_days=raw_packet_retention_days,
+        observer_filter=observer_filter,
     )
 
     # Set up signal handlers
