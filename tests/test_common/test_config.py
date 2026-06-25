@@ -74,6 +74,27 @@ class TestCollectorSettings:
 
         assert settings.raw_packet_capture_enabled is False
 
+    def test_observer_lists_default_empty(self) -> None:
+        """Observer allow/deny lists default to empty (accept-all)."""
+        settings = CollectorSettings(_env_file=None)
+
+        assert settings.observer_allowlist_keys == []
+        assert settings.observer_denylist_keys == []
+
+    def test_observer_allowlist_parsed_and_trimmed(self) -> None:
+        """Comma-separated allowlist is split and blank entries dropped."""
+        settings = CollectorSettings(
+            _env_file=None, observer_allowlist="aaa, bbb ,,  ,ccc"
+        )
+
+        assert settings.observer_allowlist_keys == ["aaa", "bbb", "ccc"]
+
+    def test_observer_denylist_parsed_and_trimmed(self) -> None:
+        """Comma-separated denylist is split and blank entries dropped."""
+        settings = CollectorSettings(_env_file=None, observer_denylist=" key1 ,key2")
+
+        assert settings.observer_denylist_keys == ["key1", "key2"]
+
     def test_explicit_seed_home_overrides(self) -> None:
         """Test that explicit seed_home overrides the default."""
         settings = CollectorSettings(_env_file=None, seed_home="/seed/data")

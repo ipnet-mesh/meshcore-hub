@@ -72,6 +72,27 @@ The collector subscribes to MQTT events and persists them to the database. For p
 | --- | --- | --- |
 | `CHANNEL_REFRESH_INTERVAL_SECONDS` | `300` | Seconds between channel-key refresh from the database (minimum `10`) |
 
+### Observer Ingestion Filters
+
+Anyone can contribute as a remote [observer](observer.md) by publishing decoded
+packets to your MQTT broker. Each observer identifies itself by its public key,
+which is the third segment of its LetsMesh upload topic
+(`<prefix>/<iata>/<public_key>/<feed>`). These two variables let an operator
+restrict which observers are ingested.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `OBSERVER_ALLOWLIST` | _(none)_ | Comma-separated observer public keys (or key prefixes) permitted to ingest. If set, **only** matching observers are accepted and `OBSERVER_DENYLIST` is ignored. |
+| `OBSERVER_DENYLIST` | _(none)_ | Comma-separated observer public keys (or key prefixes) blocked from ingesting. Applies only when `OBSERVER_ALLOWLIST` is unset/empty. |
+
+- **Precedence:** the allowlist overrides the denylist. With an allowlist set,
+  any observer not on it is blocked.
+- **Matching:** case-insensitive **prefix** matching, so you can use a full
+  64-char key or a shorter prefix (e.g. `OBSERVER_DENYLIST=F4762185`).
+- **Default:** both empty accepts all observers (current behaviour).
+- **Effect:** a blocked observer's packets are dropped at ingest, **before** any
+  decode or database write — nothing is persisted or forwarded for them.
+
 ## Webhooks
 
 The collector can forward events (advertisements, messages) to external HTTP endpoints via webhooks with configurable URLs, secrets, retries, and timeouts. For URL routing rules, secret handling, retry behaviour, and payload format, see [webhooks.md](webhooks.md).

@@ -2,6 +2,23 @@
 
 This guide covers upgrading from a previous MeshCore Hub release to the current version. Check the relevant version section below before upgrading.
 
+## v0.16.0
+
+### Observer Ingestion Filters (allow/deny remote observers)
+
+Remote observers contribute to the Hub by publishing decoded packets to your MQTT broker, and anyone with broker access can do so. You can now restrict which observers are ingested by their public key with two new **optional** collector variables:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `OBSERVER_ALLOWLIST` | _(none)_ | Comma-separated observer public keys (or prefixes) permitted to ingest. If set, only matching observers are accepted and `OBSERVER_DENYLIST` is ignored. |
+| `OBSERVER_DENYLIST` | _(none)_ | Comma-separated observer public keys (or prefixes) blocked from ingesting. Applies only when `OBSERVER_ALLOWLIST` is unset. |
+
+- **Non-breaking:** both default to empty, which preserves the existing accept-all behaviour. No action is required to keep current behaviour.
+- The allowlist **takes precedence** over the denylist, and matching is **case-insensitive prefix** matching (a full 64-char key or a shorter prefix both work).
+- A blocked observer's packets are dropped at ingest, **before** any decode or database write — nothing is persisted or forwarded for them.
+
+In Docker Compose, set `OBSERVER_ALLOWLIST` / `OBSERVER_DENYLIST` in your `.env`; they are wired into the collector service. See [configuration.md → Observer Ingestion Filters](configuration.md#observer-ingestion-filters) and [observer.md](observer.md).
+
 ## v0.15.0
 
 ### Spam Detection (score, hide, and toggle likely-spam messages)

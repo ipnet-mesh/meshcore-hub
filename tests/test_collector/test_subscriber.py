@@ -3,6 +3,7 @@
 import pytest
 from unittest.mock import MagicMock, call, patch
 
+from meshcore_hub.collector.observer_filter import ObserverFilter
 from meshcore_hub.collector.subscriber import Subscriber, create_subscriber
 
 
@@ -199,6 +200,139 @@ class TestSubscriber:
         ]
         mock_mqtt_client.subscribe.assert_has_calls(expected_calls, any_order=False)
         assert mock_mqtt_client.subscribe.call_count == 3
+
+    def test_blocked_observer_is_dropped_no_dispatch(
+        self, mock_mqtt_client, db_manager
+    ):
+        """An observer on the denylist has its event dropped before dispatch."""
+        mock_mqtt_client.topic_builder.parse_letsmesh_upload_topic.return_value = (
+            "b" * 64,
+            "packets",
+        )
+        subscriber = Subscriber(
+            mock_mqtt_client,
+            db_manager,
+            observer_filter=ObserverFilter.from_lists(denylist=["b" * 64]),
+        )
+        handler = MagicMock()
+        subscriber.register_handler("channel_msg_recv", handler)
+        # Spy on normalize: it must never be called for a blocked observer.
+        subscriber._normalize_letsmesh_event = MagicMock(  # type: ignore[method-assign]
+            return_value=("b" * 64, "channel_msg_recv", {"text": "hi"})
+        )
+
+        subscriber._handle_mqtt_message(
+            topic=f"meshcore/STN/{'b' * 64}/packets",
+            pattern="meshcore/+/+/packets",
+            payload={"raw": "00", "hash": "h1"},
+        )
+
+        handler.assert_not_called()
+        subscriber._normalize_letsmesh_event.assert_not_called()
+
+    def test_blocked_observer_writes_no_raw_packet(self, mock_mqtt_client, db_manager):
+        """A blocked observer's packet is dropped before raw-packet capture."""
+        from sqlalchemy import select
+
+        from meshcore_hub.common.models import RawPacket
+
+        mock_mqtt_client.topic_builder.parse_letsmesh_upload_topic.return_value = (
+            "b" * 64,
+            "packets",
+        )
+        subscriber = Subscriber(
+            mock_mqtt_client,
+            db_manager,
+            raw_packet_capture_enabled=True,
+            observer_filter=ObserverFilter.from_lists(denylist=["b" * 64]),
+        )
+        subscriber._normalize_letsmesh_event = MagicMock(  # type: ignore[method-assign]
+            return_value=("b" * 64, "channel_msg_recv", {"text": "hi"})
+        )
+
+        subscriber._handle_mqtt_message(
+            topic=f"meshcore/STN/{'b' * 64}/packets",
+            pattern="meshcore/+/+/packets",
+            payload={"raw": "0011", "hash": "h1"},
+        )
+
+        session = db_manager.get_session()
+        try:
+            rows = session.execute(select(RawPacket)).scalars().all()
+            assert len(rows) == 0
+        finally:
+            session.close()
+
+    def test_allowed_observer_dispatches_normally(self, mock_mqtt_client, db_manager):
+        """An observer on the allowlist is dispatched as usual."""
+        mock_mqtt_client.topic_builder.parse_letsmesh_upload_topic.return_value = (
+            "a" * 64,
+            "packets",
+        )
+        subscriber = Subscriber(
+            mock_mqtt_client,
+            db_manager,
+            observer_filter=ObserverFilter.from_lists(allowlist=["a" * 64]),
+        )
+        handler = MagicMock()
+        subscriber.register_handler("channel_msg_recv", handler)
+        subscriber._normalize_letsmesh_event = MagicMock(  # type: ignore[method-assign]
+            return_value=("a" * 64, "channel_msg_recv", {"text": "hi"})
+        )
+
+        subscriber._handle_mqtt_message(
+            topic=f"meshcore/STN/{'a' * 64}/packets",
+            pattern="meshcore/+/+/packets",
+            payload={"raw": "00", "hash": "h1"},
+        )
+
+        handler.assert_called_once()
+
+    def test_observer_not_on_allowlist_is_dropped(self, mock_mqtt_client, db_manager):
+        """With an allowlist active, an unlisted observer is dropped."""
+        mock_mqtt_client.topic_builder.parse_letsmesh_upload_topic.return_value = (
+            "b" * 64,
+            "packets",
+        )
+        subscriber = Subscriber(
+            mock_mqtt_client,
+            db_manager,
+            observer_filter=ObserverFilter.from_lists(allowlist=["a" * 64]),
+        )
+        handler = MagicMock()
+        subscriber.register_handler("channel_msg_recv", handler)
+        subscriber._normalize_letsmesh_event = MagicMock(  # type: ignore[method-assign]
+            return_value=("b" * 64, "channel_msg_recv", {"text": "hi"})
+        )
+
+        subscriber._handle_mqtt_message(
+            topic=f"meshcore/STN/{'b' * 64}/packets",
+            pattern="meshcore/+/+/packets",
+            payload={"raw": "00", "hash": "h1"},
+        )
+
+        handler.assert_not_called()
+
+    def test_inactive_filter_does_not_parse_topic(self, mock_mqtt_client, db_manager):
+        """The default (inactive) filter adds no work: the topic is not parsed
+        for filtering, and dispatch proceeds normally."""
+        mock_mqtt_client.topic_builder.parse_letsmesh_upload_topic.reset_mock()
+        subscriber = Subscriber(mock_mqtt_client, db_manager)
+        handler = MagicMock()
+        subscriber.register_handler("channel_msg_recv", handler)
+        subscriber._normalize_letsmesh_event = MagicMock(  # type: ignore[method-assign]
+            return_value=("a" * 64, "channel_msg_recv", {"text": "hi"})
+        )
+
+        subscriber._handle_mqtt_message(
+            topic=f"meshcore/STN/{'a' * 64}/packets",
+            pattern="meshcore/+/+/packets",
+            payload={"raw": "00", "hash": "h1"},
+        )
+
+        handler.assert_called_once()
+        # Inactive filter short-circuits before touching the topic builder.
+        mock_mqtt_client.topic_builder.parse_letsmesh_upload_topic.assert_not_called()
 
     def test_letsmesh_status_maps_to_letsmesh_status(
         self, mock_mqtt_client, db_manager

@@ -236,6 +236,7 @@ def _run_collector_service(
     else:
         click.echo("Webhooks: None configured")
 
+    from meshcore_hub.collector.observer_filter import ObserverFilter
     from meshcore_hub.collector.subscriber import run_collector
 
     # Show cleanup configuration
@@ -257,6 +258,18 @@ def _run_collector_service(
 
     if settings.data_retention_enabled or settings.node_cleanup_enabled:
         click.echo(f"  Interval: {settings.data_retention_interval_hours} hours")
+
+    click.echo("")
+    if settings.observer_allowlist_keys:
+        click.echo(
+            f"Observer filter: ALLOWLIST ({len(settings.observer_allowlist_keys)} entries)"
+        )
+    elif settings.observer_denylist_keys:
+        click.echo(
+            f"Observer filter: DENYLIST ({len(settings.observer_denylist_keys)} entries)"
+        )
+    else:
+        click.echo("Observer filter: Disabled (accepting all observers)")
 
     click.echo("")
     builtin_keys = len(LetsMeshPacketDecoder.BUILTIN_CHANNEL_KEYS)
@@ -283,6 +296,10 @@ def _run_collector_service(
         channel_refresh_interval_seconds=settings.channel_refresh_interval_seconds,
         raw_packet_capture_enabled=settings.raw_packet_capture_enabled,
         raw_packet_retention_days=settings.effective_raw_packet_retention_days,
+        observer_filter=ObserverFilter.from_lists(
+            allowlist=settings.observer_allowlist_keys,
+            denylist=settings.observer_denylist_keys,
+        ),
     )
 
 

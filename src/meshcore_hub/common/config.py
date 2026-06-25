@@ -261,6 +261,26 @@ class CollectorSettings(CommonSettings):
         ge=1,
     )
 
+    # Observer ingestion filtering (allow/deny by observer public key).
+    # Stored as raw comma-separated strings (not list[str]) because
+    # pydantic-settings parses complex field types from env vars as JSON, which
+    # breaks comma-separated input; the *_keys properties split them instead.
+    # Allowlist takes precedence over denylist. Empty = no restriction.
+    observer_allowlist: str = Field(
+        default="",
+        description=(
+            "Comma-separated observer public keys (or key prefixes) allowed to "
+            "ingest. If set, overrides OBSERVER_DENYLIST."
+        ),
+    )
+    observer_denylist: str = Field(
+        default="",
+        description=(
+            "Comma-separated observer public keys (or key prefixes) blocked from "
+            "ingesting. Ignored when OBSERVER_ALLOWLIST is set."
+        ),
+    )
+
     # Spam scoring tuning (only consulted when SPAM_DETECTION_ENABLED is true).
     # The shared SPAM_DETECTION_ENABLED / SPAM_SCORE_THRESHOLD live on
     # CommonSettings; these collector-only knobs tune the scorer + sweep.
@@ -312,6 +332,16 @@ class CollectorSettings(CommonSettings):
         if self.raw_packet_retention_days is not None:
             return self.raw_packet_retention_days
         return self.data_retention_days
+
+    @property
+    def observer_allowlist_keys(self) -> list[str]:
+        """Parsed OBSERVER_ALLOWLIST entries (empty/blank entries dropped)."""
+        return [k.strip() for k in self.observer_allowlist.split(",") if k.strip()]
+
+    @property
+    def observer_denylist_keys(self) -> list[str]:
+        """Parsed OBSERVER_DENYLIST entries (empty/blank entries dropped)."""
+        return [k.strip() for k in self.observer_denylist.split(",") if k.strip()]
 
     @property
     def collector_data_dir(self) -> str:
