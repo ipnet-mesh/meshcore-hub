@@ -27,6 +27,18 @@ def clean_env(monkeypatch):
     return monkeypatch
 
 
+def _served_paths(app):
+    """Return the set of paths the app actually serves.
+
+    FastAPI 0.137 refactored ``include_router`` to keep included routers as
+    nested objects instead of flattening their routes into ``app.routes``, so
+    iterating ``app.routes`` no longer surfaces routed endpoints like
+    ``/metrics``. The OpenAPI schema is the stable, version-independent way to
+    introspect mounted paths (and it resolves router prefixes correctly).
+    """
+    return set(app.openapi()["paths"])
+
+
 def test_factory_reads_database_and_redis_from_env(clean_env):
     """Workers must pick up the real DB/Redis config from env, not the
     hardcoded create_app defaults."""
@@ -71,13 +83,11 @@ def test_factory_metrics_enabled_via_env(clean_env):
     """METRICS_ENABLED=true mounts the /metrics endpoint."""
     clean_env.setenv("METRICS_ENABLED", "true")
     app = create_app_from_env()
-    paths = {getattr(route, "path", None) for route in app.routes}
-    assert "/metrics" in paths
+    assert "/metrics" in _served_paths(app)
 
 
 def test_factory_metrics_disabled_via_env(clean_env):
     """METRICS_ENABLED=false omits the /metrics endpoint."""
     clean_env.setenv("METRICS_ENABLED", "false")
     app = create_app_from_env()
-    paths = {getattr(route, "path", None) for route in app.routes}
-    assert "/metrics" not in paths
+    assert "/metrics" not in _served_paths(app)
