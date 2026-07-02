@@ -83,7 +83,7 @@ export async function render(container, params, router) {
     <h1 class="text-3xl font-bold">${t('entities.members')}</h1>
 </div>
 
-<div class="text-center py-12 opacity-70">
+<div class="text-center py-8 opacity-70">
     <p class="text-lg">${t('members_page.empty_state')}</p>
     <p class="text-sm mt-2">${t('members_page.empty_description')}</p>
 </div>`, container);

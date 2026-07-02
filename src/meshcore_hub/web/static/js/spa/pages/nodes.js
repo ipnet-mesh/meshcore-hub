@@ -37,7 +37,7 @@ export async function render(container, params, router) {
         const displayContent = error ? lastContent : content;
         const displayTotal = error ? lastTotal : total;
         litRender(html`
-<div class="flex items-center justify-between mb-4">
+<div class="flex items-center justify-between mb-6">
     <h1 class="text-3xl font-bold">${t('entities.nodes')}</h1>
     ${tzBadge}
 </div>

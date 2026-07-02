@@ -58,8 +58,8 @@ function renderHeroSection({ networkName, logoUrl, logoInvertLight, networkCity,
         : nothing;
 
     const welcomeText = networkWelcomeText
-        ? html`<p class="py-4 max-w-[70%]">${networkWelcomeText}</p>`
-        : html`<p class="py-4 max-w-[70%]">
+        ? html`<p class="py-4 max-w-[90%] sm:max-w-[70%]">${networkWelcomeText}</p>`
+        : html`<p class="py-4 max-w-[90%] sm:max-w-[70%]">
             ${t('home.welcome_default', { network_name: networkName })}
         </p>`;
 

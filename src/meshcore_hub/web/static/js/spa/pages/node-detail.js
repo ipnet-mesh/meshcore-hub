@@ -116,13 +116,13 @@ export async function render(container, params, router) {
 <div class="relative rounded-box overflow-hidden mb-6 shadow-xl" style="height: 180px;">
     <div id="header-map" class="absolute inset-0 z-0"></div>
     <div class="relative z-20 h-full p-3 flex items-center justify-end">
-        <div id="qr-code" class="bg-white p-2 rounded shadow-lg"></div>
+        <div id="qr-code" class="bg-white p-2 rounded-box shadow-lg"></div>
     </div>
 </div>`
             : html`
 <div class="card bg-base-100 shadow-xl mb-6">
     <div class="card-body flex-row items-center gap-4">
-        <div id="qr-code" class="bg-white p-1 rounded"></div>
+        <div id="qr-code" class="bg-white p-2 rounded-box"></div>
         <p class="text-sm opacity-70">${t('nodes.scan_to_add')}</p>
     </div>
 </div>`;

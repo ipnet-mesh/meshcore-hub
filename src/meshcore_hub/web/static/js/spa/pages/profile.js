@@ -10,7 +10,7 @@ function renderAdoptedNode(node) {
     const relTime = node.last_seen ? formatRelativeTime(node.last_seen) : '-';
     const fullTime = node.last_seen ? formatDateTime(node.last_seen) : '-';
 
-    return html`<a href="/nodes/${node.public_key}" class="flex items-center justify-between gap-3 p-3 bg-base-200 rounded-lg hover:bg-base-300 transition-colors">
+    return html`<a href="/nodes/${node.public_key}" class="flex items-center justify-between gap-3 p-3 bg-base-200 rounded-box hover:bg-base-300 transition-colors">
         <div class="flex-1 min-w-0">
             <div class="font-medium text-sm truncate">${displayName}</div>
             <div class="font-mono text-xs opacity-60 truncate">${node.public_key}</div>

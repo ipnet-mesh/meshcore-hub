@@ -2,6 +2,18 @@
  * MeshCore Hub SPA - Shared UI Components
  *
  * Reusable rendering functions using lit-html.
+ *
+ * Styling conventions:
+ * - Page <h1>: `text-3xl font-bold`; header row wrapper: `mb-6`.
+ * - Content/detail cards: `card bg-base-100 shadow-xl`; stat cards and
+ *   table wrappers: `shadow-sm`; mobile list cards: `shadow-sm`.
+ * - Muted text: `opacity-70` (primary), `opacity-60` (secondary),
+ *   `opacity-50` (timestamps/tertiary) — not `text-base-content/N`.
+ * - Empty states: `text-center py-8 opacity-70`.
+ * - Panel-level surfaces: `rounded-box`; small inline chips: `rounded`.
+ * - Buttons: table-row icon actions `btn btn-xs btn-ghost`; card-level
+ *   labeled actions `btn btn-xs btn-outline` (+ `btn-error` on delete);
+ *   modal submits full-size `btn btn-primary`, inline/header actions `btn-sm`.
  */
 
 import { html, nothing } from 'lit-html';

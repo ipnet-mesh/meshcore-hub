@@ -142,7 +142,7 @@ export async function render(container, params, router) {
                 : nothing;
 
             const emptyMessage = channelsList.length === 0
-                ? html`<div class="text-center py-10 opacity-60">
+                ? html`<div class="text-center py-8 opacity-70">
                     ${t('common.no_entity_found', { entity: t('entities.channels').toLowerCase() })}
                 </div>`
                 : nothing;
@@ -194,9 +194,9 @@ export async function render(container, params, router) {
             }
 
             litRender(html`
-                <div class="mb-4">
-                    <h1 class="text-2xl font-bold flex items-center gap-2">
-                        ${iconChannel('h-7 w-7')}
+                <div class="mb-6">
+                    <h1 class="text-3xl font-bold flex items-center gap-2">
+                        ${iconChannel('h-8 w-8')}
                         ${t('channels.title')}
                     </h1>
                 </div>

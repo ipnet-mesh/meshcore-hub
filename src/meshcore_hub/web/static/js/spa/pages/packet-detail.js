@@ -29,8 +29,8 @@ export async function render(container, params, router) {
     </ul>
 </div>
 
-<div class="flex items-center justify-between mb-4">
-    <h1 class="text-2xl font-bold">${t('packets.detail_title')}</h1>
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-3xl font-bold">${t('packets.detail_title')}</h1>
     ${tzBadge}
 </div>
 ${content}`, container);
