@@ -30,6 +30,10 @@
     --color-neutral: oklch(0.3 0.01 250);     /* subtle dark grey */
     --color-radio: oklch(0.75 0.15 210);     /* cyan — radio tile icons */
 
+    /* Panel tint defaults — overridden per theme below */
+    --panel-tint-strength: 8%;
+    --panel-tint-bg: var(--color-base-100);
+
     /* Map marker colors — theme-independent, chosen for contrast on map tiles */
     --color-marker-infra: #3b82f6;
     --color-marker-infra-border: #1e40af;
@@ -49,6 +53,10 @@
     --color-members: oklch(0.55 0.18 25);
     --color-neutral: oklch(0.85 0.01 250);
     --color-radio: oklch(0.55 0.15 210);
+
+    /* Panel fill — neutral grey; colored left border carries section identity */
+    --panel-tint-strength: 0%;
+    --panel-tint-bg: oklch(97% 0 0);
 }
 
 /* ==========================================================================
@@ -100,31 +108,19 @@
 }
 
 /* ==========================================================================
-   Panel Glow
-   Radial color glow from bottom-right corner.
-   Set --panel-color on the element for a section-tinted glow.
+   Panel Tint & Accent
+   Subtle flat color tint plus a colored left accent border for section
+   identity. Set --panel-color on the element for the section color.
    ========================================================================== */
 
-.panel-glow {
-    background-image:
-        radial-gradient(
-            ellipse at 80% 80%,
-            color-mix(in oklch, var(--panel-color, transparent) 15%, transparent),
-            transparent 70%
-        );
-}
-
-.panel-glow.panel-glow-tl {
-    background-image:
-        radial-gradient(
-            ellipse at 20% 20%,
-            color-mix(in oklch, var(--panel-color, transparent) 15%, transparent),
-            transparent 70%
-        );
+.panel-accent {
+    background-color: color-mix(in oklch, var(--panel-color, transparent) var(--panel-tint-strength), var(--panel-tint-bg));
+    border-left: 5px solid color-mix(in oklch, var(--panel-color, transparent) 55%, transparent);
 }
 
 .panel-solid {
-    background-color: color-mix(in oklch, var(--panel-color, transparent) 10%, var(--color-base-100));
+    background-color: color-mix(in oklch, var(--panel-color, transparent) var(--panel-tint-strength), var(--panel-tint-bg));
+    border-left: 5px solid color-mix(in oklch, var(--panel-color, transparent) 55%, transparent);
 }
 
 .radio-tile-icon {
@@ -427,6 +423,17 @@
         padding-bottom: 0.625rem;
         font-size: 0.9375rem;
     }
+
+    #mobile-nav {
+        display: block;
+        column-count: 2;
+        column-gap: 0.25rem;
+        width: min(90vw, 20rem);
+    }
+
+    #mobile-nav > li {
+        break-inside: avoid;
+    }
 }
 
 /* ==========================================================================
@@ -457,6 +464,19 @@ footer.footer {
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
+}
+
+/* Light mode: soften the network announcement (alert-warning) banner */
+[data-theme="light"] #flash-banner {
+    --alert-color: oklch(0.95 0.06 70);
+    --alert-border-color: oklch(0.82 0.12 70);
+    color: oklch(0.33 0.07 46);
+}
+
+/* Light mode: boost stat label contrast on tinted panels */
+[data-theme="light"] .stat-title,
+[data-theme="light"] .stat-desc {
+    color: color-mix(in oklab, var(--color-base-content) 80%, transparent);
 }
 
 .flash-banner-content {

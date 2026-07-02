@@ -88,7 +88,7 @@ function renderChannelMessages(channelMessages, channelLabels) {
         </div>`;
     });
 
-    return html`<div class="card bg-base-100 shadow-xl panel-glow" style="--panel-color: var(--color-neutral)">
+    return html`<div class="card bg-base-100 shadow-xl panel-accent" style="--panel-color: var(--color-messages)">
         <div class="card-body">
             <h2 class="card-title">
                 ${iconChannel('h-6 w-6')}
@@ -114,13 +114,13 @@ function renderChartCards({ showNodes, showAdverts, showMessages }) {
     return html`
 <div class="grid grid-cols-1 ${gridCols(visibleCount)} gap-6 mb-8">
     ${showNodes ? html`
-    <div class="card bg-base-100 shadow-xl panel-glow" style="--panel-color: var(--color-neutral)">
+    <div class="card bg-base-100 shadow-xl panel-accent" style="--panel-color: var(--color-nodes)">
         <div class="card-body">
             <h2 class="card-title text-base">
                 ${iconNodes('h-5 w-5')}
                 ${t('common.total_entity', { entity: t('entities.nodes') })}
             </h2>
-            <p class="text-xs opacity-70">${t('time.over_time_last_7_days')}</p>
+            <p class="text-xs opacity-80">${t('time.over_time_last_7_days')}</p>
             <div class="h-32">
                 <canvas id="nodeChart"></canvas>
             </div>
@@ -128,13 +128,13 @@ function renderChartCards({ showNodes, showAdverts, showMessages }) {
     </div>` : nothing}
 
     ${showAdverts ? html`
-    <div class="card bg-base-100 shadow-xl panel-glow" style="--panel-color: var(--color-neutral)">
+    <div class="card bg-base-100 shadow-xl panel-accent" style="--panel-color: var(--color-adverts)">
         <div class="card-body">
             <h2 class="card-title text-base">
                 ${iconAdvertisements('h-5 w-5')}
                 ${t('entities.advertisements')}
             </h2>
-            <p class="text-xs opacity-70">${t('time.per_day_last_7_days')}</p>
+            <p class="text-xs opacity-80">${t('time.per_day_last_7_days')}</p>
             <div class="h-32">
                 <canvas id="advertChart"></canvas>
             </div>
@@ -142,13 +142,13 @@ function renderChartCards({ showNodes, showAdverts, showMessages }) {
     </div>` : nothing}
 
     ${showMessages ? html`
-    <div class="card bg-base-100 shadow-xl panel-glow" style="--panel-color: var(--color-neutral)">
+    <div class="card bg-base-100 shadow-xl panel-accent" style="--panel-color: var(--color-messages)">
         <div class="card-body">
             <h2 class="card-title text-base">
                 ${iconMessages('h-5 w-5')}
                 ${t('entities.messages')}
             </h2>
-            <p class="text-xs opacity-70">${t('time.per_day_last_7_days')}</p>
+            <p class="text-xs opacity-80">${t('time.per_day_last_7_days')}</p>
             <div class="h-32">
                 <canvas id="messageChart"></canvas>
             </div>
@@ -226,7 +226,7 @@ ${renderChartCards({ showNodes, showAdverts, showMessages })}` : nothing}
 ${bottomCount > 0 ? html`
 <div class="grid grid-cols-1 ${bottomGrid} gap-6">
     ${showAdverts ? html`
-    <div class="card bg-base-100 shadow-xl panel-glow" style="--panel-color: var(--color-neutral)">
+    <div class="card bg-base-100 shadow-xl panel-accent" style="--panel-color: var(--color-adverts)">
         <div class="card-body">
             <h2 class="card-title">
                 ${iconAdvertisements('h-6 w-6')}

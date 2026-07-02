@@ -58,23 +58,24 @@ function renderHeroSection({ networkName, logoUrl, logoInvertLight, networkCity,
         : nothing;
 
     const welcomeText = networkWelcomeText
-        ? html`<p class="py-4 max-w-[90%] sm:max-w-[70%]">${networkWelcomeText}</p>`
-        : html`<p class="py-4 max-w-[90%] sm:max-w-[70%]">
+        ? html`<p class="py-6 max-w-[90%] sm:max-w-[70%]">${networkWelcomeText}</p>`
+        : html`<p class="py-6 max-w-[90%] sm:max-w-[70%]">
             ${t('home.welcome_default', { network_name: networkName })}
         </p>`;
 
     return html`
-        <div class="flex flex-col items-center text-center">
-            <div class="flex flex-col sm:flex-row items-center gap-4 sm:gap-8 mb-4">
+        <div class="flex flex-col items-center text-center flex-1">
+            <div class="flex flex-col sm:flex-row items-center gap-4 sm:gap-8">
                 <img src="${logoUrl}" alt="${networkName}" class="theme-logo ${logoInvertLight ? 'theme-logo--invert-light' : ''} h-24 w-24 sm:h-36 sm:w-36" />
                 <div class="flex flex-col justify-center">
                     <h1 class="hero-title text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight">${networkName}</h1>
                     ${cityCountry}
                 </div>
             </div>
-            ${welcomeText}
-            <div class="flex-1"></div>
-            <div class="flex flex-wrap justify-center gap-2 sm:gap-3 mt-auto">
+            <div class="flex-1 flex items-center justify-center w-full">
+                ${welcomeText}
+            </div>
+            <div class="flex flex-wrap justify-center gap-2 sm:gap-3">
                 ${features.dashboard !== false ? renderNavCard({
                     href: '/dashboard',
                     icon: iconDashboard('w-full h-full'),
@@ -243,7 +244,7 @@ export async function render(container, params, router) {
 
         litRender(html`
 <div class="${showStats ? 'grid grid-cols-1 lg:grid-cols-3 gap-6' : ''} bg-base-100 rounded-box shadow-xl p-6">
-    <div class="${showStats ? 'lg:col-span-2' : ''}">
+    <div class="flex flex-col ${showStats ? 'lg:col-span-2' : ''}">
         ${heroSection}
     </div>
     ${showStats ? statsPanel : nothing}
