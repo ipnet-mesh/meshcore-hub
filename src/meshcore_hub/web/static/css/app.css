@@ -424,7 +424,8 @@
         font-size: 0.9375rem;
     }
 
-    #mobile-nav {
+    .dropdown.dropdown-open #mobile-nav,
+    .dropdown:focus-within #mobile-nav {
         display: block;
         column-count: 2;
         column-gap: 0.25rem;
