@@ -8,7 +8,7 @@ export async function render(container, params, router) {
         <div class="max-w-md">
             <div class="text-9xl font-bold text-primary opacity-20">404</div>
             <h1 class="text-4xl font-bold -mt-8">${t('common.page_not_found')}</h1>
-            <p class="py-6 text-base-content/70">
+            <p class="py-6 opacity-70">
                 ${t('not_found.description')}
             </p>
             <div class="flex gap-4 justify-center">

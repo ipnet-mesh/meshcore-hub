@@ -8,6 +8,8 @@
     "esbuild": "^0.28.0"
   },
   "dependencies": {
+    "@fontsource-variable/ibm-plex-sans": "^5",
+    "@fontsource/ibm-plex-mono": "^5",
     "@tailwindcss/cli": "^4",
     "chart.js": "^4",
     "daisyui": "^5",

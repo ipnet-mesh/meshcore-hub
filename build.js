@@ -45,6 +45,22 @@ cpSync(
 
 vendor("chart.js", ["dist/chart.umd.min.js"], "chart.js");
 vendor("qrcodejs", ["qrcode.min.js"], "qrcodejs");
+vendor(
+  "@fontsource-variable/ibm-plex-sans",
+  [
+    "files/ibm-plex-sans-latin-wght-normal.woff2",
+    "files/ibm-plex-sans-latin-ext-wght-normal.woff2",
+  ],
+  "fonts",
+);
+vendor(
+  "@fontsource/ibm-plex-mono",
+  [
+    "files/ibm-plex-mono-latin-400-normal.woff2",
+    "files/ibm-plex-mono-latin-ext-400-normal.woff2",
+  ],
+  "fonts",
+);
 
 console.log("Bundling SPA with esbuild...");
 mkdirSync(DIST, { recursive: true });

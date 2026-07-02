@@ -29,6 +29,12 @@
     --color-members: oklch(0.72 0.17 50);      /* orange */
     --color-neutral: oklch(0.3 0.01 250);     /* subtle dark grey */
     --color-radio: oklch(0.75 0.15 210);     /* cyan — radio tile icons */
+
+    /* Map marker colors — theme-independent, chosen for contrast on map tiles */
+    --color-marker-infra: #3b82f6;
+    --color-marker-infra-border: #1e40af;
+    --color-marker-public: #22c55e;
+    --color-marker-public-border: #15803d;
 }
 
 /* Light mode: darker section colors for contrast on light backgrounds */
@@ -60,6 +66,7 @@
 /* Ensure hero heading is pure black/white per theme */
 .hero-title {
     color: #fff;
+    letter-spacing: -0.01em;
 }
 [data-theme="light"] .hero-title {
     color: #000;
@@ -233,7 +240,7 @@
 }
 
 .prose a:hover {
-    color: var(--color-primary-content);
+    color: color-mix(in oklab, var(--color-primary) 70%, var(--color-base-content));
 }
 
 .prose code {

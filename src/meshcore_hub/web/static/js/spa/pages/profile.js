@@ -10,7 +10,7 @@ function renderAdoptedNode(node) {
     const relTime = node.last_seen ? formatRelativeTime(node.last_seen) : '-';
     const fullTime = node.last_seen ? formatDateTime(node.last_seen) : '-';
 
-    return html`<a href="/nodes/${node.public_key}" class="flex items-center justify-between gap-3 p-3 bg-base-200 rounded-lg hover:bg-base-300 transition-colors">
+    return html`<a href="/nodes/${node.public_key}" class="flex items-center justify-between gap-3 p-3 bg-base-200 rounded-box hover:bg-base-300 transition-colors">
         <div class="flex-1 min-w-0">
             <div class="font-medium text-sm truncate">${displayName}</div>
             <div class="font-mono text-xs opacity-60 truncate">${node.public_key}</div>
@@ -44,7 +44,7 @@ function renderProfileDetails(profile, config) {
                 <h2 class="card-title">${t('user_profile.adopted_nodes')}</h2>
                 ${profile.nodes && profile.nodes.length > 0
                     ? html`<div class="space-y-2">${profile.nodes.map(n => renderAdoptedNode(n))}</div>`
-                    : html`<p class="text-base-content/60 text-sm py-4">${t('user_profile.no_adopted_nodes')}</p>`}
+                    : html`<p class="opacity-60 text-sm py-4">${t('user_profile.no_adopted_nodes')}</p>`}
             </div>
         </div>`
         : nothing;
@@ -125,25 +125,25 @@ ${flashHtml}
                 <form id="profile-form" class="py-4 space-y-4">
                     <label class="flex items-center gap-3 py-1">
                         <span class="text-sm font-medium shrink-0 w-24">${t('user_profile.name_label')}</span>
-                        <input type="text" name="name" class="input input-bordered flex-1"
+                        <input type="text" name="name" class="input flex-1"
                                value=${profile.name || ''}
                                placeholder=${t('user_profile.name_placeholder')} maxlength="255" />
                     </label>
                     <label class="flex items-center gap-3 py-1">
                         <span class="text-sm font-medium shrink-0 w-24">${t('user_profile.callsign_label')}</span>
-                        <input type="text" name="callsign" class="input input-bordered flex-1"
+                        <input type="text" name="callsign" class="input flex-1"
                                value=${profile.callsign || ''}
                                placeholder=${t('user_profile.callsign_placeholder')} maxlength="20" />
                     </label>
                     <label class="flex items-center gap-3 py-1">
                         <span class="text-sm font-medium shrink-0 w-24">${t('user_profile.description_label')}</span>
-                        <input type="text" name="description" class="input input-bordered flex-1"
+                        <input type="text" name="description" class="input flex-1"
                                value=${profile.description || ''}
                                placeholder=${t('user_profile.description_placeholder')} maxlength="500" />
                     </label>
                     <label class="flex items-center gap-3 py-1">
                         <span class="text-sm font-medium shrink-0 w-24">${t('user_profile.url_label')}</span>
-                        <input type="url" name="url" class="input input-bordered flex-1"
+                        <input type="url" name="url" class="input flex-1"
                                value=${profile.url || ''}
                                placeholder=${t('user_profile.url_placeholder')} maxlength="2048" />
                     </label>
@@ -160,7 +160,7 @@ ${flashHtml}
             <h2 class="card-title">${t('user_profile.adopted_nodes')}</h2>
             ${profile.nodes && profile.nodes.length > 0
                 ? html`<div class="space-y-2">${profile.nodes.map(n => renderAdoptedNode(n))}</div>`
-                : html`<p class="text-base-content/60 text-sm py-4">${t('user_profile.no_adopted_nodes')}</p>`}
+                : html`<p class="opacity-60 text-sm py-4">${t('user_profile.no_adopted_nodes')}</p>`}
         </div>
     </div>` : nothing}
 

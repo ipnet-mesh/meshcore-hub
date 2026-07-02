@@ -37,6 +37,9 @@
     </style>
     {% endif %}
 
+    <!-- Preload primary UI font (URL must match the @font-face src exactly; crossorigin required for fonts) -->
+    <link rel="preload" href="/static/vendor/fonts/ibm-plex-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+
     <!-- Tailwind CSS with DaisyUI (built from source) -->
     <link rel="stylesheet" href="/static/css/tailwind.css?v={{ version }}" />
 

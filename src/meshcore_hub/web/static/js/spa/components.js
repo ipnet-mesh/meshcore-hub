@@ -2,6 +2,18 @@
  * MeshCore Hub SPA - Shared UI Components
  *
  * Reusable rendering functions using lit-html.
+ *
+ * Styling conventions:
+ * - Page <h1>: `text-3xl font-bold`; header row wrapper: `mb-6`.
+ * - Content/detail cards: `card bg-base-100 shadow-xl`; stat cards and
+ *   table wrappers: `shadow-sm`; mobile list cards: `shadow-sm`.
+ * - Muted text: `opacity-70` (primary), `opacity-60` (secondary),
+ *   `opacity-50` (timestamps/tertiary) — not `text-base-content/N`.
+ * - Empty states: `text-center py-8 opacity-70`.
+ * - Panel-level surfaces: `rounded-box`; small inline chips: `rounded`.
+ * - Buttons: table-row icon actions `btn btn-xs btn-ghost`; card-level
+ *   labeled actions `btn btn-xs btn-outline` (+ `btn-error` on delete);
+ *   modal submits full-size `btn btn-primary`, inline/header actions `btn-sm`.
  */
 
 import { html, nothing } from 'lit-html';
@@ -74,7 +86,7 @@ export function mobileSortSelect({ currentSort, currentOrder, navigate, basePath
     return html`<div class="lg:hidden mb-5">
         <div class="flex items-center gap-2">
             <span class="text-xs opacity-60">${t('common.sort_by')}</span>
-            <select class="select select-sm select-bordered flex-1"
+            <select class="select select-sm flex-1"
                     @change=${onChange}>
                 ${sortOptions}
             </select>
@@ -402,7 +414,7 @@ export function copyToClipboard(e, text) {
 export function renderNodeDisplay({ name, description, publicKey, advType, size = 'base' }) {
     const displayName = name || null;
     const emoji = getNodeEmoji(name, advType);
-    const emojiSize = size === 'sm' ? 'text-lg' : 'text-lg';
+    const emojiSize = 'text-lg';
     const nameSize = size === 'sm' ? 'text-sm' : 'text-base';
     const descSize = size === 'sm' ? 'text-xs' : 'text-xs';
 
@@ -718,7 +730,7 @@ export function renderAuthSection(container, config) {
             <div tabindex="0" role="button" class="btn btn-ghost btn-circle btn-sm avatar">
                 ${pictureHtml}
             </div>
-            <ul tabindex="0" class="dropdown-content menu z-50 p-2 shadow bg-base-100 rounded-box w-56 mt-3">
+            <ul tabindex="0" class="dropdown-content menu z-50 p-2 shadow-sm bg-base-100 rounded-box w-56 mt-3">
                 <li class="menu-title">
                     <div class="flex flex-col gap-1">
                         <span class="font-medium">${displayName}</span>
@@ -760,7 +772,7 @@ export function renderFilterCard({ fields, basePath, navigate, submitLabel, clea
 
     if (!collapsible) {
         return html`
-            <div class="card shadow mb-6 panel-solid" style="--panel-color: var(--color-neutral)">
+            <div class="card shadow-sm mb-6 panel-solid" style="--panel-color: var(--color-neutral)">
                 <div class="card-body py-4">${formBody}</div>
             </div>
         `;
@@ -790,7 +802,7 @@ export function renderFilterCard({ fields, basePath, navigate, submitLabel, clea
  */
 export function renderStatCard({ icon, color, title, value, description }) {
     return html`
-        <div class="stat bg-base-200 rounded-box shadow panel-glow" style="--panel-color: ${color}">
+        <div class="stat bg-base-200 rounded-box shadow-sm panel-glow" style="--panel-color: ${color}">
             <div class="stat-figure" style="color: ${color}">${icon}</div>
             <div class="stat-title">${title}</div>
             <div class="stat-value" style="color: ${color}">${value}</div>

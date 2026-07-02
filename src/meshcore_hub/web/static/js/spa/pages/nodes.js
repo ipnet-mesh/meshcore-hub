@@ -37,7 +37,7 @@ export async function render(container, params, router) {
         const displayContent = error ? lastContent : content;
         const displayTotal = error ? lastTotal : total;
         litRender(html`
-<div class="flex items-center justify-between mb-4">
+<div class="flex items-center justify-between mb-6">
     <h1 class="text-3xl font-bold">${t('entities.nodes')}</h1>
     ${tzBadge}
 </div>
@@ -136,14 +136,14 @@ ${displayContent}`, container);
                 <label class="flex items-center py-1">
                     <span class="opacity-80 text-sm">${t('common.search')}</span>
                 </label>
-                <input type="text" name="search" .value=${search} placeholder="${t('common.search_placeholder')}" class="input input-bordered input-sm w-80" @keydown=${submitOnEnter} />
+                <input type="text" name="search" .value=${search} placeholder="${t('common.search_placeholder')}" class="input input-sm w-80" @keydown=${submitOnEnter} />
             </div>`,
                 () => html`
             <div class="flex flex-col gap-1">
                 <label class="flex items-center py-1">
                     <span class="opacity-80 text-sm">${t('common.type')}</span>
                 </label>
-                <select name="adv_type" class="select select-bordered select-sm" @change=${autoSubmit}>
+                <select name="adv_type" class="select select-sm" @change=${autoSubmit}>
                     <option value="">${t('common.all_types')}</option>
                     <option value="chat" ?selected=${adv_type === 'chat'}>${t('node_types.chat')}</option>
                     <option value="repeater" ?selected=${adv_type === 'repeater'}>${t('node_types.repeater')}</option>
@@ -158,7 +158,7 @@ ${displayContent}`, container);
                 <label class="flex items-center py-1">
                     <span class="opacity-80 text-sm">${t('common.filter_operator_label')}</span>
                 </label>
-                <select name="adopted_by" class="select select-bordered select-sm" @change=${autoSubmit}>
+                <select name="adopted_by" class="select select-sm" @change=${autoSubmit}>
                     <option value="" ?selected=${!adopted_by}>${t('common.all_operators')}</option>
                     ${profiles.sort((a, b) => {
                         const na = a.name || a.callsign || '';
@@ -210,7 +210,7 @@ ${mobileSortSelect({
     ${mobileCards}
 </div>
 
-<div class="hidden lg:block overflow-x-auto bg-base-100 rounded-box shadow">
+<div class="hidden lg:block overflow-x-auto bg-base-100 rounded-box shadow-sm">
     <table class="table table-zebra">
         <thead>
             <tr>

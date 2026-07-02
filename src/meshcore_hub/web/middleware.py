@@ -54,6 +54,10 @@ class CacheControlMiddleware(BaseHTTPMiddleware):
         elif path.startswith("/static/dist/"):
             response.headers["cache-control"] = "public, max-age=31536000, immutable"
 
+        # Vendored font files - stable names referenced from CSS - long-term cache
+        elif path.startswith("/static/vendor/fonts/"):
+            response.headers["cache-control"] = "public, max-age=31536000, immutable"
+
         # Static files without version - short cache as fallback
         elif path.startswith("/static/"):
             response.headers["cache-control"] = "public, max-age=3600"

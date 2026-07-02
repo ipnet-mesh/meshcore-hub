@@ -66,7 +66,7 @@ export async function render(container, params, router) {
         const displayContent = error ? lastContent : content;
         const displayTotal = error ? lastTotal : total;
         litRender(html`
-<div class="flex items-center justify-between mb-4">
+<div class="flex items-center justify-between mb-6">
     <h1 class="text-3xl font-bold">${t('entities.advertisements')}</h1>
     ${tzBadge}
 </div>
@@ -226,14 +226,14 @@ ${displayContent}`, container);
                 <label class="flex items-center py-1">
                     <span class="opacity-80 text-sm">${t('common.search')}</span>
                 </label>
-                <input type="text" name="search" .value=${search} placeholder="${t('common.search_placeholder')}" class="input input-bordered input-sm w-80" @keydown=${submitOnEnter} />
+                <input type="text" name="search" .value=${search} placeholder="${t('common.search_placeholder')}" class="input input-sm w-80" @keydown=${submitOnEnter} />
             </div>`,
                 () => html`
             <div class="flex flex-col gap-1 max-w-48">
                 <label class="flex items-center py-1">
                     <span class="opacity-80 text-sm">${t('advertisements.filter_route_type_label')}</span>
                 </label>
-                <select name="route_type" class="select select-bordered select-sm" @change=${autoSubmit}>
+                <select name="route_type" class="select select-sm" @change=${autoSubmit}>
                     <option value="flood,transport_flood" ?selected=${route_type === 'flood,transport_flood'}>${t('advertisements.route_type_flood')}</option>
                     <option value="all" ?selected=${route_type === 'all'}>${t('advertisements.route_type_all')}</option>
                     <option value="direct" ?selected=${route_type === 'direct'}>${t('advertisements.route_type_direct')}</option>
@@ -246,7 +246,7 @@ ${displayContent}`, container);
                 <label class="flex items-center py-1">
                     <span class="opacity-80 text-sm">${t('common.filter_operator_label')}</span>
                 </label>
-                <select name="adopted_by" class="select select-bordered select-sm" @change=${autoSubmit}>
+                <select name="adopted_by" class="select select-sm" @change=${autoSubmit}>
                     <option value="" ?selected=${!adopted_by}>${t('common.all_operators')}</option>
                     ${profiles.sort((a, b) => {
                         const na = a.name || a.callsign || '';
@@ -301,7 +301,7 @@ ${observerBadges('flex lg:hidden mb-4')}
     ${mobileCards}
 </div>
 
-<div class="hidden lg:block overflow-x-auto overflow-y-visible bg-base-100 rounded-box shadow">
+<div class="hidden lg:block overflow-x-auto overflow-y-visible bg-base-100 rounded-box shadow-sm">
     <table class="table table-zebra">
         <thead>
             <tr>

@@ -29,8 +29,8 @@ export async function render(container, params, router) {
     </ul>
 </div>
 
-<div class="flex items-center justify-between mb-4">
-    <h1 class="text-2xl font-bold">${t('packets.detail_title')}</h1>
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-3xl font-bold">${t('packets.detail_title')}</h1>
     ${tzBadge}
 </div>
 ${content}`, container);
@@ -85,7 +85,7 @@ ${content}`, container);
 
         shell(html`
 ${redactedNotice}
-<div class="card bg-base-100 shadow">
+<div class="card bg-base-100 shadow-sm">
     <div class="card-body">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8">
             ${field(t('common.time'), formatDateTime(p.received_at))}

@@ -49,12 +49,12 @@ function renderEditTagModal() {
             <input type="hidden" id="tagEditKey">
             <div class="fieldset mb-4">
                 <label class="fieldset-label">${t('common.value')}</label>
-                <input type="text" id="tagEditValue" class="input input-bordered w-full">
+                <input type="text" id="tagEditValue" class="input w-full">
                 <div class="hidden text-xs text-error" id="tagEditError"></div>
             </div>
             <div class="fieldset mb-4">
                 <label class="fieldset-label">${t('common.type')}</label>
-                <select id="tagEditType" class="select select-bordered w-full">
+                <select id="tagEditType" class="select w-full">
                     <option value="string">string</option>
                     <option value="number">number</option>
                     <option value="boolean">boolean</option>
@@ -116,13 +116,13 @@ export async function render(container, params, router) {
 <div class="relative rounded-box overflow-hidden mb-6 shadow-xl" style="height: 180px;">
     <div id="header-map" class="absolute inset-0 z-0"></div>
     <div class="relative z-20 h-full p-3 flex items-center justify-end">
-        <div id="qr-code" class="bg-white p-2 rounded shadow-lg"></div>
+        <div id="qr-code" class="bg-white p-2 rounded-box shadow-lg"></div>
     </div>
 </div>`
             : html`
 <div class="card bg-base-100 shadow-xl mb-6">
     <div class="card-body flex-row items-center gap-4">
-        <div id="qr-code" class="bg-white p-1 rounded"></div>
+        <div id="qr-code" class="bg-white p-2 rounded-box"></div>
         <p class="text-sm opacity-70">${t('nodes.scan_to_add')}</p>
     </div>
 </div>`;
@@ -227,13 +227,13 @@ export async function render(container, params, router) {
             ? html`<form id="tag-add-form" class="mt-4">
                 <div class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto_auto] gap-2 items-end">
                     <div class="fieldset">
-                        <input type="text" name="key" class="input input-bordered input-sm w-full" placeholder=${t('common.key')} required>
+                        <input type="text" name="key" class="input input-sm w-full" placeholder=${t('common.key')} required>
                     </div>
                     <div class="fieldset">
-                        <input type="text" name="value" class="input input-bordered input-sm w-full" placeholder=${t('common.value')}>
+                        <input type="text" name="value" class="input input-sm w-full" placeholder=${t('common.value')}>
                         <div class="hidden text-xs text-error" id="tagAddError"></div>
                     </div>
-                    <select name="value_type" class="select select-bordered select-sm w-28">
+                    <select name="value_type" class="select select-sm w-28">
                         <option value="string">string</option>
                         <option value="number">number</option>
                         <option value="boolean">boolean</option>
@@ -297,7 +297,7 @@ export async function render(container, params, router) {
     <span class="text-6xl flex-shrink-0" title=${node.adv_type || t('node_types.unknown')}>${emoji}</span>
     <div class="flex-1 min-w-0">
         <h1 class="text-3xl font-bold">${displayName}</h1>
-        ${tagDescription ? html`<p class="text-base-content/70 mt-2">${tagDescription}</p>` : nothing}
+        ${tagDescription ? html`<p class="opacity-70 mt-2">${tagDescription}</p>` : nothing}
     </div>
 </div>
 

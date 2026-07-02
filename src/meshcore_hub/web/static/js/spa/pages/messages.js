@@ -218,7 +218,7 @@ export async function render(container, params, router) {
         const displayContent = error ? lastContent : content;
         const displayTotal = error ? lastTotal : total;
         litRender(html`
-<div class="flex items-center justify-between mb-4">
+<div class="flex items-center justify-between mb-6">
     <h1 class="text-3xl font-bold">${t('entities.messages')}</h1>
     ${tzBadge}
 </div>
@@ -386,7 +386,7 @@ ${displayContent}`, container);
                 <label class="flex items-center py-1">
                     <span class="opacity-80 text-sm">${t('common.type')}</span>
                 </label>
-                <select name="message_type" class="select select-bordered select-sm" @change=${autoSubmit}>
+                <select name="message_type" class="select select-sm" @change=${autoSubmit}>
                     <option value="">${t('common.all_types')}</option>
                     <option value="contact" ?selected=${message_type === 'contact'}>${t('messages.type_direct')}</option>
                     <option value="channel" ?selected=${message_type === 'channel'}>${t('messages.type_channel')}</option>
@@ -397,7 +397,7 @@ ${displayContent}`, container);
                 <label class="flex items-center py-1">
                     <span class="opacity-80 text-sm">${t('entities.channel')}</span>
                 </label>
-                <select name="channel_idx" class="select select-bordered select-sm" @change=${autoSubmit}>
+                <select name="channel_idx" class="select select-sm" @change=${autoSubmit}>
                     <option value="">${t('common.all_channels')}</option>
                     ${builtinLabels.size > 0 ? html`<optgroup label=${t('channels.optgroup_standard')}>${[...builtinLabels.entries()].map(([idx, label]) =>
                         html`<option value=${idx} ?selected=${channel_idx === String(idx)}>${label}</option>`
@@ -466,7 +466,7 @@ ${observerBadges('flex lg:hidden mb-4')}
     ${mobileCards}
 </div>
 
-<div class="hidden lg:block overflow-x-auto overflow-y-visible bg-base-100 rounded-box shadow">
+<div class="hidden lg:block overflow-x-auto overflow-y-visible bg-base-100 rounded-box shadow-sm">
     <table class="table table-zebra">
         <thead>
             <tr>

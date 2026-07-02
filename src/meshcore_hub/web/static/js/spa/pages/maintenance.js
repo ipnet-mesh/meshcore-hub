@@ -20,7 +20,7 @@ export async function render(container, params, router) {
             <img src=${config.logo_url} alt=${config.network_name} class="${logoClass} h-16 w-16" />
             <h1 class="text-3xl font-bold">${config.network_name}</h1>
             <h2 class="text-xl font-semibold text-warning">${t('maintenance.title')}</h2>
-            <p class="text-base-content/70">${t('maintenance.message')}</p>
+            <p class="opacity-70">${t('maintenance.message')}</p>
         </div>
     </div>
 </div>`, container);

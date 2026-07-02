@@ -1,6 +1,6 @@
 import { apiGet, apiPost, apiPut, apiDelete, isAbortError } from '../api.js';
 import { html, litRender, nothing, t, errorAlert, getConfig, hasRole } from '../components.js';
-import { iconChannel, iconPlus, iconEdit, iconTrash, iconLock } from '../icons.js';
+import { iconChannel, iconPlus, iconEdit, iconTrash } from '../icons.js';
 
 const VISIBILITY_ORDER = ['community', 'member', 'operator', 'admin'];
 
@@ -37,7 +37,9 @@ function renderChannelCard(channel, { oidcEnabled, isAdmin, onDelete, onEdit, on
         ? html`<div id="${qrId}" class="qr-container"></div>`
         : nothing;
 
-    return html`<div class="card bg-base-100 shadow-xl cursor-pointer" @click=${() => onNavigate(channelIdx)}>
+    return html`<div class="card bg-base-100 shadow-xl cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" role="button" tabindex="0"
+        @click=${() => onNavigate(channelIdx)}
+        @keydown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate(channelIdx); } }}>
         <div class="card-body flex-row gap-4">
             <div class="flex-1 min-w-0">
                 <h2 class="card-title flex items-center gap-2">
@@ -69,20 +71,20 @@ function renderChannelModal({ channel, isEdit, onSave, onCancel }) {
             <h3 class="font-bold text-lg mb-4">${title}</h3>
             <form @submit=${(e) => { e.preventDefault(); onSave(); }}>
                 <div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 items-center mb-4">
-                    <label class="label-text text-right">${t('channels.name_label')}</label>
-                    <input type="text" id="channel-modal-name" class="input input-bordered input-sm"
+                    <label class="text-sm opacity-70 text-right">${t('channels.name_label')}</label>
+                    <input type="text" id="channel-modal-name" class="input input-sm"
                         .value=${isEdit ? channel.name : ''}
                         ?disabled=${isEdit}
                         placeholder="${t('channels.name_label')}"
                         required maxlength="100" />
                     ${!isEdit ? html`
-                    <label class="label-text text-right">${t('channels.key_label')}</label>
-                    <input type="text" id="channel-modal-key" class="input input-bordered input-sm font-mono"
+                    <label class="text-sm opacity-70 text-right">${t('channels.key_label')}</label>
+                    <input type="text" id="channel-modal-key" class="input input-sm font-mono"
                         placeholder="e.g. ABCDEF0123456789..."
                         required minlength="32" maxlength="64"
                         pattern="[0-9A-Fa-f]{32,64}" />` : nothing}
-                    <label class="label-text text-right">${t('channels.visibility_label')}</label>
-                    <select id="channel-modal-visibility" class="select select-bordered select-sm">
+                    <label class="text-sm opacity-70 text-right">${t('channels.visibility_label')}</label>
+                    <select id="channel-modal-visibility" class="select select-sm">
                         <option value="community" .selected=${channel?.visibility === 'community' || !channel}>community</option>
                         <option value="member" .selected=${channel?.visibility === 'member'}>member</option>
                         <option value="operator" .selected=${channel?.visibility === 'operator'}>operator</option>
@@ -92,7 +94,7 @@ function renderChannelModal({ channel, isEdit, onSave, onCancel }) {
                     <label class="label cursor-pointer justify-start gap-3">
                         <input type="checkbox" id="channel-modal-enabled" class="checkbox checkbox-sm"
                             .checked=${channel?.enabled !== false} />
-                        <span class="label-text">${t('channels.enabled_label')}</span>
+                        <span class="text-sm">${t('channels.enabled_label')}</span>
                     </label>
                 </div>
                 <div class="modal-action">
@@ -142,7 +144,7 @@ export async function render(container, params, router) {
                 : nothing;
 
             const emptyMessage = channelsList.length === 0
-                ? html`<div class="text-center py-10 opacity-60">
+                ? html`<div class="text-center py-8 opacity-70">
                     ${t('common.no_entity_found', { entity: t('entities.channels').toLowerCase() })}
                 </div>`
                 : nothing;
@@ -194,9 +196,9 @@ export async function render(container, params, router) {
             }
 
             litRender(html`
-                <div class="mb-4">
-                    <h1 class="text-2xl font-bold flex items-center gap-2">
-                        ${iconChannel('h-7 w-7')}
+                <div class="mb-6">
+                    <h1 class="text-3xl font-bold flex items-center gap-2">
+                        ${iconChannel('h-8 w-8')}
                         ${t('channels.title')}
                     </h1>
                 </div>
