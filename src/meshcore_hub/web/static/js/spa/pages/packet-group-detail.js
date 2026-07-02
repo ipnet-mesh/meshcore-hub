@@ -327,7 +327,7 @@ ${content}`, container);
 
         shell(html`
 ${redactedNotice}
-<div class="card bg-base-100 shadow">
+<div class="card bg-base-100 shadow-sm">
     <div class="card-body">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8">
             ${field(t('common.time'), formatDateTime(g.first_seen))}

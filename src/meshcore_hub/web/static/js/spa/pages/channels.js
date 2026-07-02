@@ -1,6 +1,6 @@
 import { apiGet, apiPost, apiPut, apiDelete, isAbortError } from '../api.js';
 import { html, litRender, nothing, t, errorAlert, getConfig, hasRole } from '../components.js';
-import { iconChannel, iconPlus, iconEdit, iconTrash, iconLock } from '../icons.js';
+import { iconChannel, iconPlus, iconEdit, iconTrash } from '../icons.js';
 
 const VISIBILITY_ORDER = ['community', 'member', 'operator', 'admin'];
 
@@ -70,19 +70,19 @@ function renderChannelModal({ channel, isEdit, onSave, onCancel }) {
             <form @submit=${(e) => { e.preventDefault(); onSave(); }}>
                 <div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 items-center mb-4">
                     <label class="text-sm opacity-70 text-right">${t('channels.name_label')}</label>
-                    <input type="text" id="channel-modal-name" class="input input-bordered input-sm"
+                    <input type="text" id="channel-modal-name" class="input input-sm"
                         .value=${isEdit ? channel.name : ''}
                         ?disabled=${isEdit}
                         placeholder="${t('channels.name_label')}"
                         required maxlength="100" />
                     ${!isEdit ? html`
                     <label class="text-sm opacity-70 text-right">${t('channels.key_label')}</label>
-                    <input type="text" id="channel-modal-key" class="input input-bordered input-sm font-mono"
+                    <input type="text" id="channel-modal-key" class="input input-sm font-mono"
                         placeholder="e.g. ABCDEF0123456789..."
                         required minlength="32" maxlength="64"
                         pattern="[0-9A-Fa-f]{32,64}" />` : nothing}
                     <label class="text-sm opacity-70 text-right">${t('channels.visibility_label')}</label>
-                    <select id="channel-modal-visibility" class="select select-bordered select-sm">
+                    <select id="channel-modal-visibility" class="select select-sm">
                         <option value="community" .selected=${channel?.visibility === 'community' || !channel}>community</option>
                         <option value="member" .selected=${channel?.visibility === 'member'}>member</option>
                         <option value="operator" .selected=${channel?.visibility === 'operator'}>operator</option>

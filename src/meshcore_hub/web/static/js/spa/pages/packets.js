@@ -152,12 +152,12 @@ ${displayContent}`, container);
                 () => html`
             <div class="flex flex-col gap-1">
                 <label class="flex items-center py-1"><span class="opacity-80 text-sm">${t('common.search')}</span></label>
-                <input type="text" name="search" .value=${search} placeholder="${t('common.search_placeholder')}" class="input input-bordered input-sm w-80" @keydown=${submitOnEnter} />
+                <input type="text" name="search" .value=${search} placeholder="${t('common.search_placeholder')}" class="input input-sm w-80" @keydown=${submitOnEnter} />
             </div>`,
                 () => html`
             <div class="flex flex-col gap-1 max-w-48">
                 <label class="flex items-center py-1"><span class="opacity-80 text-sm">${t('packets.filter_event_type')}</span></label>
-                <select name="event_type" class="select select-bordered select-sm" @change=${autoSubmit}>
+                <select name="event_type" class="select select-sm" @change=${autoSubmit}>
                     <option value="" ?selected=${!event_type}>${t('common.all_types')}</option>
                     ${EVENT_TYPES.map(et => html`<option value=${et} ?selected=${event_type === et}>${et}</option>`)}
                 </select>
@@ -165,7 +165,7 @@ ${displayContent}`, container);
                 () => html`
             <div class="flex flex-col gap-1 max-w-48">
                 <label class="flex items-center py-1"><span class="opacity-80 text-sm">${t('entities.channel')}</span></label>
-                <select name="channel_idx" class="select select-bordered select-sm" @change=${autoSubmit}>
+                <select name="channel_idx" class="select select-sm" @change=${autoSubmit}>
                     <option value="" ?selected=${channel_idx === ''}>${t('common.all_channels')}</option>
                     ${channelList.map(c => html`<option value=${c.idx} ?selected=${String(channel_idx) === String(c.idx)}>${c.name} (${c.idx})</option>`)}
                 </select>
@@ -208,7 +208,7 @@ ${mobileSortSelect({
     ${mobileCards}
 </div>
 
-<div class="hidden lg:block overflow-x-auto overflow-y-visible bg-base-100 rounded-box shadow">
+<div class="hidden lg:block overflow-x-auto overflow-y-visible bg-base-100 rounded-box shadow-sm">
     <table class="table table-zebra">
         <thead>
             <tr>

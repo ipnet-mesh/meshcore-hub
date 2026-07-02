@@ -50,8 +50,8 @@ function createNodeIcon(node, oidcEnabled) {
     const timeDisplay = relativeTime ? ' (' + relativeTime + ')' : '';
 
     const iconHtml = (oidcEnabled && node.is_adopted)
-        ? '<div style="width: 12px; height: 12px; background: #3b82f6; border: 2px solid #1e40af; border-radius: 50%; box-shadow: 0 0 4px rgba(59,130,246,0.6), 0 1px 2px rgba(0,0,0,0.5);"></div>'
-        : '<div style="width: 12px; height: 12px; background: #22c55e; border: 2px solid #15803d; border-radius: 50%; box-shadow: 0 0 4px rgba(34,197,94,0.6), 0 1px 2px rgba(0,0,0,0.5);"></div>';
+        ? '<div style="width: 12px; height: 12px; background: var(--color-marker-infra); border: 2px solid var(--color-marker-infra-border); border-radius: 50%; box-shadow: 0 0 4px rgba(59,130,246,0.6), 0 1px 2px rgba(0,0,0,0.5);"></div>'
+        : '<div style="width: 12px; height: 12px; background: var(--color-marker-public); border: 2px solid var(--color-marker-public-border); border-radius: 50%; box-shadow: 0 0 4px rgba(34,197,94,0.6), 0 1px 2px rgba(0,0,0,0.5);"></div>';
 
     return L.divIcon({
         className: 'custom-div-icon',
@@ -72,8 +72,8 @@ function createPopupContent(node, oidcEnabled) {
 
     let infraIndicatorHtml = '';
     if (oidcEnabled && typeof node.is_adopted !== 'undefined') {
-        const dotColor = node.is_adopted ? '#3b82f6' : '#22c55e';
-        const borderColor = node.is_adopted ? '#1e40af' : '#15803d';
+        const dotColor = node.is_adopted ? 'var(--color-marker-infra)' : 'var(--color-marker-public)';
+        const borderColor = node.is_adopted ? 'var(--color-marker-infra-border)' : 'var(--color-marker-public-border)';
         const title = node.is_adopted ? ((window.t && window.t('map.infrastructure')) || 'Infrastructure') : ((window.t && window.t('map.public')) || 'Public');
         infraIndicatorHtml = ' <span style="display: inline-block; width: 10px; height: 10px; background: ' + dotColor + '; border: 2px solid ' + borderColor + '; border-radius: 50%; vertical-align: middle;" title="' + title + '"></span>';
     }
@@ -206,14 +206,14 @@ export async function render(container, params, router) {
         <div class="flex gap-4 flex-wrap items-end">
             <div class="fieldset">
                 <label class="fieldset-label">${t('common.show')}</label>
-                <select id="filter-category" class="select select-bordered select-sm" @change=${applyFilters}>
+                <select id="filter-category" class="select select-sm" @change=${applyFilters}>
                     <option value="">${t('common.all_entity', { entity: t('entities.nodes') })}</option>
                     ${config.oidc_enabled ? html`<option value="infra">${t('map.infrastructure_only')}</option>` : nothing}
                 </select>
             </div>
             <div class="fieldset">
                 <label class="fieldset-label">${t('common.node_type')}</label>
-                <select id="filter-type" class="select select-bordered select-sm" @change=${applyFilters}>
+                <select id="filter-type" class="select select-sm" @change=${applyFilters}>
                     <option value="">${t('common.all_types')}</option>
                     <option value="chat">${t('node_types.chat')}</option>
                     <option value="repeater">${t('node_types.repeater')}</option>
@@ -223,7 +223,7 @@ export async function render(container, params, router) {
             ${config.oidc_enabled && operatorProfiles.length > 0 ? html`
             <div class="fieldset">
                 <label class="fieldset-label">${t('common.filter_operator_label')}</label>
-                <select id="member-filter" class="select select-bordered select-sm" @change=${applyFilters}>
+                <select id="member-filter" class="select select-sm" @change=${applyFilters}>
                     <option value="">${t('common.all_operators')}</option>
                     ${operatorProfiles.sort((a, b) => {
                         const na = a.name || a.callsign || '';
@@ -255,11 +255,11 @@ ${config.oidc_enabled ? html`
 <div class="mt-4 flex flex-wrap gap-4 items-center text-sm">
     <span class="opacity-70">${t('map.legend')}</span>
     <div class="flex items-center gap-1">
-        <div style="width: 10px; height: 10px; background: #3b82f6; border: 2px solid #1e40af; border-radius: 50%;"></div>
+        <div style="width: 10px; height: 10px; background: var(--color-marker-infra); border: 2px solid var(--color-marker-infra-border); border-radius: 50%;"></div>
         <span>${t('map.infrastructure')}</span>
     </div>
     <div class="flex items-center gap-1">
-        <div style="width: 10px; height: 10px; background: #22c55e; border: 2px solid #15803d; border-radius: 50%;"></div>
+        <div style="width: 10px; height: 10px; background: var(--color-marker-public); border: 2px solid var(--color-marker-public-border); border-radius: 50%;"></div>
         <span>${t('map.public')}</span>
     </div>
 </div>
