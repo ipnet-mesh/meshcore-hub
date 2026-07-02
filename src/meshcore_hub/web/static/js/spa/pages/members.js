@@ -25,7 +25,9 @@ function renderProfileTile(profile, router) {
                 e.stopPropagation();
                 router.navigate('/nodes/' + node.public_key);
             };
-            return html`<span class="badge badge-secondary badge-sm cursor-pointer" @click=${handleClick}>${label}</span>`;
+            return html`<span class="badge badge-secondary badge-sm cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" role="button" tabindex="0"
+                @click=${handleClick}
+                @keydown=${(e) => { if (e.key === 'Enter' || e.key === ' ') handleClick(e); }}>${label}</span>`;
         })}</div>`
         : nothing;
 
@@ -33,8 +35,11 @@ function renderProfileTile(profile, router) {
         ? html`<p class="text-sm opacity-70 mt-1 truncate">${profile.description}</p>`
         : nothing;
 
+    const openUrl = (e) => { e.preventDefault(); e.stopPropagation(); window.open(profile.url, '_blank', 'noopener,noreferrer'); };
     const urlLink = profile.url
-        ? html`<span class="link link-accent text-xs mt-1 inline-block truncate cursor-pointer" @click=${(e) => { e.preventDefault(); e.stopPropagation(); window.open(profile.url, '_blank', 'noopener,noreferrer'); }}>${profile.url}</span>`
+        ? html`<span class="link link-accent text-xs mt-1 inline-block truncate cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" role="link" tabindex="0"
+            @click=${openUrl}
+            @keydown=${(e) => { if (e.key === 'Enter') openUrl(e); }}>${profile.url}</span>`
         : nothing;
 
     return html`<a href="/profile/${profile.id}" class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow">

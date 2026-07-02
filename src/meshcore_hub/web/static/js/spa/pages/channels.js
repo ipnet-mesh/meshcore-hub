@@ -37,7 +37,9 @@ function renderChannelCard(channel, { oidcEnabled, isAdmin, onDelete, onEdit, on
         ? html`<div id="${qrId}" class="qr-container"></div>`
         : nothing;
 
-    return html`<div class="card bg-base-100 shadow-xl cursor-pointer" @click=${() => onNavigate(channelIdx)}>
+    return html`<div class="card bg-base-100 shadow-xl cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" role="button" tabindex="0"
+        @click=${() => onNavigate(channelIdx)}
+        @keydown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate(channelIdx); } }}>
         <div class="card-body flex-row gap-4">
             <div class="flex-1 min-w-0">
                 <h2 class="card-title flex items-center gap-2">
