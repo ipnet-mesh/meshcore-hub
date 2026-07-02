@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Field Station — MeshCore Hub mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --display:"Chakra Petch",system-ui,sans-serif;
+  --body:"IBM Plex Sans",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+  --radius:10px;
+}
+/* DARK — field at night */
+[data-theme="dark"]{
+  --bg:#0B0F14; --panel:#11171F; --panel-2:#161E29; --line:#1B2430;
+  --text:#E6EDF3; --muted:#8B9AAB;
+  --tx:#E8932A;          /* transmit / amber primary */
+  --tx-soft:#E8932A26;
+  --rx:#2BB8AD;          /* receive / cyan secondary */
+  --rx-soft:#2BB8AD22;
+  --good:#5BD17F; --warn:#E8C44A;
+}
+/* LIGHT — daytime bench */
+[data-theme="light"]{
+  --bg:#F3F5F7; --panel:#FFFFFF; --panel-2:#F7F9FB; --line:#DCE2E8;
+  --text:#10171F; --muted:#5A6B7B;
+  --tx:#B86A12; --tx-soft:#B86A1218;
+  --rx:#0E857C; --rx-soft:#0E857C14;
+  --good:#1E9E4A; --warn:#9A7710;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--body);background:var(--bg);color:var(--text);
+  -webkit-font-smoothing:antialiased;line-height:1.5}
+a{color:inherit;text-decoration:none}
+.mono{font-family:var(--mono)}
+.eyebrow{font-family:var(--mono);font-size:.7rem;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--muted)}
+
+/* NAV */
+.nav{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:.5rem;
+  padding:.6rem 1rem;background:color-mix(in oklab,var(--panel) 88%,transparent);
+  backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:.6rem;font-family:var(--display);
+  font-weight:700;letter-spacing:.04em;font-size:1.05rem}
+.brand .logo{height:22px;width:auto;color:var(--text)}
+.brand .logo .arcs{stroke:var(--tx)}
+.hero .logo-lg{height:52px;width:auto;color:var(--text);display:block;margin-bottom:.7rem;position:relative}
+.hero .logo-lg .arcs{stroke:var(--tx)}
+.navlinks{display:none;margin-left:1rem;gap:.15rem}
+.navlinks a{font-size:.85rem;padding:.35rem .6rem;border-radius:7px;color:var(--muted);
+  display:flex;align-items:center;gap:.35rem}
+.navlinks a:hover{background:var(--tx-soft);color:var(--text)}
+.navlinks a.active{color:var(--text);background:var(--tx-soft)}
+.navlinks a .i{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.7}
+.spacer{flex:1}
+.iconbtn{width:34px;height:34px;border-radius:8px;border:1px solid var(--line);
+  background:var(--panel-2);color:var(--text);display:grid;place-items:center;cursor:pointer}
+@media(min-width:1000px){.navlinks{display:flex}.burger{display:none}}
+
+/* HERO with RF range-rings signature */
+.wrap{max-width:1080px;margin:0 auto;padding:1.25rem 1rem 3rem}
+.hero{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:var(--radius);
+  background:var(--panel);padding:1.6rem 1.4rem;margin-bottom:1.25rem}
+.hero .rings{position:absolute;right:-60px;top:50%;transform:translateY(-50%);
+  width:340px;height:340px;pointer-events:none;opacity:.5}
+.hero .rings span{position:absolute;inset:0;margin:auto;border-radius:50%;
+  border:1px solid var(--tx);opacity:.35}
+.r1{width:90px;height:90px} .r2{width:170px;height:170px;opacity:.22!important}
+.r3{width:260px;height:260px;opacity:.12!important} .r4{width:340px;height:340px;opacity:.06!important}
+.hero .ping{position:absolute;right:calc(-60px + 170px - 5px);top:calc(50% - 5px);
+  width:10px;height:10px;border-radius:50%;background:var(--tx);box-shadow:0 0 10px var(--tx)}
+.hero h1{font-family:var(--display);font-weight:700;font-size:clamp(1.6rem,5vw,2.4rem);
+  margin:.4rem 0 .3rem;letter-spacing:.02em}
+.hero p{color:var(--muted);max-width:46ch;margin:0}
+.status{display:inline-flex;align-items:center;gap:.45rem;font-family:var(--mono);
+  font-size:.72rem;color:var(--good);border:1px solid var(--line);border-radius:99px;
+  padding:.2rem .6rem;background:var(--panel-2)}
+.status .live{width:7px;height:7px;border-radius:50%;background:var(--good)}
+
+/* STATS */
+.grid{display:grid;gap:.75rem;grid-template-columns:repeat(2,1fr);margin-bottom:1.25rem}
+@media(min-width:760px){.grid{grid-template-columns:repeat(4,1fr)}}
+.stat{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);
+  padding:.9rem 1rem;position:relative;overflow:hidden}
+.stat::after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent,var(--tx))}
+.stat .label{font-family:var(--mono);font-size:.66rem;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted)}
+.stat .val{font-family:var(--display);font-weight:700;font-size:1.9rem;line-height:1.1;margin-top:.2rem}
+.stat .sub{font-size:.72rem;color:var(--muted)}
+
+/* PANEL + TABLE */
+.panel{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);overflow:hidden}
+.panel-h{display:flex;align-items:center;justify-content:space-between;padding:.85rem 1rem;
+  border-bottom:1px solid var(--line)}
+.panel-h h2{font-family:var(--display);font-weight:600;font-size:1rem;margin:0;letter-spacing:.02em}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{text-align:left;font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted);font-weight:500;padding:.55rem 1rem}
+td{padding:.6rem 1rem;border-top:1px solid var(--line)}
+tr:hover td{background:var(--panel-2)}
+.key{font-family:var(--mono);font-size:.78rem;color:var(--muted)}
+.badge{font-family:var(--mono);font-size:.66rem;letter-spacing:.04em;padding:.12rem .5rem;
+  border-radius:99px;border:1px solid var(--line)}
+.b-tx{color:var(--tx);background:var(--tx-soft);border-color:transparent}
+.b-rx{color:var(--rx);background:var(--rx-soft);border-color:transparent}
+.btn{font-family:var(--body);font-weight:600;font-size:.82rem;padding:.45rem .8rem;border-radius:8px;
+  background:var(--tx);color:#0B0F14;border:none;cursor:pointer}
+[data-theme="light"] .btn{color:#fff}
+.node{display:flex;align-items:center;gap:.6rem}
+.node .em{font-size:1.1rem}
+.node .nm{font-weight:600}
+.foot{max-width:1080px;margin:0 auto;padding:1.5rem 1rem;color:var(--muted);
+  font-size:.78rem;border-top:1px solid var(--line);margin-top:2rem;text-align:center}
+.note{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;font-family:var(--mono);
+  font-size:.68rem;color:var(--muted);background:var(--panel);border:1px solid var(--line);
+  padding:.3rem .7rem;border-radius:99px}
+</style>
+</head>
+<body>
+<nav class="nav">
+  <div class="brand"><svg class="logo" viewBox="0 0 115 100" aria-hidden="true"><rect x="0" y="0" width="25" height="100" rx="2" fill="currentColor" opacity=".5"/><rect x="35" y="0" width="25" height="100" rx="2" fill="currentColor"/><g class="arcs" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round" transform="translate(-30,-10)"><path d="M 110,65 A 20,20 0 0 0 90,45"/><path d="M 125,65 A 35,35 0 0 0 90,30"/><path d="M 140,65 A 50,50 0 0 0 90,15"/></g></svg>IPNET</div>
+  <div class="navlinks">
+    <a class="active"><span class="i" style="background:#7AA7FF"></span>Dashboard</a>
+    <a href="field-station-list.html"><span class="i" style="background:#9B7BFF"></span>Nodes</a>
+    <a href="field-station-list.html"><span class="i" style="background:#E07BC0"></span>Adverts</a>
+    <a><span class="i" style="background:var(--rx)"></span>Messages</a>
+    <a><span class="i" style="background:#7FD98A"></span>Packets</a>
+    <a href="field-station-map.html"><span class="i" style="background:var(--tx)"></span>Map</a>
+    <a><span class="i" style="background:#E0A24A"></span>Members</a>
+  </div>
+  <div class="spacer"></div>
+  <button class="iconbtn" onclick="toggleTheme()" title="Toggle light/dark">◐</button>
+  <button class="iconbtn burger">≡</button>
+</nav>
+
+<div class="wrap">
+  <section class="hero">
+    <div class="rings"><span class="r1"></span><span class="r2"></span><span class="r3"></span><span class="r4"></span></div>
+    <span class="ping"></span>
+    <svg class="logo-lg" viewBox="0 0 115 100" aria-hidden="true"><rect x="0" y="0" width="25" height="100" rx="2" fill="currentColor" opacity=".5"/><rect x="35" y="0" width="25" height="100" rx="2" fill="currentColor"/><g class="arcs" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round" transform="translate(-30,-10)"><path d="M 110,65 A 20,20 0 0 0 90,45"/><path d="M 125,65 A 35,35 0 0 0 90,30"/><path d="M 140,65 A 50,50 0 0 0 90,15"/></g></svg>
+    <span class="status"><span class="live"></span>ON AIR · 42 NODES</span>
+    <h1>IPNET</h1>
+    <p>Off-grid encrypted LoRa mesh. Tracking who's transmitting, how packets propagate, and where the network reaches.</p>
+  </section>
+
+  <div class="grid">
+    <div class="stat" style="--accent:#9B7BFF"><div class="label">Nodes</div><div class="val">42</div><div class="sub">+3 this week</div></div>
+    <div class="stat" style="--accent:#E07BC0"><div class="label">Adverts · 7d</div><div class="val">1,284</div><div class="sub">flood &amp; direct</div></div>
+    <div class="stat" style="--accent:var(--rx)"><div class="label">Messages · 7d</div><div class="val">318</div><div class="sub">6 channels</div></div>
+    <div class="stat" style="--accent:var(--tx)"><div class="label">Reach</div><div class="val">31<span style="font-size:1rem">km</span></div><div class="sub">max link</div></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-h"><h2>Recent nodes</h2><button class="btn">View all</button></div>
+    <table>
+      <thead><tr><th>Node</th><th>Public key</th><th>Route</th><th>Last heard</th></tr></thead>
+      <tbody>
+        <tr><td><div class="node"><span class="em">📡</span><span class="nm">Holbeck-Relay</span></div></td><td class="key">a1f3…9c2e</td><td><span class="badge b-rx">DIRECT</span></td><td class="mono" style="color:var(--muted)">2m ago</td></tr>
+        <tr><td><div class="node"><span class="em">💬</span><span class="nm">kestrel</span></div></td><td class="key">7b02…4d1a</td><td><span class="badge b-tx">FLOOD</span></td><td class="mono" style="color:var(--muted)">11m ago</td></tr>
+        <tr><td><div class="node"><span class="em">🪧</span><span class="nm">Briggate-Room</span></div></td><td class="key">e5c9…aa70</td><td><span class="badge b-tx">FLOOD</span></td><td class="mono" style="color:var(--muted)">38m ago</td></tr>
+        <tr><td><div class="node"><span class="em">📡</span><span class="nm">Armley-Hill</span></div></td><td class="key">3d8e…1f55</td><td><span class="badge b-rx">DIRECT</span></td><td class="mono" style="color:var(--muted)">1h ago</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<footer class="foot">IPNET · 53.80°N 1.55°W — powered by MeshCore Hub</footer>
+<div class="note">Field Station · click ◐ to toggle light/dark · resize to portrait to test mobile</div>
+<script>function toggleTheme(){const h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark'}</script>
+</body>
+</html>

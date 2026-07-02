@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Field Station — Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="field-station.css">
+</head>
+<body>
+<nav class="nav">
+  <a href="field-station.html" class="brand"><svg class="logo" viewBox="0 0 115 100" aria-hidden="true"><rect x="0" y="0" width="25" height="100" rx="2" fill="currentColor" opacity=".5"/><rect x="35" y="0" width="25" height="100" rx="2" fill="currentColor"/><g class="arcs" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round" transform="translate(-30,-10)"><path d="M 110,65 A 20,20 0 0 0 90,45"/><path d="M 125,65 A 35,35 0 0 0 90,30"/><path d="M 140,65 A 50,50 0 0 0 90,15"/></g></svg>IPNET</a>
+  <div class="navlinks">
+    <a href="field-station.html"><span class="i" style="background:#7AA7FF"></span>Dashboard</a>
+    <a href="field-station-list.html"><span class="i" style="background:#9B7BFF"></span>Nodes</a>
+    <a href="field-station-list.html"><span class="i" style="background:#E07BC0"></span>Adverts</a>
+    <a><span class="i" style="background:var(--rx)"></span>Messages</a>
+    <a><span class="i" style="background:#7FD98A"></span>Packets</a>
+    <a class="active"><span class="i" style="background:var(--tx)"></span>Map</a>
+    <a><span class="i" style="background:#E0A24A"></span>Members</a>
+  </div>
+  <div class="spacer"></div>
+  <button class="iconbtn" onclick="toggleTheme()" title="Toggle light/dark">◐</button>
+  <button class="iconbtn burger">≡</button>
+</nav>
+
+<div class="wrap">
+  <div class="page-head">
+    <h1 class="page-title">Map</h1>
+    <span class="chip"><b>42</b> nodes</span>
+    <span class="chip"><b>18</b> shown</span>
+    <span class="chip">UTC+1</span>
+  </div>
+
+  <div class="map-layout">
+    <!-- filter sidebar -->
+    <form class="filters" style="grid-template-columns:1fr;align-content:start" onsubmit="return false">
+      <div class="field"><label>Show</label><select><option>All nodes</option><option>Infrastructure only</option></select></div>
+      <div class="field"><label>Node type</label><select><option>All types</option><option>Chat</option><option>Repeater</option><option>Room</option></select></div>
+      <div class="field"><label>Operator</label><select><option>Any operator</option><option>kestrel</option></select></div>
+      <label style="display:flex;gap:.5rem;align-items:center;font-size:.82rem"><input type="checkbox" checked style="width:auto"> Show labels</label>
+      <button class="btn btn-ghost">Clear filters</button>
+    </form>
+
+    <!-- fake map -->
+    <div class="mapwrap">
+      <div class="ring" style="width:160px;height:160px;left:30%;top:42%;transform:translate(-50%,-50%)"></div>
+      <div class="ring" style="width:280px;height:280px;left:30%;top:42%;transform:translate(-50%,-50%)"></div>
+      <div class="pin infra" style="left:30%;top:42%"><span class="plabel">Holbeck-Relay · 2m</span></div>
+      <div class="pin public" style="left:52%;top:30%"><span class="plabel">kestrel · 6m</span></div>
+      <div class="pin public" style="left:66%;top:55%"><span class="plabel">Briggate-Room · 11m</span></div>
+      <div class="pin infra" style="left:46%;top:64%"><span class="plabel">Armley-Hill · 18m</span></div>
+      <div class="pin public" style="left:74%;top:38%"><span class="plabel">g7xyz · 24m</span></div>
+
+      <div class="popup" style="left:32%;top:46%">
+        <h3>📡 Holbeck-Relay</h3>
+        <div class="row"><span>Type</span><span>Repeater</span></div>
+        <div class="row"><span>Owner</span><span>kestrel</span></div>
+        <div class="row"><span>Key</span><span>a1f3…9c2e</span></div>
+        <div class="row"><span>Last seen</span><span>2m ago</span></div>
+        <a href="#">View details →</a>
+      </div>
+
+      <div class="legend">
+        <div class="li"><span class="sw" style="background:var(--infra)"></span> Infrastructure</div>
+        <div class="li"><span class="sw" style="background:var(--public)"></span> Public node</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer class="foot">IPNET · 53.80°N 1.55°W — powered by MeshCore Hub</footer>
+<div class="note">Field Station · Map view · ◐ toggle theme · resize narrow to stack filters</div>
+<script>function toggleTheme(){const h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark'}</script>
+</body>
+</html>

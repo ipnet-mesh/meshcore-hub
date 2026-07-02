@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Packet Monitor — Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="packet-monitor.css">
+</head>
+<body>
+<nav class="nav">
+  <a href="packet-monitor.html" class="brand"><svg class="logo" viewBox="0 0 115 100" aria-hidden="true"><rect x="0" y="0" width="25" height="100" rx="2" fill="currentColor" opacity=".5"/><rect x="35" y="0" width="25" height="100" rx="2" fill="currentColor"/><g class="arcs" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round" transform="translate(-30,-10)"><path d="M 110,65 A 20,20 0 0 0 90,45"/><path d="M 125,65 A 35,35 0 0 0 90,30"/><path d="M 140,65 A 50,50 0 0 0 90,15"/></g></svg>IPNET</a>
+  <div class="navlinks">
+    <a href="packet-monitor.html">dashboard</a><a href="packet-monitor-list.html">nodes</a><a href="packet-monitor-list.html">adverts</a><a>messages</a><a>packets</a><a class="active">map</a><a>members</a>
+  </div>
+  <div class="spacer"></div>
+  <button class="iconbtn" onclick="toggleTheme()" title="Toggle light/dark">◐</button>
+  <button class="iconbtn burger">≡</button>
+</nav>
+
+<div class="wrap">
+  <div class="page-head">
+    <h1 class="page-title">map</h1>
+    <span class="chip"><b>42</b> nodes</span>
+    <span class="chip"><b>18</b> shown</span>
+    <span class="chip">UTC+1</span>
+  </div>
+
+  <div class="map-layout">
+    <form class="filters" style="grid-template-columns:1fr;align-content:start" onsubmit="return false">
+      <div class="field"><label>show</label><select><option>all nodes</option><option>infrastructure only</option></select></div>
+      <div class="field"><label>node_type</label><select><option>all types</option><option>chat</option><option>repeater</option><option>room</option></select></div>
+      <div class="field"><label>operator</label><select><option>any operator</option><option>kestrel</option></select></div>
+      <label style="display:flex;gap:.5rem;align-items:center;font-size:.8rem;font-family:var(--mono)"><input type="checkbox" checked style="width:auto"> show labels</label>
+      <button class="btn btn-ghost">clear filters</button>
+    </form>
+
+    <div class="mapwrap">
+      <div class="pin infra" style="left:32%;top:44%"><span class="plabel">Holbeck-Relay · 2m</span></div>
+      <div class="pin public" style="left:54%;top:30%"><span class="plabel">kestrel · 6m</span></div>
+      <div class="pin public" style="left:68%;top:56%"><span class="plabel">Briggate-Room · 11m</span></div>
+      <div class="pin infra" style="left:46%;top:66%"><span class="plabel">Armley-Hill · 18m</span></div>
+      <div class="pin public" style="left:76%;top:40%"><span class="plabel">g7xyz · 24m</span></div>
+
+      <div class="popup" style="left:34%;top:48%">
+        <h3>📡 Holbeck-Relay</h3>
+        <div class="row"><span>type</span><span>repeater</span></div>
+        <div class="row"><span>owner</span><span>kestrel</span></div>
+        <div class="row"><span>key</span><span>a1f3…9c2e</span></div>
+        <div class="row"><span>last_seen</span><span>2m</span></div>
+        <a href="#">view_details →</a>
+      </div>
+
+      <div class="legend">
+        <div class="li"><span class="sw" style="background:var(--infra)"></span> infrastructure</div>
+        <div class="li"><span class="sw" style="background:var(--public)"></span> public node</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer class="foot">IPNET · 53.80N 1.55W — powered by MeshCore Hub</footer>
+<div class="note">Packet Monitor · Map view · ◐ toggle theme · resize narrow to stack filters</div>
+<script>function toggleTheme(){const h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark'}</script>
+</body>
+</html>

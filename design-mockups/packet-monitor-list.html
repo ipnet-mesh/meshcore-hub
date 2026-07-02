@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Packet Monitor — Advertisements</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="packet-monitor.css">
+</head>
+<body>
+<nav class="nav">
+  <a href="packet-monitor.html" class="brand"><svg class="logo" viewBox="0 0 115 100" aria-hidden="true"><rect x="0" y="0" width="25" height="100" rx="2" fill="currentColor" opacity=".5"/><rect x="35" y="0" width="25" height="100" rx="2" fill="currentColor"/><g class="arcs" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round" transform="translate(-30,-10)"><path d="M 110,65 A 20,20 0 0 0 90,45"/><path d="M 125,65 A 35,35 0 0 0 90,30"/><path d="M 140,65 A 50,50 0 0 0 90,15"/></g></svg>IPNET</a>
+  <div class="navlinks">
+    <a href="packet-monitor.html">dashboard</a><a href="packet-monitor-list.html">nodes</a><a class="active">adverts</a><a>messages</a><a>packets</a><a href="packet-monitor-map.html">map</a><a>members</a>
+  </div>
+  <div class="spacer"></div>
+  <button class="iconbtn" onclick="toggleTheme()" title="Toggle light/dark">◐</button>
+  <button class="iconbtn burger">≡</button>
+</nav>
+
+<div class="wrap">
+  <div class="page-head">
+    <h1 class="page-title">advertisements</h1>
+    <span class="chip">UTC+1</span>
+    <span class="chip"><b>1284</b> total</span>
+    <div class="spacer"></div>
+    <button class="iconbtn" title="Auto-refresh: on">⏸</button>
+  </div>
+
+  <form class="filters" onsubmit="return false">
+    <div class="field"><label>search</label><input placeholder="node name or pubkey…"></div>
+    <div class="field"><label>route_type</label><select><option>all routes</option><option>flood</option><option>direct relay</option></select></div>
+    <div class="field"><label>operator</label><select><option>any operator</option><option>kestrel</option><option>g7xyz</option></select></div>
+    <button class="btn">apply</button>
+    <button class="btn btn-ghost">clear</button>
+  </form>
+
+  <div class="tbl-mobile-sort field"><label>sort_by</label><select><option>newest first</option><option>oldest first</option><option>node name</option></select></div>
+
+  <div class="panel desktop-only">
+    <div class="table-scroll">
+    <table>
+      <thead><tr>
+        <th class="sort">node <span class="caret"></span></th>
+        <th>pubkey</th>
+        <th class="sort">route <span class="caret"></span></th>
+        <th class="sort desc">time <span class="caret"></span></th>
+        <th>obs</th>
+      </tr></thead>
+      <tbody>
+        <tr><td><div class="node"><span class="em">📡</span><span class="nm">Holbeck-Relay</span></div></td><td class="key">a1f3…9c2e</td><td><span class="badge b-acc">DIRECT</span></td><td class="time">2m</td><td><span class="observers">📡 4</span></td></tr>
+        <tr><td><div class="node"><span class="em">💬</span><span class="nm">kestrel</span></div></td><td class="key">7b02…4d1a</td><td><span class="badge b-amb">FLOOD</span></td><td class="time">6m</td><td><span class="observers">📡 7</span></td></tr>
+        <tr><td><div class="node"><span class="em">🪧</span><span class="nm">Briggate-Room</span></div></td><td class="key">e5c9…aa70</td><td><span class="badge b-amb">FLOOD</span></td><td class="time">11m</td><td><span class="observers">📡 3</span></td></tr>
+        <tr><td><div class="node"><span class="em">📡</span><span class="nm">Armley-Hill</span></div></td><td class="key">3d8e…1f55</td><td><span class="badge b-acc">DIRECT</span></td><td class="time">18m</td><td><span class="observers">📡 5</span></td></tr>
+        <tr><td><div class="node"><span class="em">📱</span><span class="nm">g7xyz-companion</span></div></td><td class="key">b240…77c1</td><td><span class="badge b-amb">FLOOD</span></td><td class="time">24m</td><td><span class="observers">📡 2</span></td></tr>
+        <tr><td><div class="node"><span class="em">📡</span><span class="nm">Hyde-Park-Hub</span></div></td><td class="key">9f10…3b8d</td><td><span class="badge b-acc">DIRECT</span></td><td class="time">31m</td><td><span class="observers">📡 6</span></td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="pager"><a>‹</a><a class="cur">1</a><a>2</a><a>3</a><a>…</a><a>9</a><a>›</a></div>
+  </div>
+
+  <div class="cards mobile-only">
+    <div class="ncard"><span class="em">📡</span><div class="meta"><div class="nm">Holbeck-Relay</div><div class="sub">a1f3…9c2e · 📡 4</div></div><span class="badge b-acc">DIRECT</span></div>
+    <div class="ncard"><span class="em">💬</span><div class="meta"><div class="nm">kestrel</div><div class="sub">7b02…4d1a · 📡 7</div></div><span class="badge b-amb">FLOOD</span></div>
+    <div class="ncard"><span class="em">🪧</span><div class="meta"><div class="nm">Briggate-Room</div><div class="sub">e5c9…aa70 · 📡 3</div></div><span class="badge b-amb">FLOOD</span></div>
+    <div class="ncard"><span class="em">📡</span><div class="meta"><div class="nm">Armley-Hill</div><div class="sub">3d8e…1f55 · 📡 5</div></div><span class="badge b-acc">DIRECT</span></div>
+    <div class="pager"><a>‹</a><a class="cur">1</a><a>2</a><a>3</a><a>›</a></div>
+  </div>
+</div>
+
+<footer class="foot">IPNET · 53.80N 1.55W — powered by MeshCore Hub</footer>
+<div class="note">Packet Monitor · List view · ◐ toggle theme · resize narrow for mobile cards</div>
+<script>function toggleTheme(){const h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark'}</script>
+</body>
+</html>

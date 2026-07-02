@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IPNet — design mockups</title>
+<style>
+body{margin:0;font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;
+  display:grid;place-items:center;min-height:100vh;padding:2rem}
+.card{max-width:640px;width:100%}
+h1{font-weight:700;letter-spacing:.02em;margin-bottom:.25rem}
+.lead{color:#8b949e;line-height:1.6;margin-top:0}
+.theme{border:1px solid #30363d;border-radius:12px;padding:1rem 1.2rem;margin:.8rem 0}
+.theme h2{margin:.1rem 0 .15rem;font-size:1.1rem}
+.theme p{color:#8b949e;font-size:.86rem;margin:0 0 .7rem;line-height:1.5}
+.row{display:flex;gap:.5rem;flex-wrap:wrap}
+.row a{flex:1;min-width:120px;text-align:center;padding:.55rem .8rem;border:1px solid #30363d;border-radius:8px;
+  text-decoration:none;color:inherit;font-size:.9rem;transition:.15s}
+.row a:hover{border-color:#58a6ff;background:#161b22}
+.tip{color:#6e7681;font-size:.8rem;margin-top:1rem}
+</style>
+</head>
+<body>
+<div class="card">
+<h1>IPNet — theme mockups</h1>
+<p class="lead">Each theme has three pages. Click ◐ (top-right of any page) to toggle light/dark. Resize the window narrow to test mobile portrait. Nav links move between that theme's pages. All keep the existing navigation and functionality — only palette, type, and a signature element change.</p>
+
+<div class="theme">
+  <h2>1 · Field Station</h2>
+  <p>Radio instrument console. Amber transmit + cyan receive. Chakra Petch + IBM Plex. RF range-rings signature.</p>
+  <div class="row"><a href="field-station.html">Dashboard</a><a href="field-station-list.html">List</a><a href="field-station-map.html">Map</a></div>
+</div>
+
+<div class="theme">
+  <h2>2 · Topographic</h2>
+  <p>Cartographic survey. Rust + topo green. Archivo Narrow + Inter. Faint contour-line signature.</p>
+  <div class="row"><a href="topographic.html">Dashboard</a><a href="topographic-list.html">List</a><a href="topographic-map.html">Map</a></div>
+</div>
+
+<div class="theme">
+  <h2>3 · Packet Monitor</h2>
+  <p>Live ops console. Monospace-forward, dense, square corners. JetBrains Mono + IBM Plex Sans.</p>
+  <div class="row"><a href="packet-monitor.html">Dashboard</a><a href="packet-monitor-list.html">List</a><a href="packet-monitor-map.html">Map</a></div>
+</div>
+
+<p class="tip">Maps are stylised placeholders (CSS-drawn) to show the themed chrome — filters, markers, popups, legend — not real Leaflet tiles. The production build keeps the real Leaflet map and just restyles its container, popups, and markers.</p>
+</div>
+</body>
+</html>
