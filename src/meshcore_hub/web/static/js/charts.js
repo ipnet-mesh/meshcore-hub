@@ -5,6 +5,11 @@
  * for activity charts used on home and dashboard pages.
  */
 
+// Match app typography (IBM Plex Sans); Chart.js defaults to Helvetica/Arial.
+if (typeof Chart !== 'undefined') {
+    Chart.defaults.font.family = '"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif';
+}
+
 /**
  * Read page colors from CSS custom properties (defined in app.css :root).
  * Falls back to hardcoded values if CSS vars are unavailable.

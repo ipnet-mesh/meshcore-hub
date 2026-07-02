@@ -35,6 +35,21 @@ class TestCacheControlHeaders:
             response.headers["cache-control"] == "public, max-age=31536000, immutable"
         )
 
+    def test_static_vendor_font(self, client):
+        """Vendored fonts should have long-term immutable cache.
+
+        Only the header is asserted (not status): static/vendor/ is a build
+        artifact absent from host checkouts, and the middleware sets headers
+        on 404 responses too.
+        """
+        response = client.get(
+            "/static/vendor/fonts/ibm-plex-sans-latin-wght-normal.woff2"
+        )
+        assert "cache-control" in response.headers
+        assert (
+            response.headers["cache-control"] == "public, max-age=31536000, immutable"
+        )
+
     def test_static_css_without_version(self, client):
         """Static CSS without version should have short fallback cache."""
         response = client.get("/static/css/app.css")

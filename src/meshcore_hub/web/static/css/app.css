@@ -66,6 +66,7 @@
 /* Ensure hero heading is pure black/white per theme */
 .hero-title {
     color: #fff;
+    letter-spacing: -0.01em;
 }
 [data-theme="light"] .hero-title {
     color: #000;
