@@ -233,7 +233,7 @@
 }
 
 .prose a:hover {
-    color: var(--color-primary-content);
+    color: color-mix(in oklab, var(--color-primary) 70%, var(--color-base-content));
 }
 
 .prose code {

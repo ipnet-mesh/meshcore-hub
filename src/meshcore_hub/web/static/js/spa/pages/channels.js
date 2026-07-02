@@ -69,19 +69,19 @@ function renderChannelModal({ channel, isEdit, onSave, onCancel }) {
             <h3 class="font-bold text-lg mb-4">${title}</h3>
             <form @submit=${(e) => { e.preventDefault(); onSave(); }}>
                 <div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 items-center mb-4">
-                    <label class="label-text text-right">${t('channels.name_label')}</label>
+                    <label class="text-sm opacity-70 text-right">${t('channels.name_label')}</label>
                     <input type="text" id="channel-modal-name" class="input input-bordered input-sm"
                         .value=${isEdit ? channel.name : ''}
                         ?disabled=${isEdit}
                         placeholder="${t('channels.name_label')}"
                         required maxlength="100" />
                     ${!isEdit ? html`
-                    <label class="label-text text-right">${t('channels.key_label')}</label>
+                    <label class="text-sm opacity-70 text-right">${t('channels.key_label')}</label>
                     <input type="text" id="channel-modal-key" class="input input-bordered input-sm font-mono"
                         placeholder="e.g. ABCDEF0123456789..."
                         required minlength="32" maxlength="64"
                         pattern="[0-9A-Fa-f]{32,64}" />` : nothing}
-                    <label class="label-text text-right">${t('channels.visibility_label')}</label>
+                    <label class="text-sm opacity-70 text-right">${t('channels.visibility_label')}</label>
                     <select id="channel-modal-visibility" class="select select-bordered select-sm">
                         <option value="community" .selected=${channel?.visibility === 'community' || !channel}>community</option>
                         <option value="member" .selected=${channel?.visibility === 'member'}>member</option>
@@ -92,7 +92,7 @@ function renderChannelModal({ channel, isEdit, onSave, onCancel }) {
                     <label class="label cursor-pointer justify-start gap-3">
                         <input type="checkbox" id="channel-modal-enabled" class="checkbox checkbox-sm"
                             .checked=${channel?.enabled !== false} />
-                        <span class="label-text">${t('channels.enabled_label')}</span>
+                        <span class="text-sm">${t('channels.enabled_label')}</span>
                     </label>
                 </div>
                 <div class="modal-action">
