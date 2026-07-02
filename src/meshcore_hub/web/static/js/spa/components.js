@@ -802,10 +802,10 @@ export function renderFilterCard({ fields, basePath, navigate, submitLabel, clea
  */
 export function renderStatCard({ icon, color, title, value, description }) {
     return html`
-        <div class="stat bg-base-200 rounded-box shadow-sm panel-glow" style="--panel-color: ${color}">
+        <div class="stat bg-base-200 rounded-box shadow-sm panel-accent" style="--panel-color: ${color}">
             <div class="stat-figure" style="color: ${color}">${icon}</div>
             <div class="stat-title">${title}</div>
-            <div class="stat-value" style="color: ${color}">${value}</div>
+            <div class="stat-value">${value}</div>
             ${description ? html`<div class="stat-desc">${description}</div>` : nothing}
         </div>`;
 }
