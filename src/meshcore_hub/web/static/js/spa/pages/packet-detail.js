@@ -3,6 +3,7 @@ import {
     html, litRender, nothing, t,
     getConfig, formatDateTime, warningBadge, copyToClipboard
 } from '../components.js';
+import { jsonTree } from '../json-tree.js';
 
 function field(label, value) {
     return html`
@@ -79,7 +80,7 @@ ${content}`, container);
             ? html`
         <div class="mt-4">
             <span class="text-xs uppercase opacity-60">${t('packets.decoded')}</span>
-            <pre class="bg-base-200 rounded p-3 text-xs overflow-x-auto">${JSON.stringify(p.decoded, null, 2)}</pre>
+            <div class="bg-base-200 rounded p-3">${jsonTree(p.decoded, { openDepth: 1 })}</div>
         </div>`
             : nothing;
 

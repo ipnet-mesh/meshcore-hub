@@ -168,6 +168,8 @@
     "detail_title": "Pakketdetail",
     "decoded": "Gedecodeerd",
     "copy_raw": "Ruwe hex kopiëren",
+    "expand_all": "Alles uitklappen",
+    "collapse_all": "Alles inklappen",
     "view_raw": "Ruwe pakketten bekijken",
     "packet_hash": "Pakkethash",
     "packet_type": "Pakkettype",

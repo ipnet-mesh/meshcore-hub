@@ -226,6 +226,8 @@
     "detail_title": "Packet Detail",
     "decoded": "Decoded",
     "copy_raw": "Copy raw hex",
+    "expand_all": "Expand all",
+    "collapse_all": "Collapse all",
     "view_raw": "View raw packets",
     "packet_hash": "Packet Hash",
     "packet_type": "Packet Type",

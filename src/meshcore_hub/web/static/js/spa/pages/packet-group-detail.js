@@ -1,9 +1,11 @@
 import { apiGet, isAbortError } from '../api.js';
+import { iconSatelliteDish } from '../icons.js';
 import {
     html, litRender, nothing, t,
     getConfig, formatDateTime, formatRelativeTime, formatNumber, warningBadge, copyToClipboard,
     loading, truncateKey
 } from '../components.js';
+import { jsonTree } from '../json-tree.js';
 
 function field(label, value) {
     return html`
@@ -43,25 +45,44 @@ function pathRow(badges) {
     return html`<span class="flex flex-wrap items-center gap-1">${parts}</span>`;
 }
 
-function formatPath(pathHashes, pathLen, onBadgeClick) {
+// Static start-of-path marker: a filled green dot signifying the origin node.
+function senderMarker(prefix) {
+    const title = prefix
+        ? `${t('packets.col_source')}: ${prefix}`
+        : t('packets.col_source');
+    return html`<span class="inline-block h-3 w-3 rounded-full bg-success flex-shrink-0" title=${title}></span>`;
+}
+
+// Static end-of-path marker: a satellite-dish icon signifying the observer.
+function observerEndMarker() {
+    return html`<span class="flex-shrink-0">${iconSatelliteDish('h-4 w-4 opacity-70')}</span>`;
+}
+
+// Render the full path as a flow: sender -> [hops] -> observer. The endpoints are
+// static markers; the intermediate hops keep their existing hash badges (with the
+// same truncation + popover-click behaviour), joined together by pathRow.
+function formatPathFlow(pathHashes, pathLen, sourcePrefix, onBadgeClick) {
     const badge = (h) => pathBadge(h, onBadgeClick);
+    let middleParts;
     if (pathHashes && pathHashes.length > 0) {
         if (pathHashes.length <= PATH_MAX_BADGES) {
-            return pathRow(pathHashes.map(badge));
+            middleParts = pathHashes.map(badge);
+        } else {
+            const hidden = pathHashes.length - PATH_HEAD - PATH_TAIL;
+            const ellipsis = html`<span class="badge badge-sm badge-ghost cursor-help" title=${t('packets.hops_hidden', { count: hidden })}>…</span>`;
+            middleParts = [
+                ...pathHashes.slice(0, PATH_HEAD).map(badge),
+                ellipsis,
+                ...pathHashes.slice(-PATH_TAIL).map(badge),
+            ];
         }
-        const hidden = pathHashes.length - PATH_HEAD - PATH_TAIL;
-        const ellipsis = html`<span class="badge badge-sm badge-ghost cursor-help" title=${t('packets.hops_hidden', { count: hidden })}>…</span>`;
-        const badges = [
-            ...pathHashes.slice(0, PATH_HEAD).map(badge),
-            ellipsis,
-            ...pathHashes.slice(-PATH_TAIL).map(badge),
-        ];
-        return pathRow(badges);
+    } else if (pathLen != null) {
+        middleParts = [html`<span class="text-xs opacity-60">${pathLen} ${t('common.hops').toLowerCase()}</span>`];
+    } else {
+        middleParts = [html`<span class="opacity-50">—</span>`];
     }
-    if (pathLen != null) {
-        return html`${pathLen} ${t('common.hops').toLowerCase()}`;
-    }
-    return html`<span class="opacity-50">—</span>`;
+
+    return pathRow([senderMarker(sourcePrefix), ...middleParts, observerEndMarker()]);
 }
 
 function groupByObserver(receptions) {
@@ -194,11 +215,11 @@ export async function render(container, params, router) {
     }
 
     // Mobile (< lg): one card per reception, path full-width on top, stats below.
-    function receptionCards(recs) {
+    function receptionCards(recs, sourcePrefix) {
         return html`<div class="lg:hidden space-y-2">
             ${recs.map(r => html`
             <div class="rounded-box bg-base-200/60 p-3">
-                <div class="mb-2">${formatPath(r.path_hashes, r.path_len, openPathPopover)}</div>
+                <div class="mb-2">${formatPathFlow(r.path_hashes, r.path_len, sourcePrefix, openPathPopover)}</div>
                 <div class="grid grid-cols-3 gap-2">
                     ${stat(t('common.time'), timeValue(r))}
                     ${stat(t('common.hops'), hopsValue(r))}
@@ -210,7 +231,7 @@ export async function render(container, params, router) {
 
     // Desktop (lg+): table-fixed so the right-aligned stat columns line up across
     // every observer block regardless of path length.
-    function receptionTable(recs) {
+    function receptionTable(recs, sourcePrefix) {
         return html`<div class="hidden lg:block overflow-x-auto">
             <table class="table table-xs table-fixed w-full">
                 <thead>
@@ -224,7 +245,7 @@ export async function render(container, params, router) {
                 <tbody>
                     ${recs.map(r => html`
                     <tr>
-                        <td class="whitespace-normal align-top">${formatPath(r.path_hashes, r.path_len, openPathPopover)}</td>
+                        <td class="whitespace-normal align-top">${formatPathFlow(r.path_hashes, r.path_len, sourcePrefix, openPathPopover)}</td>
                         <td class="w-16 text-right text-sm align-top">${hopsValue(r)}</td>
                         <td class="w-20 text-right text-sm align-top">${snrValue(r)}</td>
                         <td class="w-32 text-right text-xs opacity-60 align-top whitespace-nowrap">${timeValue(r)}</td>
@@ -289,11 +310,12 @@ ${content}`, container);
             ? html`
         <div class="mt-4">
             <span class="text-xs uppercase opacity-60">${t('packets.decoded')}</span>
-            <pre class="bg-base-200 rounded p-3 text-xs overflow-x-auto">${JSON.stringify(g.decoded, null, 2)}</pre>
+            <div class="bg-base-200 rounded p-3">${jsonTree(g.decoded, { openDepth: 1 })}</div>
         </div>`
             : nothing;
 
         const receptions = g.receptions || [];
+        const sourcePrefix = g.source_pubkey_prefix || null;
         const observerGroups = groupByObserver(receptions);
 
         const receptionsSection = receptions.length > 0
@@ -318,8 +340,8 @@ ${content}`, container);
                             ? html`<span class="text-xs opacity-50 ml-1">(${formatNumber(recs.length)} ${t('packets.reception_plural')})</span>`
                             : nothing}
                     </div>
-                    ${receptionCards(recs)}
-                    ${receptionTable(recs)}
+                    ${receptionCards(recs, sourcePrefix)}
+                    ${receptionTable(recs, sourcePrefix)}
                 </div>`;
             })}
         </div>`
