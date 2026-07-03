@@ -51,14 +51,6 @@ def _extract_path_hashes(decoded: dict[str, Any] | None) -> list[str] | None:
     return hashes if isinstance(hashes, list) else None
 
 
-def _path_hash_byte_width(path_hashes: Optional[list[str]]) -> Optional[int]:
-    """Widest path-hash prefix width in bytes (each hash is hex: 2/4/6 chars)."""
-    if not path_hashes:
-        return None
-    widths = [len(h) // 2 for h in path_hashes if isinstance(h, str) and h]
-    return max(widths) if widths else None
-
-
 def _get_tag_name(node: Optional[Node]) -> Optional[str]:
     if not node or not node.tags:
         return None
@@ -79,6 +71,9 @@ def list_packet_groups(
     ),
     event_type: Optional[str] = Query(None, description="Filter by event type"),
     channel_idx: Optional[int] = Query(None, description="Filter by channel index"),
+    path_hash_bytes: Optional[int] = Query(
+        None, ge=1, le=3, description="Filter by path-hash byte width (1/2/3)"
+    ),
     since: Optional[datetime] = Query(None, description="Start timestamp"),
     until: Optional[datetime] = Query(None, description="End timestamp"),
     sort: Optional[str] = Query(
@@ -120,6 +115,7 @@ def list_packet_groups(
             func.count(RawPacket.id).label("reception_count"),
             func.count(RawPacket.observer_node_id.distinct()).label("observer_count"),
             func.min(RawPacket.received_at).label("first_seen"),
+            func.max(RawPacket.path_hash_bytes).label("path_hash_bytes"),
         )
         .outerjoin(ObserverNode, RawPacket.observer_node_id == ObserverNode.id)
         .where(RawPacket.packet_hash.is_not(None))
@@ -145,6 +141,11 @@ def list_packet_groups(
         group_query = group_query.where(RawPacket.received_at <= until)
 
     group_query = group_query.group_by(RawPacket.packet_hash)
+
+    if path_hash_bytes is not None:
+        group_query = group_query.having(
+            func.max(RawPacket.path_hash_bytes) == path_hash_bytes
+        )
 
     count_query = select(func.count()).select_from(group_query.subquery())
     total = session.execute(count_query).scalar() or 0
@@ -195,20 +196,6 @@ def list_packet_groups(
 
     group_counts = {r.packet_hash: r for r in group_rows}
 
-    # ── Phase 3: path-hash width — load decoded only for representative rows ───
-    rep_id_to_hash = {rep.id: h for h, rep in representative.items()}
-    width_by_hash: dict[str, Optional[int]] = {}
-    if rep_id_to_hash:
-        decoded_rows = session.execute(
-            select(RawPacket.id, RawPacket.decoded).where(
-                RawPacket.id.in_(rep_id_to_hash.keys())
-            )
-        ).all()
-        for rid, decoded in decoded_rows:
-            h = rep_id_to_hash.get(rid)
-            if h is not None:
-                width_by_hash[h] = _path_hash_byte_width(_extract_path_hashes(decoded))
-
     items = []
     for h in hashes:
         rep = representative.get(h)
@@ -231,7 +218,7 @@ def list_packet_groups(
                 ),
                 reception_count=grp.reception_count,
                 observer_count=grp.observer_count,
-                path_hash_bytes=(None if is_redacted else width_by_hash.get(h)),
+                path_hash_bytes=(None if is_redacted else grp.path_hash_bytes),
                 receptions=[],
                 first_seen=grp.first_seen,
                 redacted=is_redacted,

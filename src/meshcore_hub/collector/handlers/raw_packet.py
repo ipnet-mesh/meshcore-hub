@@ -42,6 +42,14 @@ def _extract_source_pubkey_prefix(
     return None
 
 
+def _path_hash_byte_width(hashes: list[str] | None) -> int | None:
+    """Widest path-hash prefix width in bytes (each hash is hex: 2/4/6 chars)."""
+    if not hashes:
+        return None
+    widths = [len(h) // 2 for h in hashes if isinstance(h, str) and h]
+    return max(widths) if widths else None
+
+
 def store_raw_packet(
     public_key: str,
     payload: dict[str, Any],
@@ -95,6 +103,14 @@ def store_raw_packet(
             decoded_packet
         )
 
+    path_hashes = LetsMeshNormalizer._normalize_hash_list(
+        decoded_packet.get("path") if isinstance(decoded_packet, dict) else None
+    )
+    if not path_hashes and isinstance(decoded_packet, dict):
+        inner = (decoded_packet.get("payload") or {}).get("decoded") or {}
+        path_hashes = LetsMeshNormalizer._normalize_hash_list(inner.get("pathHashes"))
+    path_hash_bytes = _path_hash_byte_width(path_hashes)
+
     snr = LetsMeshNormalizer._parse_float(payload.get("SNR"))
     if snr is None:
         snr = LetsMeshNormalizer._parse_float(payload.get("snr"))
@@ -131,6 +147,7 @@ def store_raw_packet(
                 source_pubkey_prefix=source_pubkey_prefix,
                 route_type=route_type,
                 path_len=path_len,
+                path_hash_bytes=path_hash_bytes,
                 snr=snr,
                 decoded=decoded_packet,
                 received_at=now,

@@ -32,6 +32,7 @@ class RawPacket(Base, UUIDMixin, TimestampMixin):
             senderPublicKey, for efficient "packets from this node" filtering
         route_type: Mapped route type (flood, transport_flood, direct, ...)
         path_len: Hop count
+        path_hash_bytes: Widest path-hash prefix width in bytes (1/2/3)
         snr: Signal-to-noise ratio as reported by the observer
         decoded: Decoder summary JSON, so the detail view needs no re-decode
         received_at: When received by the observing interface
@@ -83,6 +84,10 @@ class RawPacket(Base, UUIDMixin, TimestampMixin):
         nullable=True,
     )
     path_len: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+    path_hash_bytes: Mapped[Optional[int]] = mapped_column(
         Integer,
         nullable=True,
     )
