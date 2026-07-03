@@ -63,7 +63,8 @@ function createChartOptions(showLegend) {
         plugins: {
             legend: {
                 display: showLegend,
-                position: 'bottom',
+                position: 'top',
+                align: 'end',
                 labels: {
                     color: ChartColors.text,
                     boxWidth: 12,
@@ -183,7 +184,7 @@ function createActivityChart(canvasId, advertData, messageData) {
             data: advertData.data.map(function(d) { return d.count; }),
             borderColor: ChartColors.adverts,
             backgroundColor: ChartColors.advertsFill,
-            fill: false,
+            fill: true,
             tension: 0.3,
             pointRadius: 2,
             pointHoverRadius: 5
@@ -197,7 +198,7 @@ function createActivityChart(canvasId, advertData, messageData) {
             data: messageData.data.map(function(d) { return d.count; }),
             borderColor: ChartColors.messages,
             backgroundColor: ChartColors.messagesFill,
-            fill: false,
+            fill: true,
             tension: 0.3,
             pointRadius: 2,
             pointHoverRadius: 5
