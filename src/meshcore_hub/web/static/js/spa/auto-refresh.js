@@ -7,7 +7,7 @@
  */
 
 import { html, litRender, getConfig, t } from './components.js';
-import { iconPause, iconPlay, iconInfo } from './icons.js';
+import { iconRefresh } from './icons.js';
 
 /**
  * Create an auto-refresh controller.
@@ -30,24 +30,23 @@ export function createAutoRefresh({ fetchAndRender, toggleContainer }) {
     let timerId = null;
 
     function renderToggle() {
-        const pauseIcon = iconPause('w-4 h-4');
-        const playIcon = iconPlay('w-4 h-4');
-
         const tooltip = paused ? t('auto_refresh.resume') : t('auto_refresh.pause');
-        const icon = paused ? playIcon : pauseIcon;
 
         litRender(html`
-            <button class="btn btn-ghost btn-xs gap-1 opacity-60 hover:opacity-100"
-                    title=${tooltip}
-                    @click=${onToggle}>
-                ${icon}
-                <span class="text-xs">${intervalSeconds}s</span>
-            </button>
+            <label class="label cursor-pointer gap-2" title=${tooltip}>
+                <span class="text-sm opacity-80 flex items-center gap-1">
+                    ${iconRefresh('w-4 h-4')}
+                    <span class="text-xs">${intervalSeconds}s</span>
+                </span>
+                <input type="checkbox"
+                       class="toggle toggle-sm toggle-primary"
+                       ?checked=${!paused} @change=${onToggle}>
+            </label>
         `, toggleContainer);
     }
 
-    function onToggle() {
-        paused = !paused;
+    function onToggle(e) {
+        paused = !e.target.checked;
         if (paused) {
             clearInterval(timerId);
             timerId = null;
