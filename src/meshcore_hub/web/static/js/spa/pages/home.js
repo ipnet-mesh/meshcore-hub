@@ -35,7 +35,7 @@ function renderRadioTiles(rc) {
 
 function renderNavCard({ href, icon, label, colorVar }) {
     return html`
-        <a href="${href}" class="w-24 h-24 sm:w-28 sm:h-28
+        <a href="${href}" class="w-20 h-20 sm:w-[6.75rem] sm:h-[6.75rem]
             border border-base-content/20 rounded-box
             hover:scale-105 hover:border-base-content/40
             transition-all duration-200 ease-out
@@ -75,7 +75,9 @@ function renderHeroSection({ networkName, logoUrl, logoInvertLight, networkCity,
             <div class="flex-1 flex items-center justify-center w-full">
                 ${welcomeText}
             </div>
-            <div class="flex flex-wrap justify-center gap-2 sm:gap-3">
+            <div class="flex flex-wrap justify-center justify-items-center gap-2
+                    sm:grid sm:grid-cols-4 min-[1536px]:grid-cols-8
+                    sm:gap-3 min-[1536px]:gap-2">
                 ${features.dashboard !== false ? renderNavCard({
                     href: '/dashboard',
                     icon: iconDashboard('w-full h-full'),
@@ -142,7 +144,7 @@ function renderStatsPanel({ features, stats }) {
             ${features.nodes !== false ? renderStatCard({
                 icon: iconNodes('h-8 w-8'),
                 color: pageColors.nodes,
-                title: t('common.total_entity', { entity: t('entities.nodes') }),
+                title: t('entities.nodes'),
                 value: stats.total_nodes,
                 description: t('home.all_discovered_nodes'),
             }) : nothing}
@@ -158,6 +160,13 @@ function renderStatsPanel({ features, stats }) {
                 color: pageColors.messages,
                 title: t('entities.messages'),
                 value: stats.messages_7d,
+                description: t('time.last_7_days'),
+            }) : nothing}
+            ${features.packets !== false ? renderStatCard({
+                icon: iconPackets('h-8 w-8'),
+                color: pageColors.packets,
+                title: t('entities.packets'),
+                value: stats.packets_7d,
                 description: t('time.last_7_days'),
             }) : nothing}
         </div>`;
@@ -223,7 +232,7 @@ export async function render(container, params, router) {
             apiGet('/api/v1/dashboard/message-activity', { days: 7 }, { signal }),
         ]);
 
-        const showStats = features.nodes !== false || features.advertisements !== false || features.messages !== false;
+        const showStats = features.nodes !== false || features.advertisements !== false || features.messages !== false || features.packets !== false;
         const showAdvertSeries = features.advertisements !== false;
         const showMessageSeries = features.messages !== false;
         const showActivityChart = showAdvertSeries || showMessageSeries;

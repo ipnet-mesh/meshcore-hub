@@ -185,6 +185,7 @@ export const pageColors = {
     get nodes()     { return getComputedStyle(document.documentElement).getPropertyValue('--color-nodes').trim(); },
     get adverts()   { return getComputedStyle(document.documentElement).getPropertyValue('--color-adverts').trim(); },
     get messages()  { return getComputedStyle(document.documentElement).getPropertyValue('--color-messages').trim(); },
+    get packets()   { return getComputedStyle(document.documentElement).getPropertyValue('--color-packets').trim(); },
     get map()       { return getComputedStyle(document.documentElement).getPropertyValue('--color-map').trim(); },
     get members()   { return getComputedStyle(document.documentElement).getPropertyValue('--color-members').trim(); },
 };
@@ -554,7 +555,20 @@ export function observerIcons(observers) {
     if (!observers || observers.length === 0) return nothing;
     const names = observers.map(o => o.tag_name || o.name || truncateKey(o.public_key, 8));
     const tooltip = names.join(', ');
-    return html`<span class="badge badge-sm badge-primary cursor-help observer-badge" title=${tooltip}>${observers.length}</span>`;
+    return html`<span class="badge badge-sm badge-primary observer-badge" title=${tooltip}>${observers.length}</span>`;
+}
+
+export function routeTypeBadge(routeType) {
+    if (!routeType) {
+        return nothing;
+    }
+    if (routeType === 'flood' || routeType === 'transport_flood') {
+        return html`<span class="badge badge-sm badge-info">${routeType === 'flood' ? 'Flood' : 'Relay'}</span>`;
+    }
+    if (routeType === 'direct' || routeType === 'transport_direct') {
+        return html`<span class="badge badge-sm badge-success">${routeType === 'direct' ? 'Zero-hop' : 'Direct relay'}</span>`;
+    }
+    return nothing;
 }
 
 // --- Observer filter (localStorage-backed toggle badges) ---
@@ -802,10 +816,10 @@ export function renderFilterCard({ fields, basePath, navigate, submitLabel, clea
  */
 export function renderStatCard({ icon, color, title, value, description }) {
     return html`
-        <div class="stat bg-base-200 rounded-box shadow-sm panel-accent" style="--panel-color: ${color}">
+        <div class="stat bg-base-200 rounded-box shadow-sm panel-accent !py-2" style="--panel-color: ${color}">
             <div class="stat-figure" style="color: ${color}">${icon}</div>
             <div class="stat-title">${title}</div>
-            <div class="stat-value">${value}</div>
+            <div class="stat-value text-3xl">${value}</div>
             ${description ? html`<div class="stat-desc">${description}</div>` : nothing}
         </div>`;
 }

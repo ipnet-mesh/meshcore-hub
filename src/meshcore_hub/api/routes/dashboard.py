@@ -14,12 +14,16 @@ from meshcore_hub.api.channel_visibility import (
     resolve_user_role,
 )
 from meshcore_hub.api.dependencies import DbSession
-from meshcore_hub.api.observer_utils import resolve_sender_names
+from meshcore_hub.api.observer_utils import (
+    fetch_observers_for_events,
+    resolve_sender_names,
+)
 from meshcore_hub.common.models import (
     Advertisement,
     Message,
     Node,
     NodeTag,
+    RawPacket,
     UserProfile,
 )
 from meshcore_hub.common.schemas.messages import (
@@ -147,6 +151,19 @@ def get_stats(
     advertisements_24h = adv_row[1] or 0
     advertisements_7d = adv_row[2] or 0
 
+    # Raw-packet counts (total + last 7 days), observer-level volume metric
+    # with no role/channel filter (payload redaction lives on list/detail only).
+    packet_row = session.execute(
+        select(
+            func.count(RawPacket.id).label("total_packets"),
+            func.sum(case((RawPacket.received_at >= seven_days_ago, 1), else_=0)).label(
+                "packets_7d"
+            ),
+        ).select_from(RawPacket)
+    ).one()
+    total_packets = packet_row[0] or 0
+    packets_7d = packet_row[1] or 0
+
     # Recent advertisements (last 10, flood-only)
     recent_ads = (
         session.execute(
@@ -185,6 +202,25 @@ def get_stats(
         for public_key, value in session.execute(tag_name_query).all():
             tag_names[public_key] = value
 
+    # Batch-resolve observers (via event_observers) and the legacy
+    # observed_by public key for the recent adverts, mirroring the
+    # advertisements list endpoint.
+    ad_event_hashes = [ad.event_hash for ad in recent_ads if ad.event_hash]
+    observers_by_hash = fetch_observers_for_events(
+        session, "advertisement", ad_event_hashes
+    )
+
+    observer_node_ids = [
+        ad.observer_node_id for ad in recent_ads if ad.observer_node_id
+    ]
+    observer_pk_map: dict[str, str] = {}
+    if observer_node_ids:
+        obs_query = select(Node.id, Node.public_key).where(
+            Node.id.in_(observer_node_ids)
+        )
+        for node_id, public_key in session.execute(obs_query).all():
+            observer_pk_map[node_id] = public_key
+
     recent_advertisements = [
         RecentAdvertisement(
             public_key=ad.public_key,
@@ -192,6 +228,13 @@ def get_stats(
             tag_name=tag_names.get(ad.public_key),
             adv_type=ad.adv_type or node_adv_types.get(ad.public_key),
             received_at=ad.received_at,
+            route_type=ad.route_type,
+            observers=observers_by_hash.get(ad.event_hash, []) if ad.event_hash else [],
+            observed_by=(
+                observer_pk_map.get(ad.observer_node_id)
+                if ad.observer_node_id
+                else None
+            ),
         )
         for ad in recent_ads
     ]
@@ -279,6 +322,8 @@ def get_stats(
         channel_messages=channel_messages,
         total_operators=total_operators,
         total_members=total_members,
+        total_packets=total_packets,
+        packets_7d=packets_7d,
     )
 
 
@@ -329,6 +374,54 @@ def get_activity(
     counts_by_date = {_date_bucket_key(row.date): row.count for row in results}
 
     # Generate all dates in the range, filling in zeros for missing days
+    data = []
+    for i in range(days):
+        date = start_date + timedelta(days=i)
+        date_str = date.strftime("%Y-%m-%d")
+        count = counts_by_date.get(date_str, 0)
+        data.append(DailyActivityPoint(date=date_str, count=count))
+
+    return DailyActivity(days=days, data=data)
+
+
+@router.get("/packet-activity", response_model=DailyActivity)
+@cached("dashboard/packet-activity", ttl_setting="redis_cache_ttl_dashboard")
+def get_packet_activity(
+    _: RequireRead,
+    session: DbSession,
+    request: Request,
+    days: int = 30,
+) -> DailyActivity:
+    """Get daily raw-packet activity for the specified period.
+
+    Args:
+        days: Number of days to include (default 30, max 90)
+
+    Returns:
+        Daily raw-packet counts for each day in the period (excluding today)
+    """
+    days = min(days, 90)
+
+    now = datetime.now(timezone.utc)
+    end_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_date = end_date - timedelta(days=days)
+
+    date_expr = func.date(RawPacket.received_at)
+
+    query = (
+        select(
+            date_expr.label("date"),
+            func.count().label("count"),
+        )
+        .where(RawPacket.received_at >= start_date)
+        .where(RawPacket.received_at < end_date)
+        .group_by(date_expr)
+        .order_by(date_expr)
+    )
+
+    results = session.execute(query).all()
+    counts_by_date = {_date_bucket_key(row.date): row.count for row in results}
+
     data = []
     for i in range(days):
         date = start_date + timedelta(days=i)

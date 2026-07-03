@@ -5,22 +5,9 @@ import {
     warningBadge,
     pagination, sortableTableHeader, mobileSortSelect,
     renderFilterCard, autoSubmit, submitOnEnter, copyToClipboard, renderNodeDisplay,
-    observerIcons, getDisabledObservers, toggleObserver, observerFilterBadges
+    observerIcons, getDisabledObservers, toggleObserver, observerFilterBadges, routeTypeBadge
 } from '../components.js';
 import { createAutoRefresh } from '../auto-refresh.js';
-
-function routeTypeBadge(routeType) {
-    if (!routeType) {
-        return nothing;
-    }
-    if (routeType === 'flood' || routeType === 'transport_flood') {
-        return html`<span class="badge badge-sm badge-info">${routeType === 'flood' ? 'Flood' : 'Relay'}</span>`;
-    }
-    if (routeType === 'direct' || routeType === 'transport_direct') {
-        return html`<span class="badge badge-sm badge-success">${routeType === 'direct' ? 'Zero-hop' : 'Direct relay'}</span>`;
-    }
-    return nothing;
-}
 
 export async function render(container, params, router) {
     const { signal } = params || {};

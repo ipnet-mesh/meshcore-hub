@@ -8,10 +8,12 @@ import pytest
 from meshcore_hub.api.routes.dashboard import _date_bucket_key
 from meshcore_hub.common.models import (
     Advertisement,
+    EventObserver,
     Message,
     Node,
     NodeTag,
     Channel,
+    RawPacket,
 )
 from meshcore_hub.common.models import UserProfile
 
@@ -54,6 +56,8 @@ class TestDashboardStats:
         assert data["total_messages"] == 0
         assert data["messages_today"] == 0
         assert data["total_advertisements"] == 0
+        assert data["total_packets"] == 0
+        assert data["packets_7d"] == 0
         assert data["channel_message_counts"] == {}
 
     def test_get_stats_with_data(
@@ -119,6 +123,15 @@ class TestDashboardStats:
                 ),
             ]
         )
+
+        # Raw packets: now (7d), 3 days ago (7d), 10 days ago (older).
+        api_db_session.add_all(
+            [
+                RawPacket(event_type="message", received_at=now),
+                RawPacket(event_type="message", received_at=now - timedelta(days=3)),
+                RawPacket(event_type="message", received_at=now - timedelta(days=10)),
+            ]
+        )
         api_db_session.commit()
 
         data = client_no_auth.get("/api/v1/dashboard/stats").json()
@@ -133,6 +146,9 @@ class TestDashboardStats:
         assert data["total_advertisements"] == 3
         assert data["advertisements_24h"] == 1
         assert data["advertisements_7d"] == 2  # now + 3d (10d excluded)
+
+        assert data["total_packets"] == 3
+        assert data["packets_7d"] == 2  # now + 3d (10d excluded)
 
 
 class TestDashboardHtmlRemoved:
@@ -267,6 +283,101 @@ class TestDashboardActivity:
         )
         yesterday_point = next(p for p in data["data"] if p["date"] == yesterday_str)
         assert yesterday_point["count"] >= 1
+
+
+class TestPacketActivity:
+    """Tests for GET /dashboard/packet-activity endpoint."""
+
+    def test_get_packet_activity_empty(self, client_no_auth):
+        """Test getting packet activity with empty database."""
+        response = client_no_auth.get("/api/v1/dashboard/packet-activity")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["days"] == 30
+        assert len(data["data"]) == 30
+        for point in data["data"]:
+            assert point["count"] == 0
+            assert "date" in point
+
+    def test_get_packet_activity_custom_days(self, client_no_auth):
+        """Test getting packet activity with custom days parameter."""
+        response = client_no_auth.get("/api/v1/dashboard/packet-activity?days=7")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["days"] == 7
+        assert len(data["data"]) == 7
+
+    def test_get_packet_activity_max_days(self, client_no_auth):
+        """Test that packet activity is capped at 90 days."""
+        response = client_no_auth.get("/api/v1/dashboard/packet-activity?days=365")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["days"] == 90
+        assert len(data["data"]) == 90
+
+    def test_get_packet_activity_with_data(self, client_no_auth, api_db_session):
+        """Test getting packet activity with packets across two days.
+
+        Note: Activity endpoints exclude today's data to avoid showing
+        incomplete stats early in the day.
+        """
+        now = datetime.now(timezone.utc)
+        yesterday = now - timedelta(days=1)
+        two_days_ago = now - timedelta(days=2)
+
+        observer = Node(
+            public_key="a" * 64,
+            name="Observer",
+            adv_type="REPEATER",
+        )
+        api_db_session.add(observer)
+        api_db_session.flush()
+
+        api_db_session.add_all(
+            [
+                RawPacket(
+                    observer_node_id=observer.id,
+                    event_type="message",
+                    received_at=yesterday,
+                ),
+                RawPacket(
+                    observer_node_id=observer.id,
+                    event_type="message",
+                    received_at=yesterday,
+                ),
+                RawPacket(
+                    observer_node_id=observer.id,
+                    event_type="message",
+                    received_at=two_days_ago,
+                ),
+            ]
+        )
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/dashboard/packet-activity?days=7")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["days"] == 7
+        assert len(data["data"]) == 7
+
+        yesterday_str = yesterday.strftime("%Y-%m-%d")
+        two_days_ago_str = two_days_ago.strftime("%Y-%m-%d")
+
+        yesterday_point = next(p for p in data["data"] if p["date"] == yesterday_str)
+        assert yesterday_point["count"] == 2
+
+        two_days_ago_point = next(
+            p for p in data["data"] if p["date"] == two_days_ago_str
+        )
+        assert two_days_ago_point["count"] == 1
+
+        # All other days in the 7-day window should be zero-filled.
+        other_days = [
+            p
+            for p in data["data"]
+            if p["date"] not in (yesterday_str, two_days_ago_str)
+        ]
+        assert all(p["count"] == 0 for p in other_days)
 
 
 class TestMessageActivity:
@@ -571,6 +682,9 @@ class TestDashboardFloodOnlyFilter:
         data = response.json()
         assert len(data["recent_advertisements"]) == 1
         assert data["recent_advertisements"][0]["name"] == "Flood"
+        assert data["recent_advertisements"][0]["route_type"] == "flood"
+        assert data["recent_advertisements"][0]["observers"] == []
+        assert data["recent_advertisements"][0]["observed_by"] is None
 
     def test_activity_excludes_direct(self, client_no_auth, api_db_session):
         """Activity endpoint excludes direct advertisements."""
@@ -768,6 +882,89 @@ class TestDashboardChannelVisibility:
         data = response.json()
         assert len(data["recent_advertisements"]) == 1
         assert data["recent_advertisements"][0]["tag_name"] == "TagName"
+        assert data["recent_advertisements"][0]["route_type"] == "flood"
+        assert data["recent_advertisements"][0]["observers"] == []
+        assert data["recent_advertisements"][0]["observed_by"] is None
+
+    def test_recent_advertisements_includes_observers(
+        self, client_no_auth, api_db_session
+    ):
+        """Recent advertisements include observer list via event_observers."""
+        from hashlib import md5
+
+        now = datetime.now(timezone.utc)
+        observer_node = Node(
+            public_key="cc" * 16,
+            name="ObserverStation",
+            first_seen=now,
+            last_seen=now,
+        )
+        api_db_session.add(observer_node)
+        api_db_session.commit()
+
+        event_hash = md5(b"dashboard-ad-observers").hexdigest()
+        ad = Advertisement(
+            public_key="dd" * 16,
+            name="HeardAd",
+            adv_type="REPEATER",
+            received_at=now,
+            route_type="flood",
+            event_hash=event_hash,
+            observer_node_id=observer_node.id,
+        )
+        api_db_session.add(ad)
+
+        observer = EventObserver(
+            event_type="advertisement",
+            event_hash=event_hash,
+            observer_node_id=observer_node.id,
+            observed_at=now,
+        )
+        api_db_session.add(observer)
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/dashboard/stats")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["recent_advertisements"]) == 1
+        item = data["recent_advertisements"][0]
+        assert item["route_type"] == "flood"
+        assert len(item["observers"]) == 1
+        assert item["observers"][0]["public_key"] == observer_node.public_key
+
+    def test_recent_advertisements_includes_observed_by(
+        self, client_no_auth, api_db_session
+    ):
+        """Recent advertisements resolve observed_by from observer_node_id."""
+        now = datetime.now(timezone.utc)
+        observer_node = Node(
+            public_key="ee" * 16,
+            name="InterfaceNode",
+            first_seen=now,
+            last_seen=now,
+        )
+        api_db_session.add(observer_node)
+        api_db_session.commit()
+
+        ad = Advertisement(
+            public_key="ff" * 16,
+            name="LegacyAd",
+            adv_type="CLIENT",
+            received_at=now,
+            route_type="flood",
+            observer_node_id=observer_node.id,
+        )
+        api_db_session.add(ad)
+        api_db_session.commit()
+
+        response = client_no_auth.get("/api/v1/dashboard/stats")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["recent_advertisements"]) == 1
+        item = data["recent_advertisements"][0]
+        assert item["route_type"] == "flood"
+        assert item["observers"] == []
+        assert item["observed_by"] == observer_node.public_key
 
     def test_operator_sees_community_and_member_channel_counts(
         self, client_no_auth, api_db_session
@@ -876,6 +1073,26 @@ class TestDashboardDateBucketRegression:
         api_db_session.commit()
 
         data = client_no_auth.get("/api/v1/dashboard/message-activity").json()
+        seeded_str = two_days_ago.strftime("%Y-%m-%d")
+        seeded_point = next(p for p in data["data"] if p["date"] == seeded_str)
+        assert seeded_point["count"] == 1
+
+    def test_packet_activity_nonzero_on_seeded_day(
+        self, client_no_auth, api_db_session
+    ):
+        """Packet activity chart shows non-zero count for the seeded day."""
+        two_days_ago = (datetime.now(timezone.utc) - timedelta(days=2)).replace(
+            hour=12, minute=0, second=0, microsecond=0
+        )
+        api_db_session.add(
+            RawPacket(
+                event_type="message",
+                received_at=two_days_ago,
+            )
+        )
+        api_db_session.commit()
+
+        data = client_no_auth.get("/api/v1/dashboard/packet-activity").json()
         seeded_str = two_days_ago.strftime("%Y-%m-%d")
         seeded_point = next(p for p in data["data"] if p["date"] == seeded_str)
         assert seeded_point["count"] == 1
