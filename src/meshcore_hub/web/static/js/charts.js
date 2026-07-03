@@ -11,6 +11,16 @@ if (typeof Chart !== 'undefined') {
 }
 
 /**
+ * Format a number with locale-appropriate grouping separators.
+ * Uses the visitor's browser locale (no explicit locale argument).
+ * @param {number} v
+ * @returns {string}
+ */
+function formatNumber(v) {
+    return new Intl.NumberFormat().format(v);
+}
+
+/**
  * Read page colors from CSS custom properties (defined in app.css :root).
  * Falls back to hardcoded values if CSS vars are unavailable.
  */
@@ -67,7 +77,14 @@ function createChartOptions(showLegend) {
                 titleColor: ChartColors.tooltipText,
                 bodyColor: ChartColors.tooltipText,
                 borderColor: ChartColors.tooltipBorder,
-                borderWidth: 1
+                borderWidth: 1,
+                callbacks: {
+                    label: function(ctx) {
+                        const label = ctx.dataset.label || '';
+                        const value = formatNumber(ctx.parsed.y);
+                        return label ? label + ': ' + value : value;
+                    }
+                }
             }
         },
         scales: {
@@ -85,7 +102,8 @@ function createChartOptions(showLegend) {
                 grid: { color: ChartColors.grid },
                 ticks: {
                     color: ChartColors.text,
-                    precision: 0
+                    precision: 0,
+                    callback: function(value) { return formatNumber(value); }
                 }
             }
         },

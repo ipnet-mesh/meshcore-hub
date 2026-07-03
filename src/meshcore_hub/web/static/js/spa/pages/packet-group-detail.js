@@ -1,7 +1,7 @@
 import { apiGet, isAbortError } from '../api.js';
 import {
     html, litRender, nothing, t,
-    getConfig, formatDateTime, formatRelativeTime, warningBadge, copyToClipboard,
+    getConfig, formatDateTime, formatRelativeTime, formatNumber, warningBadge, copyToClipboard,
     loading, truncateKey
 } from '../components.js';
 
@@ -169,7 +169,7 @@ export async function render(container, params, router) {
                         </a></li>`)}
                     ${more > 0 ? html`<li>
                         <a href="/nodes?pubkey_prefix=${ph}" @click=${closePopover} class="text-xs opacity-70">
-                            ${t('packets.path_nodes_more', { count: more })}
+                            ${t('packets.path_nodes_more', { count: formatNumber(more) })}
                         </a></li>` : nothing}
                 </ul>`;
             litRender(popoverShell(ph, body), popoverEl);
@@ -301,7 +301,7 @@ ${content}`, container);
         <div class="mt-6">
             <h2 class="text-sm font-semibold uppercase opacity-60 mb-3">
                 ${t('packets.receptions_title')}
-                <span class="ml-1 normal-case opacity-80">(${g.reception_count} ${g.reception_count === 1 ? t('packets.reception_singular') : t('packets.reception_plural')}, ${g.observer_count} ${t('common.observers').toLowerCase()})</span>
+                <span class="ml-1 normal-case opacity-80">(${formatNumber(g.reception_count)} ${g.reception_count === 1 ? t('packets.reception_singular') : t('packets.reception_plural')}, ${formatNumber(g.observer_count)} ${t('common.observers').toLowerCase()})</span>
             </h2>
             ${[...observerGroups.entries()].map(([_key, recs]) => {
                 const first = recs[0];
@@ -315,7 +315,7 @@ ${content}`, container);
                             ? html`<a href="/nodes/${first.observed_by}" class="link link-hover">${displayName}</a>`
                             : html`${displayName}`}
                         ${recs.length > 1
-                            ? html`<span class="text-xs opacity-50 ml-1">(${recs.length} ${t('packets.reception_plural')})</span>`
+                            ? html`<span class="text-xs opacity-50 ml-1">(${formatNumber(recs.length)} ${t('packets.reception_plural')})</span>`
                             : nothing}
                     </div>
                     ${receptionCards(recs)}
@@ -343,7 +343,7 @@ ${redactedNotice}
             ${field(t('packets.payload_type'), g.payload_type != null ? g.payload_type : '—')}
             ${field(t('packets.col_route_type'), g.route_type || '—')}
             ${field(t('packets.receptions_count'),
-                html`${g.reception_count} ${g.reception_count === 1 ? t('packets.reception_singular') : t('packets.reception_plural')} · ${g.observer_count} ${t('common.observers').toLowerCase()}`)}
+                html`${formatNumber(g.reception_count)} ${g.reception_count === 1 ? t('packets.reception_singular') : t('packets.reception_plural')} · ${formatNumber(g.observer_count)} ${t('common.observers').toLowerCase()}`)}
         </div>
         ${receptionsSection}
         ${rawBlock}

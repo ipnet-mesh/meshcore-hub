@@ -2,7 +2,7 @@ import { apiGet, isAbortError } from '../api.js';
 import {
     html, litRender, nothing,
     getConfig, getChannelLabelsMap, resolveChannelLabel,
-    observerIcons, routeTypeBadge, errorAlert, t, formatDateTime,
+    observerIcons, routeTypeBadge, errorAlert, t, formatDateTime, formatNumber,
 } from '../components.js';
 import {
     iconNodes, iconAdvertisements, iconMessages, iconPackets, iconChannel,
@@ -136,7 +136,7 @@ function renderChartCards({ showNodes, showAdverts, showMessages, showPackets, s
                     <p class="text-xs opacity-80">${t('time.over_time_last_7_days')}</p>
                 </div>
                 <div class="text-4xl font-bold leading-none" style="color: var(--color-nodes)">
-                    ${stats.total_nodes}
+                    ${formatNumber(stats.total_nodes)}
                 </div>
             </div>
             <div class="h-32">
@@ -157,7 +157,7 @@ function renderChartCards({ showNodes, showAdverts, showMessages, showPackets, s
                     <p class="text-xs opacity-80">${t('time.per_day_last_7_days')}</p>
                 </div>
                 <div class="text-4xl font-bold leading-none" style="color: var(--color-adverts)">
-                    ${stats.advertisements_7d}
+                    ${formatNumber(stats.advertisements_7d)}
                 </div>
             </div>
             <div class="h-32">
@@ -178,7 +178,7 @@ function renderChartCards({ showNodes, showAdverts, showMessages, showPackets, s
                     <p class="text-xs opacity-80">${t('time.per_day_last_7_days')}</p>
                 </div>
                 <div class="text-4xl font-bold leading-none" style="color: var(--color-messages)">
-                    ${stats.messages_7d}
+                    ${formatNumber(stats.messages_7d)}
                 </div>
             </div>
             <div class="h-32">
@@ -199,7 +199,7 @@ function renderChartCards({ showNodes, showAdverts, showMessages, showPackets, s
                     <p class="text-xs opacity-80">${t('time.per_day_last_7_days')}</p>
                 </div>
                 <div class="text-4xl font-bold leading-none" style="color: var(--color-packets)">
-                    ${stats.packets_7d}
+                    ${formatNumber(stats.packets_7d)}
                 </div>
             </div>
             <div class="h-32">

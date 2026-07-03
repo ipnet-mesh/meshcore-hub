@@ -2,7 +2,7 @@ import { apiGet, isAbortError } from '../api.js';
 import {
     html, litRender, nothing, t,
     getConfig, typeEmoji, formatRelativeTime, escapeHtml, errorAlert,
-    timezoneIndicator,
+    timezoneIndicator, formatNumber, renderFilterToggle,
 } from '../components.js';
 
 const MAX_BOUNDS_RADIUS_KM = 20;
@@ -184,8 +184,13 @@ export async function render(container, params, router) {
             applyFilters();
         }
 
-        const existingDetails = container.querySelector('details.collapse');
-        const isFilterOpen = existingDetails ? existingDetails.open : false;
+        function onMapFilterToggle() {
+            const filterDiv = container.querySelector('#map-filter-fields');
+            if (filterDiv) filterDiv.classList.toggle('hidden');
+        }
+
+        const existingToggle = container.querySelector('#filter-toggle');
+        const isFilterOpen = existingToggle ? existingToggle.checked : false;
 
         litRender(html`
 <div class="flex items-center justify-between mb-6">
@@ -194,16 +199,11 @@ export async function render(container, params, router) {
         ${timezoneIndicator()}
         <span id="node-count" class="badge badge-lg">${t('common.loading')}</span>
         <span id="filtered-count" class="badge badge-lg badge-ghost hidden"></span>
+        ${renderFilterToggle({ open: isFilterOpen, onChange: onMapFilterToggle })}
     </div>
 </div>
 
-<details class="collapse collapse-arrow bg-base-200 border-2 border-base-content/25 rounded-box mb-6"
-         ?open=${isFilterOpen}>
-    <summary class="collapse-title text-sm font-medium cursor-pointer">
-        ${t('common.filters')}
-    </summary>
-    <div class="collapse-content pt-4">
-        <div class="flex gap-4 flex-wrap items-end">
+<div id="map-filter-fields" class="flex gap-4 flex-wrap items-end ${isFilterOpen ? '' : 'hidden'} mb-6">
             <div class="fieldset">
                 <label class="fieldset-label">${t('common.show')}</label>
                 <select id="filter-category" class="select select-sm" @change=${applyFilters}>
@@ -241,9 +241,7 @@ export async function render(container, params, router) {
                 </label>
             </div>
             <button id="clear-filters" class="btn btn-ghost btn-sm" @click=${clearFiltersHandler}>${t('common.clear_filters')}</button>
-        </div>
-    </div>
-</details>
+</div>
 
 <div class="card bg-base-100 shadow-xl">
     <div class="card-body p-2">
@@ -306,11 +304,11 @@ ${config.oidc_enabled ? html`
             const filteredEl = container.querySelector('#filtered-count');
 
             if (filteredNodes.length === allNodes.length) {
-                countEl.textContent = t('map.nodes_on_map', { count: allNodes.length });
+                countEl.textContent = t('map.nodes_on_map', { count: formatNumber(allNodes.length) });
                 filteredEl.classList.add('hidden');
             } else {
-                countEl.textContent = t('common.total', { count: allNodes.length });
-                filteredEl.textContent = t('common.shown', { count: filteredNodes.length });
+                countEl.textContent = t('common.total', { count: formatNumber(allNodes.length) });
+                filteredEl.textContent = t('common.shown', { count: formatNumber(filteredNodes.length) });
                 filteredEl.classList.remove('hidden');
             }
 
@@ -328,7 +326,7 @@ ${config.oidc_enabled ? html`
         }
 
         if (debug.nodes_with_coords === 0) {
-            container.querySelector('#node-count').textContent = t('map.nodes_none_have_coordinates', { count: debug.total_nodes });
+            container.querySelector('#node-count').textContent = t('map.nodes_none_have_coordinates', { count: formatNumber(debug.total_nodes) });
             return () => map.remove();
         }
 
