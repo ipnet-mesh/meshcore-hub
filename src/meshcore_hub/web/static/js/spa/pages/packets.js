@@ -7,7 +7,7 @@ import {
     renderFilterForm, renderFilterToggle, autoSubmit, submitOnEnter
 } from '../components.js';
 import { createAutoRefresh } from '../auto-refresh.js';
-import { iconSatelliteDish, iconPath } from '../icons.js';
+import { iconSatelliteDish, iconPath, iconRuler } from '../icons.js';
 
 const EVENT_TYPES = [
     'advertisement', 'channel_msg_recv', 'contact_msg_recv',
@@ -34,12 +34,19 @@ function receptionBadge(packet) {
     const rc = packet.reception_count ?? 1;
     const oc = packet.observer_count ?? 1;
     const pb = packet.path_hash_bytes;
+    const knownWidth = pb != null && pb > 0;
+    const widthLabel = knownWidth
+        ? t('packets.path_width_bytes', { count: pb })
+        : t('packets.path_width_unknown');
     return html`<span class="inline-flex items-center gap-1">
         ${iconSatelliteDish('h-4 w-4 opacity-70')}
         <span class="badge badge-sm badge-primary" title=${t('common.observers')}>${formatNumber(oc)}</span>
+        <span class="opacity-40" aria-hidden="true">×</span>
         ${iconPath('h-4 w-4 opacity-70')}
         <span class="badge badge-sm badge-primary" title=${t('packets.reception_plural')}>${formatNumber(rc)}</span>
-        ${pb ? html`<span class="badge badge-sm badge-ghost" title=${t('packets.path_width_title')}>${t('packets.path_width_bytes', { count: pb })}</span>` : nothing}
+        <span class="opacity-40" aria-hidden="true">@</span>
+        ${iconRuler('h-4 w-4 opacity-70')}
+        <span class="badge badge-sm badge-primary ${knownWidth ? '' : 'opacity-60'}" title=${t('packets.path_width_title')}>${widthLabel}</span>
     </span>`;
 }
 
@@ -49,6 +56,7 @@ export async function render(container, params, router) {
     const search = query.search || '';
     const event_type = query.event_type || '';
     const channel_idx = query.channel_idx || '';
+    const path_hash_bytes = query.path_hash_bytes || '';
     const page = parseInt(query.page, 10) || 1;
     const limit = parseInt(query.limit, 10) || 20;
     const offset = (page - 1) * limit;
@@ -63,7 +71,7 @@ export async function render(container, params, router) {
     let lastContent = nothing;
     let lastTotal = null;
     let currentFilterFields = [];
-    const hasActiveFilters = search !== '' || event_type !== '' || channel_idx !== '';
+    const hasActiveFilters = search !== '' || event_type !== '' || channel_idx !== '' || path_hash_bytes !== '';
 
     function onFilterToggle() { renderPage(lastContent, { total: lastTotal }); }
 
@@ -104,6 +112,7 @@ ${displayContent}`, container);
             const apiParams = { limit, offset, search, sort, order };
             if (event_type) apiParams.event_type = event_type;
             if (channel_idx !== '') apiParams.channel_idx = channel_idx;
+            if (path_hash_bytes !== '') apiParams.path_hash_bytes = path_hash_bytes;
 
             const [data, channelsData] = await Promise.all([
                 apiGet('/api/v1/packet-groups', apiParams, { signal }),
@@ -157,7 +166,7 @@ ${displayContent}`, container);
                 </tr>`);
 
             const paginationBlock = pagination(page, totalPages, '/packets', {
-                search, event_type, channel_idx, limit, sort, order,
+                search, event_type, channel_idx, path_hash_bytes, limit, sort, order,
             });
 
             const filterFields = [
@@ -182,9 +191,17 @@ ${displayContent}`, container);
                     ${channelList.map(c => html`<option value=${c.idx} ?selected=${String(channel_idx) === String(c.idx)}>${c.name} (${c.idx})</option>`)}
                 </select>
             </div>`,
+                () => html`
+            <div class="flex flex-col gap-1 max-w-48">
+                <label class="flex items-center py-1"><span class="opacity-80 text-sm">${t('packets.filter_path_width')}</span></label>
+                <select name="path_hash_bytes" class="select select-sm" @change=${autoSubmit}>
+                    <option value="" ?selected=${path_hash_bytes === ''}>${t('common.all')}</option>
+                    ${[1, 2, 3].map(w => html`<option value=${w} ?selected=${path_hash_bytes === String(w)}>${t('packets.path_width_bytes', { count: w })}</option>`)}
+                </select>
+            </div>`,
             ];
 
-            const headerParams = { search, event_type, channel_idx, limit };
+            const headerParams = { search, event_type, channel_idx, path_hash_bytes, limit };
             const sortable = (label, sortKey) => sortableTableHeader(label, {
                 sortKey, currentSort: sort, currentOrder: order,
                 navigate, basePath: '/packets', params: headerParams,

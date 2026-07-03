@@ -109,6 +109,7 @@ class TestRawPacketModel:
         assert packet.raw_hex is None
         assert packet.channel_idx is None
         assert packet.source_pubkey_prefix is None
+        assert packet.path_hash_bytes is None
         assert packet.decoded is None
 
     def test_raw_packet_indexes(self) -> None:

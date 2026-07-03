@@ -300,14 +300,14 @@ class TestListPacketGroups:
 
 
 class TestPathHashBytes:
-    """Tests for the derived path_hash_bytes field on the list endpoint."""
+    """Tests for the persisted path_hash_bytes field on the list endpoint."""
 
     def test_one_byte_path(self, client_no_auth, api_db_session):
         api_db_session.add(
             RawPacket(
                 raw_hex="AA",
                 packet_hash="H1",
-                decoded={"path": ["aa", "bb"]},
+                path_hash_bytes=1,
                 received_at=_now(),
             )
         )
@@ -320,7 +320,7 @@ class TestPathHashBytes:
             RawPacket(
                 raw_hex="AA",
                 packet_hash="H1",
-                decoded={"path": ["aabb"]},
+                path_hash_bytes=2,
                 received_at=_now(),
             )
         )
@@ -328,13 +328,41 @@ class TestPathHashBytes:
         item = client_no_auth.get("/api/v1/packet-groups").json()["items"][0]
         assert item["path_hash_bytes"] == 2
 
-    def test_mixed_path_uses_max(self, client_no_auth, api_db_session):
+    def test_three_byte_path(self, client_no_auth, api_db_session):
         api_db_session.add(
             RawPacket(
                 raw_hex="AA",
                 packet_hash="H1",
-                decoded={"path": ["aa", "aabb"]},
+                path_hash_bytes=3,
                 received_at=_now(),
+            )
+        )
+        api_db_session.commit()
+        item = client_no_auth.get("/api/v1/packet-groups").json()["items"][0]
+        assert item["path_hash_bytes"] == 3
+
+    def test_width_aggregates_across_receptions(self, client_no_auth, api_db_session):
+        """Width is observer-relative; take the widest across all receptions.
+
+        The oldest reception (representative) carries no path, while a newer
+        reception of the same packet saw a 2-byte path. The badge must reflect
+        the widest path seen, not just the representative row.
+        """
+        base = _now()
+        api_db_session.add(
+            RawPacket(
+                raw_hex="AA",
+                packet_hash="H1",
+                path_hash_bytes=None,
+                received_at=base,
+            )
+        )
+        api_db_session.add(
+            RawPacket(
+                raw_hex="BB",
+                packet_hash="H1",
+                path_hash_bytes=2,
+                received_at=base.replace(microsecond=base.microsecond + 1),
             )
         )
         api_db_session.commit()
@@ -366,7 +394,7 @@ class TestPathHashBytes:
                 raw_hex="SECRET",
                 packet_hash="ADM_HASH",
                 channel_idx=adm_idx,
-                decoded={"path": ["aabb"]},
+                path_hash_bytes=2,
                 received_at=_now(),
             )
         )
@@ -374,6 +402,142 @@ class TestPathHashBytes:
         item = client_no_auth.get("/api/v1/packet-groups").json()["items"][0]
         assert item["redacted"] is True
         assert item["path_hash_bytes"] is None
+
+
+class TestPathHashBytesFilter:
+    """Tests for the ?path_hash_bytes= query filter."""
+
+    def test_filter_returns_only_matching_width(self, client_no_auth, api_db_session):
+        now = _now()
+        api_db_session.add_all(
+            [
+                RawPacket(
+                    raw_hex="A", packet_hash="H1", path_hash_bytes=1, received_at=now
+                ),
+                RawPacket(
+                    raw_hex="B", packet_hash="H2", path_hash_bytes=2, received_at=now
+                ),
+                RawPacket(
+                    raw_hex="C", packet_hash="H3", path_hash_bytes=3, received_at=now
+                ),
+            ]
+        )
+        api_db_session.commit()
+
+        data = client_no_auth.get("/api/v1/packet-groups?path_hash_bytes=2").json()
+        assert data["total"] == 1
+        assert data["items"][0]["packet_hash"] == "H2"
+
+    def test_filter_width_1(self, client_no_auth, api_db_session):
+        now = _now()
+        api_db_session.add_all(
+            [
+                RawPacket(
+                    raw_hex="A", packet_hash="H1", path_hash_bytes=1, received_at=now
+                ),
+                RawPacket(
+                    raw_hex="B", packet_hash="H2", path_hash_bytes=3, received_at=now
+                ),
+            ]
+        )
+        api_db_session.commit()
+
+        data = client_no_auth.get("/api/v1/packet-groups?path_hash_bytes=1").json()
+        assert data["total"] == 1
+        assert data["items"][0]["packet_hash"] == "H1"
+
+    def test_filter_width_3(self, client_no_auth, api_db_session):
+        now = _now()
+        api_db_session.add_all(
+            [
+                RawPacket(
+                    raw_hex="A", packet_hash="H1", path_hash_bytes=1, received_at=now
+                ),
+                RawPacket(
+                    raw_hex="B", packet_hash="H2", path_hash_bytes=3, received_at=now
+                ),
+            ]
+        )
+        api_db_session.commit()
+
+        data = client_no_auth.get("/api/v1/packet-groups?path_hash_bytes=3").json()
+        assert data["total"] == 1
+        assert data["items"][0]["packet_hash"] == "H2"
+
+    def test_no_filter_returns_all_including_null(self, client_no_auth, api_db_session):
+        now = _now()
+        api_db_session.add_all(
+            [
+                RawPacket(
+                    raw_hex="A", packet_hash="H1", path_hash_bytes=1, received_at=now
+                ),
+                RawPacket(
+                    raw_hex="B", packet_hash="H2", path_hash_bytes=None, received_at=now
+                ),
+            ]
+        )
+        api_db_session.commit()
+
+        data = client_no_auth.get("/api/v1/packet-groups").json()
+        assert data["total"] == 2
+        widths = {i["path_hash_bytes"] for i in data["items"]}
+        assert widths == {1, None}
+
+    def test_filter_excludes_null_width(self, client_no_auth, api_db_session):
+        now = _now()
+        api_db_session.add_all(
+            [
+                RawPacket(
+                    raw_hex="A", packet_hash="H1", path_hash_bytes=None, received_at=now
+                ),
+                RawPacket(
+                    raw_hex="B", packet_hash="H2", path_hash_bytes=2, received_at=now
+                ),
+            ]
+        )
+        api_db_session.commit()
+
+        data = client_no_auth.get("/api/v1/packet-groups?path_hash_bytes=2").json()
+        assert data["total"] == 1
+        assert data["items"][0]["path_hash_bytes"] == 2
+
+    def test_filter_redacted_group_still_null(self, client_no_auth, api_db_session):
+        adm_key = "FFEEDDCCBBAA99887766554433221100"
+        adm_idx = int(Channel.compute_channel_hash(adm_key), 16)
+        now = _now()
+        api_db_session.add(
+            Channel(
+                name="Adm",
+                key_hex=adm_key,
+                channel_hash=Channel.compute_channel_hash(adm_key),
+                visibility="admin",
+                enabled=True,
+            )
+        )
+        api_db_session.add_all(
+            [
+                RawPacket(
+                    raw_hex="SECRET",
+                    packet_hash="ADM",
+                    channel_idx=adm_idx,
+                    path_hash_bytes=2,
+                    received_at=now,
+                ),
+                RawPacket(
+                    raw_hex="OK",
+                    packet_hash="PUB",
+                    path_hash_bytes=2,
+                    received_at=now,
+                ),
+            ]
+        )
+        api_db_session.commit()
+
+        data = client_no_auth.get("/api/v1/packet-groups?path_hash_bytes=2").json()
+        assert data["total"] == 2
+        adm = next(i for i in data["items"] if i["packet_hash"] == "ADM")
+        assert adm["redacted"] is True
+        assert adm["path_hash_bytes"] is None
 
 
 class TestGetPacketGroup:

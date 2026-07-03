@@ -82,6 +82,7 @@
     "sign_out": "Sign Out",
     "view_details": "View Details",
     "all_types": "All Types",
+    "all": "Any",
     "all_channels": "All Channels",
     "all_members": "All Members",
     "all_operators": "All Operators",
@@ -218,6 +219,7 @@
   },
   "packets": {
     "filter_event_type": "Event Type",
+    "filter_path_width": "Path Width",
     "filter_min_snr": "Min SNR",
     "filter_max_snr": "Max SNR",
     "redacted": "Restricted",
@@ -248,6 +250,7 @@
     "path_nodes_more": "+{{count}} more — view all →",
     "not_found_retention": "Packet not found — it may have been cleaned up due to data retention.",
     "path_width_bytes": "{{count}}B",
+    "path_width_unknown": "?B",
     "path_width_title": "Path hash width (bytes)",
     "sort": {
       "newest": "Time (newest)",

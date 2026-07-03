@@ -144,3 +144,84 @@ class TestStoreRawPacketEdges:
 
         rp = db_session.execute(select(RawPacket)).scalar_one()
         assert rp.source_pubkey_prefix is None
+
+
+class TestStoreRawPacketPathHashBytes:
+    """Tests for path_hash_bytes computation at ingest."""
+
+    def test_top_level_path_max_byte_width(self, db_manager, db_session):
+        """Mixed-width hashes in decoded.path persist the widest byte width."""
+        decoded = {
+            "payloadType": 1,
+            "path": ["aa", "aabbcc"],
+            "pathLength": 2,
+            "payload": {"decoded": {"sourceHash": "AABBCCDD"}},
+        }
+        store_raw_packet(
+            "a" * 64, {"raw": "00", "hash": "h1"}, decoded, "flood", db_manager
+        )
+
+        rp = db_session.execute(select(RawPacket)).scalar_one()
+        assert rp.path_hash_bytes == 3
+
+    def test_trace_fallback_path_hashes(self, db_manager, db_session):
+        """Trace-style pathHashes in payload.decoded are used as fallback."""
+        decoded = {
+            "payloadType": 1,
+            "payload": {"decoded": {"pathHashes": ["aabb", "ccdd"]}},
+        }
+        store_raw_packet(
+            "a" * 64, {"raw": "00", "hash": "h1"}, decoded, "trace", db_manager
+        )
+
+        rp = db_session.execute(select(RawPacket)).scalar_one()
+        assert rp.path_hash_bytes == 2
+
+    def test_one_byte_path(self, db_manager, db_session):
+        """Single-byte hashes persist width 1."""
+        decoded = {
+            "payloadType": 1,
+            "path": ["aa", "bb"],
+            "payload": {"decoded": {}},
+        }
+        store_raw_packet(
+            "a" * 64, {"raw": "00", "hash": "h1"}, decoded, "flood", db_manager
+        )
+
+        rp = db_session.execute(select(RawPacket)).scalar_one()
+        assert rp.path_hash_bytes == 1
+
+    def test_no_path_returns_none(self, db_manager, db_session):
+        """No path hashes at all persist path_hash_bytes = None."""
+        decoded = {"payloadType": 3, "payload": {"decoded": {}}}
+        store_raw_packet(
+            "a" * 64, {"raw": "00", "hash": "h1"}, decoded, "ack", db_manager
+        )
+
+        rp = db_session.execute(select(RawPacket)).scalar_one()
+        assert rp.path_hash_bytes is None
+
+    def test_null_decoded_returns_none(self, db_manager, db_session):
+        """A None decoded_packet leaves path_hash_bytes as None."""
+        store_raw_packet(
+            "a" * 64, {"raw": "00", "hash": "h1"}, None, "unknown", db_manager
+        )
+
+        rp = db_session.execute(select(RawPacket)).scalar_one()
+        assert rp.path_hash_bytes is None
+
+    def test_path_len_still_persisted(self, db_manager, db_session):
+        """path_len is still persisted alongside path_hash_bytes."""
+        decoded = {
+            "payloadType": 1,
+            "path": ["aa", "bb", "cc"],
+            "pathLength": 3,
+            "payload": {"decoded": {"sourceHash": "AABBCCDD"}},
+        }
+        store_raw_packet(
+            "a" * 64, {"raw": "00", "hash": "h1"}, decoded, "flood", db_manager
+        )
+
+        rp = db_session.execute(select(RawPacket)).scalar_one()
+        assert rp.path_len == 3
+        assert rp.path_hash_bytes == 1
