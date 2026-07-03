@@ -30,6 +30,8 @@ const ChartColors = {
     get advertsFill()  { return withAlpha(this.adverts, 0.1); },
     get messages()     { return getCSSColor('--color-messages', 'oklch(0.75 0.18 180)'); },
     get messagesFill() { return withAlpha(this.messages, 0.1); },
+    get packets()      { return getCSSColor('--color-packets', 'oklch(0.72 0.17 145)'); },
+    get packetsFill()  { return withAlpha(this.packets, 0.1); },
 
     // Neutral grays (not page-specific)
     grid: 'oklch(0.4 0 0 / 0.2)',
@@ -194,13 +196,14 @@ function createActivityChart(canvasId, advertData, messageData) {
 }
 
 /**
- * Initialize dashboard charts (nodes, advertisements, messages).
+ * Initialize dashboard charts (nodes, advertisements, messages, packets).
  * Pass null for any data parameter to skip that chart.
  * @param {Object|null} nodeData - Node count data, or null to skip
  * @param {Object|null} advertData - Advertisement data, or null to skip
  * @param {Object|null} messageData - Message data, or null to skip
+ * @param {Object|null} packetData - Raw-packet data, or null to skip
  */
-function initDashboardCharts(nodeData, advertData, messageData) {
+function initDashboardCharts(nodeData, advertData, messageData, packetData) {
     if (nodeData) {
         createLineChart(
             'nodeChart',
@@ -230,6 +233,17 @@ function initDashboardCharts(nodeData, advertData, messageData) {
             (window.t && window.t('entities.messages')) || 'Messages',
             ChartColors.messages,
             ChartColors.messagesFill,
+            true
+        );
+    }
+
+    if (packetData) {
+        createLineChart(
+            'packetChart',
+            packetData,
+            (window.t && window.t('entities.packets')) || 'Packets',
+            ChartColors.packets,
+            ChartColors.packetsFill,
             true
         );
     }

@@ -2,10 +2,10 @@ import { apiGet, isAbortError } from '../api.js';
 import {
     html, litRender, nothing,
     getConfig, getChannelLabelsMap, resolveChannelLabel,
-    typeEmoji, errorAlert, pageColors, renderStatCard, t, formatDateTime,
+    observerIcons, routeTypeBadge, errorAlert, t, formatDateTime,
 } from '../components.js';
 import {
-    iconNodes, iconAdvertisements, iconMessages, iconChannel,
+    iconNodes, iconAdvertisements, iconMessages, iconPackets, iconChannel,
 } from '../icons.js';
 
 function channelLabel(channel, channelLabels) {
@@ -35,12 +35,20 @@ function renderRecentAds(ads) {
     if (!ads || ads.length === 0) {
         return html`<p class="text-sm opacity-70">${t('common.no_entity_yet', { entity: t('entities.advertisements').toLowerCase() })}</p>`;
     }
-    const rows = ads.slice(0, 5).map(ad => {
+    const rows = ads.map(ad => {
         const friendlyName = ad.tag_name || ad.name;
         const displayName = friendlyName || (ad.public_key.slice(0, 12) + '...');
         const keyLine = friendlyName
             ? html`<div class="text-xs opacity-50 font-mono">${ad.public_key.slice(0, 12)}...</div>`
             : nothing;
+        let observersBlock;
+        if (ad.observers && ad.observers.length >= 1) {
+            observersBlock = html`${observerIcons(ad.observers)}`;
+        } else if (ad.observed_by) {
+            observersBlock = html`<span class="opacity-50">\u{1F4E1}</span>`;
+        } else {
+            observersBlock = html`<span class="opacity-50">-</span>`;
+        }
         return html`<tr>
             <td>
                 <a href="/nodes/${ad.public_key}" class="link link-hover">
@@ -48,8 +56,9 @@ function renderRecentAds(ads) {
                 </a>
                 ${keyLine}
             </td>
-            <td>${ad.adv_type ? typeEmoji(ad.adv_type) : html`<span class="opacity-50">-</span>`}</td>
+            <td class="hidden md:table-cell">${routeTypeBadge(ad.route_type)}</td>
             <td class="text-right text-sm opacity-70">${formatTimeOnly(ad.received_at)}</td>
+            <td>${observersBlock}</td>
         </tr>`;
     });
 
@@ -58,8 +67,9 @@ function renderRecentAds(ads) {
             <thead>
                 <tr>
                     <th>${t('entities.node')}</th>
-                    <th>${t('common.type')}</th>
+                    <th class="hidden md:table-cell">${t('common.type')}</th>
                     <th class="text-right">${t('common.received')}</th>
+                    <th>${t('common.observers')}</th>
                 </tr>
             </thead>
             <tbody>${rows}</tbody>
@@ -105,22 +115,30 @@ function renderChannelMessages(channelMessages, channelLabels) {
 function gridCols(count) {
     if (count === 2) return 'md:grid-cols-2';
     if (count === 3) return 'md:grid-cols-3';
+    if (count === 4) return 'md:grid-cols-4';
     return '';
 }
 
-function renderChartCards({ showNodes, showAdverts, showMessages }) {
-    const visibleCount = (showNodes ? 1 : 0) + (showAdverts ? 1 : 0) + (showMessages ? 1 : 0);
+function renderChartCards({ showNodes, showAdverts, showMessages, showPackets, stats }) {
+    const visibleCount = (showNodes ? 1 : 0) + (showAdverts ? 1 : 0) + (showMessages ? 1 : 0) + (showPackets ? 1 : 0);
     if (visibleCount === 0) return nothing;
     return html`
 <div class="grid grid-cols-1 ${gridCols(visibleCount)} gap-6 mb-8">
     ${showNodes ? html`
     <div class="card bg-base-100 shadow-xl panel-accent" style="--panel-color: var(--color-nodes)">
         <div class="card-body">
-            <h2 class="card-title text-base">
-                ${iconNodes('h-5 w-5')}
-                ${t('common.total_entity', { entity: t('entities.nodes') })}
-            </h2>
-            <p class="text-xs opacity-80">${t('time.over_time_last_7_days')}</p>
+            <div class="flex items-start justify-between gap-2">
+                <div>
+                    <h2 class="card-title text-base">
+                        ${iconNodes('h-5 w-5')}
+                        ${t('entities.nodes')}
+                    </h2>
+                    <p class="text-xs opacity-80">${t('time.over_time_last_7_days')}</p>
+                </div>
+                <div class="text-4xl font-bold leading-none" style="color: var(--color-nodes)">
+                    ${stats.total_nodes}
+                </div>
+            </div>
             <div class="h-32">
                 <canvas id="nodeChart"></canvas>
             </div>
@@ -130,11 +148,18 @@ function renderChartCards({ showNodes, showAdverts, showMessages }) {
     ${showAdverts ? html`
     <div class="card bg-base-100 shadow-xl panel-accent" style="--panel-color: var(--color-adverts)">
         <div class="card-body">
-            <h2 class="card-title text-base">
-                ${iconAdvertisements('h-5 w-5')}
-                ${t('entities.advertisements')}
-            </h2>
-            <p class="text-xs opacity-80">${t('time.per_day_last_7_days')}</p>
+            <div class="flex items-start justify-between gap-2">
+                <div>
+                    <h2 class="card-title text-base">
+                        ${iconAdvertisements('h-5 w-5')}
+                        ${t('entities.advertisements')}
+                    </h2>
+                    <p class="text-xs opacity-80">${t('time.per_day_last_7_days')}</p>
+                </div>
+                <div class="text-4xl font-bold leading-none" style="color: var(--color-adverts)">
+                    ${stats.advertisements_7d}
+                </div>
+            </div>
             <div class="h-32">
                 <canvas id="advertChart"></canvas>
             </div>
@@ -144,13 +169,41 @@ function renderChartCards({ showNodes, showAdverts, showMessages }) {
     ${showMessages ? html`
     <div class="card bg-base-100 shadow-xl panel-accent" style="--panel-color: var(--color-messages)">
         <div class="card-body">
-            <h2 class="card-title text-base">
-                ${iconMessages('h-5 w-5')}
-                ${t('entities.messages')}
-            </h2>
-            <p class="text-xs opacity-80">${t('time.per_day_last_7_days')}</p>
+            <div class="flex items-start justify-between gap-2">
+                <div>
+                    <h2 class="card-title text-base">
+                        ${iconMessages('h-5 w-5')}
+                        ${t('entities.messages')}
+                    </h2>
+                    <p class="text-xs opacity-80">${t('time.per_day_last_7_days')}</p>
+                </div>
+                <div class="text-4xl font-bold leading-none" style="color: var(--color-messages)">
+                    ${stats.messages_7d}
+                </div>
+            </div>
             <div class="h-32">
                 <canvas id="messageChart"></canvas>
+            </div>
+        </div>
+    </div>` : nothing}
+
+    ${showPackets ? html`
+    <div class="card bg-base-100 shadow-xl panel-accent" style="--panel-color: var(--color-packets)">
+        <div class="card-body">
+            <div class="flex items-start justify-between gap-2">
+                <div>
+                    <h2 class="card-title text-base">
+                        ${iconPackets('h-5 w-5')}
+                        ${t('entities.packets')}
+                    </h2>
+                    <p class="text-xs opacity-80">${t('time.per_day_last_7_days')}</p>
+                </div>
+                <div class="text-4xl font-bold leading-none" style="color: var(--color-packets)">
+                    ${stats.packets_7d}
+                </div>
+            </div>
+            <div class="h-32">
+                <canvas id="packetChart"></canvas>
             </div>
         </div>
     </div>` : nothing}
@@ -166,12 +219,14 @@ export async function render(container, params, router) {
         const showNodes = features.nodes !== false;
         const showAdverts = features.advertisements !== false;
         const showMessages = features.messages !== false;
+        const showPackets = features.packets !== false;
 
-        const [stats, advertActivity, messageActivity, nodeCount, channelsData] = await Promise.all([
+        const [stats, advertActivity, messageActivity, nodeCount, packetActivity, channelsData] = await Promise.all([
             apiGet('/api/v1/dashboard/stats', {}, { signal }),
             apiGet('/api/v1/dashboard/activity', { days: 7 }, { signal }),
             apiGet('/api/v1/dashboard/message-activity', { days: 7 }, { signal }),
             apiGet('/api/v1/dashboard/node-count', { days: 7 }, { signal }),
+            apiGet('/api/v1/dashboard/packet-activity', { days: 7 }, { signal }),
             apiGet('/api/v1/channels', {}, { signal }),
         ]);
         channelLabels = new Map([
@@ -180,10 +235,6 @@ export async function render(container, params, router) {
                 .map(ch => [parseInt(ch.channel_hash, 16), ch.name])
                 .filter(([idx]) => Number.isInteger(idx)),
         ]);
-
-        // Top section: stats + charts
-        const topCount = (showNodes ? 1 : 0) + (showAdverts ? 1 : 0) + (showMessages ? 1 : 0);
-        const topGrid = gridCols(topCount);
 
         // Bottom section: recent adverts + recent channel messages
         const bottomCount = (showAdverts ? 1 : 0) + (showMessages ? 1 : 0);
@@ -194,34 +245,8 @@ export async function render(container, params, router) {
     <h1 class="text-3xl font-bold">${t('entities.dashboard')}</h1>
 </div>
 
-${topCount > 0 ? html`
-<div class="grid grid-cols-1 ${topGrid} gap-6 mb-6">
-    ${showNodes ? renderStatCard({
-        icon: iconNodes('h-8 w-8'),
-        color: pageColors.nodes,
-        title: t('common.total_entity', { entity: t('entities.nodes') }),
-        value: stats.total_nodes,
-        description: t('dashboard.all_discovered_nodes'),
-    }) : nothing}
-
-    ${showAdverts ? renderStatCard({
-        icon: iconAdvertisements('h-8 w-8'),
-        color: pageColors.adverts,
-        title: t('entities.advertisements'),
-        value: stats.advertisements_7d,
-        description: t('time.last_7_days'),
-    }) : nothing}
-
-    ${showMessages ? renderStatCard({
-        icon: iconMessages('h-8 w-8'),
-        color: pageColors.messages,
-        title: t('entities.messages'),
-        value: stats.messages_7d,
-        description: t('time.last_7_days'),
-    }) : nothing}
-</div>
-
-${renderChartCards({ showNodes, showAdverts, showMessages })}` : nothing}
+${(showNodes || showAdverts || showMessages || showPackets) ? html`
+${renderChartCards({ showNodes, showAdverts, showMessages, showPackets, stats })}` : nothing}
 
 ${bottomCount > 0 ? html`
 <div class="grid grid-cols-1 ${bottomGrid} gap-6">
@@ -243,9 +268,10 @@ ${bottomCount > 0 ? html`
             showNodes ? nodeCount : null,
             showAdverts ? advertActivity : null,
             showMessages ? messageActivity : null,
+            showPackets ? packetActivity : null,
         );
 
-        const chartIds = ['nodeChart', 'advertChart', 'messageChart'];
+        const chartIds = ['nodeChart', 'advertChart', 'messageChart', 'packetChart'];
         return () => {
             chartIds.forEach(id => {
                 const canvas = document.getElementById(id);

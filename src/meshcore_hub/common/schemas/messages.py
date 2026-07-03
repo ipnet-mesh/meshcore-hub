@@ -242,6 +242,14 @@ class RecentAdvertisement(BaseModel):
     tag_name: Optional[str] = Field(default=None, description="Name tag")
     adv_type: Optional[str] = Field(default=None, description="Node type")
     received_at: datetime = Field(..., description="When received")
+    route_type: Optional[str] = Field(default=None, description="Route type")
+    observers: list[ObserverInfo] = Field(
+        default_factory=list,
+        description="All observers that captured this advertisement",
+    )
+    observed_by: Optional[str] = Field(
+        default=None, description="Observing interface node public key"
+    )
 
 
 class ChannelMessage(BaseModel):
@@ -288,6 +296,8 @@ class DashboardStats(BaseModel):
     total_members: int = Field(
         default=0, description="Number of member-role users (excluding operators)"
     )
+    total_packets: int = Field(default=0, description="Total raw packets captured")
+    packets_7d: int = Field(default=0, description="Packets captured in last 7 days")
 
 
 class DailyActivityPoint(BaseModel):
