@@ -1,5 +1,5 @@
 import { apiGet, isAbortError } from '../api.js';
-import { html, litRender, nothing, t, errorAlert, getConfig } from '../components.js';
+import { html, litRender, nothing, t, errorAlert, getConfig, formatNumber } from '../components.js';
 import { iconAntenna, iconUsers } from '../icons.js';
 
 function renderProfileTile(profile, router) {
@@ -14,7 +14,7 @@ function renderProfileTile(profile, router) {
         : nothing;
 
     const nodeCountLabel = profile.node_count > 0
-        ? html`<span class="text-sm opacity-60">${t('members_page.node_count', { count: profile.node_count })}</span>`
+        ? html`<span class="text-sm opacity-60">${t('members_page.node_count', { count: formatNumber(profile.node_count) })}</span>`
         : nothing;
 
     const nodeBadges = profile.adopted_nodes && profile.adopted_nodes.length > 0
@@ -103,7 +103,7 @@ export async function render(container, params, router) {
         litRender(html`
 <div class="flex items-center justify-between mb-6">
     <h1 class="text-3xl font-bold">${t('entities.members')}</h1>
-    <span class="badge badge-lg">${t('common.count_entity', { count: operators.length + members.length, entity: t('entities.members').toLowerCase() })}</span>
+    <span class="badge badge-lg">${t('common.count_entity', { count: formatNumber(operators.length + members.length), entity: t('entities.members').toLowerCase() })}</span>
 </div>
 
 ${renderGroup(t('members_page.operators'), operators, html`<span class="text-primary">${iconAntenna('h-6 w-6')}</span>`, router)}

@@ -1,10 +1,10 @@
 import { apiGet, isAbortError } from '../api.js';
 import {
     html, litRender, nothing,
-    getConfig, formatDateTime, formatDateTimeShort,
+    getConfig, formatDateTime, formatDateTimeShort, formatNumber,
     warningBadge,
     pagination, sortableTableHeader, mobileSortSelect,
-    renderFilterCard, autoSubmit, submitOnEnter, copyToClipboard, renderNodeDisplay, t
+    renderFilterForm, renderFilterToggle, autoSubmit, submitOnEnter, copyToClipboard, renderNodeDisplay, t
 } from '../components.js';
 import { createAutoRefresh } from '../auto-refresh.js';
 
@@ -28,6 +28,10 @@ export async function render(container, params, router) {
 
     let lastContent = nothing;
     let lastTotal = null;
+    let currentFilterFields = [];
+    const hasActiveFilters = search !== '' || adv_type !== '' || pubkey_prefix !== '' || (config.oidc_enabled && adopted_by !== '');
+
+    function onFilterToggle() { renderPage(lastContent, { total: lastTotal }); }
 
     function renderPage(content, { total = null, error = null } = {}) {
         if (!error) {
@@ -36,6 +40,8 @@ export async function render(container, params, router) {
         }
         const displayContent = error ? lastContent : content;
         const displayTotal = error ? lastTotal : total;
+        const existingToggle = container.querySelector('#filter-toggle');
+        const filterOpen = existingToggle ? existingToggle.checked : hasActiveFilters;
         litRender(html`
 <div class="flex items-center justify-between mb-6">
     <h1 class="text-3xl font-bold">${t('entities.nodes')}</h1>
@@ -43,11 +49,17 @@ export async function render(container, params, router) {
 </div>
 <div class="flex items-center gap-2 mb-4">
     ${displayTotal !== null
-        ? html`<span class="badge badge-lg">${t('common.total', { count: displayTotal })}</span>`
+        ? html`<span class="badge badge-lg">${t('common.total', { count: formatNumber(displayTotal) })}</span>`
         : nothing}
-    <span id="auto-refresh-toggle"></span>
     ${error ? warningBadge(error) : nothing}
+    <div class="ml-auto flex items-center gap-3">
+        <span id="auto-refresh-toggle"></span>
+    </div>
+    <div class="ml-4">${renderFilterToggle({ open: filterOpen, onChange: onFilterToggle })}</div>
 </div>
+${(filterOpen && currentFilterFields.length > 0)
+    ? html`<div class="mb-4">${renderFilterForm({ fields: currentFilterFields, basePath: '/nodes', navigate })}</div>`
+    : nothing}
 ${displayContent}`, container);
     }
 
@@ -172,25 +184,15 @@ ${displayContent}`, container);
             </div>`);
             }
 
-            const hasActiveFilters = search !== '' || adv_type !== '' || (config.oidc_enabled && adopted_by !== '');
-            const existingDetails = container.querySelector('details.collapse');
-            const isFilterOpen = existingDetails ? existingDetails.open : hasActiveFilters;
-
-            const filterCard = renderFilterCard({
-                fields: filterFields,
-                basePath: '/nodes',
-                navigate,
-                collapsible: true,
-                defaultOpen: isFilterOpen,
-            });
-
             const headerParams = { search, adv_type, adopted_by, pubkey_prefix, limit };
             const sortable = (label, sortKey) => sortableTableHeader(label, {
                 sortKey, currentSort: sort, currentOrder: order,
                 navigate, basePath: '/nodes', params: headerParams,
             });
 
-            renderPage(html`${filterCard}
+            currentFilterFields = filterFields;
+
+            renderPage(html`
 
 ${mobileSortSelect({
     currentSort: sort, currentOrder: order,

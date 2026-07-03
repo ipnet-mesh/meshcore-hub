@@ -20,7 +20,7 @@ import { html, nothing } from 'lit-html';
 import { render } from 'lit-html';
 import { unsafeHTML } from 'lit-html/directives/unsafe-html.js';
 import { t } from './i18n.js';
-import { iconAlert, iconError, iconInfo, iconSuccess, iconUser, iconLogout } from './icons.js';
+import { iconAlert, iconError, iconInfo, iconSuccess, iconUser, iconLogout, iconFilter } from './icons.js';
 
 // Re-export lit-html utilities for page modules
 export { html, nothing, unsafeHTML };
@@ -191,6 +191,20 @@ export const pageColors = {
 };
 
 // --- Formatting Helpers (return strings) ---
+
+/**
+ * Format a number with locale-appropriate grouping separators.
+ * Uses the visitor's browser locale (no explicit locale argument).
+ * @param {number|string|null|undefined} value
+ * @returns {string} Grouped number string, or '' for missing values
+ */
+export function formatNumber(value) {
+    if (value === null || value === undefined || value === '') return '';
+    const n = Number(value);
+    if (!Number.isFinite(n)) return String(value);
+    return new Intl.NumberFormat().format(n);
+}
+window.formatNumber = formatNumber;
 
 /**
  * Get the type emoji for a node advertisement type.
@@ -555,7 +569,7 @@ export function observerIcons(observers) {
     if (!observers || observers.length === 0) return nothing;
     const names = observers.map(o => o.tag_name || o.name || truncateKey(o.public_key, 8));
     const tooltip = names.join(', ');
-    return html`<span class="badge badge-sm badge-primary observer-badge" title=${tooltip}>${observers.length}</span>`;
+    return html`<span class="badge badge-sm badge-primary observer-badge" title=${tooltip}>${formatNumber(observers.length)}</span>`;
 }
 
 export function routeTypeBadge(routeType) {
@@ -761,18 +775,17 @@ export function renderAuthSection(container, config) {
 }
 
 /**
- * Render a filter card with configurable form fields, submit, and clear buttons.
+ * Render a bare filter form (fields + submit/clear buttons).
+ * No surrounding card, border, or collapse wrapper — the caller controls visibility.
  * @param {Array<Function>} options.fields - Array of render functions returning lit-html form controls
  * @param {string} options.basePath - Base URL path for the page (e.g., '/nodes')
  * @param {Function} options.navigate - Router navigate function
  * @param {string} [options.submitLabel] - Text for submit button (default: translated "Filter")
  * @param {string} [options.clearLabel] - Text for clear button (default: translated "Clear")
- * @param {boolean} [options.collapsible=false] - Wrap in DaisyUI collapsible <details>
- * @param {boolean} [options.defaultOpen=false] - Start expanded when collapsible
  * @returns {TemplateResult}
  */
-export function renderFilterCard({ fields, basePath, navigate, submitLabel, clearLabel, collapsible = false, defaultOpen = false }) {
-    const formBody = html`
+export function renderFilterForm({ fields, basePath, navigate, submitLabel, clearLabel }) {
+    return html`
         <form method="GET" action=${basePath} class="flex flex-col gap-4" @submit=${createFilterHandler(basePath, navigate)}>
             <div class="flex gap-4 flex-wrap items-start">
                 ${fields.map(f => f())}
@@ -781,28 +794,26 @@ export function renderFilterCard({ fields, basePath, navigate, submitLabel, clea
                 <button type="submit" class="btn btn-primary btn-sm">${submitLabel || t('common.filter')}</button>
                 <a href=${basePath} class="btn btn-ghost btn-sm">${clearLabel || t('common.clear')}</a>
             </div>
-        </form>
-    `;
+        </form>`;
+}
 
-    if (!collapsible) {
-        return html`
-            <div class="card shadow-sm mb-6 panel-solid" style="--panel-color: var(--color-neutral)">
-                <div class="card-body py-4">${formBody}</div>
-            </div>
-        `;
-    }
-
+/**
+ * Render the filter toggle control (DaisyUI slider switch + label).
+ * Placed at the right of the control row; the native checkbox holds open-state.
+ * @param {boolean} options.open - Whether the toggle is checked
+ * @param {Function} options.onChange - @change handler on the checkbox
+ * @returns {TemplateResult}
+ */
+export function renderFilterToggle({ open, onChange }) {
     return html`
-        <details class="collapse collapse-arrow bg-base-200 border-2 border-base-content/25 rounded-box mb-6"
-                 ?open=${defaultOpen}>
-            <summary class="collapse-title text-sm font-medium cursor-pointer">
-                ${t('common.filters')}
-            </summary>
-            <div class="collapse-content pt-4">
-                ${formBody}
-            </div>
-        </details>
-    `;
+        <label class="label cursor-pointer gap-2" title=${t('common.filters')}>
+            <span class="text-sm opacity-80 flex items-center gap-1">
+                ${iconFilter('w-4 h-4')} ${t('common.filters')}
+            </span>
+            <input type="checkbox" id="filter-toggle"
+                   class="toggle toggle-sm toggle-primary"
+                   ?checked=${open} @change=${onChange}>
+        </label>`;
 }
 
 /**
@@ -819,7 +830,7 @@ export function renderStatCard({ icon, color, title, value, description }) {
         <div class="stat bg-base-200 rounded-box shadow-sm panel-accent !py-2" style="--panel-color: ${color}">
             <div class="stat-figure" style="color: ${color}">${icon}</div>
             <div class="stat-title">${title}</div>
-            <div class="stat-value text-3xl">${value}</div>
+            <div class="stat-value text-3xl">${formatNumber(value)}</div>
             ${description ? html`<div class="stat-desc">${description}</div>` : nothing}
         </div>`;
 }
