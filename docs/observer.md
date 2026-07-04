@@ -8,7 +8,7 @@ This document covers the local packet-capture observer (the `observer` compose p
 
 > **Restricting which observers are accepted:** because anyone with broker access can publish as an observer, Hub operators can gate ingestion by observer public key using `OBSERVER_ALLOWLIST` / `OBSERVER_DENYLIST`. See [configuration.md → Observer Ingestion Filters](configuration.md#observer-ingestion-filters).
 
-## Example: Contribute to MeshCore Hub, LetsMesh, and MeshRank
+## Example: Contribute to MeshCore Hub, MeshRank and other services
 
 A ready-made Docker Compose setup is provided in `contrib/packetcapture/`. Download it and configure:
 
@@ -23,22 +23,20 @@ cp .env.example .env
 
 Edit `.env` and update the following variables:
 
-| Variable | Description |
-|----------|-------------|
-| `SERIAL_PORT` | Device path for your MeshCore companion device (e.g. `/dev/ttyUSB0`, or `/dev/serial/by-id/...` for a stable path) |
-| `IATA` | 3-letter area code for your location (e.g. `STN`, `SEA`) |
-| `ORIGIN` | Observer identifier (default: `observer`) |
-| `IPNET_ENABLE` | Set `true` to contribute packets to IPNet MeshCore Hub (default: `true`) |
-| `LETSMESH_ENABLE` | Set `true` to contribute to LetsMesh (default: `false`) |
-| `LETSMESH_REGION` | LetsMesh region: `eu` or `us` (default: `eu`) |
-| `MESHRANK_ENABLE` | Set `true` to contribute to MeshRank (default: `false`) |
-| `MESHRANK_UPLINK_KEY` | Your MeshRank uplink key (required if MeshRank enabled) |
-| `CUSTOM_ENABLE` | Set `true` to publish to a custom MQTT broker (default: `false`) |
-| `CUSTOM_MQTT_SERVER` | Custom MQTT broker hostname |
-| `CUSTOM_MQTT_PORT` | Custom MQTT broker port (default: `8883`) |
-| `CUSTOM_MQTT_USE_TLS` | `true` for TLS, `false` for plain (default: `true`) |
-| `CUSTOM_MQTT_USERNAME` | Username for custom broker auth |
-| `CUSTOM_MQTT_PASSWORD` | Password for custom broker auth |
+| Variable               | Description                                                                                                        |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `SERIAL_PORT`          | Device path for your MeshCore companion device (e.g. `/dev/ttyUSB0`, or `/dev/serial/by-id/...` for a stable path) |
+| `IATA`                 | 3-letter area code for your location (e.g. `STN`, `SEA`)                                                           |
+| `ORIGIN`               | Observer identifier (default: `observer`)                                                                          |
+| `IPNET_ENABLE`         | Set `true` to contribute packets to IPNet MeshCore Hub (default: `true`)                                           |
+| `MESHRANK_ENABLE`      | Set `true` to contribute to MeshRank (default: `false`)                                                            |
+| `MESHRANK_UPLINK_KEY`  | Your MeshRank uplink key (required if MeshRank enabled)                                                            |
+| `CUSTOM_ENABLE`        | Set `true` to publish to a custom MQTT broker (default: `false`)                                                   |
+| `CUSTOM_MQTT_SERVER`   | Custom MQTT broker hostname                                                                                        |
+| `CUSTOM_MQTT_PORT`     | Custom MQTT broker port (default: `8883`)                                                                          |
+| `CUSTOM_MQTT_USE_TLS`  | `true` for TLS, `false` for plain (default: `true`)                                                                |
+| `CUSTOM_MQTT_USERNAME` | Username for custom broker auth                                                                                    |
+| `CUSTOM_MQTT_PASSWORD` | Password for custom broker auth                                                                                    |
 
 Then start the observer:
 
@@ -50,55 +48,32 @@ docker compose up -d
 
 ## Packet Capture Settings
 
-The variables below configure the external **meshcore-packet-capture** image (`ghcr.io/agessaman/meshcore-packet-capture`), which is run by the `observer` compose profile. They are *not* consumed by MeshCore Hub itself — they are listed here because they live in the same `.env` and are needed by operators running an observer. See the [meshcore-packet-capture documentation](https://github.com/agessaman/meshcore-packet-capture) for full details.
+The variables below configure the external **meshcore-packet-capture** image (`ghcr.io/agessaman/meshcore-packet-capture`), which is run by the `observer` compose profile. They are _not_ consumed by MeshCore Hub itself — they are listed here because they live in the same `.env` and are needed by operators running an observer. See the [meshcore-packet-capture documentation](https://github.com/agessaman/meshcore-packet-capture) for full details.
 
 ### Device
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SERIAL_PORT` | `/dev/ttyUSB0` | Serial port for the packet-capture device (typically `/dev/ttyUSB[0-9]` or `/dev/ttyACM[0-9]` on Linux) |
-| `PACKETCAPTURE_IATA` | `LOC` | 3-letter IATA airport/area code used in LetsMesh topic templates |
-| `PACKETCAPTURE_ORIGIN` | _(device name)_ | Observer display name (defaults to the device name from the MeshCore connection) |
-| `PACKETCAPTURE_IMAGE_VERSION` | `latest` | Docker image tag for the packet-capture image |
+| Variable                      | Default         | Description                                                                                             |
+| ----------------------------- | --------------- | ------------------------------------------------------------------------------------------------------- |
+| `SERIAL_PORT`                 | `/dev/ttyUSB0`  | Serial port for the packet-capture device (typically `/dev/ttyUSB[0-9]` or `/dev/ttyACM[0-9]` on Linux) |
+| `PACKETCAPTURE_IATA`          | `LOC`           | 3-letter IATA airport/area code used in topic templates                                                 |
+| `PACKETCAPTURE_ORIGIN`        | _(device name)_ | Observer display name (defaults to the device name from the MeshCore connection)                        |
+| `PACKETCAPTURE_IMAGE_VERSION` | `latest`        | Docker image tag for the packet-capture image                                                           |
 
 ### Connection behaviour
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PACKETCAPTURE_TIMEOUT` | `30` | Connection timeout in seconds |
-| `PACKETCAPTURE_MAX_CONNECTION_RETRIES` | `5` | Max device-connection retries |
-| `PACKETCAPTURE_CONNECTION_RETRY_DELAY` | `5` | Seconds between device-connection retries |
-| `PACKETCAPTURE_HEALTH_CHECK_INTERVAL` | `30` | Seconds between health checks |
-| `PACKETCAPTURE_ADVERT_INTERVAL_HOURS` | `11` | Send flood adverts at this interval in hours (`0` = disabled) |
-| `PACKETCAPTURE_RF_DATA_TIMEOUT` | `15.0` | RF data cache timeout in seconds |
+| Variable                               | Default | Description                                                   |
+| -------------------------------------- | ------- | ------------------------------------------------------------- |
+| `PACKETCAPTURE_TIMEOUT`                | `30`    | Connection timeout in seconds                                 |
+| `PACKETCAPTURE_MAX_CONNECTION_RETRIES` | `5`     | Max device-connection retries                                 |
+| `PACKETCAPTURE_CONNECTION_RETRY_DELAY` | `5`     | Seconds between device-connection retries                     |
+| `PACKETCAPTURE_HEALTH_CHECK_INTERVAL`  | `30`    | Seconds between health checks                                 |
+| `PACKETCAPTURE_ADVERT_INTERVAL_HOURS`  | `11`    | Send flood adverts at this interval in hours (`0` = disabled) |
+| `PACKETCAPTURE_RF_DATA_TIMEOUT`        | `15.0`  | RF data cache timeout in seconds                              |
 
 ### MQTT reconnection
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PACKETCAPTURE_MAX_MQTT_RETRIES` | `5` | Max MQTT reconnection attempts |
-| `PACKETCAPTURE_MQTT_RETRY_DELAY` | `5` | Seconds between MQTT reconnection attempts |
-| `PACKETCAPTURE_EXIT_ON_RECONNECT_FAIL` | `true` | Exit the process when MQTT reconnection fails |
-
-### LetsMesh / custom MQTT brokers
-
-The observer can publish to up to three MQTT brokers in parallel. Broker 3 is wired to the Hub's own `MQTT_*` settings by default.
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PACKETCAPTURE_MQTT1_ENABLED` | `false` | Publish to LetsMesh US |
-| `PACKETCAPTURE_MQTT1_SERVER` | `mqtt-us-v1.letsmesh.net` | Broker 1 hostname |
-| `PACKETCAPTURE_MQTT1_PORT` | `443` | Broker 1 port |
-| `PACKETCAPTURE_MQTT1_USE_TLS` | `true` | Use TLS for broker 1 |
-| `PACKETCAPTURE_MQTT1_USE_AUTH_TOKEN` | `true` | Use JWT auth token for broker 1 |
-| `PACKETCAPTURE_MQTT1_TOKEN_AUDIENCE` | `mqtt-us-v1.letsmesh.net` | JWT audience claim for broker 1 |
-| `PACKETCAPTURE_MQTT1_KEEPALIVE` | `120` | Keepalive (seconds) for broker 1 |
-| `PACKETCAPTURE_MQTT2_ENABLED` | `false` | Publish to LetsMesh EU |
-| `PACKETCAPTURE_MQTT2_SERVER` | `mqtt-eu-v1.letsmesh.net` | Broker 2 hostname |
-| `PACKETCAPTURE_MQTT2_PORT` | `443` | Broker 2 port |
-| `PACKETCAPTURE_MQTT2_USE_TLS` | `true` | Use TLS for broker 2 |
-| `PACKETCAPTURE_MQTT2_USE_AUTH_TOKEN` | `true` | Use JWT auth token for broker 2 |
-| `PACKETCAPTURE_MQTT2_TOKEN_AUDIENCE` | `mqtt-eu-v1.letsmesh.net` | JWT audience claim for broker 2 |
-| `PACKETCAPTURE_MQTT2_KEEPALIVE` | `120` | Keepalive (seconds) for broker 2 |
-| `PACKETCAPTURE_MQTT3_ENABLED` | `true` | Publish to the local Hub MQTT broker (wired to `MQTT_*`) |
-| `PACKETCAPTURE_MQTT3_KEEPALIVE` | `60` | Keepalive (seconds) for broker 3 |
+| Variable                               | Default | Description                                   |
+| -------------------------------------- | ------- | --------------------------------------------- |
+| `PACKETCAPTURE_MAX_MQTT_RETRIES`       | `5`     | Max MQTT reconnection attempts                |
+| `PACKETCAPTURE_MQTT_RETRY_DELAY`       | `5`     | Seconds between MQTT reconnection attempts    |
+| `PACKETCAPTURE_EXIT_ON_RECONNECT_FAIL` | `true`  | Exit the process when MQTT reconnection fails |
