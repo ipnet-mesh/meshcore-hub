@@ -126,8 +126,9 @@ export async function render(container, params, router) {
         return tagName || n.name || truncateKey(n.public_key, 12);
     }
 
-    function positionPopover(rect) {
+    function positionPopover(badgeEl) {
         if (!popoverEl) return;
+        const rect = badgeEl.getBoundingClientRect();
         const margin = 8;
         const pw = popoverEl.offsetWidth || 256;
         const ph = popoverEl.offsetHeight || 0;
@@ -137,8 +138,9 @@ export async function render(container, params, router) {
         if (top + ph + margin > window.innerHeight && rect.top - ph - 4 > margin) {
             top = rect.top - ph - 4;
         }
-        popoverEl.style.left = `${left}px`;
-        popoverEl.style.top = `${top}px`;
+        // Anchor to the document (position: absolute) so the popover scrolls with the page.
+        popoverEl.style.left = `${left + window.scrollX}px`;
+        popoverEl.style.top = `${top + window.scrollY}px`;
     }
 
     function popoverShell(hashLabel, body) {
@@ -153,15 +155,15 @@ export async function render(container, params, router) {
     async function openPathPopover(e, ph) {
         e.preventDefault();
         e.stopPropagation();
-        const rect = e.currentTarget.getBoundingClientRect();
+        const badgeEl = e.currentTarget;
         closePopover();
 
         popoverEl = document.createElement('div');
-        popoverEl.className = 'path-node-popover fixed z-[1000] w-64 max-w-[90vw] max-h-[60vh] overflow-y-auto bg-base-100 rounded-box shadow-lg border border-base-300';
+        popoverEl.className = 'path-node-popover absolute z-[1000] w-64 max-w-[90vw] max-h-[60vh] overflow-y-auto bg-base-100 rounded-box shadow-lg border border-base-300';
         document.body.appendChild(popoverEl);
 
         litRender(popoverShell(ph, html`<div class="p-3">${loading()}</div>`), popoverEl);
-        positionPopover(rect);
+        positionPopover(badgeEl);
 
         const onDocClick = (ev) => { if (popoverEl && !popoverEl.contains(ev.target)) closePopover(); };
         const onKey = (ev) => { if (ev.key === 'Escape') closePopover(); };
@@ -194,11 +196,11 @@ export async function render(container, params, router) {
                         </a></li>` : nothing}
                 </ul>`;
             litRender(popoverShell(ph, body), popoverEl);
-            positionPopover(rect);
+            positionPopover(badgeEl);
         } catch (err) {
             if (isAbortError(err) || !popoverEl) return;
             litRender(popoverShell(ph, html`<div class="p-3">${warningBadge(err.message)}</div>`), popoverEl);
-            positionPopover(rect);
+            positionPopover(badgeEl);
         }
     }
 

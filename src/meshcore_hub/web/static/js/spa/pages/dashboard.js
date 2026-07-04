@@ -111,11 +111,11 @@ function renderChannelMessages(channelMessages, channelLabels) {
     </div>`;
 }
 
-/** Return a Tailwind grid-cols class for the given visible column count. */
+/** Return responsive Tailwind grid-cols classes for the given visible column count. */
 function gridCols(count) {
-    if (count === 2) return 'md:grid-cols-2';
-    if (count === 3) return 'md:grid-cols-3';
-    if (count === 4) return 'md:grid-cols-4';
+    if (count === 2) return 'sm:grid-cols-2';
+    if (count === 3) return 'sm:grid-cols-2 lg:grid-cols-3';
+    if (count === 4) return 'sm:grid-cols-2 lg:grid-cols-4';
     return '';
 }
 
