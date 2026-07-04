@@ -2,6 +2,7 @@
 
 import json
 from typing import Any
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,6 +12,7 @@ from meshcore_hub.web.app import (
     _OPEN,
     _build_config_json,
     _build_endpoint_access,
+    _sanitize_header_value,
     check_api_access,
     create_app,
 )
@@ -591,3 +593,139 @@ class TestRolelessUserProfileUpdate:
             json={"callsign": "NR1"},
         )
         assert response.status_code == 200
+
+
+class TestSanitizeHeaderValue:
+    """Unit tests for the _sanitize_header_value RFC 7230 guard."""
+
+    def test_strips_trailing_whitespace(self) -> None:
+        assert _sanitize_header_value("Matt ") == "Matt"
+
+    def test_strips_leading_and_trailing_whitespace(self) -> None:
+        assert _sanitize_header_value("  Matt  ") == "Matt"
+
+    def test_strips_trailing_crlf(self) -> None:
+        assert _sanitize_header_value("Matt\r\n") == "Matt"
+
+    def test_strips_embedded_del(self) -> None:
+        assert _sanitize_header_value("Ma\x7ftt") == "Matt"
+
+    def test_strips_embedded_nul(self) -> None:
+        assert _sanitize_header_value("\x00foo\x00") == "foo"
+
+    def test_strips_embedded_cr_and_lf(self) -> None:
+        assert _sanitize_header_value("Ma\r\ntt") == "Matt"
+
+    def test_whitespace_only_yields_empty(self) -> None:
+        assert _sanitize_header_value("   ") == ""
+
+    def test_tab_preserved(self) -> None:
+        # HTAB (0x09) is allowed by RFC 7230 and must survive sanitization.
+        assert _sanitize_header_value("Ma\ttt") == "Ma\ttt"
+
+    def test_clean_value_passthrough(self) -> None:
+        assert _sanitize_header_value("clean") == "clean"
+
+    def test_strips_all_ctl_chars(self) -> None:
+        # Every CTL char 0x00-0x1F except HTAB/SP, plus DEL, is removed.
+        removed = [chr(c) for c in range(0x00, 0x20) if chr(c) not in "\t "]
+        dirty = "x" + "".join(removed) + "\x7f" + "y"
+        assert _sanitize_header_value(dirty) == "xy"
+
+
+class TestProxyHeaderSanitization:
+    """The API proxy must sanitize X-User-Name before forwarding (regression)."""
+
+    def test_trailing_whitespace_name_forwarded_clean(
+        self,
+        client_with_oidc: TestClient,
+        mock_http_client: MockHttpClient,
+    ) -> None:
+        """Reported bug: name='Matt ' caused 502; must now forward 'Matt'."""
+        dirty_user = {"sub": "user-1", "name": "Matt ", "roles": ["member"]}
+        with (
+            patch("meshcore_hub.web.app.get_session_user", return_value=dirty_user),
+            patch("meshcore_hub.web.oidc.get_session_user", return_value=dirty_user),
+        ):
+            response = client_with_oidc.get("/api/v1/nodes")
+
+        assert response.status_code != 502
+        forwarded = mock_http_client.last_request_headers
+        assert forwarded is not None
+        assert forwarded["X-User-Name"] == "Matt"
+
+    def test_whitespace_only_name_omits_header(
+        self,
+        client_with_oidc: TestClient,
+        mock_http_client: MockHttpClient,
+    ) -> None:
+        """A whitespace-only name must NOT emit an empty X-User-Name header."""
+        ws_user = {"sub": "user-1", "name": "   ", "roles": ["member"]}
+        with (
+            patch("meshcore_hub.web.app.get_session_user", return_value=ws_user),
+            patch("meshcore_hub.web.oidc.get_session_user", return_value=ws_user),
+        ):
+            response = client_with_oidc.get("/api/v1/nodes")
+
+        assert response.status_code != 502
+        forwarded = mock_http_client.last_request_headers
+        assert forwarded is not None
+        assert "X-User-Name" not in forwarded
+
+    def test_control_char_name_forwarded_clean(
+        self,
+        client_with_oidc: TestClient,
+        mock_http_client: MockHttpClient,
+    ) -> None:
+        """Embedded DEL/CR/LF in the name must be dropped before forwarding."""
+        dirty_user = {"sub": "user-1", "name": "Ma\x7f\r\ntt", "roles": ["member"]}
+        with (
+            patch("meshcore_hub.web.app.get_session_user", return_value=dirty_user),
+            patch("meshcore_hub.web.oidc.get_session_user", return_value=dirty_user),
+        ):
+            response = client_with_oidc.get("/api/v1/nodes")
+
+        assert response.status_code != 502
+        forwarded = mock_http_client.last_request_headers
+        assert forwarded is not None
+        assert forwarded["X-User-Name"] == "Matt"
+
+
+class TestBootstrapHeaderSanitization:
+    """The auth-callback bootstrap must forward a sanitized X-User-Name."""
+
+    def test_trailing_whitespace_stripped_on_bootstrap(
+        self,
+        client_with_oidc: TestClient,
+        mock_http_client: MockHttpClient,
+    ) -> None:
+        """Bootstrap GET forwards clean name after strip_userinfo trims it."""
+        token = {"userinfo": {"sub": "user-1", "name": "Matt "}}
+        with patch(
+            "meshcore_hub.web.app.oauth.oidc.authorize_access_token",
+            new_callable=AsyncMock,
+            return_value=token,
+        ):
+            client_with_oidc.get("/auth/callback", follow_redirects=False)
+
+        forwarded = mock_http_client.last_get_headers
+        assert forwarded is not None
+        assert forwarded["X-User-Name"] == "Matt"
+
+    def test_control_char_dropped_on_bootstrap(
+        self,
+        client_with_oidc: TestClient,
+        mock_http_client: MockHttpClient,
+    ) -> None:
+        """Defense-in-depth: DEL survives strip_userinfo but is removed at header."""
+        token = {"userinfo": {"sub": "user-1", "name": "Ma\x7ftt"}}
+        with patch(
+            "meshcore_hub.web.app.oauth.oidc.authorize_access_token",
+            new_callable=AsyncMock,
+            return_value=token,
+        ):
+            client_with_oidc.get("/auth/callback", follow_redirects=False)
+
+        forwarded = mock_http_client.last_get_headers
+        assert forwarded is not None
+        assert forwarded["X-User-Name"] == "Matt"

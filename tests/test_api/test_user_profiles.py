@@ -252,6 +252,19 @@ class TestUpdateProfile:
         assert data["name"] == "New Name"
         assert data["callsign"] == sample_user_profile.callsign
 
+    def test_update_profile_name_trims_whitespace(
+        self, client_no_auth, sample_user_profile
+    ):
+        """Leading/trailing whitespace on a user-supplied name is stripped."""
+        response = client_no_auth.put(
+            f"/api/v1/user/profile/{sample_user_profile.id}",
+            json={"name": "  Matt  "},
+            headers=USER_HEADERS,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "Matt"
+
     def test_update_profile_callsign(self, client_no_auth, sample_user_profile):
         """Test updating profile callsign."""
         response = client_no_auth.put(

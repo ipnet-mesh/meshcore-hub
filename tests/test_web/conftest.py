@@ -31,6 +31,10 @@ class MockHttpClient:
         # Records the params forwarded by the most recent request() call so
         # tests can assert how the proxy forwards query parameters.
         self.last_request_params: Any = None
+        # Records the headers forwarded by the most recent request() call.
+        self.last_request_headers: dict[str, Any] | None = None
+        # Records the headers forwarded by the most recent get() call.
+        self.last_get_headers: dict[str, Any] | None = None
         self._default_responses()
 
     def _default_responses(self) -> None:
@@ -269,6 +273,7 @@ class MockHttpClient:
     ) -> Response:
         """Mock generic request (used by API proxy)."""
         self.last_request_params = params
+        self.last_request_headers = headers
         key = f"{method.upper()}:{url}"
         if key in self._responses:
             return self._create_response(key)
@@ -277,8 +282,14 @@ class MockHttpClient:
         key = f"{method.upper()}:{base_path}"
         return self._create_response(key)
 
-    async def get(self, path: str, params: dict | None = None) -> Response:
+    async def get(
+        self,
+        path: str,
+        params: dict | None = None,
+        headers: dict | None = None,
+    ) -> Response:
         """Mock GET request."""
+        self.last_get_headers = headers
         # Try exact match first
         key = f"GET:{path}"
         if key in self._responses:

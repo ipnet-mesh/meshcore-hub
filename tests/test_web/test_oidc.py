@@ -332,6 +332,36 @@ class TestStripUserinfo:
         result = strip_userinfo(userinfo, "roles")
         assert result["name"] is None
 
+    def test_name_trailing_whitespace_stripped(self) -> None:
+        """Test trailing whitespace is stripped from the name claim."""
+        userinfo = {"sub": "user-1", "name": "Matt "}
+        result = strip_userinfo(userinfo, "roles")
+        assert result["name"] == "Matt"
+
+    def test_name_leading_and_trailing_whitespace_stripped(self) -> None:
+        """Test both leading and trailing whitespace are stripped."""
+        userinfo = {"sub": "user-1", "name": "  Matt  "}
+        result = strip_userinfo(userinfo, "roles")
+        assert result["name"] == "Matt"
+
+    def test_preferred_username_whitespace_stripped(self) -> None:
+        """Test whitespace is stripped from the preferred_username fallback."""
+        userinfo = {"sub": "user-1", "preferred_username": "  johndoe  "}
+        result = strip_userinfo(userinfo, "roles")
+        assert result["name"] == "johndoe"
+
+    def test_username_whitespace_stripped(self) -> None:
+        """Test whitespace is stripped from the username fallback."""
+        userinfo = {"sub": "user-1", "username": "\tjohndoe\t"}
+        result = strip_userinfo(userinfo, "roles")
+        assert result["name"] == "johndoe"
+
+    def test_name_none_passthrough_not_stripped(self) -> None:
+        """Test that a missing name remains None (no AttributeError)."""
+        userinfo = {"sub": "user-1"}
+        result = strip_userinfo(userinfo, "roles")
+        assert result["name"] is None
+
     def test_roles_extracted(self) -> None:
         """Test roles are extracted from configured claim."""
         userinfo = {"sub": "user-1", "custom_roles": ["admin", "member"]}

@@ -63,6 +63,7 @@ def strip_userinfo(userinfo: dict[str, Any], roles_claim: str) -> dict[str, Any]
         or userinfo.get("username")
         or userinfo.get("nickname")
     )
+    name = name.strip() if isinstance(name, str) else name
     return {
         "sub": userinfo.get("sub"),
         "name": name,

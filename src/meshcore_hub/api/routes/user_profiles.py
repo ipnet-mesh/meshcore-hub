@@ -225,7 +225,7 @@ def update_profile(
         )
 
     if profile_update.name is not None:
-        profile.name = profile_update.name
+        profile.name = profile_update.name.strip()
 
     update_data = profile_update.model_dump(exclude_unset=True, exclude={"name"})
     for field, value in update_data.items():
