@@ -27,12 +27,14 @@ from meshcore_hub.common.models import (
     UserProfile,
 )
 from meshcore_hub.common.schemas.messages import (
+    BreakdownBucket,
     ChannelMessage,
     DailyActivity,
     DailyActivityPoint,
     DashboardStats,
     MessageActivity,
     NodeCountHistory,
+    PacketBreakdown,
     RecentAdvertisement,
 )
 
@@ -430,6 +432,82 @@ def get_packet_activity(
         data.append(DailyActivityPoint(date=date_str, count=count))
 
     return DailyActivity(days=days, data=data)
+
+
+# Max number of distinct event-type buckets shown verbatim; remaining values
+# are rolled into a single "other" bucket so the chart stays legible.
+_PACKET_BREAKDOWN_TOP_N = 6
+
+
+@router.get("/packet-breakdown", response_model=PacketBreakdown)
+@cached("dashboard/packet-breakdown", ttl_setting="redis_cache_ttl_dashboard")
+def get_packet_breakdown(
+    _: RequireRead,
+    session: DbSession,
+    request: Request,
+    days: int = 7,
+) -> PacketBreakdown:
+    """Get raw-packet composition (by event type and path-hash width).
+
+    Args:
+        days: Number of days to include (default 7, max 90)
+
+    Returns:
+        Counts bucketed by event type (top 6 + "other") and by path-hash
+        byte width (1b/2b/3b, NULL excluded) for the period (excluding today).
+    """
+    days = min(days, 90)
+
+    now = datetime.now(timezone.utc)
+    end_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_date = end_date - timedelta(days=days)
+
+    window_clauses = (
+        RawPacket.received_at >= start_date,
+        RawPacket.received_at < end_date,
+    )
+
+    # Event-type breakdown: top N by count, remainder rolled into "other".
+    event_rows = session.execute(
+        select(RawPacket.event_type, func.count().label("count"))
+        .where(*window_clauses)
+        .group_by(RawPacket.event_type)
+        .order_by(func.count().desc())
+    ).all()
+
+    by_event_type: list[BreakdownBucket] = []
+    other_total = 0
+    for label, count in event_rows[:_PACKET_BREAKDOWN_TOP_N]:
+        by_event_type.append(
+            BreakdownBucket(
+                label=label if label is not None else "unknown", count=count
+            )
+        )
+    if len(event_rows) > _PACKET_BREAKDOWN_TOP_N:
+        for _, count in event_rows[_PACKET_BREAKDOWN_TOP_N:]:
+            other_total += count
+        by_event_type.append(BreakdownBucket(label="other", count=other_total))
+
+    # Path-width breakdown: fixed 1b/2b/3b order, NULL excluded, zero-filled.
+    width_rows = session.execute(
+        select(RawPacket.path_hash_bytes, func.count().label("count"))
+        .where(*window_clauses)
+        .where(RawPacket.path_hash_bytes.isnot(None))
+        .group_by(RawPacket.path_hash_bytes)
+    ).all()
+    width_counts = {row[0]: row[1] for row in width_rows}
+
+    by_path_width = [
+        BreakdownBucket(label="1b", count=width_counts.get(1, 0)),
+        BreakdownBucket(label="2b", count=width_counts.get(2, 0)),
+        BreakdownBucket(label="3b", count=width_counts.get(3, 0)),
+    ]
+
+    return PacketBreakdown(
+        days=days,
+        by_event_type=by_event_type,
+        by_path_width=by_path_width,
+    )
 
 
 @router.get("/message-activity", response_model=MessageActivity)

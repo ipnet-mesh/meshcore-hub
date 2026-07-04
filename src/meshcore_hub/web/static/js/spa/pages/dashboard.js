@@ -119,9 +119,13 @@ function gridCols(count) {
     return '';
 }
 
-function renderChartCards({ showNodes, showAdverts, showMessages, showPackets, stats }) {
+function renderChartCards({ showNodes, showAdverts, showMessages, showPackets, stats, packetBreakdown }) {
     const visibleCount = (showNodes ? 1 : 0) + (showAdverts ? 1 : 0) + (showMessages ? 1 : 0) + (showPackets ? 1 : 0);
     if (visibleCount === 0) return nothing;
+
+    const eventTypeTotal = packetBreakdown?.by_event_type?.reduce((s, b) => s + b.count, 0) ?? 0;
+    const pathWidthTotal = packetBreakdown?.by_path_width?.reduce((s, b) => s + b.count, 0) ?? 0;
+
     return html`
 <div class="grid grid-cols-1 ${gridCols(visibleCount)} gap-6 mb-8">
     ${showNodes ? html`
@@ -135,7 +139,7 @@ function renderChartCards({ showNodes, showAdverts, showMessages, showPackets, s
                     </h2>
                     <p class="text-xs opacity-80">${t('time.over_time_last_7_days')}</p>
                 </div>
-                <div class="text-4xl font-bold leading-none" style="color: var(--color-nodes)">
+                <div class="text-3xl font-bold leading-none" style="color: var(--color-nodes)">
                     ${formatNumber(stats.total_nodes)}
                 </div>
             </div>
@@ -156,7 +160,7 @@ function renderChartCards({ showNodes, showAdverts, showMessages, showPackets, s
                     </h2>
                     <p class="text-xs opacity-80">${t('time.per_day_last_7_days')}</p>
                 </div>
-                <div class="text-4xl font-bold leading-none" style="color: var(--color-adverts)">
+                <div class="text-3xl font-bold leading-none" style="color: var(--color-adverts)">
                     ${formatNumber(stats.advertisements_7d)}
                 </div>
             </div>
@@ -177,7 +181,7 @@ function renderChartCards({ showNodes, showAdverts, showMessages, showPackets, s
                     </h2>
                     <p class="text-xs opacity-80">${t('time.per_day_last_7_days')}</p>
                 </div>
-                <div class="text-4xl font-bold leading-none" style="color: var(--color-messages)">
+                <div class="text-3xl font-bold leading-none" style="color: var(--color-messages)">
                     ${formatNumber(stats.messages_7d)}
                 </div>
             </div>
@@ -198,7 +202,7 @@ function renderChartCards({ showNodes, showAdverts, showMessages, showPackets, s
                     </h2>
                     <p class="text-xs opacity-80">${t('time.per_day_last_7_days')}</p>
                 </div>
-                <div class="text-4xl font-bold leading-none" style="color: var(--color-packets)">
+                <div class="text-3xl font-bold leading-none" style="color: var(--color-packets)">
                     ${formatNumber(stats.packets_7d)}
                 </div>
             </div>
@@ -207,7 +211,50 @@ function renderChartCards({ showNodes, showAdverts, showMessages, showPackets, s
             </div>
         </div>
     </div>` : nothing}
-</div>`;
+</div>
+
+${showPackets ? html`
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
+    <div class="card bg-base-100 shadow-xl panel-accent" style="--panel-color: var(--color-packets)">
+        <div class="card-body">
+            <div class="flex items-start justify-between gap-2">
+                <div>
+                    <h2 class="card-title text-base">
+                        ${iconPackets('h-5 w-5')}
+                        ${t('entities.packet_event_types')}
+                    </h2>
+                    <p class="text-xs opacity-80">${t('time.last_7_days')}</p>
+                </div>
+                <div class="text-3xl font-bold leading-none" style="color: var(--color-packets)">
+                    ${formatNumber(eventTypeTotal)}
+                </div>
+            </div>
+            <div class="h-32">
+                <canvas id="packetEventTypeChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="card bg-base-100 shadow-xl panel-accent" style="--panel-color: var(--color-packets)">
+        <div class="card-body">
+            <div class="flex items-start justify-between gap-2">
+                <div>
+                    <h2 class="card-title text-base">
+                        ${iconPackets('h-5 w-5')}
+                        ${t('entities.path_hash_width')}
+                    </h2>
+                    <p class="text-xs opacity-80">${t('time.last_7_days')}</p>
+                </div>
+                <div class="text-3xl font-bold leading-none" style="color: var(--color-packets)">
+                    ${formatNumber(pathWidthTotal)}
+                </div>
+            </div>
+            <div class="h-32">
+                <canvas id="packetPathWidthChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>` : nothing}`;
 }
 
 export async function render(container, params, router) {
@@ -221,12 +268,13 @@ export async function render(container, params, router) {
         const showMessages = features.messages !== false;
         const showPackets = features.packets !== false;
 
-        const [stats, advertActivity, messageActivity, nodeCount, packetActivity, channelsData] = await Promise.all([
+        const [stats, advertActivity, messageActivity, nodeCount, packetActivity, packetBreakdown, channelsData] = await Promise.all([
             apiGet('/api/v1/dashboard/stats', {}, { signal }),
             apiGet('/api/v1/dashboard/activity', { days: 7 }, { signal }),
             apiGet('/api/v1/dashboard/message-activity', { days: 7 }, { signal }),
             apiGet('/api/v1/dashboard/node-count', { days: 7 }, { signal }),
             apiGet('/api/v1/dashboard/packet-activity', { days: 7 }, { signal }),
+            apiGet('/api/v1/dashboard/packet-breakdown', { days: 7 }, { signal }),
             apiGet('/api/v1/channels', {}, { signal }),
         ]);
         channelLabels = new Map([
@@ -246,7 +294,7 @@ export async function render(container, params, router) {
 </div>
 
 ${(showNodes || showAdverts || showMessages || showPackets) ? html`
-${renderChartCards({ showNodes, showAdverts, showMessages, showPackets, stats })}` : nothing}
+${renderChartCards({ showNodes, showAdverts, showMessages, showPackets, stats, packetBreakdown })}` : nothing}
 
 ${bottomCount > 0 ? html`
 <div class="grid grid-cols-1 ${bottomGrid} gap-6">
@@ -269,9 +317,11 @@ ${bottomCount > 0 ? html`
             showAdverts ? advertActivity : null,
             showMessages ? messageActivity : null,
             showPackets ? packetActivity : null,
+            showPackets ? packetBreakdown.by_event_type : null,
+            showPackets ? packetBreakdown.by_path_width : null,
         );
 
-        const chartIds = ['nodeChart', 'advertChart', 'messageChart', 'packetChart'];
+        const chartIds = ['nodeChart', 'advertChart', 'messageChart', 'packetChart', 'packetEventTypeChart', 'packetPathWidthChart'];
         return () => {
             chartIds.forEach(id => {
                 const canvas = document.getElementById(id);

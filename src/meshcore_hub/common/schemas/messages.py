@@ -323,6 +323,27 @@ class MessageActivity(BaseModel):
     data: list[DailyActivityPoint] = Field(..., description="Daily message counts")
 
 
+class BreakdownBucket(BaseModel):
+    """Schema for a single labeled count bucket in a breakdown."""
+
+    label: str = Field(..., description="Bucket label")
+    count: int = Field(..., description="Count for this bucket")
+
+
+class PacketBreakdown(BaseModel):
+    """Schema for raw-packet composition over a period."""
+
+    days: int = Field(..., description="Number of days in the period")
+    by_event_type: list[BreakdownBucket] = Field(
+        default_factory=list,
+        description="Top event types by count (top 6 + 'other')",
+    )
+    by_path_width: list[BreakdownBucket] = Field(
+        default_factory=list,
+        description="Path-hash byte widths (1b/2b/3b), NULL excluded",
+    )
+
+
 class NodeCountHistory(BaseModel):
     """Schema for node count over time."""
 
