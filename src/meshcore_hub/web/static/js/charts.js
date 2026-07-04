@@ -48,7 +48,20 @@ const ChartColors = {
     text: 'oklch(0.7 0 0)',
     tooltipBg: 'oklch(0.25 0 0)',
     tooltipText: 'oklch(0.9 0 0)',
-    tooltipBorder: 'oklch(0.4 0 0)'
+    tooltipBorder: 'oklch(0.4 0 0)',
+
+    // Qualitative palette for stacked breakdown bars (6 hues + neutral grey
+    // for "other"). Hardcoded oklch values render consistently across light
+    // and dark themes without extra CSS tokens.
+    breakdown: [
+        'oklch(0.65 0.24 265)',   // blue
+        'oklch(0.7 0.17 330)',    // magenta
+        'oklch(0.75 0.18 180)',   // teal
+        'oklch(0.72 0.17 145)',   // green
+        'oklch(0.7 0.19 80)',     // yellow-green
+        'oklch(0.65 0.22 25)',    // orange
+        'oklch(0.55 0 0)'        // neutral grey (for "other")
+    ]
 };
 
 /**
@@ -215,14 +228,101 @@ function createActivityChart(canvasId, advertData, messageData) {
 }
 
 /**
- * Initialize dashboard charts (nodes, advertisements, messages, packets).
+ * Create a horizontal 100% stacked bar chart from labeled buckets.
+ *
+ * Each bucket becomes one dataset sized proportionally to its count. The
+ * x-axis is fixed at 0-100% and tooltips show the raw count and percentage.
+ * Returns null when buckets is empty or the total is zero (matching
+ * createLineChart's empty-data idiom).
+ *
+ * @param {string} canvasId - ID of the canvas element
+ * @param {Array|null} buckets - Array of {label, count} objects
+ * @param {Array<string>} colors - Ordered color strings (one per bucket)
+ * @returns {Chart|null}
+ */
+function createStackedBarChart(canvasId, buckets, colors) {
+    var ctx = document.getElementById(canvasId);
+    if (!ctx || !buckets || buckets.length === 0) return null;
+
+    var total = buckets.reduce(function(sum, b) { return sum + b.count; }, 0);
+    if (total === 0) return null;
+
+    var datasets = buckets.map(function(bucket, i) {
+        var pct = (bucket.count / total) * 100;
+        return {
+            label: bucket.label,
+            data: [pct],
+            backgroundColor: colors[i % colors.length],
+            borderColor: colors[i % colors.length],
+            borderWidth: 1,
+            rawCount: bucket.count
+        };
+    });
+
+    return new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: [''],
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y',
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: ChartColors.tooltipBg,
+                    titleColor: ChartColors.tooltipText,
+                    bodyColor: ChartColors.tooltipText,
+                    borderColor: ChartColors.tooltipBorder,
+                    borderWidth: 1,
+                    callbacks: {
+                        label: function(ctx) {
+                            var label = ctx.dataset.label || '';
+                            var count = formatNumber(ctx.dataset.rawCount);
+                            var pct = ctx.parsed.x.toFixed(1);
+                            return label + ': ' + count + ' (' + pct + '%)';
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    max: 100,
+                    stacked: true,
+                    grid: { color: ChartColors.grid },
+                    ticks: {
+                        color: ChartColors.text,
+                        callback: function(value) { return value + '%'; }
+                    }
+                },
+                y: {
+                    stacked: true,
+                    grid: { display: false },
+                    ticks: { display: false }
+                }
+            },
+            interaction: {
+                mode: 'nearest',
+                intersect: false
+            }
+        }
+    });
+}
+
+/**
+ * Initialize dashboard charts (nodes, advertisements, messages, packets,
+ * plus optional packet-breakdown stacked bars).
  * Pass null for any data parameter to skip that chart.
  * @param {Object|null} nodeData - Node count data, or null to skip
  * @param {Object|null} advertData - Advertisement data, or null to skip
  * @param {Object|null} messageData - Message data, or null to skip
- * @param {Object|null} packetData - Raw-packet data, or null to skip
+ * @param {Object|null} packetData - Raw-packet trend data, or null to skip
+ * @param {Array|null} [eventTypeData] - Packet event-type breakdown buckets
+ * @param {Array|null} [pathWidthData] - Packet path-width breakdown buckets
  */
-function initDashboardCharts(nodeData, advertData, messageData, packetData) {
+function initDashboardCharts(nodeData, advertData, messageData, packetData, eventTypeData, pathWidthData) {
     if (nodeData) {
         createLineChart(
             'nodeChart',
@@ -264,6 +364,22 @@ function initDashboardCharts(nodeData, advertData, messageData, packetData) {
             ChartColors.packets,
             ChartColors.packetsFill,
             true
+        );
+    }
+
+    if (eventTypeData && eventTypeData.length > 0) {
+        createStackedBarChart(
+            'packetEventTypeChart',
+            eventTypeData,
+            ChartColors.breakdown
+        );
+    }
+
+    if (pathWidthData && pathWidthData.length > 0) {
+        createStackedBarChart(
+            'packetPathWidthChart',
+            pathWidthData,
+            ChartColors.breakdown.slice(0, 3)
         );
     }
 }

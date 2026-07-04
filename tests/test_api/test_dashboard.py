@@ -380,6 +380,167 @@ class TestPacketActivity:
         assert all(p["count"] == 0 for p in other_days)
 
 
+class TestPacketBreakdown:
+    """Tests for GET /dashboard/packet-breakdown endpoint."""
+
+    def test_get_packet_breakdown_empty(self, client_no_auth):
+        """Empty database returns empty bucket lists."""
+        response = client_no_auth.get("/api/v1/dashboard/packet-breakdown")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["days"] == 7
+        assert data["by_event_type"] == []
+        assert data["by_path_width"] == [
+            {"label": "1b", "count": 0},
+            {"label": "2b", "count": 0},
+            {"label": "3b", "count": 0},
+        ]
+
+    def test_get_packet_breakdown_custom_days(self, client_no_auth):
+        """Custom days parameter is honored."""
+        response = client_no_auth.get("/api/v1/dashboard/packet-breakdown?days=14")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["days"] == 14
+
+    def test_get_packet_breakdown_max_days(self, client_no_auth):
+        """Days parameter is capped at 90."""
+        response = client_no_auth.get("/api/v1/dashboard/packet-breakdown?days=365")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["days"] == 90
+
+    def test_breakdown_excludes_today(self, client_no_auth, api_db_session):
+        """Today's packets are excluded from the breakdown window."""
+        now = datetime.now(timezone.utc)
+        yesterday = now - timedelta(days=1)
+
+        api_db_session.add_all(
+            [
+                RawPacket(event_type="advert", received_at=now),
+                RawPacket(event_type="advert", received_at=yesterday),
+            ]
+        )
+        api_db_session.commit()
+
+        data = client_no_auth.get("/api/v1/dashboard/packet-breakdown?days=7").json()
+        event_total = sum(b["count"] for b in data["by_event_type"])
+        assert event_total == 1  # only yesterday's packet
+
+    def test_event_type_top_six_plus_other(self, client_no_auth, api_db_session):
+        """Top 6 event types are shown verbatim; remainder rolls into 'other'."""
+        now = datetime.now(timezone.utc)
+        yesterday = now - timedelta(days=1)
+        # 8 distinct event types with descending counts.
+        types = [
+            ("type_a", 10),
+            ("type_b", 9),
+            ("type_c", 8),
+            ("type_d", 7),
+            ("type_e", 6),
+            ("type_f", 5),
+            ("type_g", 3),
+            ("type_h", 2),
+        ]
+        for event_type, n in types:
+            for _ in range(n):
+                api_db_session.add(
+                    RawPacket(event_type=event_type, received_at=yesterday)
+                )
+        api_db_session.commit()
+
+        data = client_no_auth.get("/api/v1/dashboard/packet-breakdown?days=7").json()
+        buckets = data["by_event_type"]
+        assert len(buckets) == 7  # 6 verbatim + "other"
+        assert [b["label"] for b in buckets[:6]] == [
+            "type_a",
+            "type_b",
+            "type_c",
+            "type_d",
+            "type_e",
+            "type_f",
+        ]
+        assert buckets[6]["label"] == "other"
+        assert buckets[6]["count"] == 5  # type_g + type_h
+
+    def test_event_type_no_other_when_le_six(self, client_no_auth, api_db_session):
+        """No 'other' bucket is emitted when distinct types <= 6."""
+        now = datetime.now(timezone.utc)
+        yesterday = now - timedelta(days=1)
+        for event_type, n in [("type_a", 3), ("type_b", 2), ("type_c", 1)]:
+            for _ in range(n):
+                api_db_session.add(
+                    RawPacket(event_type=event_type, received_at=yesterday)
+                )
+        api_db_session.commit()
+
+        data = client_no_auth.get("/api/v1/dashboard/packet-breakdown?days=7").json()
+        labels = [b["label"] for b in data["by_event_type"]]
+        assert "other" not in labels
+        assert len(labels) == 3
+
+    def test_path_width_fixed_order_zero_fill(self, client_no_auth, api_db_session):
+        """Path-width buckets are always 1b/2b/3b, zero-filled, NULL excluded."""
+        now = datetime.now(timezone.utc)
+        yesterday = now - timedelta(days=1)
+        # Seed: two widths present, one missing, plus a NULL.
+        for _ in range(4):
+            api_db_session.add(RawPacket(path_hash_bytes=1, received_at=yesterday))
+        for _ in range(2):
+            api_db_session.add(RawPacket(path_hash_bytes=3, received_at=yesterday))
+        api_db_session.add(RawPacket(path_hash_bytes=None, received_at=yesterday))
+        api_db_session.commit()
+
+        data = client_no_auth.get("/api/v1/dashboard/packet-breakdown?days=7").json()
+        widths = data["by_path_width"]
+        assert [w["label"] for w in widths] == ["1b", "2b", "3b"]
+        assert widths[0]["count"] == 4
+        assert widths[1]["count"] == 0  # zero-filled
+        assert widths[2]["count"] == 2
+        # NULL excluded from denominator.
+        width_total = sum(w["count"] for w in widths)
+        assert width_total == 6
+
+    def test_path_width_excludes_null(self, client_no_auth, api_db_session):
+        """Rows with NULL path_hash_bytes are excluded from all width buckets."""
+        now = datetime.now(timezone.utc)
+        yesterday = now - timedelta(days=1)
+        api_db_session.add_all(
+            [
+                RawPacket(path_hash_bytes=2, received_at=yesterday),
+                RawPacket(path_hash_bytes=None, received_at=yesterday),
+                RawPacket(path_hash_bytes=None, received_at=yesterday),
+            ]
+        )
+        api_db_session.commit()
+
+        data = client_no_auth.get("/api/v1/dashboard/packet-breakdown?days=7").json()
+        widths = data["by_path_width"]
+        assert widths[0]["count"] == 0  # 1b
+        assert widths[1]["count"] == 1  # 2b
+        assert widths[2]["count"] == 0  # 3b
+
+    def test_breakdown_response_shape(self, client_no_auth, api_db_session):
+        """Response conforms to PacketBreakdown schema."""
+        now = datetime.now(timezone.utc)
+        yesterday = now - timedelta(days=1)
+        api_db_session.add(
+            RawPacket(event_type="advert", path_hash_bytes=1, received_at=yesterday)
+        )
+        api_db_session.commit()
+
+        data = client_no_auth.get("/api/v1/dashboard/packet-breakdown?days=7").json()
+        assert "days" in data
+        assert "by_event_type" in data
+        assert "by_path_width" in data
+        assert isinstance(data["by_event_type"], list)
+        assert isinstance(data["by_path_width"], list)
+        for bucket in data["by_event_type"] + data["by_path_width"]:
+            assert "label" in bucket
+            assert "count" in bucket
+            assert isinstance(bucket["count"], int)
+
+
 class TestMessageActivity:
     """Tests for GET /dashboard/message-activity endpoint."""
 

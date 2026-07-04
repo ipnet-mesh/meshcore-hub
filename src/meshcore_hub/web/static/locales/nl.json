@@ -9,6 +9,8 @@
     "advertisement": "Advertentie",
     "messages": "Berichten",
     "packets": "Pakketten",
+    "packet_event_types": "Pakkettypes",
+    "path_hash_width": "Padbytes",
     "message": "Bericht",
     "packet": "Pakket",
     "map": "Kaart",
@@ -162,6 +164,7 @@
   "packets": {
     "filter_event_type": "Gebeurtenistype",
     "filter_path_width": "Padbreedte",
+    "breakdown_other": "Overig",
     "filter_min_snr": "Min. SNR",
     "filter_max_snr": "Max. SNR",
     "redacted": "Beperkt",
