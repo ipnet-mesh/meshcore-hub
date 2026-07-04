@@ -38,6 +38,31 @@ PACKAGE_DIR = Path(__file__).parent
 TEMPLATES_DIR = PACKAGE_DIR / "templates"
 STATIC_DIR = PACKAGE_DIR / "static"
 
+# RFC 7230 §3.2.6 forbidden field-value characters: CTL (0x00-0x1F) excluding
+# HTAB (0x09) and SP (0x20), plus DEL (0x7F). These must never appear in a
+# forwarded header value or httpx rejects the request.
+_ILLEGAL_HEADER_CHARS = (
+    "".join(chr(c) for c in range(0x00, 0x20) if chr(c) not in "\t ") + "\x7f"
+)
+
+
+def _sanitize_header_value(value: str) -> str:
+    """Sanitize a header value for RFC 7230 compliance.
+
+    Strips leading/trailing OWS and removes any CTL/DEL characters that would
+    cause httpx to reject the request. Emits debug logs when altering a value.
+    """
+    stripped = value.strip()
+    if stripped != value:
+        logger.debug("Stripped whitespace from header value %r -> %r", value, stripped)
+    if any(c in _ILLEGAL_HEADER_CHARS for c in stripped):
+        clean = "".join(c for c in stripped if c not in _ILLEGAL_HEADER_CHARS)
+        logger.debug(
+            "Dropped control chars from header value %r -> %r", stripped, clean
+        )
+        return clean
+    return stripped
+
 
 def _load_asset_manifest() -> dict[str, Any]:
     """Load the esbuild asset manifest from dist/assets.json.
@@ -748,7 +773,9 @@ def create_app(
             if user and user.get("sub"):
                 headers["X-User-Id"] = user["sub"]
                 if user.get("name"):
-                    headers["X-User-Name"] = user["name"]
+                    sanitized = _sanitize_header_value(user["name"])
+                    if sanitized:
+                        headers["X-User-Name"] = sanitized
                 roles = get_session_roles(request, roles_claim)
                 if roles:
                     headers["X-User-Roles"] = ",".join(roles)
@@ -1125,7 +1152,9 @@ def create_app(
                 "X-User-Roles": ",".join(session_user.get("roles", [])),
             }
             if session_user.get("name"):
-                profile_headers["X-User-Name"] = session_user["name"]
+                sanitized = _sanitize_header_value(session_user["name"])
+                if sanitized:
+                    profile_headers["X-User-Name"] = sanitized
             await request.app.state.http_client.get(
                 "/api/v1/user/profile/me", headers=profile_headers
             )
