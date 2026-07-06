@@ -50,6 +50,9 @@ path.
 - Each link has a visibility level (community / member / operator / admin), so
   sensitive links are only shown to the right roles — exactly like channel keys
   today.
+- Links can be configured in the web UI by admins, **or** loaded from a YAML
+  file by site operators without logging in (via the existing seed system) —
+  handy for provisioning a fresh instance before any users exist.
 
 **Things to know before configuring one.** Links rely on the hub capturing raw
 packets (`FEATURE_PACKETS` on), and on at least one observer hearing enough of
@@ -144,7 +147,7 @@ first bytes co-occur far apart on an unrelated long flood path.
 
 - **F1 — Link configuration.** An operator with the `admin` role can create,
   update, and delete Links. Each Link has: a unique name, optional description,
-  a `visibility` (community/member/operator/admin), a `match_width` (1/2/3,
+  a `visibility` (community/member/operator/admin, default `community`), a `match_width` (1/2/3,
   default 1), `window_hours`, `packet_count_threshold`, `max_hop_span`
   (nullable int, default `null` = unlimited), an `enabled` flag, an ordered
   list of **≥2** path node specs, and an optional observer scope.
@@ -184,6 +187,33 @@ first bytes co-occur far apart on an unrelated long flood path.
 - **F7 — Prometheus.** `/metrics` emits `meshcore_link_healthy{link}`,
   `meshcore_link_matched_packets{link}`, and `meshcore_link_threshold{link}`
   for **all** enabled links (no visibility filtering on the monitoring feed).
+- **F8 — Seeding (no-auth provisioning).** Site operators can load Links from
+  a YAML file (`$SEED_HOME/links.yaml`) without authenticating, via the
+  existing `meshcore-hub seed` command (and the compose `seed` profile). The
+  file is keyed by link name; each entry holds the link's knobs plus an ordered
+  `path` of **≥2** node public_keys and, optionally, an `observers` list of
+  public_keys. The importer resolves each public_key to its node, derives
+  `expected_hash = public_key[:2*match_width]` itself, and upserts the link
+  plus its `link_nodes`/`link_observers` children idempotently by name —
+  mirroring how `channels.yaml` is seeded. `visibility` defaults to
+  `community` (public); an explicit higher level may be set, since the operator
+  has filesystem access and links carry no secret (unlike channel keys).
+  Example shape:
+  ```yaml
+  Ipswich ↔ Norwich:
+    description: A140 corridor route
+    visibility: community      # default; member/operator/admin also supported
+    match_width: 1              # default: 1 (1/2/3)
+    window_hours: 24
+    packet_count_threshold: 3
+    max_hop_span: 8             # optional; omit/null = unlimited
+    enabled: true               # default: true
+    path:                       # ordered, ≥2, by public_key
+      - a1b2c3d4e5f6...
+      - 9a8b7c6d5e4f...
+    observers:                  # optional; omit/empty = all observers
+      - 010203040506...
+  ```
 
 ### Technical Requirements
 
@@ -218,6 +248,19 @@ first bytes co-occur far apart on an unrelated long flood path.
   `link_evaluator_interval_seconds=60` collector knob in `common/config.py`,
   surfaced in `.env.example`. Hop extraction only runs when raw packet capture
   is enabled (`FEATURE_PACKETS=1`).
+- **T9 — Seed loader.** A new `_import_links` helper in `collector/cli.py`,
+  wired into `_run_seed_import` so the existing `meshcore-hub seed` command
+  (and the compose `seed` profile) loads `links.yaml` automatically, plus a
+  `links_file` property on the settings resolving to `$SEED_HOME/links.yaml`.
+  Upsert is by `name`; on update the `link_nodes` and `link_observers`
+  children are replaced wholesale. Path and observer entries are resolved by
+  `public_key` — a missing **path** node is a hard error (the route can't be
+  tested against a node the hub has never seen); a missing **observer** is
+  skipped with a warning. `expected_hash` is computed by the importer, never
+  hand-typed. Returns the `{created, updated, errors}` shape already used by
+  the channel and tag seeders. `visibility` defaults to `community`; an
+  explicit value is honored, since the operator has filesystem access and links
+  carry no secret (unlike channel keys).
 
 ## Implementation Plan
 
@@ -290,12 +333,20 @@ first bytes co-occur far apart on an unrelated long flood path.
   in `home.js` (~line 99) and page titles; add `entities.links` + `links.*`
   strings to `web/static/locales/en.json` and `nl.json`.
 
-### Phase 8: Config + docs + optional CLI
+### Phase 8: Config + seed loader + docs
 - Add `feature_links=True` and `link_evaluator_interval_seconds=60` to
-  `common/config.py` (and the `features` dict ~line 611); update `.env.example`.
+  `common/config.py` (and the `features` dict ~line 611); add a `links_file`
+  property resolving to `$SEED_HOME/links.yaml`; update `.env.example`.
+- New `_import_links` in `collector/cli.py`, wired into `_run_seed_import` so
+  `meshcore-hub seed` and the compose `seed` profile pick up `links.yaml`
+  automatically. Idempotent upsert by `name`; resolves path/observer nodes by
+  `public_key`; derives `expected_hash`; replaces `link_nodes`/`link_observers`
+  on update; honors seeded `visibility`; returns `{created, updated, errors}`.
+- Add `example/seed/links.yaml` documenting the format (mirrors the example in
+  F8), alongside the existing `example/seed/channels.yaml`.
 - Document in `SCHEMAS.md`, `README.md`, and cross-reference from
-  `docs/letsmesh.md`. Optional `meshcore-hub links list|create|delete` CLI
-  mirroring the channel/seed commands.
+  `docs/seeding.md` and `docs/letsmesh.md`. Optional `meshcore-hub links
+  list|delete` CLI (create/edit stays in the UI or seed).
 
 ## Open Questions
 
