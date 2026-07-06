@@ -148,12 +148,14 @@ first bytes co-occur far apart on an unrelated long flood path.
 - **F1 — Link configuration.** An operator with the `admin` role can create,
   update, and delete Links. Each Link has: a unique name, optional description,
   a `visibility` (community/member/operator/admin, default `community`), a `match_width` (1/2/3,
-  default 1), `window_hours`, `packet_count_threshold`, `max_hop_span`
-  (nullable int, default `null` = unlimited), an `enabled` flag, an ordered
+  default 1), `window_hours` (default 24, range 1..720),
+  `packet_count_threshold` (default 3, range 1..10000), `max_hop_span`
+  (nullable int, default `null` = unlimited), an `enabled` flag (default true), an ordered
   list of **≥2** path node specs, and an optional observer scope.
 - **F2 — Path node specs.** Each path entry selects a known Node (from
   `nodes`); the system derives `expected_hash = public_key[:2*match_width]` at
-  save time. Entries are ordered; the subsequence match preserves that order
+  save time. Entries are ordered; entries must be **distinct** (the same node
+  twice in one link is invalid). The subsequence match preserves that order
   with gaps allowed (intermediary nodes may sit between configured entries).
   `match_width` is **per-link**: an operator who knows the traffic in a given
   area is uniformly 2- or 3-byte can widen that link's width to drop from 256
@@ -176,15 +178,38 @@ first bytes co-occur far apart on an unrelated long flood path.
   **distinct packets** (`packet_hash`) whose path, in at least one observer's
   reception (within the observer scope, if set), contains the configured
   ordered subsequence within the window and within `max_hop_span` (if set), is
-  greater than or equal to `packet_count_threshold`.
+  greater than or equal to `packet_count_threshold`. Each evaluation writes a
+  `link_result` row whose `state` is one of:
+  - **`healthy`** — `matched_count >= packet_count_threshold`.
+  - **`unhealthy`** — in-scope observers received packets in the window but
+    `matched_count < threshold` (route may be down).
+  - **`no_coverage`** — `matched_count == 0` **and** no in-scope observer
+    received any packet with a non-empty path in the window (cannot
+    distinguish route-down from no-listener; the operator action is to
+    add/widen observers, not assume the route failed). When the scope is "all
+    observers", `no_coverage` is only reachable when the whole mesh is silent.
+
+  The evaluator separates the latter two with one extra existence check (any
+  in-scope `packet_path_hops` row in the window). Disabled links are excluded
+  from evaluation entirely — they produce no `link_result`, are omitted from
+  Prometheus output, and render a gray **disabled** badge (that badge comes
+  from `link.enabled`, not a result state).
 - **F5 — Visibility scoping.** The link list is filtered by the requesting
-  user's role exactly like channels (`VISIBILITY_LEVELS`). Reads are role-
-  scoped; writes are admin-only.
-- **F6 — UI.** A dedicated `/links` page lists links with health badges,
-  grouped by visibility, with admin CRUD modals (mirror of `channels.js`). The
-  node picker shows prefix-collision badges and a live "matches in 24h"
-  preview; it warns on mixed-width intent and recommends 3-node paths.
-- **F7 — Prometheus.** `/metrics` emits `meshcore_link_healthy{link}`,
+  user's role exactly like channels, using `VISIBILITY_LEVELS` from
+  `api/channel_visibility.py`. Reads are role-scoped; writes are admin-only.
+- **F6 — UI.** A dedicated `/links` page (see **UI Design** below) behaves as
+  a status board: a health summary strip, cards grouped by visibility with
+  unhealthy/no_coverage sorted first, a four-state badge (healthy /
+  unhealthy / no_coverage / disabled), and an inline accordion expand
+  revealing the diagnosis, contributing observers, the latest matched path, a
+  config recap, and a deep-link to the packets view. Admin CRUD uses a wider
+  modal containing a node path-builder and observer picker with prefix-
+  collision badges, a live "matches in 24h" preview, and a segmented
+  `match_width` control. Mirrors `channels.js` structure throughout.
+- **F7 — Prometheus.** `/metrics` emits `meshcore_link_healthy{link}` (1 if
+  `state == healthy` else 0), `meshcore_link_state{link}` (0=healthy,
+  1=unhealthy, 2=no_coverage — so the amber case is independently alertable:
+  `state==1` = route may be down, `state==2` = add observers),
   `meshcore_link_matched_packets{link}`, and `meshcore_link_threshold{link}`
   for **all** enabled links (no visibility filtering on the monitoring feed).
 - **F8 — Seeding (no-auth provisioning).** Site operators can load Links from
@@ -232,18 +257,29 @@ first bytes co-occur far apart on an unrelated long flood path.
   modeled on the spam re-scoring sweep (`subscriber.py:545-597`), runs at a
   configurable interval (default 60s, `0` disables), performs an immediate
   first run on startup, and upserts one row per link into `link_results` using
-  the existing dialect-specific `on_conflict_do_update` pattern
-  (`event_observer.py:143-158`).
-- **T5 — Indexing.** `packet_path_hops` carries `INDEX (node_hash,
-  raw_packet_id, position)` (drives the chain), `INDEX (raw_packet_id)` (FK +
-  per-reception lookup + cascade), and the denormalized `packet_hash` for the
-  dedup count.
+  a dialect-specific `on_conflict_do_update` (postgresql
+  `pg_insert(...).on_conflict_do_update(...)` / sqlite
+  `sqlite_insert(...).on_conflict_do_update(...)`), modeled on the existing
+  dialect branch in `common/models/event_observer.py:143-158`. That branch
+  currently uses `on_conflict_do_nothing`; no `do_update` variant exists in
+  the codebase yet, so the evaluator authors it (standard SQLAlchemy idiom).
+- **T5 — Indexing.** Every hop query is time-windowed, so `received_at`
+  belongs in the leading index, not as a post-filter. `packet_path_hops`
+  carries `INDEX (node_hash, received_at)` — drives the first-prefix + window
+  range scan in `fetch_candidate_paths` (a two-range seek: prefix then
+  recent) — and `INDEX (raw_packet_id, position)` — serves the per-reception
+  ordered-hop fetch, the FK lookup, and the `ON DELETE CASCADE` (leftmost-
+  prefix covers equality-on-`raw_packet_id`, so no separate FK index). The
+  denormalized `packet_hash`/`received_at` columns back the distinct count
+  and the window without a join back to `raw_packets`.
 - **T6 — Backend-agnostic.** All DDL via Alembic **batch mode** (SQLite-safe);
   queries use SQLAlchemy Core/ORM with a Python-computed `window_since`
   datetime (never `NOW() - INTERVAL`).
 - **T7 — Retention.** `packet_path_hops.raw_packet_id` uses `ON DELETE
   CASCADE`, so the existing cleanup in `cleanup.py` removes hop rows for free
   when aged `raw_packets` are deleted; no cleanup change required.
+  `link_results` and `link_nodes`/`link_observers` cascade-delete with their
+  parent `links` row (standard FK cascade).
 - **T8 — Feature gating.** New `feature_links=True` UI flag and
   `link_evaluator_interval_seconds=60` collector knob in `common/config.py`,
   surfaced in `.env.example`. Hop extraction only runs when raw packet capture
@@ -262,6 +298,79 @@ first bytes co-occur far apart on an unrelated long flood path.
   explicit value is honored, since the operator has filesystem access and links
   carry no secret (unlike channel keys).
 
+## UI Design
+
+Decisions captured during plan review. The build lives in Phase 7; this
+section is the single source of truth for the design.
+
+### Mental model: status board, not catalog
+Channels is a catalog (CRUD list of static keys). Links is a **status board**
+— the page's primary job is glancing at health; configuration is secondary
+admin work. Every layout choice below follows from that.
+
+### List page (`/links`)
+- **Summary strip** at the top: `● N healthy · ● M unhealthy · ◐ K no
+  coverage · ◌ D disabled` (live counts from the embedded results).
+- **Cards grouped by visibility** (`VISIBILITY_ORDER`, like channels), but
+  within each group **sorted unhealthy / no_coverage first** so broken routes
+  surface immediately.
+- Header + admin "Add link" button + empty state mirror `channels.js`.
+
+### The link card
+- **Health badge** — four states, color-coded: `healthy` (green ●),
+  `unhealthy` (red ●), `no_coverage` (amber ◐), `disabled` (gray ◌, from
+  `link.enabled`).
+- **Path chips** — the configured nodes as `[Ipswich RP] → … → [Norwich RP]`,
+  conveying "ordered, gaps allowed".
+- **Numbers line** — `matched / threshold · window · evaluated Xm ago`.
+- Admin edit/delete buttons (channels pattern).
+- **Click → inline accordion expand** (not a modal, not a separate page).
+
+### Card expand contents (lazy `GET /api/v1/links/{id}`)
+1. **Diagnosis line** — turns the amber/red split into a sentence.
+2. **Contributing observers with counts** — an empty list *is* the
+   `no_coverage` signal.
+3. **Latest match (~3) with the observed path** — configured nodes marked ✓,
+   intermediates shown, so the operator can verify a real match vs a
+   collision. Served by a new `recent_matches(link, limit)` engine helper.
+4. **Config recap** (read-only) — width, span, window, observer scope.
+5. **"View packets" deep-link** — to the existing packet-groups page filtered
+   to matched hashes + window (reuses built UI; no new packet browser).
+
+### Create/edit modal (wider: `modal-box-lg`)
+- `name`, `description`, `visibility` (select), `enabled` (checkbox) — as
+  channels.
+- **`match_width`** — **segmented control** `[ 1 byte | 2 bytes | 3 bytes ]`
+  with a dynamic hint ("Matches all traffic · ~256 buckets" / "2-byte+ only ·
+  ~65K" / "3-byte only · ~16M"). Chosen over a `<select>` because toggling it
+  live-updates the collision badges and preview — the explore-by-tapping
+  affordance is the point.
+- **Path builder** (new shared component): search → `/api/v1/nodes`, selected
+  nodes as ordered draggable chips (↑↓ for a11y), enforce ≥2 + distinct, each
+  chip showing a **collision badge** ("unique" green / "N share prefix `a1`"
+  amber). Warn on mixed-width intent (a node never observed at the chosen
+  width) and suggest adding a 3rd node when collisions appear.
+- **Observers** multi-picker (same component; empty = all observers).
+- `window_hours`, `packet_count_threshold`, `max_hop_span` (empty =
+  unlimited) numeric fields.
+- **Live "matches in 24h" preview** — debounced `POST /api/v1/links/preview`
+  as the path / width / observers change; shows `~N matches in 24h` plus the
+  per-node collision counts used by the chips.
+
+### Data split (list vs detail vs preview)
+- `GET /api/v1/links` embeds the **lightweight** result per card: `state`,
+  `matched_count`, `threshold`, `evaluated_at`. Keeps the list payload small.
+- `GET /api/v1/links/{id}` returns the **full detail**: the lightweight result
+  plus contributing observers (with counts) and the latest ~3 matched paths.
+  Fetched lazily on first expand and cached in page state.
+- `POST /api/v1/links/preview` (unsaved config → `{matched_count,
+  contributing_observers, collisions}`) powers the live preview + chip badges.
+
+### i18n
+- Feature strings under a new top-level **`mesh_links.*`** block (the existing
+  `links.*` block holds footer labels and must not be reused); nav label under
+  `entities.links`. See Phase 7.
+
 ## Implementation Plan
 
 ### Phase 1: Data model + migration + backfill
@@ -269,74 +378,165 @@ first bytes co-occur far apart on an unrelated long flood path.
   `link.py` (with `LinkVisibility` mirroring the channel enum, plus config
   columns `match_width` and nullable `max_hop_span`), `link_node.py`,
   `link_observer.py`, `link_result.py`. Export all from `models/__init__.py`.
+  `link_result` carries: `link_id` (FK `links.id`, `ondelete=CASCADE`, unique
+  — one row per link), `state` (enum `healthy` / `unhealthy` /
+  `no_coverage`), `matched_count` (int), `threshold` (int, snapshot at eval
+  time for stable reporting), `evaluated_at` (datetime). Per-observer
+  breakdown and recent matched paths are **not** stored — they are computed
+  on demand by `GET /api/v1/links/{id}` (see UI Design → Data split).
 - One Alembic revision (batch mode) creating the five tables + indexes.
 - Backfill `packet_path_hops` from `raw_packets.decoded`, keyset-paginated
   (batch 1000), reusing the **frozen dual-path extraction** copied from
   migration `20260703_2250` (`_normalize_hash_list` + `decoded.path` →
-  `payload.decoded.pathHashes` fallback), emitting one row per
-  `(position, node_hash)` with `packet_hash`/`received_at` denormalized.
+  `payload.decoded.pathHashes` fallback), which yields a list of `node_hash`
+  strings ordered origin-to-observer. The backfill enumerates this list
+  (index = `position`) and emits one `PacketPathHop` row per
+  `(position, node_hash)` with `packet_hash`/`received_at` denormalized from
+  the source `raw_packet` row.
 
 ### Phase 2: Ingest hook + tests
-- In `collector/handlers/raw_packet.py:138` (after `path_hashes` is computed at
-  lines 106-112), bulk-insert `PacketPathHop` rows from the normalized list.
-  Zero extra decode; gated by existing raw-capture flag.
+- In `collector/handlers/raw_packet.py::store_raw_packet`, the normalized
+  `path_hashes` list is already computed at lines 106-111 (line 112 derives
+  `path_hash_bytes` from it — the citable "available" point is 106-111). The
+  hop bulk-insert goes inside the `with db.session_scope()` block (line 118)
+  **after** the `RawPacket` is added. The current inline
+  `session.add(RawPacket(...))` at lines 138-155 must be refactored to
+  `raw_packet = RawPacket(...); session.add(raw_packet); session.flush()` so
+  `raw_packet.id` is materialized, then bulk-insert one `PacketPathHop` per
+  `(position, node_hash)` from `path_hashes`, denormalizing
+  `packet_hash`/`received_at` from the same values. Zero extra decode; gated
+  by the existing raw-capture flag (the caller,
+  `Subscriber._maybe_capture_raw_packet`, already checks
+  `self._raw_packet_capture_enabled`).
 - Extend `tests/test_collector/test_handlers/test_raw_packet.py` to assert
   hops are inserted with correct positions/hashes and skipped when the path is
   absent.
 
 ### Phase 3: Matching engine (pure, DB-tested)
-- New `collector/links.py`: `build_subsequence_query(link, since)` (dynamic
-  chain of indexed self-joins on `raw_packet_id` with strictly-increasing
-  `position`, each filtering `node_hash LIKE expected_hash || '%'`, optional
-  observer filter, and optional `max_hop_span` predicate
-  `(ph_last.position − ph0.position) <= max_hop_span` when set), `evaluate_link`,
-  `evaluate_all_links`, plus helpers `derive_expected_hash`,
-  `detect_observed_width`, and `prefix_collision_counts`
-  (`GROUP BY lower(public_key[:2])`) for UI badges.
+- New `collector/links.py` using a **fetch-and-check** strategy (not an N-way
+  self-join). Rationale: the default 1-byte match width produces broad first-
+  prefix candidate sets where a self-join's cost scales with (candidates ×
+  depth); fetch-and-check scales with (candidates) only, on per-reception
+  paths that are ≤8 hops. Core functions:
+  - `fetch_candidate_paths(db, first_prefix, since, observer_ids=None,
+    limit=None)`: one statement — `SELECT raw_packet_id, position, node_hash,
+    packet_hash FROM packet_path_hops WHERE raw_packet_id IN (SELECT
+    raw_packet_id FROM packet_path_hops WHERE node_hash LIKE :p0 || '%' AND
+    received_at >= :since [...observer filter]) ORDER BY raw_packet_id,
+    position` — returns grouped ordered hop arrays. A subquery (not a client
+    `IN`-list) avoids the `SQLITE_MAX_VARIABLE_NUMBER` ceiling.
+  - `is_subsequence(path, expected, max_hop_span=None)`: pure two-pointer
+    prefix match (`node_hash.startswith(expected_hash)`), gaps allowed,
+    `position(last) − position(first) <= max_hop_span` when set. ~8 lines,
+    unit-trivial.
+  - `evaluate_link(db, link, since)`: fetch candidates for the link's first
+    node prefix, run `is_subsequence` per reception, count **distinct**
+    `packet_hash`, and **short-circuit as soon as the count reaches
+    `packet_count_threshold`** (the evaluator only needs the threshold
+    crossing, not an exact count → `healthy` early-exit). Below threshold, run
+    **one existence check** (any in-scope `packet_path_hops` row in the
+    window) to choose `unhealthy` vs `no_coverage` per F4. Returns `(state,
+    matched_count)` (`matched_count` is `>= threshold` when short-circuited).
+  - `evaluate_all_links`: iterates enabled links, calls `evaluate_link`.
+  - `recent_matches(db, link, limit=3)`: same fetch + subsequence check,
+    returns the latest `limit` matching paths (positions/hashes) for the card
+    expand's ✓-marked path view.
+  - `preview_link(db, config, since)`: accepts an **unsaved** config (path
+    nodes by `node_id`, width, observers, span) and returns `{matched_count,
+    contributing_observers, collisions}`. Applies the **candidate cap**:
+    if `fetch_candidate_paths` exceeds the cap (default 5000), stops and
+    returns `{matched_count: null, truncated: true, candidate_count}` so no
+    preview call does unbounded work (see Phase 4).
+  - Helpers: `derive_expected_hash`, `detect_observed_width`,
+    `prefix_collision_counts` (`GROUP BY lower(public_key[:2])`).
 - `tests/test_collector/test_links.py`: subsequence (gaps allowed, order
-  enforced), **per-reception isolation** (no cross-observer splice),
-  multi-observer dedup to distinct packets, observer-scope filter, **hop-span
-  cap rejects wide co-occurrences and keeps close ones on long packets**,
-  threshold boundary, prefix-match across widths.
+  enforced, span cap), **per-reception isolation** (no cross-observer
+  splice), multi-observer dedup to distinct packets, observer-scope filter,
+  **threshold short-circuit**, **`no_coverage` vs `unhealthy` separation**,
+  **`recent_matches` ordering/limit**, and **preview truncation**.
 
 ### Phase 4: CRUD API + schemas
 - New `api/routes/links.py` + `common/schemas/links.py` mirroring
-  `api/routes/channels.py`: `GET /api/v1/links` (RequireRead, role-filtered,
-  `@cached`, embeds current `link_result`); `GET/POST/PUT/DELETE
-  /api/v1/links/{id}` (RequireAdmin writes; ≥2 `link_nodes` validated in
-  Pydantic; `expected_hash` auto-derived from `node_id` when omitted; observer
-  set managed inline). Register router in `api/app.py`.
+  `api/routes/channels.py` (which uses `@cached` from `api/cache.py`,
+  `RequireRead`/`RequireAdmin` from `api/auth.py`, and `DbSession` from
+  `api/dependencies.py`): `GET /api/v1/links` (RequireRead, role-filtered,
+  `@cached`, embeds current `link_result`); `POST /api/v1/links`
+  (collection-level, like channels) and `GET/PUT/DELETE /api/v1/links/{id}`
+  (RequireAdmin writes; ≥2 **distinct** `link_nodes` validated in Pydantic;
+  `expected_hash` auto-derived from `node_id` when omitted, and re-derived for
+  all path nodes when `match_width` changes; observer set managed inline).
+  Note: channels has no single-resource `GET`; links adds one to serve the
+  embedded result. Register router in `api/app.py`.
+- `POST /api/v1/links/preview` (RequireRead — any authenticated user may
+  preview; it computes no saved state): accepts an unsaved link config (path
+  `node_id`s, `match_width`, observers, `max_hop_span`, `window_hours`) and
+  returns `{matched_count, contributing_observers, collisions}` by delegating
+  to `collector.links.preview_link`. Not cached (inputs are arbitrary).
+  `preview_link` applies a **candidate cap** (default 5000): on overflow it
+  returns `{matched_count: null, truncated: true, candidate_count}` and the
+  UI shows "~many — narrow your path to preview", bounding every call to one
+  scan. The client debounces (~400ms) and cancels in-flight via
+  `AbortController` (the `signal` pattern) so typing never stacks calls.
+- `GET /api/v1/links/{id}` (RequireRead, role-scoped) returns the **full
+  detail** per UI Design → Data split: the lightweight result plus
+  contributing observers (with counts) and the latest ~3 matched paths (via
+  `recent_matches`). The list `GET /api/v1/links` embeds only the lightweight
+  result (`state`, `matched_count`, `threshold`, `evaluated_at`).
 - `tests/test_api/test_links.py`: CRUD, role-scoping, visibility filter,
-  min-2-nodes rejection, result embedding.
+  min-2-nodes rejection, result embedding, **the preview endpoint**, and the
+  **`GET /{id}` detail shape** (observers + recent paths).
 
 ### Phase 5: Evaluator thread
-- New `collector/link_evaluator.py` wrapping `collector/links.py`. In
+- New `collector/link_evaluator.py` wrapping `collector/links.py`.
+  `evaluate_all_links` iterates only enabled links. In
   `collector/subscriber.py`, add `_start_link_evaluator_scheduler` /
   `_stop_link_evaluator_scheduler` (copy of the spam sweep), started in
-  `start()` (~line 667) and stopped in `stop()` (~line 708); thread attr near
-  line 114. Immediate first run, 60s loop, dialect upsert, per-iteration error
+  `start()` (after the spam scheduler at ~line 669) and stopped in `stop()`
+  (after the spam stop at ~line 710); thread attr near line 114. Immediate
+  first run on startup, 60s loop, dialect upsert, per-iteration error
   logging.
 - `tests/test_collector/test_link_evaluator.py`: upsert idempotency,
   immediate-first-run, disabled when interval is 0.
 
 ### Phase 6: Prometheus
 - In `api/metrics.py::collect_metrics`, read `link_results ⋈ links` and emit
-  the three gauges labelled by link name. Verify in
+  `meshcore_link_healthy`, `meshcore_link_state`, `meshcore_link_matched_packets`,
+  and `meshcore_link_threshold`, labelled by link name. Verify in
   `tests/test_api/test_metrics.py`.
 
 ### Phase 7: Web UI + i18n
-- New `web/static/js/spa/pages/links.js` (mirror `channels.js`): list grouped
-  by visibility with health badges; admin CRUD modal with the node multi-picker
-  (collision badges + observed width + live preview), observer multi-picker,
-  and an optional "within N hops" field (`max_hop_span`, empty = unlimited).
-- Register route in `web/static/js/spa/app.js` (~lines 27, 90), add a nav card
-  in `home.js` (~line 99) and page titles; add `entities.links` + `links.*`
-  strings to `web/static/locales/en.json` and `nl.json`.
+- Build per the **UI Design** section above. New
+  `src/meshcore_hub/web/static/js/spa/pages/links.js` (mirror `channels.js`):
+  summary strip + visibility-grouped cards sorted unhealthy/no_coverage first;
+  four-state health badge; **inline accordion expand** (toggle `expandedId` in
+  page state, lazy `GET /api/v1/links/{id}` on first expand, cached) showing
+  diagnosis / contributing observers / latest matched path (✓ markers via
+  `recent_matches`) / config recap / "View packets" deep-link; wider
+  (`modal-box-lg`) add/edit modal with the shared node path-builder +
+  observer picker, segmented `match_width` control, and a debounced
+  `POST /api/v1/links/preview` driving the live "matches in 24h" readout and
+  collision badges.
+- Register route in `src/meshcore_hub/web/static/js/spa/app.js`: add
+  `links: () => import('./pages/links.js')` to the `pages` lazy-load map
+  (~line 27); add a `if (features.links !== false) { router.addRoute('/links',
+  pageHandler(pages.links)); }` block (~line 92, next to the channels guard);
+  add a `composePageTitle('entities.links')` title entry (~line 178). Add a
+  nav card in `src/meshcore_hub/web/static/js/spa/pages/home.js` (~line 99)
+  among the existing `renderNavCard` blocks in `renderHeroSection`.
+- Add `entities.links` plus a new **`mesh_links.*`** top-level block to
+  `src/meshcore_hub/web/static/locales/en.json` and `nl.json`. The existing
+  top-level `links` block (`en.json:121-127`) holds footer labels
+  (website/github/discord/youtube/profile) and must **not** be reused — hence
+  `mesh_links.*` for the feature namespace.
 
 ### Phase 8: Config + seed loader + docs
 - Add `feature_links=True` and `link_evaluator_interval_seconds=60` to
-  `common/config.py` (and the `features` dict ~line 611); add a `links_file`
-  property resolving to `$SEED_HOME/links.yaml`; update `.env.example`.
+  `common/config.py` (as `feature_*` `Field(...)` declarations in the
+  ~569-602 block), and a `"links": self.feature_links` entry in the `features`
+  property's returned dict (dict body at ~lines 622-634); add a `links_file`
+  property mirroring the existing `channels_file` property at
+  `config.py:367-372` (resolves to `Path(self.effective_seed_home) /
+  "links.yaml"`); update `.env.example`.
 - New `_import_links` in `collector/cli.py`, wired into `_run_seed_import` so
   `meshcore-hub seed` and the compose `seed` profile pick up `links.yaml`
   automatically. Idempotent upsert by `name`; resolves path/observer nodes by
@@ -347,6 +547,50 @@ first bytes co-occur far apart on an unrelated long flood path.
 - Document in `SCHEMAS.md`, `README.md`, and cross-reference from
   `docs/seeding.md` and `docs/letsmesh.md`. Optional `meshcore-hub links
   list|delete` CLI (create/edit stays in the UI or seed).
+
+### Phase 9: Consolidate packet-detail path read onto the hop table
+- Opportunistic consolidation riding on the populated `packet_path_hops`
+  table. In `api/routes/packet_groups.py::get_packet_group`, replace the
+  per-reception `_extract_path_hashes(packet.decoded)` call (~line 292) with a
+  batched `SELECT raw_packet_id, position, node_hash FROM packet_path_hops
+  WHERE raw_packet_id IN (:ids) ORDER BY raw_packet_id, position` (one query
+  for the whole reception set), grouped into the same
+  `receptions[i].path_hashes` shape. **Zero client-visible payload change** —
+  `PacketReceptionInfo.path_hashes` stays `Optional[list[str]]`; the only
+  renderer (`packet-group-detail.js`) is untouched.
+- Delete `_extract_path_hashes` (lines 36-51) — it becomes a dead third copy
+  of the dual-path extraction (the live normalizer in `letsmesh_normalizer.py`
+  and the frozen copy in migration `20260703_2250` remain the canonical
+  sources). Note the list endpoint and dashboard charts already bypass JSON
+  (they use the indexed `path_hash_bytes` column), so only the detail route
+  changes.
+- Depends on the Phase 1 backfill being complete (every existing `raw_packet`
+  has its hops populated). For a row that somehow lacks hops, fall back to an
+  empty list (the renderer already handles a missing/empty path).
+- `tests/test_api/test_packet_groups.py`: assert the detail endpoint returns
+  identical `path_hashes` per reception after the swap (golden-path parity),
+  including multi-observer divergence and packets with no path.
+
+## Enabled Future Capabilities
+
+The `packet_path_hops` index is built for Link matching, but it unlocks
+packet-exploration features that are **impossible today** (each would require
+a full-table JSON scan). This plan does **not** build them; they are noted
+here as follow-on work, each likely its own plan:
+
+- **Path-node filtering on `/packets`** — "show packets that passed through
+  node X" via an indexed `(node_hash, received_at)` lookup. Today's path-node
+  popover in `packet-group-detail.js` is read-only (resolves a hash to known
+  nodes); this would turn it into an interactive filter
+  (`/packets?path_node=…`) plus a new `list_packet_groups` query param.
+- **Per-node relay statistics** — most active repeaters, common hop positions
+  (`GROUP BY node_hash`).
+- **List-page hop preview** — the `/packets` list currently shows no path
+  content (per-row extraction in a GROUP BY is too costly); a cheap indexed
+  lookup could show first-3-hops previews per group.
+
+Phase 9 captures only the low-risk consolidation (the packet-detail endpoint
+reading from the hop table). The filtering/stats features above are deferred.
 
 ## Open Questions
 
@@ -386,3 +630,83 @@ first bytes co-occur far apart on an unrelated long flood path.
   (`0300609`), path-hash-bytes filter (`c029eae`), JSON tree / packet path
   flow (`f845830`) — all building on the raw-packet foundation this plan
   extends.
+
+## Review
+
+**Status**: Approved with Changes
+
+**Reviewed**: 2026-07-06
+
+### Resolutions
+
+**Conflicts** — None. Cross-checked against all 45 plans under `docs/plans/`,
+all 7 source files the plan modifies, and `git log --oneline -20` on `main`.
+No existing `packet_path_hops` table, `Link` model, or `/api/v1/links`|
+`/api/v1/routes` endpoint exists. The plan builds on (not duplicates)
+spam-detection (`20260622-2243`), path-hash-bytes-filter (`20260703-2338`),
+raw-packets-feature (`20260612-2014`), and channel-model-db-decrypt
+(`20260519-2051`); their cited commits (`c029eae`, `0300609`, `f845830`) all
+landed on `main`.
+
+**First-pass resolutions (content):**
+- **F1 — Defaults**: `window_hours` defaults to 24 (range 1..720),
+  `packet_count_threshold` to 3 (range 1..10000); `enabled` defaults `true`.
+- **F2 — Duplicate path nodes**: entries must be distinct; validated in Pydantic.
+- **F4 — Disabled links**: excluded from evaluation, produce no `link_result`,
+  omitted from Prometheus.
+- **T7 — Cascade completeness**: `link_results`, `link_nodes`,
+  `link_observers` all cascade-delete with their parent `links` row.
+- **Phase 1 — Backfill enumeration**: frozen extraction yields an ordered list;
+  backfill enumerates index = `position`.
+
+**Second-pass resolutions (factual corrections verified against source):**
+- **T4 — Upsert citation was wrong on two counts.** The cited path
+  `collector/handlers/event_observer.py` does not exist (the file is
+  `common/models/event_observer.py`), and the cited method
+  `on_conflict_do_update` does not exist anywhere in the repo — the branch at
+  `:143-158` uses `on_conflict_do_nothing`. Corrected to point at the real
+  dialect branch and clarify the evaluator authors the `do_update` variant.
+- **Phase 2 — Insertion point was imprecise.** Line 138 is the start of
+  `session.add(RawPacket(...))` (spans 138-155), not the hop-insert point.
+  Hops need `raw_packet.id`, which requires assigning the inline `RawPacket`
+  to a variable and calling `session.flush()` before the bulk-insert.
+  `path_hashes` is computed at 106-111 (112 is the derived byte width).
+  Corrected in place.
+- **Phase 7 / Phase 8 — Web paths were missing the `src/meshcore_hub/`
+  prefix.** There is no top-level `web/` directory; the real root is
+  `src/meshcore_hub/web/`. All `web/...` citations corrected.
+- **F5 — `VISIBILITY_LEVELS` location.** It lives in
+  `api/channel_visibility.py:13`, not `models/channel.py`; import path added.
+- **Phase 4 — Route shape clarified.** Channels has no single-resource `GET`
+  and its POST is collection-level (`""`); links' POST mirrors that, and links
+  adds a `GET /{id}` to serve the embedded result. `@cached`/`RequireRead`/
+  `RequireAdmin`/`DbSession` import paths confirmed.
+- **Phase 8 — Config locations tightened.** Feature-flag `Field(...)` decls
+  live at ~569-602; the `features` property's dict body is at ~622-634 (not
+  ~611); the `links_file` property mirrors `channels_file` at
+  `config.py:367-372`.
+- **Phase 5 — Line numbers confirmed.** Spam scheduler calls occupy 667/708
+  exactly; ~669/~710 is the correct after-insertion point. Thread attr at 114
+  confirmed.
+
+**Decisions:**
+- **i18n namespace** — `mesh_links.*` chosen for the feature's page strings.
+  The existing top-level `links` block (`en.json:121-127`) holds footer labels
+  (website/github/discord/youtube/profile) and must not be reused; `mesh_links`
+  avoids the collision without renaming existing strings. `entities.links`
+  (the nav label) is unaffected.
+
+### Remaining Action Items
+
+- **Naming confirmation** — "Link" / `links` must be confirmed before Phase 1
+  (the migration authors the table; renaming later is costly).
+- **Cap on configured nodes** — confirm ~8 is comfortable for the realistic
+  longest route (drives max self-join depth).
+- **Collision tolerance** — validate the acceptable false-healthy rate with
+  live data once the hop table is populated.
+- **Observer coverage guidance** — UI decision during Phase 7 (recommend
+  adding observers when a link reads unhealthy with zero contributing
+  observers).
+
+These four items are the plan's existing Open Questions; none block starting
+Phase 1 except naming.
