@@ -88,7 +88,7 @@ class Route(Base, UUIDMixin, TimestampMixin):
     reversible: Mapped[bool] = mapped_column(
         Boolean,
         default=True,
-        server_default="1",
+        server_default="true",
         nullable=False,
     )
 
