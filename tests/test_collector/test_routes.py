@@ -84,6 +84,7 @@ def _make_route(
     observers: list[Node] | None = None,
     enabled: bool = True,
     window_hours: int = 24,
+    reversible: bool = True,
 ) -> Route:
     route = Route(
         name=name,
@@ -93,6 +94,7 @@ def _make_route(
         max_hop_span=max_hop_span,
         enabled=enabled,
         window_hours=window_hours,
+        reversible=reversible,
     )
     db_session.add(route)
     db_session.flush()
@@ -341,6 +343,56 @@ class TestEvaluateRoute:
         assert quality == RouteQuality.CLEAR.value
         assert count == 4  # short-circuited at effective_degraded = 4
 
+    def test_reversible_matches_reverse_direction(self, db_session):
+        """Reversible route matches packets travelling the reverse path."""
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        route = _make_route(db_session, "R1", [node_a, node_b], threshold=3)
+
+        # Packets going B->A (reverse of configured A->B)
+        for i in range(5):
+            _make_reception(db_session, None, f"pkt{i}", ["BB", "AA"])
+        db_session.commit()
+
+        since = _NOW - timedelta(hours=24)
+        state, quality, count = evaluate_route(db_session, route, since)
+        assert state == RouteState.HEALTHY.value
+        assert count == 5
+
+    def test_non_reversible_ignores_reverse_direction(self, db_session):
+        """Non-reversible route does NOT match reverse-direction packets."""
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        route = _make_route(
+            db_session, "R1", [node_a, node_b], threshold=3, reversible=False
+        )
+
+        # Only reverse-direction packets exist (B->A)
+        for i in range(5):
+            _make_reception(db_session, None, f"pkt{i}", ["BB", "AA"])
+        db_session.commit()
+
+        since = _NOW - timedelta(hours=24)
+        state, quality, count = evaluate_route(db_session, route, since)
+        assert count == 0
+
+    def test_reversible_matches_both_directions(self, db_session):
+        """Reversible route matches packets in both directions."""
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        route = _make_route(db_session, "R1", [node_a, node_b], threshold=3)
+
+        _make_reception(db_session, None, "fwd1", ["AA", "BB"])
+        _make_reception(db_session, None, "rev1", ["BB", "AA"])
+        _make_reception(db_session, None, "fwd2", ["AA", "BB"])
+        _make_reception(db_session, None, "rev2", ["BB", "AA"])
+        db_session.commit()
+
+        since = _NOW - timedelta(hours=24)
+        state, quality, count = evaluate_route(db_session, route, since)
+        assert state == RouteState.HEALTHY.value
+        assert count == 4
+
 
 class TestEvaluateAllRoutes:
     def test_only_enabled_routes(self, db_session):
@@ -437,6 +489,7 @@ class TestPreviewRoute:
                 "node_ids": [node_a.id, node_b.id],
                 "match_width": 1,
                 "packet_count_threshold": 3,
+                "reversible": False,
             },
             since,
         )

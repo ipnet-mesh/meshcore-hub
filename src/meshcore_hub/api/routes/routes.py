@@ -89,6 +89,7 @@ def _route_to_read(route: Route) -> RouteRead:
         degraded_threshold=route.degraded_threshold,
         max_hop_span=route.max_hop_span,
         enabled=route.enabled,
+        reversible=route.reversible,
         route_nodes=[_route_node_to_read(rn) for rn in route.route_nodes],
         route_observers=[_route_observer_to_read(ro) for ro in route.route_observers],
         route_result=_result_to_summary(route.route_result),
@@ -191,6 +192,7 @@ def create_route(
         degraded_threshold=body.degraded_threshold,
         max_hop_span=body.max_hop_span,
         enabled=body.enabled,
+        reversible=body.reversible,
     )
     session.add(route)
     session.flush()
@@ -297,6 +299,8 @@ def update_route(
         route.max_hop_span = body.max_hop_span
     if body.enabled is not None:
         route.enabled = body.enabled
+    if body.reversible is not None:
+        route.reversible = body.reversible
 
     if body.node_public_keys is not None:
         nodes = _resolve_nodes_by_pubkey(session, body.node_public_keys)
@@ -364,6 +368,7 @@ def preview(
         "max_hop_span": body.max_hop_span,
         "packet_count_threshold": body.packet_count_threshold,
         "degraded_threshold": body.degraded_threshold,
+        "reversible": body.reversible,
     }
     result = preview_route(session, config, since)
     return RoutePreviewResponse(**result)

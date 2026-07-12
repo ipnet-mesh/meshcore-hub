@@ -789,6 +789,7 @@ def _import_routes(
                     route.degraded_threshold = value.get("degraded_threshold")
                     route.max_hop_span = value.get("max_hop_span")
                     route.enabled = value.get("enabled", True)
+                    route.reversible = value.get("reversible", True)
                     # Replace path nodes wholesale
                     for rn in list(route.route_nodes):
                         session.delete(rn)
@@ -807,6 +808,7 @@ def _import_routes(
                         degraded_threshold=value.get("degraded_threshold"),
                         max_hop_span=value.get("max_hop_span"),
                         enabled=value.get("enabled", True),
+                        reversible=value.get("reversible", True),
                     )
                     session.add(route)
                     session.flush()

@@ -65,6 +65,9 @@ class RouteCreate(BaseModel):
         default=None, description="Max hop distance between first and last node"
     )
     enabled: bool = Field(default=True, description="Whether this route is evaluated")
+    reversible: bool = Field(
+        default=True, description="Whether to match the path in both directions"
+    )
     node_public_keys: list[str] = Field(
         ..., description="Ordered path node public keys (64-char hex, >= 2, distinct)"
     )
@@ -99,6 +102,7 @@ class RouteUpdate(BaseModel):
     degraded_threshold: Optional[int] = None
     max_hop_span: Optional[int] = None
     enabled: Optional[bool] = None
+    reversible: Optional[bool] = None
     node_public_keys: Optional[list[str]] = None
     observer_public_keys: Optional[list[str]] = None
 
@@ -133,6 +137,7 @@ class RouteRead(BaseModel):
     degraded_threshold: Optional[int] = None
     max_hop_span: Optional[int] = None
     enabled: bool
+    reversible: bool
     route_nodes: list[RouteNodeRead] = []
     route_observers: list[RouteObserverRead] = []
     route_result: Optional[RouteResultSummary] = None
@@ -179,6 +184,7 @@ class RouteDetail(BaseModel):
     degraded_threshold: Optional[int] = None
     max_hop_span: Optional[int] = None
     enabled: bool
+    reversible: bool
     route_nodes: list[RouteNodeRead] = []
     route_observers: list[RouteObserverRead] = []
     route_result: Optional[RouteResultSummary] = None
@@ -202,6 +208,7 @@ class RoutePreviewRequest(BaseModel):
     degraded_threshold: Optional[int] = None
     max_hop_span: Optional[int] = None
     observer_public_keys: Optional[list[str]] = None
+    reversible: bool = Field(default=True)
 
     @model_validator(mode="after")
     def validate_preview(self) -> "RoutePreviewRequest":

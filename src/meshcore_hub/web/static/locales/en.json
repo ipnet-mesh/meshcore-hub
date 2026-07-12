@@ -334,6 +334,7 @@
     "degraded_label": "Degraded",
     "span_label": "Max Span",
     "enabled_label": "Enabled",
+    "reversible_label": "Reversible (match both directions)",
     "disabled": "Disabled",
     "not_evaluated": "Not yet evaluated",
     "diagnosis": "Diagnosis",

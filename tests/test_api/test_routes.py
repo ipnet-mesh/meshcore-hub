@@ -67,6 +67,23 @@ class TestCreateRoute:
         assert data["name"] == "Route1"
         assert len(data["route_nodes"]) == 2
         assert data["route_nodes"][0]["expected_hash"] is not None
+        assert data["reversible"] is True
+
+    def test_create_non_reversible(self, client_no_auth, api_db_session):
+        nodes = _sample_nodes(api_db_session)
+        api_db_session.commit()
+
+        resp = client_no_auth.post(
+            "/api/v1/routes",
+            json={
+                "name": "OneWay",
+                "node_public_keys": [n.public_key for n in nodes],
+                "reversible": False,
+            },
+            headers={"X-User-Roles": "admin"},
+        )
+        assert resp.status_code == 201
+        assert resp.json()["reversible"] is False
 
     def test_duplicate_name_rejected(self, client_no_auth, api_db_session):
         nodes = _sample_nodes(api_db_session)

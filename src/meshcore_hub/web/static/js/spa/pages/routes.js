@@ -61,9 +61,10 @@ function renderSummaryStrip(routes) {
 
 function renderPathChips(route) {
     const nodes = route.route_nodes || [];
+    const arrow = route.reversible !== false ? '\u2194' : '\u2192';
     return html`<div class="flex flex-wrap items-center gap-1 text-sm">
         ${nodes.map((rn, i) => html`
-            ${i > 0 ? html`<span class="opacity-50">\u2192</span>` : nothing}
+            ${i > 0 ? html`<span class="opacity-50">${arrow}</span>` : nothing}
             <span class="badge badge-ghost badge-sm">${rn.name || rn.public_key?.slice(0, 8) || rn.node_id.slice(0, 8)}</span>
         `)}
     </div>`;
@@ -147,9 +148,23 @@ function renderDetailContent(route, detail) {
         ${matches.length > 0 ? html`<div>
             <strong class="opacity-70">${t('routes.recent_matches')}:</strong>
             <div class="mt-1 space-y-1">
-                ${matches.map(m => html`<div class="font-mono text-xs opacity-60">
-                    ${(m.hops || []).map((h, i) => html`${i > 0 ? ' \u2192 ' : nothing}${h.node_hash}`).slice(0, 10)}
-                </div>`)}
+                ${matches.map(m => {
+                    const pathLookup = new Map(
+                        (route.route_nodes || []).map(rn =>
+                            [rn.expected_hash?.toLowerCase(), rn])
+                    );
+                    return html`<div class="flex flex-wrap items-center gap-0.5 text-xs">
+                        ${(m.hops || []).slice(0, 10).map((h, i) => {
+                            const rn = pathLookup.get((h.node_hash || '').toLowerCase());
+                            return html`
+                                ${i > 0 ? html`<span class="opacity-30 mx-0.5">\u2192</span>` : nothing}
+                                ${rn
+                                    ? html`<span class="badge badge-primary badge-sm">${rn.name || h.node_hash}</span>`
+                                    : html`<span class="badge badge-ghost badge-sm opacity-50">${h.node_hash}</span>`}
+                            `;
+                        })}
+                    </div>`;
+                })}
             </div>
         </div>` : nothing}
         <div class="opacity-50 text-xs">
@@ -324,11 +339,18 @@ function renderRouteModal({ modalState, onSave, onCancel }) {
                                 placeholder="\u221E" min="1" />
                         </div>
                     </div>
-                    <label class="label cursor-pointer justify-start gap-3">
-                        <input type="checkbox" id="route-modal-enabled" class="checkbox checkbox-sm"
-                            .checked=${route.enabled !== false} />
-                        <span class="text-sm">${t('routes.enabled_label')}</span>
-                    </label>
+                    <div class="flex gap-6">
+                        <label class="label cursor-pointer justify-start gap-3">
+                            <input type="checkbox" id="route-modal-enabled" class="checkbox checkbox-sm"
+                                .checked=${route.enabled !== false} />
+                            <span class="text-sm">${t('routes.enabled_label')}</span>
+                        </label>
+                        <label class="label cursor-pointer justify-start gap-3">
+                            <input type="checkbox" id="route-modal-reversible" class="checkbox checkbox-sm"
+                                .checked=${route.reversible !== false} />
+                            <span class="text-sm">${t('routes.reversible_label')}</span>
+                        </label>
+                    </div>
                 </div>
                 <div class="modal-action">
                     <button type="button" class="btn btn-ghost" @click=${onCancel}>${t('common.cancel')}</button>
@@ -652,6 +674,7 @@ export async function render(container, params, router) {
             const degradedEl = document.getElementById('route-modal-degraded');
             const spanEl = document.getElementById('route-modal-span');
             const enabledEl = document.getElementById('route-modal-enabled');
+            const reversibleEl = document.getElementById('route-modal-reversible');
 
             const isEdit = modalState.isEdit;
             const nodePublicKeys = modalState.pathNodes.map(n => n.public_key);
@@ -671,6 +694,7 @@ export async function render(container, params, router) {
                 packet_count_threshold: parseInt(thresholdEl.value, 10) || 3,
                 max_hop_span: spanEl.value ? parseInt(spanEl.value, 10) : null,
                 enabled: enabledEl.checked,
+                reversible: reversibleEl.checked,
                 node_public_keys: nodePublicKeys,
                 observer_public_keys: observerPublicKeys.length > 0 ? observerPublicKeys : null,
             };

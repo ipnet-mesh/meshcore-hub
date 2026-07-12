@@ -110,6 +110,38 @@ def is_subsequence(
     return True
 
 
+def _match_hops(
+    hops: list[dict[str, Any]],
+    expected: list[str],
+    max_hop_span: Optional[int] = None,
+    reversible: bool = True,
+) -> bool:
+    """Check whether *hops* match *expected* forward (and optionally reverse)."""
+    if is_subsequence(hops, expected, max_hop_span):
+        return True
+    if reversible and len(expected) > 1:
+        return is_subsequence(hops, list(reversed(expected)), max_hop_span)
+    return False
+
+
+def _fetch_candidate_paths_maybe_bidirectional(
+    session: Session,
+    expected: list[str],
+    since: datetime,
+    observer_ids: Optional[list[str]] = None,
+    reversible: bool = True,
+) -> dict[str, list[dict[str, Any]]]:
+    """Fetch candidate paths from one or both endpoints of *expected*."""
+    paths = fetch_candidate_paths(session, expected[0], since, observer_ids)
+    if reversible and len(expected) > 1 and expected[-1] != expected[0]:
+        for rp_id, hops in fetch_candidate_paths(
+            session, expected[-1], since, observer_ids
+        ).items():
+            if rp_id not in paths:
+                paths[rp_id] = hops
+    return paths
+
+
 def prefix_collision_counts(session: Session, match_width: int) -> dict[str, int]:
     """Count how many nodes share each public-key prefix at *match_width*.
 
@@ -279,13 +311,16 @@ def evaluate_route(
         [ro.node_id for ro in route.route_observers] if route.route_observers else None
     )
 
-    paths = fetch_candidate_paths(session, expected[0], since, observer_ids)
+    reversible = getattr(route, "reversible", True)
+    paths = _fetch_candidate_paths_maybe_bidirectional(
+        session, expected, since, observer_ids, reversible
+    )
 
     eff_degraded = effective_degraded_threshold(route)
 
     matched_packets: set[str] = set()
     for hops in paths.values():
-        if is_subsequence(hops, expected, route.max_hop_span):
+        if _match_hops(hops, expected, route.max_hop_span, reversible):
             ph = hops[0]["packet_hash"]
             if ph:
                 matched_packets.add(ph)
@@ -388,11 +423,14 @@ def recent_matches(
     )
     since = datetime.now(timezone.utc) - timedelta(hours=route.window_hours)
 
-    paths = fetch_candidate_paths(session, expected[0], since, observer_ids)
+    reversible = getattr(route, "reversible", True)
+    paths = _fetch_candidate_paths_maybe_bidirectional(
+        session, expected, since, observer_ids, reversible
+    )
 
     matches: list[dict[str, Any]] = []
     for hops in paths.values():
-        if is_subsequence(hops, expected, route.max_hop_span):
+        if _match_hops(hops, expected, route.max_hop_span, reversible):
             first = hops[0] if hops else {}
             matches.append(
                 {
@@ -418,7 +456,8 @@ def preview_route(
     """Preview matching for an unsaved route config.
 
     *config* keys: ``node_ids``, ``match_width``, ``observer_ids``,
-    ``max_hop_span``, ``packet_count_threshold``, ``degraded_threshold``.
+    ``max_hop_span``, ``packet_count_threshold``, ``degraded_threshold``,
+    ``reversible``.
     """
     node_ids: list[str] = config.get("node_ids") or []
     match_width: int = config.get("match_width") or 1
@@ -426,6 +465,7 @@ def preview_route(
     max_hop_span: Optional[int] = config.get("max_hop_span")
     threshold: int = config.get("packet_count_threshold") or 3
     degraded: Optional[int] = config.get("degraded_threshold")
+    reversible: bool = config.get("reversible", True)
 
     if len(node_ids) < 2:
         return {
@@ -460,6 +500,10 @@ def preview_route(
     candidate_count = _count_candidate_receptions(
         session, first_prefix, since, observer_ids
     )
+    if reversible and len(expected) > 1 and expected[-1] != expected[0]:
+        candidate_count += _count_candidate_receptions(
+            session, expected[-1], since, observer_ids
+        )
     if candidate_count > PREVIEW_CANDIDATE_CAP:
         return {
             "matched_count": None,
@@ -468,7 +512,9 @@ def preview_route(
             "candidate_count": candidate_count,
         }
 
-    paths = fetch_candidate_paths(session, first_prefix, since, observer_ids)
+    paths = _fetch_candidate_paths_maybe_bidirectional(
+        session, expected, since, observer_ids, reversible
+    )
 
     eff_degraded = degraded or (threshold * DEGRADED_DEFAULT_MULTIPLIER)
 
@@ -476,7 +522,7 @@ def preview_route(
     contributing: dict[str, int] = {}
 
     for hops in paths.values():
-        if is_subsequence(hops, expected, max_hop_span):
+        if _match_hops(hops, expected, max_hop_span, reversible):
             ph = hops[0]["packet_hash"]
             if ph:
                 matched_packets.add(ph)

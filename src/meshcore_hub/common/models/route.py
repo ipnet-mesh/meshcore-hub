@@ -85,6 +85,12 @@ class Route(Base, UUIDMixin, TimestampMixin):
         default=True,
         nullable=False,
     )
+    reversible: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        server_default="1",
+        nullable=False,
+    )
 
     route_nodes: Mapped[list["RouteNode"]] = relationship(
         "RouteNode",
