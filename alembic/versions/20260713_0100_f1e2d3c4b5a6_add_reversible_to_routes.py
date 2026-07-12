@@ -1,6 +1,6 @@
 """add reversible column to routes
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: f1e2d3c4b5a6
 Revises: 8f2a3c4d5e6f
 Create Date: 2026-07-13 01:00:00.000000+00:00
 
@@ -15,7 +15,7 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "a1b2c3d4e5f6"
+revision: str = "f1e2d3c4b5a6"
 down_revision: Union[str, None] = "8f2a3c4d5e6f"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

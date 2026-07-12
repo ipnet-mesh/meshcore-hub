@@ -89,7 +89,6 @@ function renderRouteCard(route, { isAdmin, onDelete, onEdit, onExpand, isExpande
     const badgeCls = qualityBadgeClass(q, route.enabled);
     const label = qualityLabel(q, route.enabled);
     const dot = qualityDot(q, route.enabled);
-    const visBadge = html`<span class="badge badge-primary badge-sm">${route.visibility}</span>`;
 
     const adminButtons = isAdmin
         ? html`<div class="flex gap-2 mt-2">
@@ -112,7 +111,6 @@ function renderRouteCard(route, { isAdmin, onDelete, onEdit, onExpand, isExpande
                 <div class="flex-1 min-w-0">
                     <h2 class="card-title flex items-center gap-2">
                         ${route.name}
-                        ${visBadge}
                     </h2>
                     ${route.description ? html`<p class="text-sm opacity-70 mt-1">${route.description}</p>` : nothing}
                 </div>
@@ -123,6 +121,9 @@ function renderRouteCard(route, { isAdmin, onDelete, onEdit, onExpand, isExpande
             </div>
             <div class="mt-2">${renderPathChips(route)}</div>
             ${renderNumbersLine(route)}
+            <div class="text-xs opacity-50 mt-0.5">
+                ${route.match_width}B \u00B7 ${(route.route_nodes || []).length} ${t('routes.nodes_count')}${route.max_hop_span ? html` \u00B7 ${t('routes.span')}: ${route.max_hop_span}` : nothing}
+            </div>
             ${adminButtons}
             ${expandContent}
         </div>

@@ -240,6 +240,7 @@
     "quality_unknown": "Onbekend",
     "disabled": "Uitgeschakeld",
     "reversible_label": "Omkeerbaar (beide richtingen)",
+    "nodes_count": "knooppunten",
     "search_nodes_placeholder": "Zoek op naam of public key\u2026",
     "path_label": "Padknooppunten",
     "path_help": "Zoek op knooppuntnaam of public key en selecteer uit de resultaten. Minimaal 2 unieke knooppunten vereist.",
