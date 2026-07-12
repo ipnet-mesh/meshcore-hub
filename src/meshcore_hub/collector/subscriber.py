@@ -112,6 +112,8 @@ class Subscriber(LetsMeshNormalizer):
         self._channel_refresh_thread: Optional[threading.Thread] = None
         # Background spam re-scoring sweep
         self._spam_rescore_thread: Optional[threading.Thread] = None
+        # Background route health evaluator
+        self._route_evaluator_thread: Optional[threading.Thread] = None
         # Load initial channel keys from database
         self._include_test_channel = self._load_channel_keys_from_db()
         self._letsmesh_decoder = LetsMeshPacketDecoder(
@@ -596,6 +598,50 @@ class Subscriber(LetsMeshNormalizer):
             if self._spam_rescore_thread.is_alive():
                 logger.warning("Spam re-scoring thread did not stop cleanly")
 
+    def _start_route_evaluator_scheduler(self) -> None:
+        """Start background thread that evaluates route health.
+
+        Disabled when the interval is 0. Follows the same loop template as the
+        spam re-scoring sweep and uses synchronous sessions.
+        """
+        from meshcore_hub.common.config import CollectorSettings
+
+        interval = CollectorSettings().route_evaluator_interval_seconds
+        if interval <= 0:
+            logger.info("Route evaluator disabled (interval=%ds)", interval)
+            return
+
+        logger.info("Starting route evaluator (interval=%ds)", interval)
+
+        def run_evaluator_loop() -> None:
+            """Periodically evaluate all enabled routes."""
+            from meshcore_hub.collector.route_evaluator import run_evaluation
+
+            while self._running:
+                for _ in range(interval):
+                    if not self._running:
+                        break
+                    time.sleep(1)
+                if self._running:
+                    try:
+                        updated = run_evaluation(self.db)
+                        if updated:
+                            logger.info("Route evaluator updated %d routes", updated)
+                    except Exception as e:
+                        logger.error("Route evaluator error: %s", e, exc_info=True)
+
+        self._route_evaluator_thread = threading.Thread(
+            target=run_evaluator_loop, daemon=True, name="route-evaluator"
+        )
+        self._route_evaluator_thread.start()
+
+    def _stop_route_evaluator_scheduler(self) -> None:
+        """Stop the route evaluator thread."""
+        if self._route_evaluator_thread and self._route_evaluator_thread.is_alive():
+            self._route_evaluator_thread.join(timeout=5.0)
+            if self._route_evaluator_thread.is_alive():
+                logger.warning("Route evaluator thread did not stop cleanly")
+
     def start(self) -> None:
         """Start the subscriber."""
         logger.info("Starting collector subscriber")
@@ -666,6 +712,9 @@ class Subscriber(LetsMeshNormalizer):
         # Start background spam re-scoring sweep (no-op when disabled)
         self._start_spam_rescore_scheduler()
 
+        # Start route health evaluator (no-op when disabled)
+        self._start_route_evaluator_scheduler()
+
         # Start health reporter for Docker health checks
         self._health_reporter = HealthReporter(
             component="collector",
@@ -706,6 +755,9 @@ class Subscriber(LetsMeshNormalizer):
 
         # Stop spam re-scoring sweep
         self._stop_spam_rescore_scheduler()
+
+        # Stop route evaluator
+        self._stop_route_evaluator_scheduler()
 
         # Stop webhook processor
         self._stop_webhook_processor()

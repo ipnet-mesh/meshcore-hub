@@ -16,6 +16,8 @@ from meshcore_hub.common.models import (
     EventLog,
     Message,
     Node,
+    Route,
+    RouteResult,
     Telemetry,
     TracePath,
     UserProfile,
@@ -312,6 +314,61 @@ def collect_metrics(session: Any) -> bytes:
                         or 0
                     )
                     user_profiles_by_role.labels(role=role).set(role_count)
+
+    # -- Route health metrics --
+    _QUALITY_VALUES = {
+        "clear": 0,
+        "marginal": 1,
+        "failing": 2,
+        "unknown": 3,
+    }
+    route_healthy = Gauge(
+        "meshcore_route_healthy",
+        "1 if route quality is clear or marginal, else 0",
+        ["route"],
+        registry=registry,
+    )
+    route_quality = Gauge(
+        "meshcore_route_quality",
+        "Route quality band (0=clear, 1=marginal, 2=failing, 3=unknown)",
+        ["route"],
+        registry=registry,
+    )
+    route_matched = Gauge(
+        "meshcore_route_matched_packets",
+        "Distinct matched packets in window (lower bound when clear)",
+        ["route"],
+        registry=registry,
+    )
+    route_threshold = Gauge(
+        "meshcore_route_threshold",
+        "Route packet count threshold",
+        ["route"],
+        registry=registry,
+    )
+    route_degraded = Gauge(
+        "meshcore_route_degraded_threshold",
+        "Effective degraded threshold (2x threshold when unset)",
+        ["route"],
+        registry=registry,
+    )
+    route_rows = session.execute(
+        select(Route, RouteResult)
+        .outerjoin(RouteResult, RouteResult.route_id == Route.id)
+        .where(Route.enabled.is_(True))
+    ).all()
+    for route, result in route_rows:
+        name = route.name
+        quality_str = result.quality if result else "unknown"
+        route_healthy.labels(route=name).set(
+            1 if quality_str in ("clear", "marginal") else 0
+        )
+        route_quality.labels(route=name).set(_QUALITY_VALUES.get(quality_str, 3))
+        route_matched.labels(route=name).set(result.matched_count if result else 0)
+        route_threshold.labels(route=name).set(route.packet_count_threshold)
+        from meshcore_hub.collector.routes import effective_degraded_threshold
+
+        route_degraded.labels(route=name).set(effective_degraded_threshold(route))
 
     output: bytes = generate_latest(registry)
     return output

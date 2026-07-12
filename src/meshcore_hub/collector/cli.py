@@ -598,6 +598,28 @@ def _run_seed_import(
     elif verbose:
         click.echo(f"\nNo channels.yaml found in {seed_home}")
 
+    # Import routes if file exists
+    routes_file = Path(seed_home) / "routes.yaml"
+    if routes_file.exists():
+        if verbose:
+            click.echo(f"\nImporting routes from: {routes_file}")
+        route_stats = _import_routes(
+            file_path=str(routes_file),
+            db=db,
+            verbose=verbose,
+        )
+        if verbose:
+            click.echo(
+                f"  Routes: {route_stats['created']} created, "
+                f"{route_stats['updated']} updated"
+            )
+            if route_stats["errors"]:
+                for error in route_stats["errors"]:  # type: ignore[union-attr]
+                    click.echo(f"  Error: {error}", err=True)
+        imported_any = True
+    elif verbose:
+        click.echo(f"\nNo routes.yaml found in {seed_home}")
+
     return imported_any
 
 
@@ -666,6 +688,149 @@ def _import_channels(
                     created += 1
             except Exception as e:
                 errors.append(f"Channel '{name}': {e}")
+
+    return {"created": created, "updated": updated, "errors": errors}
+
+
+def _import_routes(
+    file_path: str,
+    db: "DatabaseManager",
+    verbose: bool = False,
+) -> dict[str, int | list[str]]:
+    """Import routes from a YAML file.
+
+    Each entry is keyed by route name and holds the route's knobs plus an
+    ordered ``path`` of node public_keys and optionally an ``observers`` list.
+    Path/observer entries are resolved by public_key.  A missing **path** node
+    is a hard error; a missing **observer** is skipped with a warning.
+
+    Returns:
+        Dict with 'created', 'updated', and 'errors'.
+    """
+    import yaml
+
+    from meshcore_hub.collector.routes import derive_expected_hash
+    from meshcore_hub.common.models.node import Node
+    from meshcore_hub.common.models.route import Route
+    from meshcore_hub.common.models.route_node import RouteNode
+    from meshcore_hub.common.models.route_observer import RouteObserver
+
+    created: int = 0
+    updated: int = 0
+    errors: list[str] = []
+
+    with open(file_path) as f:
+        data = yaml.safe_load(f)
+
+    if not data or not isinstance(data, dict):
+        return {"created": created, "updated": updated, "errors": errors}
+
+    with db.session_scope() as session:
+        for name, value in data.items():
+            try:
+                if not isinstance(value, dict):
+                    errors.append(f"Route '{name}': entry must be a dict")
+                    continue
+
+                path_keys: list[str] = value.get("path") or []
+                if len(path_keys) < 2:
+                    errors.append(f"Route '{name}': path needs >= 2 nodes")
+                    continue
+
+                match_width: int = value.get("match_width", 1)
+                visibility: str = value.get("visibility", "community")
+
+                # Resolve path nodes by public_key
+                path_nodes: list[Node] = []
+                path_ok = True
+                for pk in path_keys:
+                    pk_lower = pk.strip().lower()
+                    node = (
+                        session.query(Node).filter(Node.public_key == pk_lower).first()
+                    )
+                    if not node:
+                        errors.append(
+                            f"Route '{name}': path node {pk_lower[:12]}... not found"
+                        )
+                        path_ok = False
+                    else:
+                        path_nodes.append(node)
+                if not path_ok:
+                    continue
+
+                # Resolve observer nodes (missing = warning, not error)
+                observer_keys: list[str] = value.get("observers") or []
+                observer_nodes: list[Node] = []
+                for pk in observer_keys:
+                    pk_lower = pk.strip().lower()
+                    node = (
+                        session.query(Node).filter(Node.public_key == pk_lower).first()
+                    )
+                    if node:
+                        observer_nodes.append(node)
+                    elif verbose:
+                        click.echo(
+                            f"  Warning: observer node {pk_lower[:12]}... "
+                            f"not found, skipping (route '{name}')"
+                        )
+
+                # Upsert route by name
+                existing = session.query(Route).filter(Route.name == name).first()
+
+                if existing:
+                    route = existing
+                    route.description = value.get("description")
+                    route.visibility = visibility
+                    route.match_width = match_width
+                    route.window_hours = value.get("window_hours", 24)
+                    route.packet_count_threshold = value.get(
+                        "packet_count_threshold", 3
+                    )
+                    route.degraded_threshold = value.get("degraded_threshold")
+                    route.max_hop_span = value.get("max_hop_span")
+                    route.enabled = value.get("enabled", True)
+                    # Replace path nodes wholesale
+                    for rn in list(route.route_nodes):
+                        session.delete(rn)
+                    for ro in list(route.route_observers):
+                        session.delete(ro)
+                    session.flush()
+                    updated += 1
+                else:
+                    route = Route(
+                        name=name,
+                        description=value.get("description"),
+                        visibility=visibility,
+                        match_width=match_width,
+                        window_hours=value.get("window_hours", 24),
+                        packet_count_threshold=value.get("packet_count_threshold", 3),
+                        degraded_threshold=value.get("degraded_threshold"),
+                        max_hop_span=value.get("max_hop_span"),
+                        enabled=value.get("enabled", True),
+                    )
+                    session.add(route)
+                    session.flush()
+                    created += 1
+
+                # Insert path nodes
+                for pos, node in enumerate(path_nodes):
+                    session.add(
+                        RouteNode(
+                            route_id=route.id,
+                            node_id=node.id,
+                            position=pos,
+                            expected_hash=derive_expected_hash(
+                                node.public_key, match_width
+                            ),
+                        )
+                    )
+
+                # Insert observers
+                for node in observer_nodes:
+                    session.add(RouteObserver(route_id=route.id, node_id=node.id))
+
+            except Exception as e:
+                errors.append(f"Route '{name}': {e}")
 
     return {"created": created, "updated": updated, "errors": errors}
 

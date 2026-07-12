@@ -13,6 +13,15 @@ from meshcore_hub.common.models.user_profile import UserProfile
 from meshcore_hub.common.models.user_profile_node import UserProfileNode
 from meshcore_hub.common.models.event_observer import EventObserver, add_event_observer
 from meshcore_hub.common.models.channel import Channel, ChannelVisibility
+from meshcore_hub.common.models.packet_path_hop import PacketPathHop
+from meshcore_hub.common.models.route import Route, RouteVisibility
+from meshcore_hub.common.models.route_node import RouteNode
+from meshcore_hub.common.models.route_observer import RouteObserver
+from meshcore_hub.common.models.route_result import (
+    RouteResult,
+    RouteQuality,
+    RouteState,
+)
 
 __all__ = [
     "Base",
@@ -31,4 +40,12 @@ __all__ = [
     "add_event_observer",
     "Channel",
     "ChannelVisibility",
+    "PacketPathHop",
+    "Route",
+    "RouteVisibility",
+    "RouteNode",
+    "RouteObserver",
+    "RouteResult",
+    "RouteQuality",
+    "RouteState",
 ]

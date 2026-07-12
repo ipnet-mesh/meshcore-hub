@@ -12,6 +12,7 @@ from meshcore_hub.api.routes.dashboard import router as dashboard_router
 from meshcore_hub.api.routes.user_profiles import router as user_profiles_router
 from meshcore_hub.api.routes.adoptions import router as adoptions_router
 from meshcore_hub.api.routes.channels import router as channels_router
+from meshcore_hub.api.routes.routes import router as routes_router
 from meshcore_hub.api.routes.raw_packets import router as raw_packets_router
 from meshcore_hub.api.routes.packet_groups import router as packet_groups_router
 
@@ -32,6 +33,7 @@ api_router.include_router(dashboard_router, prefix="/dashboard", tags=["Dashboar
 api_router.include_router(user_profiles_router, prefix="/user", tags=["User"])
 api_router.include_router(adoptions_router, prefix="/adoptions", tags=["Adoptions"])
 api_router.include_router(channels_router, prefix="/channels", tags=["Channels"])
+api_router.include_router(routes_router, prefix="/routes", tags=["Routes"])
 api_router.include_router(raw_packets_router, prefix="/packets", tags=["Packets"])
 api_router.include_router(
     packet_groups_router, prefix="/packet-groups", tags=["Packet Groups"]

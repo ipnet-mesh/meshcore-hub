@@ -325,6 +325,11 @@ class CollectorSettings(CommonSettings):
         ),
         ge=0,
     )
+    route_evaluator_interval_seconds: int = Field(
+        default=60,
+        description="Route evaluator interval in seconds (0 disables, default 60)",
+        ge=0,
+    )
 
     @property
     def effective_raw_packet_retention_days(self) -> int:
@@ -370,6 +375,13 @@ class CollectorSettings(CommonSettings):
         from pathlib import Path
 
         return str(Path(self.effective_seed_home) / "channels.yaml")
+
+    @property
+    def routes_file(self) -> str:
+        """Get the path to routes.yaml in seed_home."""
+        from pathlib import Path
+
+        return str(Path(self.effective_seed_home) / "routes.yaml")
 
 
 class APISettings(CommonSettings):
@@ -600,6 +612,9 @@ class WebSettings(CommonSettings):
             "SPAM_DETECTION_ENABLED switch"
         ),
     )
+    feature_routes: bool = Field(
+        default=True, description="Enable the /routes page (route health monitoring)"
+    )
 
     # Content directory (contains pages/ and media/ subdirectories)
     content_home: Optional[str] = Field(
@@ -631,6 +646,7 @@ class WebSettings(CommonSettings):
             "pages": self.feature_pages,
             "radio_config": self.feature_radio_config,
             "spam": self.feature_spam_detection,
+            "routes": self.feature_routes,
         }
 
     @property

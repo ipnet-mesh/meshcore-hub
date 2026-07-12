@@ -18,7 +18,8 @@
     "member": "Lid",
     "admin": "Beheer",
     "tags": "Labels",
-    "tag": "Label"
+    "tag": "Label",
+    "routes": "Routes"
   },
   "common": {
     "filter": "Filter",
@@ -221,6 +222,30 @@
     "visibility_member": "Lid",
     "visibility_operator": "Operator",
     "visibility_admin": "Beheerder"
+  },
+  "routes": {
+    "title": "Routes",
+    "add_route": "Route toevoegen",
+    "edit_route": "Route bewerken",
+    "delete_route": "Route verwijderen",
+    "delete_confirm": "Weet u zeker dat u route {{name}} wilt verwwijderen?",
+    "visibility_community": "Community",
+    "visibility_member": "Lid",
+    "visibility_operator": "Operator",
+    "visibility_admin": "Beheerder",
+    "quality_clear": "Goed",
+    "quality_marginal": "Kritiek",
+    "quality_failing": "Storing",
+    "quality_no_coverage": "Geen dekking",
+    "quality_unknown": "Onbekend",
+    "disabled": "Uitgeschakeld",
+    "search_nodes_placeholder": "Zoek op naam of public key\u2026",
+    "path_label": "Padknooppunten",
+    "path_help": "Zoek op knooppuntnaam of public key en selecteer uit de resultaten. Minimaal 2 unieke knooppunten vereist.",
+    "path_empty": "Geen padknooppunten geselecteerd \u2014 zoek hierboven om knooppunten toe te voegen.",
+    "observers_label": "Observers (optioneel)",
+    "observers_help": "Beperk evaluatie tot specifieke observer-knooppunten. Leeg laten om alle observers te gebruiken.",
+    "observers_empty": "Geen observers geselecteerd \u2014 alle observers worden gebruikt."
   },
   "not_found": {
     "description": "De pagina die u zoekt bestaat niet of is verplaatst."

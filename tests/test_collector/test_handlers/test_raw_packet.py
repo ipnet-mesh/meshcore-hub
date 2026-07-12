@@ -3,7 +3,7 @@
 from sqlalchemy import select
 
 from meshcore_hub.collector.handlers.raw_packet import store_raw_packet
-from meshcore_hub.common.models import Node, RawPacket
+from meshcore_hub.common.models import Node, PacketPathHop, RawPacket
 
 
 def _channel_decoded() -> dict:
@@ -225,3 +225,87 @@ class TestStoreRawPacketPathHashBytes:
         rp = db_session.execute(select(RawPacket)).scalar_one()
         assert rp.path_len == 3
         assert rp.path_hash_bytes == 1
+
+
+class TestStoreRawPacketPathHops:
+    """Tests for packet_path_hops insertion at ingest."""
+
+    def test_hops_inserted_with_positions(self, db_manager, db_session):
+        """Each path hash becomes a hop with the correct position and hash."""
+        decoded = {
+            "payloadType": 1,
+            "path": ["aa", "bbcc", "dd"],
+            "payload": {"decoded": {}},
+        }
+        store_raw_packet(
+            "a" * 64,
+            {"raw": "00", "hash": "pkt1"},
+            decoded,
+            "flood",
+            db_manager,
+        )
+
+        hops = (
+            db_session.execute(select(PacketPathHop).order_by(PacketPathHop.position))
+            .scalars()
+            .all()
+        )
+        assert len(hops) == 3
+        assert [h.position for h in hops] == [0, 1, 2]
+        assert [h.node_hash for h in hops] == ["AA", "BBCC", "DD"]
+        assert all(h.packet_hash == "pkt1" for h in hops)
+
+    def test_hops_skipped_when_path_absent(self, db_manager, db_session):
+        """No path hashes means zero hop rows."""
+        decoded = {"payloadType": 3, "payload": {"decoded": {}}}
+        store_raw_packet(
+            "a" * 64, {"raw": "00", "hash": "h1"}, decoded, "ack", db_manager
+        )
+
+        hops = db_session.execute(select(PacketPathHop)).scalars().all()
+        assert len(hops) == 0
+
+    def test_observer_node_id_denormalized(self, db_manager, db_session):
+        """The observer node ID is denormalized onto each hop row."""
+        decoded = {
+            "payloadType": 1,
+            "path": ["aa", "bb"],
+            "payload": {"decoded": {}},
+        }
+        store_raw_packet(
+            "c" * 64,
+            {"raw": "00", "hash": "pkt2"},
+            decoded,
+            "flood",
+            db_manager,
+        )
+
+        node = db_session.execute(
+            select(Node).where(Node.public_key == "c" * 64)
+        ).scalar_one()
+
+        hops = db_session.execute(select(PacketPathHop)).scalars().all()
+        assert len(hops) == 2
+        assert all(h.observer_node_id == node.id for h in hops)
+
+    def test_hops_trace_fallback(self, db_manager, db_session):
+        """Trace-style pathHashes in payload.decoded produce hops too."""
+        decoded = {
+            "payloadType": 1,
+            "payload": {"decoded": {"pathHashes": ["aabb", "ccdd"]}},
+        }
+        store_raw_packet(
+            "a" * 64,
+            {"raw": "00", "hash": "pkt3"},
+            decoded,
+            "trace",
+            db_manager,
+        )
+
+        hops = (
+            db_session.execute(select(PacketPathHop).order_by(PacketPathHop.position))
+            .scalars()
+            .all()
+        )
+        assert len(hops) == 2
+        assert [h.node_hash for h in hops] == ["AABB", "CCDD"]

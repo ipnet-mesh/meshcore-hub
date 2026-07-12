@@ -15,7 +15,7 @@ from meshcore_hub.api.channel_visibility import (
     resolve_user_role,
 )
 from meshcore_hub.api.dependencies import DbSession
-from meshcore_hub.common.models import Node, RawPacket
+from meshcore_hub.common.models import Node, PacketPathHop, RawPacket
 from meshcore_hub.common.schemas.raw_packets import (
     GroupedPacketList,
     GroupedPacketRead,
@@ -31,24 +31,6 @@ VALID_SORT_COLUMNS = {"time", "event_type", "reception_count"}
 def _group_key_builder(request: Request) -> str:
     role = resolve_user_role(request) or "anonymous"
     return f"packet_groups:role={role}:{sorted_query_string(request)}"
-
-
-def _extract_path_hashes(decoded: dict[str, Any] | None) -> list[str] | None:
-    """Extract the routing path (per-hop node hash bytes) from a decoded packet.
-
-    The path lives at the top level as ``decoded.path`` for normal packets
-    (flood/advertisement/etc.). Trace-style packets instead carry it at
-    ``decoded.payload.decoded.pathHashes``, so that is used as a fallback.
-    """
-    if not decoded:
-        return None
-    path = decoded.get("path")
-    if isinstance(path, list) and path:
-        return path
-    payload = decoded.get("payload") or {}
-    inner = payload.get("decoded") or {}
-    hashes = inner.get("pathHashes")
-    return hashes if isinstance(hashes, list) else None
 
 
 def _get_tag_name(node: Optional[Node]) -> Optional[str]:
@@ -273,6 +255,21 @@ def get_packet_group(
         )
         nodes_by_id = {n.id: n for n in nodes}
 
+    # Batch-fetch path hashes from the hop table (one query for all receptions)
+    packet_ids = [row[0].id for row in rows]
+    hops_by_packet: dict[str, list[str]] = {}
+    if packet_ids:
+        hop_rows = session.execute(
+            select(
+                PacketPathHop.raw_packet_id,
+                PacketPathHop.node_hash,
+            )
+            .where(PacketPathHop.raw_packet_id.in_(packet_ids))
+            .order_by(PacketPathHop.raw_packet_id, PacketPathHop.position)
+        ).all()
+        for rp_id, node_hash in hop_rows:
+            hops_by_packet.setdefault(rp_id, []).append(node_hash)
+
     receptions: list[PacketReceptionInfo] = []
     for row in rows:
         packet = row[0]
@@ -288,9 +285,7 @@ def get_packet_group(
                 observer_tag_name=_get_tag_name(observer_node),
                 snr=packet.snr,
                 path_len=packet.path_len,
-                path_hashes=(
-                    None if is_redacted else _extract_path_hashes(packet.decoded)
-                ),
+                path_hashes=(None if is_redacted else hops_by_packet.get(packet.id)),
                 received_at=packet.received_at,
                 redacted=is_redacted,
             )
