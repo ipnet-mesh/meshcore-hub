@@ -62,10 +62,11 @@ function renderSummaryStrip(routes) {
 function renderPathChips(route) {
     const nodes = route.route_nodes || [];
     const arrow = route.reversible !== false ? '\u2194' : '\u2192';
+    const prefixLen = 2 * (route.match_width || 1);
     return html`<div class="flex flex-wrap items-center gap-1 text-sm">
         ${nodes.map((rn, i) => html`
             ${i > 0 ? html`<span class="opacity-50">${arrow}</span>` : nothing}
-            <span class="badge badge-ghost badge-sm">${rn.name || rn.public_key?.slice(0, 8) || rn.node_id.slice(0, 8)}</span>
+            <span class="badge badge-ghost badge-sm">${rn.name ? html`${rn.name} (${rn.public_key?.slice(0, prefixLen)})` : (rn.public_key?.slice(0, prefixLen) || rn.node_id.slice(0, 8))}</span>
         `)}
     </div>`;
 }
@@ -148,20 +149,21 @@ function renderDetailContent(route, detail) {
         </div>` : html`<div class="opacity-50">${t('routes.no_observers')}</div>`}
         ${matches.length > 0 ? html`<div>
             <strong class="opacity-70">${t('routes.recent_matches')}:</strong>
-            <div class="mt-1 space-y-1">
+            <div class="mt-1 space-y-2">
                 ${matches.map(m => {
+                    const prefixLen = 2 * (route.match_width || 1);
                     const pathLookup = new Map(
                         (route.route_nodes || []).map(rn =>
                             [rn.expected_hash?.toLowerCase(), rn])
                     );
-                    return html`<div class="flex flex-wrap items-center gap-0.5 text-xs">
+                    return html`<div class="flex flex-wrap items-center gap-0.5 text-xs pb-1 border-b border-base-300 last:border-0">
                         ${(m.hops || []).slice(0, 10).map((h, i) => {
-                            const rn = pathLookup.get((h.node_hash || '').toLowerCase());
+                            const rn = pathLookup.get((h.node_hash || '').toLowerCase().slice(0, prefixLen));
                             return html`
                                 ${i > 0 ? html`<span class="opacity-30 mx-0.5">\u2192</span>` : nothing}
                                 ${rn
-                                    ? html`<span class="badge badge-primary badge-sm">${rn.name || h.node_hash}</span>`
-                                    : html`<span class="badge badge-ghost badge-sm opacity-50">${h.node_hash}</span>`}
+                                    ? html`<span class="badge badge-primary badge-sm">${(h.node_hash || '').toLowerCase()}</span>`
+                                    : html`<span class="badge badge-ghost badge-sm opacity-50">${(h.node_hash || '').toLowerCase()}</span>`}
                             `;
                         })}
                     </div>`;
