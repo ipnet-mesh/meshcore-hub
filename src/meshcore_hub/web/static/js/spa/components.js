@@ -588,14 +588,14 @@ export function routeTypeBadge(routeType) {
 // --- Observer filter (localStorage-backed toggle badges) ---
 
 // Shared across the Adverts and Messages pages. We persist the *disabled* set
-// so any newly-discovered observer node defaults to enabled automatically.
-const OBSERVER_FILTER_KEY = 'meshcore-observers-disabled';
+// of area codes so any newly-discovered area defaults to enabled automatically.
+const OBSERVER_FILTER_KEY = 'meshcore-observer-areas-disabled';
 
 /**
- * Read the set of disabled (deselected) observer public keys from localStorage.
+ * Read the set of disabled (deselected) observer area codes from localStorage.
  * @returns {Set<string>}
  */
-export function getDisabledObservers() {
+export function getDisabledObserverAreas() {
     try {
         const raw = localStorage.getItem(OBSERVER_FILTER_KEY);
         if (!raw) return new Set();
@@ -607,10 +607,10 @@ export function getDisabledObservers() {
 }
 
 /**
- * Persist the set of disabled observer public keys to localStorage.
+ * Persist the set of disabled observer area codes to localStorage.
  * @param {Set<string>} disabled
  */
-export function setDisabledObservers(disabled) {
+export function setDisabledObserverAreas(disabled) {
     try {
         localStorage.setItem(OBSERVER_FILTER_KEY, JSON.stringify([...disabled]));
     } catch {
@@ -619,42 +619,42 @@ export function setDisabledObservers(disabled) {
 }
 
 /**
- * Toggle an observer's enabled state, enforcing that at least one observer
+ * Toggle an observer area's enabled state, enforcing that at least one area
  * stays enabled. Returns the updated disabled set (persisted).
- * @param {string} pubkey - Observer public key to toggle
- * @param {number} totalObserverCount - Total number of observer nodes
+ * @param {string} area - Observer area code to toggle
+ * @param {number} totalAreaCount - Total number of observer areas
  * @returns {Set<string>}
  */
-export function toggleObserver(pubkey, totalObserverCount) {
-    const disabled = getDisabledObservers();
-    if (disabled.has(pubkey)) {
-        disabled.delete(pubkey);
+export function toggleObserverArea(area, totalAreaCount) {
+    const disabled = getDisabledObserverAreas();
+    if (disabled.has(area)) {
+        disabled.delete(area);
     } else {
-        // Block disabling the last enabled observer.
-        if (totalObserverCount - disabled.size <= 1) {
+        // Block disabling the last enabled area.
+        if (totalAreaCount - disabled.size <= 1) {
             return disabled;
         }
-        disabled.add(pubkey);
+        disabled.add(area);
     }
-    setDisabledObservers(disabled);
+    setDisabledObserverAreas(disabled);
     return disabled;
 }
 
 /**
- * Render a row of clickable observer filter badges.
- * @param {Array<Object>} options.nodes - Observer nodes (with public_key and _displayName)
- * @param {Set<string>} options.disabled - Currently disabled observer public keys
- * @param {Function} options.onToggle - Called with a public_key when a badge is clicked
+ * Render a row of clickable observer filter badges, one per area code.
+ * @param {Array<string>} options.areas - Observer area codes (already sorted)
+ * @param {Set<string>} options.disabled - Currently disabled area codes
+ * @param {Function} options.onToggle - Called with an area code when a badge is clicked
  * @param {string} [options.extraClass] - Wrapper classes; must set the display
  *   (e.g. 'hidden lg:flex' or 'flex lg:hidden') since the base omits it to avoid conflicts
  * @returns {TemplateResult|nothing}
  */
-export function observerFilterBadges({ nodes, disabled, onToggle, extraClass = 'flex' }) {
-    if (!nodes || nodes.length === 0) return nothing;
+export function observerFilterBadges({ areas, disabled, onToggle, extraClass = 'flex' }) {
+    if (!areas || areas.length === 0) return nothing;
     return html`<div class="flex-wrap items-center gap-2 ${extraClass}">
         <span class="opacity-80 text-sm">${t('common.filter_observer_label')}:</span>
-        ${nodes.map(n => {
-            const enabled = !disabled.has(n.public_key);
+        ${areas.map(area => {
+            const enabled = !disabled.has(area);
             const cls = enabled ? 'badge badge-primary' : 'badge badge-ghost opacity-50';
             const title = enabled
                 ? t('common.filter_observer_disable')
@@ -662,7 +662,7 @@ export function observerFilterBadges({ nodes, disabled, onToggle, extraClass = '
             return html`<button type="button"
                 class="${cls} cursor-pointer"
                 title=${title}
-                @click=${() => onToggle(n.public_key)}>${n._displayName}</button>`;
+                @click=${() => onToggle(area)}>${area}</button>`;
         })}
     </div>`;
 }

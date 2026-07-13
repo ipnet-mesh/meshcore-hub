@@ -5,7 +5,7 @@ import {
     warningBadge,
     pagination, sortableTableHeader, mobileSortSelect,
     renderFilterForm, renderFilterToggle, autoSubmit, submitOnEnter, copyToClipboard, renderNodeDisplay,
-    observerIcons, getDisabledObservers, toggleObserver, observerFilterBadges, routeTypeBadge
+    observerIcons, getDisabledObserverAreas, toggleObserverArea, observerFilterBadges, routeTypeBadge
 } from '../components.js';
 import { createAutoRefresh } from '../auto-refresh.js';
 
@@ -22,7 +22,7 @@ export async function render(container, params, router) {
     const order = query.order || 'desc';
 
     // Observer filter is sourced from localStorage (shared toggle badges), not the URL.
-    let disabledObservers = getDisabledObservers();
+    let disabledObserverAreas = getDisabledObserverAreas();
 
     const config = getConfig();
     const features = config.features || {};
@@ -101,20 +101,24 @@ ${displayContent}`, container);
                 : [];
             const allNodes = nodesData.items || [];
 
-            const sortedNodes = allNodes.map(n => {
-                const tagName = n.tags?.find(t => t.key === 'name')?.value;
-                return { ...n, _sortName: (tagName || n.name || '').toLowerCase(), _displayName: tagName || n.name || n.public_key.slice(0, 12) + '...' };
-            }).sort((a, b) => a._sortName.localeCompare(b._sortName));
+            const areaMap = new Map(); // area -> public_key[]
+            for (const n of allNodes) {
+                const area = n.tags?.find(tg => tg.key === 'area')?.value;
+                if (!area || !area.trim()) continue;
+                const key = area.trim();
+                if (!areaMap.has(key)) areaMap.set(key, []);
+                areaMap.get(key).push(n.public_key);
+            }
+            const sortedAreas = [...areaMap.keys()]
+                .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+            const enabledObserverKeys = sortedAreas
+                .filter(a => !disabledObserverAreas.has(a))
+                .flatMap(a => areaMap.get(a));
+            // Only constrain when some current area is actually hidden.
+            const observerFilterActive = sortedAreas.some(a => disabledObserverAreas.has(a));
 
-            const enabledObserverKeys = sortedNodes
-                .filter(n => !disabledObservers.has(n.public_key))
-                .map(n => n.public_key);
-            // Only constrain when some current observer is actually hidden (a stale
-            // disabled key that no longer matches a node should not filter anything).
-            const observerFilterActive = enabledObserverKeys.length < sortedNodes.length;
-
-            const onObserverToggle = (pubkey) => {
-                disabledObservers = toggleObserver(pubkey, sortedNodes.length);
+            const onObserverToggle = (area) => {
+                disabledObserverAreas = toggleObserverArea(area, sortedAreas.length);
                 if (page > 1) {
                     // Re-scoping the data invalidates the current page; reset to page 1.
                     const sp = new URLSearchParams(window.location.search);
@@ -137,7 +141,7 @@ ${displayContent}`, container);
             const totalPages = Math.ceil(total / limit);
 
             const observerBadges = (extraClass) => observerFilterBadges({
-                nodes: sortedNodes, disabled: disabledObservers, onToggle: onObserverToggle, extraClass,
+                areas: sortedAreas, disabled: disabledObserverAreas, onToggle: onObserverToggle, extraClass,
             });
 
             const mobileCards = advertisements.length === 0

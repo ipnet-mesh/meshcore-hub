@@ -263,6 +263,10 @@ function renderMobileNav(config) {
 const locale = localStorage.getItem('meshcore-locale') || config.locale || 'en';
 await loadLocale(locale);
 
+// Legacy cleanup: remove the old per-observer localStorage key so stale public
+// keys are never misread as area codes by the new area-based filter.
+try { localStorage.removeItem('meshcore-observers-disabled'); } catch {}
+
 // Render auth section in navbar (after translations are loaded)
 const authSection = document.getElementById('auth-section');
 renderAuthSection(authSection, config);
