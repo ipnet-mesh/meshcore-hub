@@ -43,6 +43,10 @@ def run_evaluation(db: DatabaseManager) -> int:
                 upsert_route_result(session, route, state, quality, matched_count)
                 count += 1
             except Exception:
-                logger.exception("Error evaluating route '%s'", route.name)
+                logger.exception(
+                    "Error evaluating route '%s -> %s'",
+                    route.from_label,
+                    route.to_label,
+                )
 
         return count

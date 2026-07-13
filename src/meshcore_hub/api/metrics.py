@@ -358,7 +358,7 @@ def collect_metrics(session: Any) -> bytes:
         .where(Route.enabled.is_(True))
     ).all()
     for route, result in route_rows:
-        name = route.name
+        name = f"{route.from_label} -> {route.to_label}"
         quality_str = result.quality if result else "unknown"
         route_healthy.labels(route=name).set(
             1 if quality_str in ("clear", "marginal") else 0

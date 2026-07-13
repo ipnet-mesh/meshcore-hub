@@ -80,7 +80,8 @@ def _result_to_summary(result: RouteResult | None) -> RouteResultSummary | None:
 def _route_to_read(route: Route) -> RouteRead:
     return RouteRead(
         id=route.id,
-        name=route.name,
+        from_label=route.from_label,
+        to_label=route.to_label,
         description=route.description,
         visibility=route.visibility,
         match_width=route.match_width,
@@ -148,7 +149,7 @@ def list_routes(
     role = resolve_user_role(request)
     max_level = get_max_visibility_level(role)
 
-    routes = session.execute(select(Route).order_by(Route.name)).scalars().all()
+    routes = session.execute(select(Route).order_by(Route.from_label)).scalars().all()
     filtered = [
         _route_to_read(r)
         for r in routes
@@ -165,11 +166,15 @@ def create_route(
 ) -> RouteRead:
     """Create a new route (admin only)."""
     existing = session.execute(
-        select(Route).where(Route.name == body.name)
+        select(Route).where(
+            Route.from_label == body.from_label,
+            Route.to_label == body.to_label,
+        )
     ).scalar_one_or_none()
     if existing:
         raise HTTPException(
-            status_code=409, detail=f"Route '{body.name}' already exists"
+            status_code=409,
+            detail=f"Route '{body.from_label}' -> '{body.to_label}' already exists",
         )
 
     nodes = _resolve_nodes_by_pubkey(session, body.node_public_keys)
@@ -183,7 +188,8 @@ def create_route(
     )
 
     route = Route(
-        name=body.name,
+        from_label=body.from_label,
+        to_label=body.to_label,
         description=body.description,
         visibility=body.visibility,
         match_width=body.match_width,
@@ -273,15 +279,23 @@ def update_route(
     if not route:
         raise HTTPException(status_code=404, detail="Route not found")
 
-    if body.name is not None:
+    if body.from_label is not None or body.to_label is not None:
+        new_from = body.from_label if body.from_label is not None else route.from_label
+        new_to = body.to_label if body.to_label is not None else route.to_label
         dup = session.execute(
-            select(Route).where(Route.name == body.name, Route.id != route_id)
+            select(Route).where(
+                Route.from_label == new_from,
+                Route.to_label == new_to,
+                Route.id != route_id,
+            )
         ).scalar_one_or_none()
         if dup:
             raise HTTPException(
-                status_code=409, detail=f"Route '{body.name}' already exists"
+                status_code=409,
+                detail=f"Route '{new_from}' -> '{new_to}' already exists",
             )
-        route.name = body.name
+        route.from_label = new_from
+        route.to_label = new_to
 
     if body.description is not None:
         route.description = body.description

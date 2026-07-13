@@ -3,7 +3,7 @@
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Boolean, Integer, String, Text
+from sqlalchemy import Boolean, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from meshcore_hub.common.models.base import Base, TimestampMixin, UUIDMixin
@@ -32,7 +32,8 @@ class Route(Base, UUIDMixin, TimestampMixin):
 
     Attributes:
         id: UUID primary key
-        name: Unique route display name
+        from_label: Human-readable label for the route's start endpoint
+        to_label: Human-readable label for the route's end endpoint
         description: Optional longer description
         visibility: Role-based visibility level
         match_width: Path-hash prefix width in bytes (1/2/3)
@@ -44,10 +45,12 @@ class Route(Base, UUIDMixin, TimestampMixin):
     """
 
     __tablename__ = "routes"
-
-    name: Mapped[str] = mapped_column(
-        String(255), unique=True, nullable=False, index=True
+    __table_args__ = (
+        Index("ix_routes_from_to", "from_label", "to_label", unique=True),
     )
+
+    from_label: Mapped[str] = mapped_column(String(255), nullable=False)
+    to_label: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(
         Text,
         nullable=True,
@@ -114,4 +117,4 @@ class Route(Base, UUIDMixin, TimestampMixin):
     )
 
     def __repr__(self) -> str:
-        return f"<Route(name={self.name}, enabled={self.enabled})>"
+        return f"<Route(from={self.from_label}, to={self.to_label}, enabled={self.enabled})>"

@@ -47,7 +47,7 @@ def _make_reception(session, packet_hash: str, path: list[str], ts=None):
 
 
 def _make_route(session, name, nodes, **kwargs):
-    route = Route(name=name, **kwargs)
+    route = Route(from_label=name, to_label=name, **kwargs)
     session.add(route)
     session.flush()
     for pos, n in enumerate(nodes):

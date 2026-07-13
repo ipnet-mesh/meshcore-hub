@@ -26,26 +26,34 @@ class TestListRoutes:
         assert data["total"] == 0
 
     def test_visibility_filter(self, client_no_auth, api_db_session):
-        api_db_session.add(Route(name="Public", visibility="community"))
-        api_db_session.add(Route(name="Secret", visibility="admin"))
+        api_db_session.add(
+            Route(from_label="Public", to_label="Endpoint", visibility="community")
+        )
+        api_db_session.add(
+            Route(from_label="Secret", to_label="Endpoint", visibility="admin")
+        )
         api_db_session.commit()
 
         resp = client_no_auth.get("/api/v1/routes")
         assert resp.status_code == 200
-        names = [r["name"] for r in resp.json()["items"]]
-        assert "Public" in names
-        assert "Secret" not in names
+        labels = [r["from_label"] for r in resp.json()["items"]]
+        assert "Public" in labels
+        assert "Secret" not in labels
 
     def test_admin_sees_all(self, client_no_auth, api_db_session):
-        api_db_session.add(Route(name="Public", visibility="community"))
-        api_db_session.add(Route(name="Secret", visibility="admin"))
+        api_db_session.add(
+            Route(from_label="Public", to_label="Endpoint", visibility="community")
+        )
+        api_db_session.add(
+            Route(from_label="Secret", to_label="Endpoint", visibility="admin")
+        )
         api_db_session.commit()
 
         resp = client_no_auth.get("/api/v1/routes", headers={"X-User-Roles": "admin"})
         assert resp.status_code == 200
-        names = [r["name"] for r in resp.json()["items"]]
-        assert "Public" in names
-        assert "Secret" in names
+        labels = [r["from_label"] for r in resp.json()["items"]]
+        assert "Public" in labels
+        assert "Secret" in labels
 
 
 class TestCreateRoute:
@@ -56,7 +64,8 @@ class TestCreateRoute:
         resp = client_no_auth.post(
             "/api/v1/routes",
             json={
-                "name": "Route1",
+                "from_label": "Alpha",
+                "to_label": "Beta",
                 "node_public_keys": [n.public_key for n in nodes],
                 "match_width": 1,
             },
@@ -64,7 +73,8 @@ class TestCreateRoute:
         )
         assert resp.status_code == 201
         data = resp.json()
-        assert data["name"] == "Route1"
+        assert data["from_label"] == "Alpha"
+        assert data["to_label"] == "Beta"
         assert len(data["route_nodes"]) == 2
         assert data["route_nodes"][0]["expected_hash"] is not None
         assert data["reversible"] is True
@@ -76,7 +86,8 @@ class TestCreateRoute:
         resp = client_no_auth.post(
             "/api/v1/routes",
             json={
-                "name": "OneWay",
+                "from_label": "Alpha",
+                "to_label": "Beta",
                 "node_public_keys": [n.public_key for n in nodes],
                 "reversible": False,
             },
@@ -85,14 +96,18 @@ class TestCreateRoute:
         assert resp.status_code == 201
         assert resp.json()["reversible"] is False
 
-    def test_duplicate_name_rejected(self, client_no_auth, api_db_session):
+    def test_duplicate_from_to_rejected(self, client_no_auth, api_db_session):
         nodes = _sample_nodes(api_db_session)
-        api_db_session.add(Route(name="Dup"))
+        api_db_session.add(Route(from_label="Dup", to_label="End"))
         api_db_session.commit()
 
         resp = client_no_auth.post(
             "/api/v1/routes",
-            json={"name": "Dup", "node_public_keys": [n.public_key for n in nodes]},
+            json={
+                "from_label": "Dup",
+                "to_label": "End",
+                "node_public_keys": [n.public_key for n in nodes],
+            },
             headers={"X-User-Roles": "admin"},
         )
         assert resp.status_code == 409
@@ -103,7 +118,11 @@ class TestCreateRoute:
 
         resp = client_no_auth.post(
             "/api/v1/routes",
-            json={"name": "R", "node_public_keys": [node.public_key]},
+            json={
+                "from_label": "A",
+                "to_label": "B",
+                "node_public_keys": [node.public_key],
+            },
             headers={"X-User-Roles": "admin"},
         )
         assert resp.status_code == 422
@@ -114,7 +133,11 @@ class TestCreateRoute:
 
         resp = client_no_auth.post(
             "/api/v1/routes",
-            json={"name": "R", "node_public_keys": [node.public_key, node.public_key]},
+            json={
+                "from_label": "A",
+                "to_label": "B",
+                "node_public_keys": [node.public_key, node.public_key],
+            },
             headers={"X-User-Roles": "admin"},
         )
         assert resp.status_code == 422
@@ -126,7 +149,8 @@ class TestCreateRoute:
         resp = client_no_auth.post(
             "/api/v1/routes",
             json={
-                "name": "R",
+                "from_label": "A",
+                "to_label": "B",
                 "node_public_keys": [n.public_key for n in nodes],
                 "packet_count_threshold": 5,
                 "degraded_threshold": 3,
@@ -141,7 +165,11 @@ class TestCreateRoute:
 
         resp = client_with_auth.post(
             "/api/v1/routes",
-            json={"name": "R", "node_public_keys": [n.public_key for n in nodes]},
+            json={
+                "from_label": "A",
+                "to_label": "B",
+                "node_public_keys": [n.public_key for n in nodes],
+            },
             headers={"Authorization": "Bearer test-read-key"},
         )
         assert resp.status_code == 403
@@ -150,7 +178,7 @@ class TestCreateRoute:
 class TestGetRouteDetail:
     def test_detail_shape(self, client_no_auth, api_db_session):
         nodes = _sample_nodes(api_db_session, 3)
-        route = Route(name="R1")
+        route = Route(from_label="Alpha", to_label="Beta")
         api_db_session.add(route)
         api_db_session.flush()
         for pos, n in enumerate(nodes):
@@ -167,7 +195,8 @@ class TestGetRouteDetail:
         resp = client_no_auth.get(f"/api/v1/routes/{route.id}")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["name"] == "R1"
+        assert data["from_label"] == "Alpha"
+        assert data["to_label"] == "Beta"
         assert len(data["route_nodes"]) == 3
         assert "contributing_observers" in data
         assert "recent_matches" in data
@@ -178,9 +207,9 @@ class TestGetRouteDetail:
 
 
 class TestUpdateRoute:
-    def test_update_name(self, client_no_auth, api_db_session):
+    def test_update_from_to(self, client_no_auth, api_db_session):
         nodes = _sample_nodes(api_db_session)
-        route = Route(name="OldName")
+        route = Route(from_label="OldFrom", to_label="OldTo")
         api_db_session.add(route)
         api_db_session.flush()
         for pos, n in enumerate(nodes):
@@ -196,15 +225,17 @@ class TestUpdateRoute:
 
         resp = client_no_auth.put(
             f"/api/v1/routes/{route.id}",
-            json={"name": "NewName"},
+            json={"from_label": "NewFrom", "to_label": "NewTo"},
             headers={"X-User-Roles": "admin"},
         )
         assert resp.status_code == 200
-        assert resp.json()["name"] == "NewName"
+        data = resp.json()
+        assert data["from_label"] == "NewFrom"
+        assert data["to_label"] == "NewTo"
 
     def test_update_path_nodes(self, client_no_auth, api_db_session):
         nodes = _sample_nodes(api_db_session, 2)
-        route = Route(name="R")
+        route = Route(from_label="A", to_label="B")
         api_db_session.add(route)
         api_db_session.flush()
         for pos, n in enumerate(nodes):
@@ -234,7 +265,7 @@ class TestUpdateRoute:
 
 class TestDeleteRoute:
     def test_delete_success(self, client_no_auth, api_db_session):
-        route = Route(name="Bye")
+        route = Route(from_label="Bye", to_label="Gone")
         api_db_session.add(route)
         api_db_session.commit()
 

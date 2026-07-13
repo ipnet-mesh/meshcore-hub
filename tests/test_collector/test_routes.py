@@ -87,7 +87,8 @@ def _make_route(
     reversible: bool = True,
 ) -> Route:
     route = Route(
-        name=name,
+        from_label=name,
+        to_label=name,
         match_width=match_width,
         packet_count_threshold=threshold,
         degraded_threshold=degraded,
@@ -194,11 +195,21 @@ class TestDeriveQuality:
 
 class TestEffectiveDegraded:
     def test_explicit(self, db_session):
-        route = Route(name="t", packet_count_threshold=5, degraded_threshold=20)
+        route = Route(
+            from_label="t",
+            to_label="t",
+            packet_count_threshold=5,
+            degraded_threshold=20,
+        )
         assert effective_degraded_threshold(route) == 20
 
     def test_default_2x(self, db_session):
-        route = Route(name="t", packet_count_threshold=5, degraded_threshold=None)
+        route = Route(
+            from_label="t",
+            to_label="t",
+            packet_count_threshold=5,
+            degraded_threshold=None,
+        )
         assert effective_degraded_threshold(route) == 10
 
 
@@ -445,9 +456,39 @@ class TestRecentMatches:
             )
         db_session.commit()
 
-        matches = recent_matches(db_session, route, limit=3)
+        matches = recent_matches(db_session, route, limit=3, now=_NOW)
         assert len(matches) == 3
         assert matches[0]["received_at"] > matches[1]["received_at"]
+
+    def test_returns_sliced_subpath(self, db_session):
+        """Recent matches return only the hops between From and To, not the
+        full packet path."""
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        route = _make_route(db_session, "R1", [node_a, node_b])
+
+        # Packet path has noise before AA and after BB; only AA..BB should be kept.
+        _make_reception(db_session, None, "pkt0", ["XX", "AA", "YY", "BB", "ZZ"])
+        db_session.commit()
+
+        matches = recent_matches(db_session, route, limit=3, now=_NOW)
+        assert len(matches) == 1
+        hops = matches[0]["hops"]
+        assert [h["node_hash"] for h in hops] == ["AA", "YY", "BB"]
+
+    def test_returns_sliced_subpath_reverse(self, db_session):
+        """A reverse-direction packet is sliced in traversal order (To..From)."""
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        route = _make_route(db_session, "R1", [node_a, node_b], reversible=True)
+
+        _make_reception(db_session, None, "pkt0", ["XX", "BB", "YY", "AA", "ZZ"])
+        db_session.commit()
+
+        matches = recent_matches(db_session, route, limit=3, now=_NOW)
+        assert len(matches) == 1
+        hops = matches[0]["hops"]
+        assert [h["node_hash"] for h in hops] == ["BB", "YY", "AA"]
 
 
 class TestPreviewRoute:

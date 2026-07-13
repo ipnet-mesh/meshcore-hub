@@ -699,10 +699,11 @@ def _import_routes(
 ) -> dict[str, int | list[str]]:
     """Import routes from a YAML file.
 
-    Each entry is keyed by route name and holds the route's knobs plus an
-    ordered ``path`` of node public_keys and optionally an ``observers`` list.
-    Path/observer entries are resolved by public_key.  A missing **path** node
-    is a hard error; a missing **observer** is skipped with a warning.
+    Each entry is a dict with ``from``/``to`` endpoint labels plus the route's
+    knobs, an ordered ``path`` of node public_keys and optionally an
+    ``observers`` list.  Path/observer entries are resolved by public_key.  A
+    missing **path** node is a hard error; a missing **observer** is skipped
+    with a warning.  Entries are upserted by ``(from_label, to_label)``.
 
     Returns:
         Dict with 'created', 'updated', and 'errors'.
@@ -725,16 +726,28 @@ def _import_routes(
     if not data or not isinstance(data, dict):
         return {"created": created, "updated": updated, "errors": errors}
 
+    entries = data.get("routes")
+    if not isinstance(entries, list):
+        errors.append("routes seed file must have a list under the 'routes:' key")
+        return {"created": created, "updated": updated, "errors": errors}
+
     with db.session_scope() as session:
-        for name, value in data.items():
+        for idx, value in enumerate(entries):
             try:
                 if not isinstance(value, dict):
-                    errors.append(f"Route '{name}': entry must be a dict")
+                    errors.append(f"Route #{idx}: entry must be a dict")
                     continue
+
+                from_label = (value.get("from") or "").strip()
+                to_label = (value.get("to") or "").strip()
+                if not from_label or not to_label:
+                    errors.append(f"Route #{idx}: 'from' and 'to' are required")
+                    continue
+                label = f"{from_label} -> {to_label}"
 
                 path_keys: list[str] = value.get("path") or []
                 if len(path_keys) < 2:
-                    errors.append(f"Route '{name}': path needs >= 2 nodes")
+                    errors.append(f"Route '{label}': path needs >= 2 nodes")
                     continue
 
                 match_width: int = value.get("match_width", 1)
@@ -750,7 +763,7 @@ def _import_routes(
                     )
                     if not node:
                         errors.append(
-                            f"Route '{name}': path node {pk_lower[:12]}... not found"
+                            f"Route '{label}': path node {pk_lower[:12]}... not found"
                         )
                         path_ok = False
                     else:
@@ -771,14 +784,23 @@ def _import_routes(
                     elif verbose:
                         click.echo(
                             f"  Warning: observer node {pk_lower[:12]}... "
-                            f"not found, skipping (route '{name}')"
+                            f"not found, skipping (route '{label}')"
                         )
 
-                # Upsert route by name
-                existing = session.query(Route).filter(Route.name == name).first()
+                # Upsert route by (from_label, to_label)
+                existing = (
+                    session.query(Route)
+                    .filter(
+                        Route.from_label == from_label,
+                        Route.to_label == to_label,
+                    )
+                    .first()
+                )
 
                 if existing:
                     route = existing
+                    route.from_label = from_label
+                    route.to_label = to_label
                     route.description = value.get("description")
                     route.visibility = visibility
                     route.match_width = match_width
@@ -799,7 +821,8 @@ def _import_routes(
                     updated += 1
                 else:
                     route = Route(
-                        name=name,
+                        from_label=from_label,
+                        to_label=to_label,
                         description=value.get("description"),
                         visibility=visibility,
                         match_width=match_width,
@@ -832,7 +855,7 @@ def _import_routes(
                     session.add(RouteObserver(route_id=route.id, node_id=node.id))
 
             except Exception as e:
-                errors.append(f"Route '{name}': {e}")
+                errors.append(f"Route '{label}': {e}")
 
     return {"created": created, "updated": updated, "errors": errors}
 

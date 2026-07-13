@@ -74,6 +74,53 @@ def derive_quality(
     return RouteQuality.UNKNOWN.value
 
 
+def _subsequence_indices(
+    path: list[dict[str, Any]],
+    expected: list[str],
+    max_hop_span: Optional[int] = None,
+) -> Optional[tuple[int, int]]:
+    """Two-pointer subsequence prefix match with gaps allowed.
+
+    Each entry in *path* is a dict with ``position`` and ``node_hash``.
+    *expected* is the ordered list of uppercase hash prefixes to find.
+    A hop matches when ``node_hash.startswith(expected_hash)``.
+    ``max_hop_span`` constrains ``position(last) - position(first)`` when set.
+
+    Returns the ``(first_i, last_i)`` indices into *path* of the matched
+    endpoints, or ``None`` when no match is found.
+    """
+    if not expected:
+        return None
+    pi = 0
+    first_i: Optional[int] = None
+    last_i: Optional[int] = None
+    first_pos: Optional[int] = None
+    last_pos: Optional[int] = None
+    for needed in expected:
+        found = False
+        while pi < len(path):
+            i = pi
+            hop = path[pi]
+            pi += 1
+            if hop["node_hash"].startswith(needed):
+                pos = hop["position"]
+                if first_i is None:
+                    first_i = i
+                    first_pos = pos
+                last_i = i
+                last_pos = pos
+                found = True
+                break
+        if not found:
+            return None
+    if max_hop_span is not None and first_pos is not None and last_pos is not None:
+        if last_pos - first_pos > max_hop_span:
+            return None
+    if first_i is not None and last_i is not None:
+        return (first_i, last_i)
+    return None
+
+
 def is_subsequence(
     path: list[dict[str, Any]],
     expected: list[str],
@@ -86,28 +133,30 @@ def is_subsequence(
     A hop matches when ``node_hash.startswith(expected_hash)``.
     ``max_hop_span`` constrains ``position(last) - position(first)`` when set.
     """
-    if not expected:
-        return False
-    pi = 0
-    first_pos: Optional[int] = None
-    last_pos: Optional[int] = None
-    for needed in expected:
-        found = False
-        while pi < len(path):
-            hop = path[pi]
-            pi += 1
-            if hop["node_hash"].startswith(needed):
-                pos = hop["position"]
-                if first_pos is None:
-                    first_pos = pos
-                last_pos = pos
-                found = True
-                break
-        if not found:
-            return False
-    if max_hop_span is not None and first_pos is not None and last_pos is not None:
-        return last_pos - first_pos <= max_hop_span
-    return True
+    return _subsequence_indices(path, expected, max_hop_span) is not None
+
+
+def _matched_subpath(
+    hops: list[dict[str, Any]],
+    expected: list[str],
+    max_hop_span: Optional[int] = None,
+    reversible: bool = True,
+) -> Optional[list[dict[str, Any]]]:
+    """Return the slice of *hops* between the first and last matched node.
+
+    Forward match is tried first; if *reversible* and the expected sequence
+    has > 1 node, the reverse-ordered match is also tried.  Returns ``None``
+    when no match is found.  The returned slice is in packet-traversal order
+    (never reversed), so a reverse-direction packet shows as To -> ... -> From.
+    """
+    idx = _subsequence_indices(hops, expected, max_hop_span)
+    if idx is not None:
+        return hops[idx[0] : idx[1] + 1]
+    if reversible and len(expected) > 1:
+        idx = _subsequence_indices(hops, list(reversed(expected)), max_hop_span)
+        if idx is not None:
+            return hops[idx[0] : idx[1] + 1]
+    return None
 
 
 def _match_hops(
@@ -117,11 +166,7 @@ def _match_hops(
     reversible: bool = True,
 ) -> bool:
     """Check whether *hops* match *expected* forward (and optionally reverse)."""
-    if is_subsequence(hops, expected, max_hop_span):
-        return True
-    if reversible and len(expected) > 1:
-        return is_subsequence(hops, list(reversed(expected)), max_hop_span)
-    return False
+    return _matched_subpath(hops, expected, max_hop_span, reversible) is not None
 
 
 def _fetch_candidate_paths_maybe_bidirectional(
@@ -361,7 +406,9 @@ def evaluate_all_routes(
             route_since = now - timedelta(hours=route.window_hours)
             results[route.id] = evaluate_route(session, route, route_since)
         except Exception:
-            logger.exception("Error evaluating route '%s'", route.name)
+            logger.exception(
+                "Error evaluating route '%s -> %s'", route.from_label, route.to_label
+            )
     return results
 
 
@@ -412,6 +459,7 @@ def recent_matches(
     session: Session,
     route: Route,
     limit: int = 3,
+    now: Optional[datetime] = None,
 ) -> list[dict[str, Any]]:
     """Return the latest *limit* matching paths for a route."""
     expected = _route_expected_hashes(route)
@@ -421,7 +469,8 @@ def recent_matches(
     observer_ids = (
         [ro.node_id for ro in route.route_observers] if route.route_observers else None
     )
-    since = datetime.now(timezone.utc) - timedelta(hours=route.window_hours)
+    current = now or datetime.now(timezone.utc)
+    since = current - timedelta(hours=route.window_hours)
 
     reversible = getattr(route, "reversible", True)
     paths = _fetch_candidate_paths_maybe_bidirectional(
@@ -430,16 +479,18 @@ def recent_matches(
 
     matches: list[dict[str, Any]] = []
     for hops in paths.values():
-        if _match_hops(hops, expected, route.max_hop_span, reversible):
-            first = hops[0] if hops else {}
-            matches.append(
-                {
-                    "packet_hash": first.get("packet_hash"),
-                    "hops": hops,
-                    "received_at": first.get("received_at"),
-                    "observer_node_id": first.get("observer_node_id"),
-                }
-            )
+        subpath = _matched_subpath(hops, expected, route.max_hop_span, reversible)
+        if not subpath:
+            continue
+        first = subpath[0] if subpath else {}
+        matches.append(
+            {
+                "packet_hash": first.get("packet_hash"),
+                "hops": subpath,
+                "received_at": first.get("received_at"),
+                "observer_node_id": first.get("observer_node_id"),
+            }
+        )
 
     matches.sort(
         key=lambda m: m["received_at"] or datetime.min.replace(tzinfo=timezone.utc),

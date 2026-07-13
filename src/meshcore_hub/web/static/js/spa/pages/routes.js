@@ -3,7 +3,6 @@ import { html, litRender, nothing, t, errorAlert, getConfig, hasRole } from '../
 import { iconPath, iconPlus, iconEdit, iconTrash, iconChevronRight } from '../icons.js';
 
 const VISIBILITY_ORDER = ['community', 'member', 'operator', 'admin'];
-const QUALITY_PRIORITY = { failing: 0, no_coverage: 1, marginal: 2, clear: 3, disabled: 4 };
 
 let _pathSearchTimer = null;
 let _pathSearchId = 0;
@@ -38,6 +37,15 @@ function qualityDot(quality, enabled) {
     if (!enabled) return '\u25CC';
     const dots = { clear: '\u25CF', marginal: '\u25CF', failing: '\u25CF', no_coverage: '\u25D0', unknown: '\u25D0' };
     return dots[quality] || '\u25D0';
+}
+
+function diagnosisText(route) {
+    const result = route.route_result;
+    if (!result || !route.enabled) return '';
+    if (result.state === 'healthy') return t('routes.diagnosis_healthy');
+    if (result.state === 'unhealthy') return t('routes.diagnosis_unhealthy');
+    if (result.state === 'no_coverage') return t('routes.diagnosis_no_coverage');
+    return '';
 }
 
 function renderSummaryStrip(routes) {
@@ -85,11 +93,16 @@ function renderNumbersLine(route) {
     </div>`;
 }
 
-function renderRouteCard(route, { isAdmin, onDelete, onEdit, onExpand, isExpanded, detail }) {
+function renderRouteCard(route, { isAdmin, onDelete, onEdit, onExpand, isExpanded, detail, navigate, packetsEnabled }) {
     const q = route.route_result?.quality || 'unknown';
     const badgeCls = qualityBadgeClass(q, route.enabled);
     const label = qualityLabel(q, route.enabled);
     const dot = qualityDot(q, route.enabled);
+    const tip = diagnosisText(route);
+    const arrow = route.reversible !== false ? '\u2194' : '\u2192';
+    const badge = tip
+        ? html`<span class="badge ${badgeCls} badge-sm tooltip tooltip-left" data-tip=${tip}>${dot} ${label}</span>`
+        : html`<span class="badge ${badgeCls} badge-sm">${dot} ${label}</span>`;
 
     const adminButtons = isAdmin
         ? html`<div class="flex gap-2 mt-2">
@@ -102,7 +115,7 @@ function renderRouteCard(route, { isAdmin, onDelete, onEdit, onExpand, isExpande
         </div>`
         : nothing;
 
-    const expandContent = isExpanded && detail ? renderDetailContent(route, detail) : nothing;
+    const expandContent = isExpanded && detail ? renderDetailContent(route, detail, { navigate, packetsEnabled }) : nothing;
 
     return html`<div class="card bg-base-100 shadow-xl">
         <div class="card-body cursor-pointer" role="button" tabindex="0"
@@ -110,13 +123,15 @@ function renderRouteCard(route, { isAdmin, onDelete, onEdit, onExpand, isExpande
             @keydown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onExpand(route); } }}>
             <div class="flex items-start justify-between gap-2">
                 <div class="flex-1 min-w-0">
-                    <h2 class="card-title flex items-center gap-2">
-                        ${route.name}
+                    <h2 class="card-title flex items-center gap-2 flex-wrap">
+                        <span>${route.from_label}</span>
+                        <span class="opacity-50">${arrow}</span>
+                        <span>${route.to_label}</span>
                     </h2>
                     ${route.description ? html`<p class="text-sm opacity-70 mt-1">${route.description}</p>` : nothing}
                 </div>
                 <div class="flex items-center gap-2 flex-shrink-0">
-                    <span class="badge ${badgeCls} badge-sm">${dot} ${label}</span>
+                    ${badge}
                     ${iconChevronRight(`h-4 w-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`)}
                 </div>
             </div>
@@ -131,18 +146,14 @@ function renderRouteCard(route, { isAdmin, onDelete, onEdit, onExpand, isExpande
     </div>`;
 }
 
-function renderDetailContent(route, detail) {
+function renderDetailContent(route, detail, { navigate, packetsEnabled }) {
     const result = detail.route_result || route.route_result;
     const observers = detail.contributing_observers || [];
     const matches = detail.recent_matches || [];
+    const packetDetailUrl = (packetHash) =>
+        (packetsEnabled && packetHash) ? `/packets/hash/${packetHash}` : null;
 
     return html`<div class="mt-4 pt-4 border-t border-base-300 space-y-3 text-sm">
-        ${result ? html`<div class="opacity-70">
-            <strong>${t('routes.diagnosis')}:</strong>
-            ${result.state === 'healthy' ? t('routes.diagnosis_healthy') : nothing}
-            ${result.state === 'unhealthy' ? t('routes.diagnosis_unhealthy') : nothing}
-            ${result.state === 'no_coverage' ? t('routes.diagnosis_no_coverage') : nothing}
-        </div>` : nothing}
         ${observers.length > 0 ? html`<div>
             <strong class="opacity-70">${t('routes.contributing_observers')}:</strong>
             ${observers.map(o => html`<span class="badge badge-ghost badge-sm ml-1">${o.name || o.node_id.slice(0, 8)} (${o.match_count})</span>`)}
@@ -156,8 +167,10 @@ function renderDetailContent(route, detail) {
                         (route.route_nodes || []).map(rn =>
                             [rn.expected_hash?.toLowerCase(), rn])
                     );
-                    return html`<div class="flex flex-wrap items-center gap-0.5 text-xs pb-1 border-b border-base-300 last:border-0">
-                        ${(m.hops || []).slice(0, 10).map((h, i) => {
+                    const detailUrl = packetDetailUrl(m.packet_hash);
+                    return html`<div class="flex flex-wrap items-center gap-0.5 text-xs pb-1 border-b border-base-300 last:border-0 ${detailUrl ? 'hover:bg-base-200 cursor-pointer -mx-1 px-1 rounded transition-colors' : ''}"
+                        @click=${detailUrl ? (e) => { e.stopPropagation(); navigate(detailUrl); } : undefined}>
+                        ${(m.hops || []).map((h, i) => {
                             const rn = pathLookup.get((h.node_hash || '').toLowerCase().slice(0, prefixLen));
                             return html`
                                 ${i > 0 ? html`<span class="opacity-30 mx-0.5">\u2192</span>` : nothing}
@@ -166,6 +179,7 @@ function renderDetailContent(route, detail) {
                                     : html`<span class="badge badge-ghost badge-sm opacity-50">${(h.node_hash || '').toLowerCase()}</span>`}
                             `;
                         })}
+                        ${m.received_at ? html`<span class="ml-auto opacity-40 whitespace-nowrap">${new Date(m.received_at).toLocaleString()}</span>` : nothing}
                     </div>`;
                 })}
             </div>
@@ -213,12 +227,21 @@ function renderRouteModal({ modalState, onSave, onCancel }) {
             <h3 class="font-bold text-lg mb-4">${title}</h3>
             <form @submit=${(e) => { e.preventDefault(); onSave(); }}>
                 <div class="grid grid-cols-1 gap-3 mb-4">
-                    <div>
-                        <label class="text-sm opacity-70">${t('routes.name_label')}</label>
-                        <input type="text" id="route-modal-name" class="input input-sm w-full"
-                            .value=${route.name || ''}
-                            placeholder="${t('routes.name_label')}"
-                            required maxlength="255" />
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-sm opacity-70">${t('routes.from_label')}</label>
+                            <input type="text" id="route-modal-from" class="input input-sm w-full"
+                                .value=${route.from_label || ''}
+                                placeholder="${t('routes.from_label')}"
+                                required maxlength="255" />
+                        </div>
+                        <div>
+                            <label class="text-sm opacity-70">${t('routes.to_label')}</label>
+                            <input type="text" id="route-modal-to" class="input input-sm w-full"
+                                .value=${route.to_label || ''}
+                                placeholder="${t('routes.to_label')}"
+                                required maxlength="255" />
+                        </div>
                     </div>
                     <div>
                         <label class="text-sm opacity-70">${t('routes.description_label')}</label>
@@ -366,10 +389,12 @@ function renderRouteModal({ modalState, onSave, onCancel }) {
 }
 
 function renderDeleteModal({ route, onConfirm, onCancel }) {
+    const arrow = route.reversible !== false ? '\u2194' : '\u2192';
+    const label = `${route.from_label} ${arrow} ${route.to_label}`;
     return html`<dialog open class="modal modal-open">
         <div class="modal-box">
             <h3 class="font-bold text-lg mb-4">${t('routes.delete_route')}</h3>
-            <p>${t('routes.delete_confirm', { name: route.name })}</p>
+            <p>${t('routes.delete_confirm', { label })}</p>
             <div class="modal-action">
                 <button class="btn btn-ghost" @click=${onCancel}>${t('common.cancel')}</button>
                 <button class="btn btn-error" @click=${onConfirm}>${t('common.delete')}</button>
@@ -384,6 +409,8 @@ export async function render(container, params, router) {
     try {
         const config = getConfig();
         const isAdmin = hasRole('admin');
+        const navigate = (url) => router.navigate(url);
+        const packetsEnabled = config.features?.packets !== false;
 
         const data = await apiGet('/api/v1/routes', {}, { signal });
         const routes = data.items || [];
@@ -444,17 +471,17 @@ export async function render(container, params, router) {
                 onExpand: handleExpand,
                 isExpanded: (r) => expandedId === r.id,
                 detail: (r) => detailCache.get(r.id),
+                navigate,
+                packetsEnabled,
             };
 
             const groupedSections = [];
             for (const vis of VISIBILITY_ORDER) {
                 const group = groups.get(vis);
                 if (!group || group.length === 0) continue;
-                group.sort((a, b) => {
-                    const qa = a.route_result?.quality || (a.enabled ? 'unknown' : 'disabled');
-                    const qb = b.route_result?.quality || (b.enabled ? 'unknown' : 'disabled');
-                    return (QUALITY_PRIORITY[qa] ?? 9) - (QUALITY_PRIORITY[qb] ?? 9);
-                });
+                group.sort((a, b) =>
+                    (a.from_label || '').localeCompare(b.from_label || '')
+                );
                 groupedSections.push(html`
                     <h2 class="text-lg font-semibold mt-6 mb-3 opacity-70">${t(`routes.visibility_${vis}`)}</h2>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -668,7 +695,8 @@ export async function render(container, params, router) {
         }
 
         async function handleSave() {
-            const nameEl = document.getElementById('route-modal-name');
+            const fromEl = document.getElementById('route-modal-from');
+            const toEl = document.getElementById('route-modal-to');
             const descEl = document.getElementById('route-modal-description');
             const visEl = document.getElementById('route-modal-visibility');
             const widthEl = document.getElementById('route-modal-width');
@@ -689,7 +717,8 @@ export async function render(container, params, router) {
             }
 
             const body = {
-                name: nameEl.value.trim(),
+                from_label: fromEl.value.trim(),
+                to_label: toEl.value.trim(),
                 description: descEl.value.trim() || null,
                 visibility: visEl.value,
                 match_width: parseInt(widthEl.value, 10) || 1,

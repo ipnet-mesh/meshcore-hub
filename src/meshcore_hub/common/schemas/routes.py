@@ -44,7 +44,18 @@ class RouteResultSummary(BaseModel):
 class RouteCreate(BaseModel):
     """Schema for creating a route."""
 
-    name: str = Field(..., min_length=1, max_length=255, description="Route name")
+    from_label: str = Field(
+        ...,
+        min_length=1,
+        max_length=255,
+        description="Label for the route's start endpoint",
+    )
+    to_label: str = Field(
+        ...,
+        min_length=1,
+        max_length=255,
+        description="Label for the route's end endpoint",
+    )
     description: Optional[str] = Field(default=None, description="Route description")
     visibility: Literal["community", "member", "operator", "admin"] = Field(
         default="community", description="Visibility level"
@@ -93,7 +104,8 @@ class RouteCreate(BaseModel):
 class RouteUpdate(BaseModel):
     """Schema for updating a route."""
 
-    name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    from_label: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    to_label: Optional[str] = Field(default=None, min_length=1, max_length=255)
     description: Optional[str] = None
     visibility: Optional[Literal["community", "member", "operator", "admin"]] = None
     match_width: Optional[int] = Field(default=None, ge=1, le=3)
@@ -128,7 +140,8 @@ class RouteRead(BaseModel):
     """Schema for reading a route (list-level with lightweight result)."""
 
     id: str
-    name: str
+    from_label: str
+    to_label: str
     description: Optional[str] = None
     visibility: str
     match_width: int
@@ -175,7 +188,8 @@ class RouteDetail(BaseModel):
     """Full detail for GET /api/v1/routes/{id}."""
 
     id: str
-    name: str
+    from_label: str
+    to_label: str
     description: Optional[str] = None
     visibility: str
     match_width: int

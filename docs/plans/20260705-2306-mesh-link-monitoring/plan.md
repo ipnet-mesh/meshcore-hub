@@ -154,8 +154,10 @@ first bytes co-occur far apart on an unrelated long flood path.
 ### Functional Requirements
 
 - **F1 — Route configuration.** An operator with the `admin` role can create,
-  update, and delete Routes. Each Route has: a unique name, optional
-  description, a `visibility` (community/member/operator/admin, default
+  update, and delete Routes. Each Route has: a `from_label`/`to_label`
+  endpoint pair (composite unique), an optional description, a `reversible`
+  flag (default true — when true the matching engine also accepts
+  reverse-ordered paths), a `visibility` (community/member/operator/admin, default
   `community`), a `match_width` (1/2/3, default 1), `window_hours` (default 24,
   range 1..720), `packet_count_threshold` (default 3, range 1..10000),
   `degraded_threshold` (nullable int, default `null` ⇒ effective comfort bar
@@ -253,30 +255,34 @@ first bytes co-occur far apart on an unrelated long flood path.
 - **F8 — Seeding (no-auth provisioning).** Site operators can load Routes
   from a YAML file (`$SEED_HOME/routes.yaml`) without authenticating, via the
   existing `meshcore-hub seed` command (and the compose `seed` profile). The
-  file is keyed by route name; each entry holds the route's knobs plus an
+  file is a list under the top-level `routes:` key; each entry holds the
+  route's `from`/`to` endpoint labels, knobs, plus an
   ordered `path` of **≥2** node public_keys and, optionally, an `observers`
   list of public_keys. The importer resolves each public_key to its node,
   derives `expected_hash = public_key[:2*match_width].upper()` itself, and upserts the
-  route plus its `route_nodes`/`route_observers` children idempotently by name
+  route plus its `route_nodes`/`route_observers` children idempotently by `(from_label, to_label)`
   — mirroring how `channels.yaml` is seeded. `visibility` defaults to
   `community` (public); an explicit higher level may be set, since the
   operator has filesystem access and routes carry no secret (unlike channel
   keys). Example shape:
   ```yaml
-  Ipswich ↔ Norwich:
-    description: A140 corridor route
-    visibility: community      # default; member/operator/admin also supported
-    match_width: 1              # default: 1 (1/2/3)
-    window_hours: 24
-    packet_count_threshold: 3
-    degraded_threshold: 10      # optional; omit/null = 2× threshold (default)
-    max_hop_span: 8             # optional; omit/null = unlimited
-    enabled: true               # default: true
-    path:                       # ordered, ≥2, by public_key
-      - a1b2c3d4e5f6...
-      - 9a8b7c6d5e4f...
-    observers:                  # optional; omit/empty = all observers
-      - 010203040506...
+  routes:
+    - from: Ipswich
+      to: Norwich
+      description: A140 corridor route
+      visibility: community      # default; member/operator/admin also supported
+      match_width: 1             # default: 1 (1/2/3)
+      window_hours: 24
+      packet_count_threshold: 3
+      degraded_threshold: 10     # optional; omit/null = 2× threshold (default)
+      max_hop_span: 8            # optional; omit/null = unlimited
+      enabled: true              # default: true
+      reversible: true           # default: true (match both directions)
+      path:                      # ordered, ≥2, by public_key
+        - a1b2c3d4e5f6...
+        - 9a8b7c6d5e4f...
+      observers:                 # optional; omit/empty = all observers
+        - 010203040506...
   ```
 
 ### Technical Requirements
@@ -340,7 +346,7 @@ first bytes co-occur far apart on an unrelated long flood path.
   wired into `_run_seed_import` so the existing `meshcore-hub seed` command
   (and the compose `seed` profile) loads `routes.yaml` automatically, plus a
   `routes_file` property on the settings resolving to `$SEED_HOME/routes.yaml`.
-  Upsert is by `name`; on update the `route_nodes` and `route_observers`
+  Upsert is by `(from_label, to_label)`; on update the `route_nodes` and `route_observers`
   children are replaced wholesale. Path and observer entries are resolved by
   `public_key` — a missing **path** node is a hard error (the route can't be
   tested against a node the hub has never seen); a missing **observer** is
@@ -399,8 +405,8 @@ admin work. Every layout choice below follows from that.
    to matched hashes + window (reuses built UI; no new packet browser).
 
 ### Create/edit modal (wider: `modal-box-lg`)
-- `name`, `description`, `visibility` (select), `enabled` (checkbox) — as
-  channels.
+- `from`, `to`, `description`, `visibility` (select), `enabled` (checkbox),
+  `reversible` (checkbox, default true) — as channels.
 - **`match_width`** — **segmented control** `[ 1 byte | 2 bytes | 3 bytes ]`
   with a dynamic hint ("Matches all traffic · ~256 buckets" / "2-byte+ only ·
   ~65K" / "3-byte only · ~16M"). Chosen over a `<select>` because toggling it
@@ -613,7 +619,8 @@ admin work. Every layout choice below follows from that.
   (a lower bound when `quality == clear` — the evaluator short-circuits at
   `effective_degraded`; exact otherwise), `meshcore_route_threshold`, and
   `meshcore_route_degraded_threshold` (the effective comfort bar; `2 ×
-  threshold` when the route hasn't set one), labelled by route name. Verify
+  threshold` when the route hasn't set one), labelled by `{route}` (the
+  `from_label → to_label` composite label). Verify
   in `tests/test_api/test_metrics.py`.
 
 ### Phase 7: Web UI + i18n
@@ -653,7 +660,7 @@ admin work. Every layout choice below follows from that.
   "routes.yaml"`); update `.env.example`.
 - New `_import_routes` in `collector/cli.py`, wired into `_run_seed_import`
   so `meshcore-hub seed` and the compose `seed` profile pick up `routes.yaml`
-  automatically. Idempotent upsert by `name`; resolves path/observer nodes by
+  automatically. Idempotent upsert by `(from_label, to_label)`; resolves path/observer nodes by
   `public_key`; derives `expected_hash` (uppercased to match the
   normalized `node_hash` column); replaces `route_nodes`/
   `route_observers` on update; honors seeded `visibility` and

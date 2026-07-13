@@ -6,10 +6,15 @@ Create Date: 2026-07-12 23:30:00.000000+00:00
 
 Creates five tables for route health monitoring:
 ``routes``, ``route_nodes``, ``route_observers``, ``route_results`` and
-``packet_path_hops``.  The hop table is backfilled from
-``raw_packets.decoded`` using a frozen copy of the dual-path extraction logic
-(``_normalize_hash_list`` + ``decoded.path`` / ``payload.decoded.pathHashes``
-fallback), mirroring migration ``57bb65130b97``.
+``packet_path_hops``.  Routes are identified by endpoint labels
+(``from_label`` / ``to_label``) with a composite unique index, and each
+route carries a ``reversible`` flag so the matching engine can also accept
+reverse-ordered paths.
+
+The hop table is backfilled from ``raw_packets.decoded`` using a frozen
+copy of the dual-path extraction logic (``_normalize_hash_list`` +
+``decoded.path`` / ``payload.decoded.pathHashes`` fallback), mirroring
+migration ``57bb65130b97``.
 
 """
 
@@ -94,7 +99,8 @@ def upgrade() -> None:
             server_default=sa.func.now(),
             nullable=False,
         ),
-        sa.Column("name", sa.String(255), nullable=False),
+        sa.Column("from_label", sa.String(255), nullable=False),
+        sa.Column("to_label", sa.String(255), nullable=False),
         sa.Column("description", sa.Text, nullable=True),
         sa.Column("visibility", sa.String(20), nullable=False),
         sa.Column("match_width", sa.Integer, nullable=False),
@@ -103,8 +109,19 @@ def upgrade() -> None:
         sa.Column("degraded_threshold", sa.Integer, nullable=True),
         sa.Column("max_hop_span", sa.Integer, nullable=True),
         sa.Column("enabled", sa.Boolean, nullable=False),
+        sa.Column(
+            "reversible",
+            sa.Boolean,
+            nullable=False,
+            server_default=sa.text("true"),
+        ),
     )
-    op.create_index("ix_routes_name", "routes", ["name"], unique=True)
+    op.create_index(
+        "ix_routes_from_to",
+        "routes",
+        ["from_label", "to_label"],
+        unique=True,
+    )
 
     # --- route_nodes ---
     op.create_table(

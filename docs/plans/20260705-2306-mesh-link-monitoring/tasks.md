@@ -10,7 +10,7 @@
   - [x] `INDEX (raw_packet_id, position)` — serves per-reception ordered-hop fetch, FK lookup, `ON DELETE CASCADE` (leftmost-prefix covers equality-on-`raw_packet_id`, no separate FK index)
 - [x] Create `src/meshcore_hub/common/models/route.py` — `Route` model + `RouteVisibility` enum (mirrors `ChannelVisibility`)
   - [x] `RouteVisibility` enum: `community` / `member` / `operator` / `admin`
-  - [x] `Route` columns: `name` (unique), `description` (nullable Text), `visibility` (RouteVisibility, default `community`), `match_width` (int, default 1, range 1..3), `window_hours` (int, default 24, range 1..720), `packet_count_threshold` (int, default 3, range 1..10000), `degraded_threshold` (nullable int, default null), `max_hop_span` (nullable int, default null = unlimited), `enabled` (bool, default true)
+  - [x] `Route` columns: `from_label`/`to_label` (composite unique pair), `description` (nullable Text), `visibility` (RouteVisibility, default `community`), `match_width` (int, default 1, range 1..3), `window_hours` (int, default 24, range 1..720), `packet_count_threshold` (int, default 3, range 1..10000), `degraded_threshold` (nullable int, default null), `max_hop_span` (nullable int, default null = unlimited), `enabled` (bool, default true), `reversible` (bool, default true)
   - [x] Relationships: `route_nodes`, `route_observers`, `route_result` (all `cascade="all, delete-orphan"`)
 - [x] Create `src/meshcore_hub/common/models/route_node.py` — `RouteNode` model
   - [x] Columns: `route_id` (FK `routes.id`, `ondelete=CASCADE`), `node_id` (FK `nodes.id`), `position` (int, ordered), `expected_hash` (String, derived as `public_key[:2*match_width].upper()` at save time)
@@ -123,7 +123,7 @@
   - [x] Numbers line (matched / threshold → degraded · window · evaluated time)
   - [x] Admin edit/delete buttons
   - [x] Inline accordion expand (lazy `GET /api/v1/routes/{id}`, cached) with diagnosis, contributing observers, recent matches, config recap
-  - [x] Wider (`modal-box-lg`) add/edit modal with name, description, visibility, enabled, segmented `match_width` control, node IDs input, observer IDs input, numeric fields, preview
+  - [x] Wider (`modal-box-lg`) add/edit modal with from, to, description, visibility, enabled, reversible, segmented `match_width` control, node IDs input, observer IDs input, numeric fields, preview
 - [x] Register page in `src/meshcore_hub/web/static/js/spa/app.js`
   - [x] Add `routes: () => import('./pages/routes.js')` to `pages` lazy-load map
   - [x] Add route registration guarded by `features.routes !== false`
@@ -144,7 +144,7 @@
 - [x] Update `.env.example` with the two new settings
 - [x] Create `_import_routes` in `src/meshcore_hub/collector/cli.py`
   - [x] Wire into `_run_seed_import` so `meshcore-hub seed` picks up `routes.yaml` automatically
-  - [x] Idempotent upsert by `name`; resolve path/observer nodes by `public_key`
+  - [x] Idempotent upsert by `(from_label, to_label)`; resolve path/observer nodes by `public_key`
   - [x] Derive `expected_hash` (uppercased); never hand-typed
   - [x] Replace `route_nodes`/`route_observers` wholesale on update
   - [x] Missing **path** node = hard error; missing **observer** = skipped with warning
