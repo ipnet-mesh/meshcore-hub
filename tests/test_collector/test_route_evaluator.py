@@ -73,12 +73,12 @@ class TestRunEvaluation:
             _make_reception(db_session, f"pkt{i}", ["AA", "BB"])
         db_session.commit()
 
-        count1 = run_evaluation(db_manager)
+        count1 = run_evaluation(db_manager, now=_NOW)
         assert count1 == 1
         results = db_session.execute(select(RouteResult)).scalars().all()
         assert len(results) == 1
 
-        count2 = run_evaluation(db_manager)
+        count2 = run_evaluation(db_manager, now=_NOW)
         assert count2 == 1
         results = db_session.execute(select(RouteResult)).scalars().all()
         assert len(results) == 1  # still one row (overwritten)
@@ -90,7 +90,7 @@ class TestRunEvaluation:
         _make_route(db_session, "disabled", [node_a, node_b], enabled=False)
         db_session.commit()
 
-        count = run_evaluation(db_manager)
+        count = run_evaluation(db_manager, now=_NOW)
         assert count == 1  # only the enabled route
 
     def test_writes_correct_result(self, db_manager, db_session):
@@ -103,7 +103,7 @@ class TestRunEvaluation:
             _make_reception(db_session, f"pkt{i}", ["AA", "BB"])
         db_session.commit()
 
-        run_evaluation(db_manager)
+        run_evaluation(db_manager, now=_NOW)
         db_session.expire_all()
 
         result = db_session.execute(

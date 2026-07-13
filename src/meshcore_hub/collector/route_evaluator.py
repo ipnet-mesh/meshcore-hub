@@ -16,12 +16,12 @@ from sqlalchemy import select
 logger = logging.getLogger(__name__)
 
 
-def run_evaluation(db: DatabaseManager) -> int:
+def run_evaluation(db: DatabaseManager, now: datetime | None = None) -> int:
     """Evaluate all enabled routes and upsert results.
 
     Returns the number of routes evaluated.
     """
-    now = datetime.now(timezone.utc)
+    now = now or datetime.now(timezone.utc)
     with db.session_scope() as session:
         routes = (
             session.execute(select(Route).where(Route.enabled.is_(True)))
