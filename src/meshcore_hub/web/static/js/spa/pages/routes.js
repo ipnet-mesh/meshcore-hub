@@ -647,7 +647,7 @@ export async function render(container, params, router) {
             _obsSearchTimer = setTimeout(async () => {
                 const myId = ++_obsSearchId;
                 try {
-                    const data = await apiGet('/api/v1/nodes', { search: q, limit: 10 });
+                    const data = await apiGet('/api/v1/nodes', { search: q, limit: 10, observer: true });
                     if (myId !== _obsSearchId) return;
                     modalState.obsResults = data.items || [];
                     renderPage(routes);
@@ -679,11 +679,11 @@ export async function render(container, params, router) {
             const query = e.target.value.trim();
             if (query.length < 2) return;
             clearTimeout(_obsSearchTimer);
-            const myId = ++_obsSearchId;
-            try {
-                const data = await apiGet('/api/v1/nodes', { search: query, limit: 10 });
-                if (myId !== _obsSearchId) return;
-                modalState.obsResults = data.items || [];
+        const myId = ++_obsSearchId;
+        try {
+            const data = await apiGet('/api/v1/nodes', { search: query, limit: 10, observer: true });
+            if (myId !== _obsSearchId) return;
+            modalState.obsResults = data.items || [];
                 renderPage(routes);
                 const filtered = modalState.obsResults.filter(
                     n => !modalState.observerNodes.some(on => on.public_key === n.public_key)
