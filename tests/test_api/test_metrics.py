@@ -420,7 +420,7 @@ class TestRouteMetrics:
                 quality="clear",
                 matched_count=10,
                 threshold=3,
-                effective_degraded=6,
+                effective_clear=6,
             )
         )
         api_db_session.commit()
@@ -432,7 +432,7 @@ class TestRouteMetrics:
         assert "meshcore_route_quality" in text
         assert "meshcore_route_matched_packets" in text
         assert "meshcore_route_threshold" in text
-        assert "meshcore_route_degraded_threshold" in text
+        assert "meshcore_route_clear_threshold" in text
         assert 'route="Test -> Route"' in text
 
     def test_disabled_routes_omitted(self, client_no_auth, api_db_session):

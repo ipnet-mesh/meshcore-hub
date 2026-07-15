@@ -112,4 +112,4 @@ class TestRunEvaluation:
         assert result.state == RouteState.HEALTHY.value
         assert result.quality == RouteQuality.CLEAR.value
         assert result.threshold == 3
-        assert result.effective_degraded == 6
+        assert result.effective_clear == 6

@@ -11,6 +11,8 @@
 - Use Python (version in `.python-version`); activate a venv in `.venv` before running pytest, pre-commit, or alembic locally.
 - **All other operations run inside the compose stack** — never invoke `meshcore-hub` or `npm` directly on the host; build/run/exec via `docker compose` (see Development).
 - **Never `git push` without explicit confirmation** — staging and committing discrete changes is fine.
+- **Never build the Docker images or run `make build` / `make up`** — the user builds manually to test. Stop after code changes + tests + pre-commit pass.
+- **Always generate random Alembic revision IDs** — use `python -c "import secrets; print(secrets.token_hex(6))"` or let `alembic revision` auto-generate. Never hand-pick sequential or guessable IDs like `a1b2c3d4e5f6` — they collide with existing migrations and cause cycle errors at upgrade time.
 - Before committing: run targeted `pytest --no-cov tests/test_<component>/` then `pre-commit run --all-files`.
 
 ## Setup

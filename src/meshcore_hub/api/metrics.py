@@ -346,9 +346,9 @@ def collect_metrics(session: Any) -> bytes:
         ["route"],
         registry=registry,
     )
-    route_degraded = Gauge(
-        "meshcore_route_degraded_threshold",
-        "Effective degraded threshold (2x threshold when unset)",
+    route_clear = Gauge(
+        "meshcore_route_clear_threshold",
+        "Effective clear threshold (2x threshold when unset)",
         ["route"],
         registry=registry,
     )
@@ -366,9 +366,9 @@ def collect_metrics(session: Any) -> bytes:
         route_quality.labels(route=name).set(_QUALITY_VALUES.get(quality_str, 3))
         route_matched.labels(route=name).set(result.matched_count if result else 0)
         route_threshold.labels(route=name).set(route.packet_count_threshold)
-        from meshcore_hub.collector.routes import effective_degraded_threshold
+        from meshcore_hub.collector.routes import effective_clear_threshold
 
-        route_degraded.labels(route=name).set(effective_degraded_threshold(route))
+        route_clear.labels(route=name).set(effective_clear_threshold(route))
 
     output: bytes = generate_latest(registry)
     return output

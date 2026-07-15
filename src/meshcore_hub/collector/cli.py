@@ -808,7 +808,7 @@ def _import_routes(
                     route.packet_count_threshold = value.get(
                         "packet_count_threshold", 3
                     )
-                    route.degraded_threshold = value.get("degraded_threshold")
+                    route.clear_threshold = value.get("clear_threshold")
                     route.max_hop_span = value.get("max_hop_span")
                     route.enabled = value.get("enabled", True)
                     route.reversible = value.get("reversible", True)
@@ -828,7 +828,7 @@ def _import_routes(
                         match_width=match_width,
                         window_hours=value.get("window_hours", 24),
                         packet_count_threshold=value.get("packet_count_threshold", 3),
-                        degraded_threshold=value.get("degraded_threshold"),
+                        clear_threshold=value.get("clear_threshold"),
                         max_hop_span=value.get("max_hop_span"),
                         enabled=value.get("enabled", True),
                         reversible=value.get("reversible", True),

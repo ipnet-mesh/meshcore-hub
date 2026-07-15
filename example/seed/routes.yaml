@@ -19,7 +19,7 @@ routes:
     match_width: 1
     window_hours: 24
     packet_count_threshold: 3
-    # degraded_threshold: 10      # optional; omit/null = 2x threshold
+    # clear_threshold: 10        # optional; omit/null = 2x threshold
     # max_hop_span: 8             # optional; omit/null = unlimited
     enabled: true
     reversible: true                # match both directions (A->B and B->A)

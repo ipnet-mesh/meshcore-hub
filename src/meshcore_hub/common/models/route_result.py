@@ -34,7 +34,7 @@ class RouteResult(Base, UUIDMixin, TimestampMixin):
     """The latest cached evaluation result for a route (one row per route).
 
     Written by the background evaluator and read by the API/UI.  ``threshold``
-    and ``effective_degraded`` are snapshotted at evaluation time so the display
+    and ``effective_clear`` are snapshotted at evaluation time so the display
     stays self-consistent if thresholds are later changed.
 
     Attributes:
@@ -44,7 +44,7 @@ class RouteResult(Base, UUIDMixin, TimestampMixin):
         quality: Display axis (clear / marginal / failing / unknown)
         matched_count: Distinct packet count (lower bound when short-circuited)
         threshold: Snapshot of route.packet_count_threshold at eval time
-        effective_degraded: Snapshot of effective_degraded_threshold at eval time
+        effective_clear: Snapshot of effective_clear_threshold at eval time
         evaluated_at: When this evaluation ran
     """
 
@@ -72,7 +72,7 @@ class RouteResult(Base, UUIDMixin, TimestampMixin):
         Integer,
         nullable=False,
     )
-    effective_degraded: Mapped[int] = mapped_column(
+    effective_clear: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
     )

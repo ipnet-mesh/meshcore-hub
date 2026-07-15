@@ -1,6 +1,6 @@
 import { apiGet, apiPost, apiPut, apiDelete, isAbortError } from '../api.js';
 import { html, litRender, nothing, t, errorAlert, getConfig, hasRole } from '../components.js';
-import { iconPath, iconPlus, iconEdit, iconTrash, iconChevronRight } from '../icons.js';
+import { iconPath, iconPlus, iconEdit, iconTrash, iconPackets, iconClock, iconRuler, iconNodes, iconSatelliteDish } from '../icons.js';
 
 const VISIBILITY_ORDER = ['community', 'member', 'operator', 'admin'];
 
@@ -79,21 +79,43 @@ function renderPathChips(route) {
     </div>`;
 }
 
-function renderNumbersLine(route) {
+function renderStatsRow(route) {
     const result = route.route_result;
-    if (!result) return html`<div class="text-xs opacity-50 mt-1">${t('routes.not_evaluated')}</div>`;
-    const matched = result.matched_count ?? '?';
-    const threshold = result.threshold ?? '?';
-    const degraded = result.effective_degraded ?? '?';
-    const evalTime = result.evaluated_at
-        ? new Date(result.evaluated_at).toLocaleTimeString()
-        : '?';
-    return html`<div class="text-xs opacity-60 mt-1">
-        ${matched} / ${threshold} \u2192 ${degraded} \u00B7 ${route.window_hours}h \u00B7 ${evalTime}
+    const matched = result?.matched_count ?? '?';
+    const threshold = result?.threshold ?? '?';
+    const degraded = result?.effective_clear ?? '?';
+    const nodeCount = (route.route_nodes || []).length;
+    const obsCount = (route.route_observers || []).length;
+
+    return html`<div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs opacity-60 mt-1">
+        <span class="inline-flex items-center gap-1">
+            ${iconPackets('h-3.5 w-3.5')}
+            <span>${matched}/${threshold}\u2192${degraded}</span>
+        </span>
+        <span class="inline-flex items-center gap-1">
+            ${iconClock('h-3.5 w-3.5')}
+            <span>${route.window_hours}h</span>
+        </span>
+        <span class="inline-flex items-center gap-1">
+            ${iconRuler('h-3.5 w-3.5')}
+            <span>${route.match_width}B</span>
+        </span>
+        <span class="inline-flex items-center gap-1">
+            ${iconNodes('h-3.5 w-3.5')}
+            <span>${nodeCount}</span>
+        </span>
+        ${route.max_hop_span ? html`<span class="inline-flex items-center gap-1">
+            ${iconPath('h-3.5 w-3.5')}
+            <span>${route.max_hop_span}</span>
+        </span>` : nothing}
+        <span class="inline-flex items-center gap-1">
+            ${iconSatelliteDish('h-3.5 w-3.5')}
+            <span>${obsCount || '\u221E'}</span>
+        </span>
     </div>`;
 }
 
-function renderRouteCard(route, { isAdmin, onDelete, onEdit, onExpand, isExpanded, detail, navigate, packetsEnabled }) {
+function renderRouteCard(route, { isAdmin, onDelete, onEdit, detail, navigate, packetsEnabled, history }) {
     const q = route.route_result?.quality || 'unknown';
     const badgeCls = qualityBadgeClass(q, route.enabled);
     const label = qualityLabel(q, route.enabled);
@@ -105,22 +127,24 @@ function renderRouteCard(route, { isAdmin, onDelete, onEdit, onExpand, isExpande
         : html`<span class="badge ${badgeCls} badge-sm">${dot} ${label}</span>`;
 
     const adminButtons = isAdmin
-        ? html`<div class="flex gap-2 mt-2">
-            <button class="btn btn-xs btn-outline" @click=${(e) => { e.stopPropagation(); onEdit(route); }}>
+        ? html`<div class="flex gap-2 mt-auto pt-2">
+            <button class="btn btn-xs btn-outline" @click=${() => onEdit(route)}>
                 ${iconEdit('h-3 w-3')} ${t('common.edit')}
             </button>
-            <button class="btn btn-xs btn-outline btn-error" @click=${(e) => { e.stopPropagation(); onDelete(route); }}>
+            <button class="btn btn-xs btn-outline btn-error" @click=${() => onDelete(route)}>
                 ${iconTrash('h-3 w-3')} ${t('common.delete')}
             </button>
         </div>`
         : nothing;
 
-    const expandContent = isExpanded && detail ? renderDetailContent(route, detail, { navigate, packetsEnabled }) : nothing;
+    const expandContent = detail
+        ? renderDetailContent(route, detail, { navigate, packetsEnabled, history })
+        : html`<div class="mt-4 pt-4 border-t border-base-300 flex justify-center">
+            <span class="loading loading-spinner loading-sm opacity-50"></span>
+          </div>`;
 
-    return html`<div class="card bg-base-100 shadow-xl">
-        <div class="card-body cursor-pointer" role="button" tabindex="0"
-            @click=${() => onExpand(route)}
-            @keydown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onExpand(route); } }}>
+    return html`<div class="card bg-base-100 shadow-xl h-full">
+        <div class="card-body">
             <div class="flex items-start justify-between gap-2">
                 <div class="flex-1 min-w-0">
                     <h2 class="card-title flex items-center gap-2 flex-wrap">
@@ -132,34 +156,36 @@ function renderRouteCard(route, { isAdmin, onDelete, onEdit, onExpand, isExpande
                 </div>
                 <div class="flex items-center gap-2 flex-shrink-0">
                     ${badge}
-                    ${iconChevronRight(`h-4 w-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`)}
                 </div>
             </div>
             <div class="mt-2">${renderPathChips(route)}</div>
-            ${renderNumbersLine(route)}
-            <div class="text-xs opacity-50 mt-0.5">
-                ${route.match_width}B \u00B7 ${(route.route_nodes || []).length} ${t('routes.nodes_count')}${route.max_hop_span ? html` \u00B7 ${t('routes.span')}: ${route.max_hop_span}` : nothing}
-            </div>
-            ${adminButtons}
+            ${renderStatsRow(route)}
             ${expandContent}
+            ${adminButtons}
         </div>
     </div>`;
 }
 
-function renderDetailContent(route, detail, { navigate, packetsEnabled }) {
-    const result = detail.route_result || route.route_result;
-    const observers = detail.contributing_observers || [];
+function renderDetailContent(route, detail, { navigate, packetsEnabled, history }) {
     const matches = detail.recent_matches || [];
     const packetDetailUrl = (packetHash) =>
         (packetsEnabled && packetHash) ? `/packets/hash/${packetHash}` : null;
 
-    return html`<div class="mt-4 pt-4 border-t border-base-300 space-y-3 text-sm">
-        ${observers.length > 0 ? html`<div>
-            <strong class="opacity-70">${t('routes.contributing_observers')}:</strong>
-            ${observers.map(o => html`<span class="badge badge-ghost badge-sm ml-1">${o.name || o.node_id.slice(0, 8)} (${o.match_count})</span>`)}
-        </div>` : html`<div class="opacity-50">${t('routes.no_observers')}</div>`}
+    const historySection = history
+        ? html`<div class="mb-3">
+            <div style="height: 40px;">
+                <canvas id="routeStripChart-${route.id}"></canvas>
+            </div>
+            ${history.data && history.data.length > 0 ? html`<div class="flex text-xs opacity-50 mt-0.5">
+                ${history.data.map(d => html`<span class="flex-1 text-center">${new Date(d.date + 'T00:00:00').toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' })}</span>`)}
+            </div>` : nothing}
+        </div>`
+        : nothing;
+
+    return html`<div class="mt-2 space-y-3 text-sm">
+        ${historySection}
         ${matches.length > 0 ? html`<div>
-            <strong class="opacity-70">${t('routes.recent_matches')}:</strong>
+            <strong class="opacity-70">${t('routes.recent_packets')}</strong>
             <div class="mt-1 space-y-2">
                 ${matches.map(m => {
                     const prefixLen = 2 * (route.match_width || 1);
@@ -184,12 +210,6 @@ function renderDetailContent(route, detail, { navigate, packetsEnabled }) {
                 })}
             </div>
         </div>` : nothing}
-        <div class="opacity-50 text-xs">
-            ${t('routes.width')}: ${route.match_width} \u00B7
-            ${t('routes.window')}: ${route.window_hours}h \u00B7
-            ${t('routes.threshold')}: ${route.packet_count_threshold} \u00B7
-            ${route.max_hop_span ? html`${t('routes.span')}: ${route.max_hop_span}` : nothing}
-        </div>
     </div>`;
 }
 
@@ -353,10 +373,10 @@ function renderRouteModal({ modalState, onSave, onCancel }) {
                                 .value=${route.packet_count_threshold || 3} min="1" max="10000" />
                         </div>
                         <div>
-                            <label class="text-sm opacity-70">${t('routes.degraded_label')}</label>
-                            <input type="number" id="route-modal-degraded" class="input input-sm w-full"
-                                .value=${route.degraded_threshold || ''}
-                                placeholder="2x" min="1" />
+                            <label class="text-sm opacity-70">${t('routes.clear_label')}</label>
+                            <input type="number" id="route-modal-clear" class="input input-sm w-full"
+                                .value=${route.clear_threshold || ''}
+                                placeholder="${2 * (route.packet_count_threshold || 3)}" min="1" />
                         </div>
                         <div>
                             <label class="text-sm opacity-70">${t('routes.span_label')}</label>
@@ -416,29 +436,44 @@ export async function render(container, params, router) {
         const routes = data.items || [];
 
         let modalState = null;
-        let expandedId = null;
         const detailCache = new Map();
+        const historyCache = new Map();
+        const chartRegistry = [];
+
+        function destroyCharts() {
+            chartRegistry.forEach(c => { try { c.destroy(); } catch (_) {} });
+            chartRegistry.length = 0;
+        }
 
         async function refresh() {
             const newData = await apiGet('/api/v1/routes');
-            renderPage(newData.items || []);
+            routes.splice(0, routes.length, ...(newData.items || []));
+            renderPage(routes);
+            loadAllDetails(routes);
         }
 
-        async function handleExpand(route) {
-            if (expandedId === route.id) {
-                expandedId = null;
-            } else {
-                expandedId = route.id;
-                if (!detailCache.has(route.id)) {
-                    try {
-                        const detail = await apiGet(`/api/v1/routes/${route.id}`);
-                        detailCache.set(route.id, detail);
-                    } catch (e) {
-                        // ignore — card still shows basic info
-                    }
+        async function loadAllDetails(routesList) {
+            const promises = [];
+            for (const r of routesList) {
+                if (!detailCache.has(r.id)) {
+                    promises.push(
+                        apiGet(`/api/v1/routes/${r.id}`, {}, { signal })
+                            .then(d => detailCache.set(r.id, d))
+                            .catch(() => {})
+                    );
+                }
+                if (!historyCache.has(r.id)) {
+                    promises.push(
+                        apiGet(`/api/v1/routes/${r.id}/history`, { days: 6 }, { signal })
+                            .then(h => historyCache.set(r.id, h))
+                            .catch(() => {})
+                    );
                 }
             }
-            renderPage(routes);
+            if (promises.length > 0) {
+                await Promise.allSettled(promises);
+                renderPage(routes);
+            }
         }
 
         function renderPage(routesList) {
@@ -468,11 +503,10 @@ export async function render(container, params, router) {
                 isAdmin,
                 onDelete: handleDeleteClick,
                 onEdit: handleEditClick,
-                onExpand: handleExpand,
-                isExpanded: (r) => expandedId === r.id,
                 detail: (r) => detailCache.get(r.id),
                 navigate,
                 packetsEnabled,
+                history: (r) => historyCache.get(r.id),
             };
 
             const groupedSections = [];
@@ -487,8 +521,8 @@ export async function render(container, params, router) {
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         ${group.map(r => renderRouteCard(r, {
                             ...cardOpts,
-                            isExpanded: cardOpts.isExpanded(r),
                             detail: cardOpts.detail(r),
+                            history: cardOpts.history(r),
                         }))}
                     </div>
                 `);
@@ -509,6 +543,8 @@ export async function render(container, params, router) {
                 });
             }
 
+            destroyCharts();
+
             litRender(html`
                 <div class="mb-6">
                     <h1 class="text-3xl font-bold flex items-center gap-2">
@@ -522,6 +558,13 @@ export async function render(container, params, router) {
                 ${groupedSections}
                 ${modalHtml}
             `, container);
+
+            for (const r of routesList) {
+                if (historyCache.has(r.id)) {
+                    const chart = window.createRouteDetailStrip(`routeStripChart-${r.id}`, historyCache.get(r.id));
+                    if (chart) chartRegistry.push(chart);
+                }
+            }
         }
 
         function _newModalState(type, route) {
@@ -702,7 +745,7 @@ export async function render(container, params, router) {
             const widthEl = document.getElementById('route-modal-width');
             const windowEl = document.getElementById('route-modal-window');
             const thresholdEl = document.getElementById('route-modal-threshold');
-            const degradedEl = document.getElementById('route-modal-degraded');
+            const clearEl = document.getElementById('route-modal-clear');
             const spanEl = document.getElementById('route-modal-span');
             const enabledEl = document.getElementById('route-modal-enabled');
             const reversibleEl = document.getElementById('route-modal-reversible');
@@ -731,14 +774,16 @@ export async function render(container, params, router) {
                 observer_public_keys: observerPublicKeys.length > 0 ? observerPublicKeys : null,
             };
 
-            const degradedVal = degradedEl.value.trim();
-            if (degradedVal) {
-                body.degraded_threshold = parseInt(degradedVal, 10);
+            const clearVal = clearEl.value.trim();
+            if (clearVal) {
+                body.clear_threshold = parseInt(clearVal, 10);
             }
 
             try {
                 if (isEdit) {
                     await apiPut(`/api/v1/routes/${modalState.route.id}`, body);
+                    detailCache.delete(modalState.route.id);
+                    historyCache.delete(modalState.route.id);
                 } else {
                     await apiPost('/api/v1/routes', body);
                 }
@@ -760,6 +805,11 @@ export async function render(container, params, router) {
         }
 
         renderPage(routes);
+        loadAllDetails(routes);
+
+        return () => {
+            destroyCharts();
+        };
 
     } catch (e) {
         if (isAbortError(e)) return;

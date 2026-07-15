@@ -9,9 +9,11 @@ from meshcore_hub.collector.routes import (
     derive_expected_hash,
     derive_quality,
     detect_observed_widths,
-    effective_degraded_threshold,
+    effective_clear_threshold,
     evaluate_all_routes,
     evaluate_route,
+    evaluate_route_day,
+    evaluate_route_history,
     is_subsequence,
     preview_route,
     prefix_collision_counts,
@@ -79,7 +81,7 @@ def _make_route(
     nodes: list[Node],
     match_width: int = 1,
     threshold: int = 3,
-    degraded: int | None = None,
+    clear_bar: int | None = None,
     max_hop_span: int | None = None,
     observers: list[Node] | None = None,
     enabled: bool = True,
@@ -91,7 +93,7 @@ def _make_route(
         to_label=name,
         match_width=match_width,
         packet_count_threshold=threshold,
-        degraded_threshold=degraded,
+        clear_threshold=clear_bar,
         max_hop_span=max_hop_span,
         enabled=enabled,
         window_hours=window_hours,
@@ -193,24 +195,24 @@ class TestDeriveQuality:
         )
 
 
-class TestEffectiveDegraded:
+class TestEffectiveClear:
     def test_explicit(self, db_session):
         route = Route(
             from_label="t",
             to_label="t",
             packet_count_threshold=5,
-            degraded_threshold=20,
+            clear_threshold=20,
         )
-        assert effective_degraded_threshold(route) == 20
+        assert effective_clear_threshold(route) == 20
 
     def test_default_2x(self, db_session):
         route = Route(
             from_label="t",
             to_label="t",
             packet_count_threshold=5,
-            degraded_threshold=None,
+            clear_threshold=None,
         )
-        assert effective_degraded_threshold(route) == 10
+        assert effective_clear_threshold(route) == 10
 
 
 class TestDeriveExpectedHash:
@@ -240,7 +242,7 @@ class TestEvaluateRoute:
         state, quality, count = evaluate_route(db_session, route, since)
         assert state == RouteState.HEALTHY.value
         assert quality == RouteQuality.CLEAR.value
-        assert count >= 6  # short-circuited at effective_degraded = 6
+        assert count >= 6  # short-circuited at effective_clear = 6
 
     def test_healthy_marginal(self, db_session):
         """Meets threshold but not comfort bar → healthy/marginal."""
@@ -339,11 +341,13 @@ class TestEvaluateRoute:
         state, _, count = evaluate_route(db_session, route, since)
         assert count == 0
 
-    def test_short_circuit_at_effective_degraded(self, db_session):
+    def test_short_circuit_at_effective_clear(self, db_session):
         """Evaluation stops counting at the comfort bar."""
         node_a = _make_node(db_session, "aa" + "0" * 62)
         node_b = _make_node(db_session, "bb" + "0" * 62)
-        route = _make_route(db_session, "R1", [node_a, node_b], threshold=2, degraded=4)
+        route = _make_route(
+            db_session, "R1", [node_a, node_b], threshold=2, clear_bar=4
+        )
 
         for i in range(20):
             _make_reception(db_session, None, f"pkt{i}", ["AA", "BB"])
@@ -352,7 +356,7 @@ class TestEvaluateRoute:
         since = _NOW - timedelta(hours=24)
         state, quality, count = evaluate_route(db_session, route, since)
         assert quality == RouteQuality.CLEAR.value
-        assert count == 4  # short-circuited at effective_degraded = 4
+        assert count == 4  # short-circuited at effective_clear = 4
 
     def test_reversible_matches_reverse_direction(self, db_session):
         """Reversible route matches packets travelling the reverse path."""
@@ -556,3 +560,271 @@ class TestPreviewRoute:
 
         widths = detect_observed_widths(db_session, node.public_key)
         assert 2 in widths  # observed at 2-byte prefix "AABB"
+
+
+# ---------------------------------------------------------------------------
+# Day-bounded evaluation tests
+# ---------------------------------------------------------------------------
+
+
+class TestEvaluateRouteDay:
+    def test_clear_within_day(self, db_session):
+        """Enough matches within the day window → clear."""
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        route = _make_route(db_session, "R1", [node_a, node_b], threshold=3)
+
+        day_start = datetime(2026, 7, 10, 0, 0, 0, tzinfo=timezone.utc)
+        day_end = datetime(2026, 7, 11, 0, 0, 0, tzinfo=timezone.utc)
+
+        for i in range(10):
+            _make_reception(
+                db_session,
+                None,
+                f"pkt{i}",
+                ["AA", "BB"],
+                received_at=day_start + timedelta(hours=2),
+            )
+        db_session.commit()
+
+        quality, state, count = evaluate_route_day(
+            db_session, route, day_start, day_end
+        )
+        assert quality == RouteQuality.CLEAR.value
+        assert state == RouteState.HEALTHY.value
+        assert count >= 6  # short-circuited at effective_clear = 6
+
+    def test_marginal_within_day(self, db_session):
+        """Meets threshold but not comfort bar → marginal."""
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        route = _make_route(db_session, "R1", [node_a, node_b], threshold=3)
+
+        day_start = datetime(2026, 7, 10, 0, 0, 0, tzinfo=timezone.utc)
+        day_end = datetime(2026, 7, 11, 0, 0, 0, tzinfo=timezone.utc)
+
+        for i in range(4):
+            _make_reception(
+                db_session,
+                None,
+                f"pkt{i}",
+                ["AA", "BB"],
+                received_at=day_start + timedelta(hours=1),
+            )
+        db_session.commit()
+
+        quality, state, count = evaluate_route_day(
+            db_session, route, day_start, day_end
+        )
+        assert quality == RouteQuality.MARGINAL.value
+        assert state == RouteState.HEALTHY.value
+        assert count == 4
+
+    def test_failing_within_day(self, db_session):
+        """Traffic exists but not enough matches → failing."""
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        route = _make_route(db_session, "R1", [node_a, node_b], threshold=3)
+
+        day_start = datetime(2026, 7, 10, 0, 0, 0, tzinfo=timezone.utc)
+        day_end = datetime(2026, 7, 11, 0, 0, 0, tzinfo=timezone.utc)
+
+        _make_reception(
+            db_session,
+            None,
+            "pkt1",
+            ["AA", "BB"],
+            received_at=day_start + timedelta(hours=1),
+        )
+        _make_reception(
+            db_session,
+            None,
+            "pkt2",
+            ["CC", "DD"],
+            received_at=day_start + timedelta(hours=2),
+        )
+        db_session.commit()
+
+        quality, state, count = evaluate_route_day(
+            db_session, route, day_start, day_end
+        )
+        assert quality == RouteQuality.FAILING.value
+        assert state == RouteState.UNHEALTHY.value
+        assert count == 1
+
+    def test_no_coverage_within_day(self, db_session):
+        """Zero hops in the day window → no_coverage/unknown."""
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        route = _make_route(db_session, "R1", [node_a, node_b], threshold=3)
+
+        day_start = datetime(2026, 7, 10, 0, 0, 0, tzinfo=timezone.utc)
+        day_end = datetime(2026, 7, 11, 0, 0, 0, tzinfo=timezone.utc)
+
+        db_session.commit()
+
+        quality, state, count = evaluate_route_day(
+            db_session, route, day_start, day_end
+        )
+        assert quality == RouteQuality.UNKNOWN.value
+        assert state == RouteState.NO_COVERAGE.value
+        assert count == 0
+
+    def test_strict_day_boundary(self, db_session):
+        """Hops in the adjacent day do not leak across the day_end bound."""
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        route = _make_route(db_session, "R1", [node_a, node_b], threshold=3)
+
+        day_start = datetime(2026, 7, 10, 0, 0, 0, tzinfo=timezone.utc)
+        day_end = datetime(2026, 7, 11, 0, 0, 0, tzinfo=timezone.utc)
+
+        # 10 matches the day AFTER day_end
+        for i in range(10):
+            _make_reception(
+                db_session,
+                None,
+                f"after{i}",
+                ["AA", "BB"],
+                received_at=day_end + timedelta(hours=2, seconds=i),
+            )
+        db_session.commit()
+
+        quality, state, count = evaluate_route_day(
+            db_session, route, day_start, day_end
+        )
+        assert state == RouteState.NO_COVERAGE.value
+        assert count == 0
+
+    def test_hops_outside_before_boundary_excluded(self, db_session):
+        """Hops before day_start are excluded."""
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        route = _make_route(db_session, "R1", [node_a, node_b], threshold=3)
+
+        day_start = datetime(2026, 7, 10, 0, 0, 0, tzinfo=timezone.utc)
+        day_end = datetime(2026, 7, 11, 0, 0, 0, tzinfo=timezone.utc)
+
+        # Matches the day BEFORE day_start
+        for i in range(10):
+            _make_reception(
+                db_session,
+                None,
+                f"before{i}",
+                ["AA", "BB"],
+                received_at=day_start - timedelta(hours=12, seconds=i),
+            )
+        db_session.commit()
+
+        quality, state, count = evaluate_route_day(
+            db_session, route, day_start, day_end
+        )
+        assert state == RouteState.NO_COVERAGE.value
+        assert count == 0
+
+
+class TestEvaluateRouteHistory:
+    def test_returns_days_entries_oldest_first(self, db_session):
+        """History returns *days* entries, oldest first."""
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        route = _make_route(db_session, "R1", [node_a, node_b], threshold=1)
+        db_session.commit()
+
+        now = datetime(2026, 7, 15, 12, 0, 0, tzinfo=timezone.utc)
+        results = evaluate_route_history(db_session, route, days=7, now=now)
+
+        assert len(results) == 7
+        dates = [r[0] for r in results]
+        assert dates == sorted(dates)
+        assert dates[0] == (now - timedelta(days=7)).date()
+        assert dates[-1] == (now - timedelta(days=1)).date()
+
+    def test_include_today_adds_extra(self, db_session):
+        """include_today=True adds one partial-day entry."""
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        route = _make_route(db_session, "R1", [node_a, node_b], threshold=1)
+        db_session.commit()
+
+        now = datetime(2026, 7, 15, 12, 0, 0, tzinfo=timezone.utc)
+        results = evaluate_route_history(
+            db_session, route, days=7, include_today=True, now=now
+        )
+
+        assert len(results) == 8
+        assert results[-1][0] == now.date()  # today is the final entry
+
+    def test_disabled_route_all_unknown(self, db_session):
+        """Disabled route returns unknown/no_coverage/0 for every day."""
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        route = _make_route(
+            db_session, "R1", [node_a, node_b], threshold=1, enabled=False
+        )
+        db_session.commit()
+
+        now = datetime(2026, 7, 15, 12, 0, 0, tzinfo=timezone.utc)
+        results = evaluate_route_history(db_session, route, days=7, now=now)
+
+        assert len(results) == 7
+        for _day, quality, state, count in results:
+            assert quality == RouteQuality.UNKNOWN.value
+            assert state == RouteState.NO_COVERAGE.value
+            assert count == 0
+
+    def test_disabled_route_include_today(self, db_session):
+        """Disabled route with include_today returns days+1 entries."""
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        route = _make_route(
+            db_session, "R1", [node_a, node_b], threshold=1, enabled=False
+        )
+        db_session.commit()
+
+        now = datetime(2026, 7, 15, 12, 0, 0, tzinfo=timezone.utc)
+        results = evaluate_route_history(
+            db_session, route, days=7, include_today=True, now=now
+        )
+
+        assert len(results) == 8
+        for _day, quality, _state, _count in results:
+            assert quality == RouteQuality.UNKNOWN.value
+
+    def test_correct_quality_per_day(self, db_session):
+        """Different days produce different quality bands."""
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        route = _make_route(db_session, "R1", [node_a, node_b], threshold=3)
+
+        now = datetime(2026, 7, 15, 12, 0, 0, tzinfo=timezone.utc)
+
+        # 3 days ago: clear (10 matches)
+        clear_day = now - timedelta(days=3)
+        for i in range(10):
+            _make_reception(
+                db_session,
+                None,
+                f"clear{i}",
+                ["AA", "BB"],
+                received_at=clear_day.replace(hour=6) + timedelta(seconds=i),
+            )
+        # 2 days ago: marginal (4 matches)
+        marginal_day = now - timedelta(days=2)
+        for i in range(4):
+            _make_reception(
+                db_session,
+                None,
+                f"marg{i}",
+                ["AA", "BB"],
+                received_at=marginal_day.replace(hour=6) + timedelta(seconds=i),
+            )
+        db_session.commit()
+
+        results = evaluate_route_history(db_session, route, days=7, now=now)
+        by_date = {r[0]: (r[1], r[2], r[3]) for r in results}
+
+        clear_date = (now - timedelta(days=3)).date()
+        marginal_date = (now - timedelta(days=2)).date()
+        assert by_date[clear_date][0] == RouteQuality.CLEAR.value
+        assert by_date[marginal_date][0] == RouteQuality.MARGINAL.value

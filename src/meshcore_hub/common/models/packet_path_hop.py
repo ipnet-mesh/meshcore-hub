@@ -69,6 +69,10 @@ class PacketPathHop(Base, UUIDMixin, TimestampMixin):
             "raw_packet_id",
             "position",
         ),
+        Index(
+            "ix_packet_path_hops_received_at",
+            "received_at",
+        ),
     )
 
     def __repr__(self) -> str:

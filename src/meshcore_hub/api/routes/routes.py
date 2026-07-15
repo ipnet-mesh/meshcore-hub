@@ -15,9 +15,11 @@ from meshcore_hub.api.channel_visibility import (
 from meshcore_hub.api.dependencies import DbSession
 from meshcore_hub.collector.routes import (
     derive_expected_hash,
+    evaluate_route_history,
     preview_route,
     recent_matches,
 )
+from meshcore_hub.common.config import get_collector_settings
 from meshcore_hub.common.models.node import Node
 from meshcore_hub.common.models.route import Route
 from meshcore_hub.common.models.route_node import RouteNode
@@ -28,6 +30,8 @@ from meshcore_hub.common.schemas.routes import (
     RecentMatchPath,
     RouteCreate,
     RouteDetail,
+    RouteDayQuality,
+    RouteHistory,
     RouteList,
     RouteNodeRead,
     RouteObserverRead,
@@ -43,7 +47,7 @@ router = APIRouter()
 
 def _routes_key_builder(request: Request) -> str:
     role = resolve_user_role(request) or "anonymous"
-    return f"routes:role={role}:{sorted_query_string(request)}"
+    return f"{request.url.path}:role={role}:{sorted_query_string(request)}"
 
 
 def _route_node_to_read(rn: RouteNode) -> RouteNodeRead:
@@ -72,7 +76,7 @@ def _result_to_summary(result: RouteResult | None) -> RouteResultSummary | None:
         quality=result.quality,
         matched_count=result.matched_count,
         threshold=result.threshold,
-        effective_degraded=result.effective_degraded,
+        effective_clear=result.effective_clear,
         evaluated_at=result.evaluated_at,
     )
 
@@ -87,7 +91,7 @@ def _route_to_read(route: Route) -> RouteRead:
         match_width=route.match_width,
         window_hours=route.window_hours,
         packet_count_threshold=route.packet_count_threshold,
-        degraded_threshold=route.degraded_threshold,
+        clear_threshold=route.clear_threshold,
         max_hop_span=route.max_hop_span,
         enabled=route.enabled,
         reversible=route.reversible,
@@ -195,7 +199,7 @@ def create_route(
         match_width=body.match_width,
         window_hours=body.window_hours,
         packet_count_threshold=body.packet_count_threshold,
-        degraded_threshold=body.degraded_threshold,
+        clear_threshold=body.clear_threshold,
         max_hop_span=body.max_hop_span,
         enabled=body.enabled,
         reversible=body.reversible,
@@ -265,6 +269,46 @@ def get_route(
     )
 
 
+@router.get("/{route_id}/history", response_model=RouteHistory)
+@cached(
+    "routes/{id}/history",
+    ttl_setting="redis_cache_ttl_dashboard",
+    key_builder=_routes_key_builder,
+)
+def get_route_history(
+    _: RequireRead,
+    session: DbSession,
+    route_id: str,
+    request: Request,
+    days: int = 7,
+) -> RouteHistory:
+    """Per-route health history over the last *days* (includes today)."""
+    route = session.execute(
+        select(Route).where(Route.id == route_id)
+    ).scalar_one_or_none()
+    if not route:
+        raise HTTPException(status_code=404, detail="Route not found")
+
+    role = resolve_user_role(request)
+    max_level = get_max_visibility_level(role)
+    if VISIBILITY_LEVELS.get(route.visibility, 0) > max_level:
+        raise HTTPException(status_code=404, detail="Route not found")
+
+    retention = get_collector_settings().effective_raw_packet_retention_days
+    days = min(days, retention)
+
+    history = evaluate_route_history(session, route, days, include_today=True)
+
+    return RouteHistory(
+        route_id=route.id,
+        days=len(history),
+        data=[
+            RouteDayQuality(date=d, quality=q, state=s, matched_count=c)
+            for d, q, s, c in history
+        ],
+    )
+
+
 @router.put("/{route_id}", response_model=RouteRead)
 def update_route(
     __: RequireAdmin,
@@ -307,8 +351,8 @@ def update_route(
         route.window_hours = body.window_hours
     if body.packet_count_threshold is not None:
         route.packet_count_threshold = body.packet_count_threshold
-    if body.degraded_threshold is not None:
-        route.degraded_threshold = body.degraded_threshold
+    if body.clear_threshold is not None:
+        route.clear_threshold = body.clear_threshold
     if body.max_hop_span is not None:
         route.max_hop_span = body.max_hop_span
     if body.enabled is not None:
@@ -381,7 +425,7 @@ def preview(
         "observer_ids": [n.id for n in observer_nodes] if observer_nodes else None,
         "max_hop_span": body.max_hop_span,
         "packet_count_threshold": body.packet_count_threshold,
-        "degraded_threshold": body.degraded_threshold,
+        "clear_threshold": body.clear_threshold,
         "reversible": body.reversible,
     }
     result = preview_route(session, config, since)

@@ -142,7 +142,7 @@ class TestCreateRoute:
         )
         assert resp.status_code == 422
 
-    def test_degraded_threshold_validation(self, client_no_auth, api_db_session):
+    def test_clear_threshold_validation(self, client_no_auth, api_db_session):
         nodes = _sample_nodes(api_db_session)
         api_db_session.commit()
 
@@ -153,7 +153,7 @@ class TestCreateRoute:
                 "to_label": "B",
                 "node_public_keys": [n.public_key for n in nodes],
                 "packet_count_threshold": 5,
-                "degraded_threshold": 3,
+                "clear_threshold": 3,
             },
             headers={"X-User-Roles": "admin"},
         )
@@ -311,3 +311,118 @@ class TestPreview:
             json={"node_public_keys": [node.public_key]},
         )
         assert resp.status_code == 422
+
+
+def _make_route_with_nodes(
+    session,
+    from_label: str,
+    to_label: str,
+    pubkeys: list[str],
+    visibility: str = "community",
+    enabled: bool = True,
+    match_width: int = 1,
+) -> Route:
+    nodes = [_make_node(session, pk) for pk in pubkeys]
+    route = Route(
+        from_label=from_label,
+        to_label=to_label,
+        visibility=visibility,
+        enabled=enabled,
+        match_width=match_width,
+    )
+    session.add(route)
+    session.flush()
+    for pos, n in enumerate(nodes):
+        session.add(
+            RouteNode(
+                route_id=route.id,
+                node_id=n.id,
+                position=pos,
+                expected_hash=n.public_key[: 2 * match_width].upper(),
+            )
+        )
+    return route
+
+
+class TestRouteHistory:
+    def test_response_shape(self, client_no_auth, api_db_session):
+        route = _make_route_with_nodes(
+            api_db_session, "A", "B", ["aa" + "0" * 62, "bb" + "0" * 62]
+        )
+        api_db_session.commit()
+
+        resp = client_no_auth.get(f"/api/v1/routes/{route.id}/history?days=3")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["route_id"] == route.id
+        assert "days" in data
+        assert "data" in data
+        assert isinstance(data["data"], list)
+        for entry in data["data"]:
+            assert "date" in entry
+            assert "quality" in entry
+            assert "state" in entry
+            assert "matched_count" in entry
+
+    def test_includes_today(self, client_no_auth, api_db_session):
+        route = _make_route_with_nodes(
+            api_db_session, "A", "B", ["aa" + "0" * 62, "bb" + "0" * 62]
+        )
+        api_db_session.commit()
+
+        resp = client_no_auth.get(f"/api/v1/routes/{route.id}/history?days=7")
+        assert resp.status_code == 200
+        data = resp.json()
+        # days=7 + include_today=True → 8 entries
+        assert len(data["data"]) == 8
+
+    def test_not_found(self, client_no_auth):
+        resp = client_no_auth.get("/api/v1/routes/nonexistent/history")
+        assert resp.status_code == 404
+
+    def test_hidden_route_404(self, client_no_auth, api_db_session):
+        route = _make_route_with_nodes(
+            api_db_session,
+            "Secret",
+            "EP",
+            ["aa" + "0" * 62, "bb" + "0" * 62],
+            visibility="admin",
+        )
+        api_db_session.commit()
+
+        resp = client_no_auth.get(f"/api/v1/routes/{route.id}/history")
+        assert resp.status_code == 404
+
+    def test_admin_sees_hidden_route(self, client_no_auth, api_db_session):
+        route = _make_route_with_nodes(
+            api_db_session,
+            "Secret",
+            "EP",
+            ["aa" + "0" * 62, "bb" + "0" * 62],
+            visibility="admin",
+        )
+        api_db_session.commit()
+
+        resp = client_no_auth.get(
+            f"/api/v1/routes/{route.id}/history",
+            headers={"X-User-Roles": "admin"},
+        )
+        assert resp.status_code == 200
+
+    def test_disabled_route_history(self, client_no_auth, api_db_session):
+        route = _make_route_with_nodes(
+            api_db_session,
+            "Disabled",
+            "Route",
+            ["aa" + "0" * 62, "bb" + "0" * 62],
+            enabled=False,
+        )
+        api_db_session.commit()
+
+        resp = client_no_auth.get(f"/api/v1/routes/{route.id}/history?days=3")
+        assert resp.status_code == 200
+        data = resp.json()
+        for entry in data["data"]:
+            assert entry["quality"] == "unknown"
+            assert entry["state"] == "no_coverage"
+            assert entry["matched_count"] == 0

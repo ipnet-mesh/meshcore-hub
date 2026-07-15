@@ -1,6 +1,6 @@
 """Pydantic schemas for route API endpoints."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
@@ -35,7 +35,7 @@ class RouteResultSummary(BaseModel):
     quality: Optional[str] = None
     matched_count: Optional[int] = None
     threshold: Optional[int] = None
-    effective_degraded: Optional[int] = None
+    effective_clear: Optional[int] = None
     evaluated_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
@@ -69,7 +69,7 @@ class RouteCreate(BaseModel):
     packet_count_threshold: int = Field(
         default=3, ge=1, le=10000, description="Minimum distinct packets for healthy"
     )
-    degraded_threshold: Optional[int] = Field(
+    clear_threshold: Optional[int] = Field(
         default=None, description="Comfort bar (null = 2x threshold)"
     )
     max_hop_span: Optional[int] = Field(
@@ -94,10 +94,10 @@ class RouteCreate(BaseModel):
         if len({k.lower() for k in self.node_public_keys}) < len(self.node_public_keys):
             raise ValueError("Path nodes must be distinct")
         if (
-            self.degraded_threshold is not None
-            and self.degraded_threshold <= self.packet_count_threshold
+            self.clear_threshold is not None
+            and self.clear_threshold <= self.packet_count_threshold
         ):
-            raise ValueError("degraded_threshold must be > packet_count_threshold")
+            raise ValueError("clear_threshold must be > packet_count_threshold")
         return self
 
 
@@ -111,7 +111,7 @@ class RouteUpdate(BaseModel):
     match_width: Optional[int] = Field(default=None, ge=1, le=3)
     window_hours: Optional[int] = Field(default=None, ge=1, le=720)
     packet_count_threshold: Optional[int] = Field(default=None, ge=1, le=10000)
-    degraded_threshold: Optional[int] = None
+    clear_threshold: Optional[int] = None
     max_hop_span: Optional[int] = None
     enabled: Optional[bool] = None
     reversible: Optional[bool] = None
@@ -128,11 +128,11 @@ class RouteUpdate(BaseModel):
             ):
                 raise ValueError("Path nodes must be distinct")
         if (
-            self.degraded_threshold is not None
+            self.clear_threshold is not None
             and self.packet_count_threshold is not None
-            and self.degraded_threshold <= self.packet_count_threshold
+            and self.clear_threshold <= self.packet_count_threshold
         ):
-            raise ValueError("degraded_threshold must be > packet_count_threshold")
+            raise ValueError("clear_threshold must be > packet_count_threshold")
         return self
 
 
@@ -147,7 +147,7 @@ class RouteRead(BaseModel):
     match_width: int
     window_hours: int
     packet_count_threshold: int
-    degraded_threshold: Optional[int] = None
+    clear_threshold: Optional[int] = None
     max_hop_span: Optional[int] = None
     enabled: bool
     reversible: bool
@@ -195,7 +195,7 @@ class RouteDetail(BaseModel):
     match_width: int
     window_hours: int
     packet_count_threshold: int
-    degraded_threshold: Optional[int] = None
+    clear_threshold: Optional[int] = None
     max_hop_span: Optional[int] = None
     enabled: bool
     reversible: bool
@@ -219,7 +219,7 @@ class RoutePreviewRequest(BaseModel):
     match_width: int = Field(default=1, ge=1, le=3)
     window_hours: int = Field(default=24, ge=1, le=720)
     packet_count_threshold: int = Field(default=3, ge=1, le=10000)
-    degraded_threshold: Optional[int] = None
+    clear_threshold: Optional[int] = None
     max_hop_span: Optional[int] = None
     observer_public_keys: Optional[list[str]] = None
     reversible: bool = Field(default=True)
@@ -243,3 +243,20 @@ class RoutePreviewResponse(BaseModel):
     collisions: dict[str, int] = {}
     truncated: bool = False
     candidate_count: Optional[int] = None
+
+
+class RouteDayQuality(BaseModel):
+    """One day of a route's health history."""
+
+    date: date
+    quality: str
+    state: str
+    matched_count: int
+
+
+class RouteHistory(BaseModel):
+    """Per-route health history (GET /routes/{id}/history)."""
+
+    route_id: str
+    days: int
+    data: list[RouteDayQuality]
