@@ -113,3 +113,17 @@ class TestRunEvaluation:
         assert result.quality == RouteQuality.CLEAR.value
         assert result.threshold == 3
         assert result.effective_clear == 6
+
+    def test_evaluation_error_logged(self, db_manager, db_session, monkeypatch):
+        """An exception evaluating one route is caught; count stays 0."""
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        _make_route(db_session, "R1", [node_a, node_b])
+        db_session.commit()
+
+        def _boom(*_args, **_kwargs):
+            raise RuntimeError("eval failed")
+
+        monkeypatch.setattr("meshcore_hub.collector.routes.evaluate_route", _boom)
+        count = run_evaluation(db_manager, now=_NOW)
+        assert count == 0

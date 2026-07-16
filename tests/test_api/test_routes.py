@@ -1,8 +1,16 @@
 """Tests for route API endpoints."""
 
 from datetime import datetime, timezone
+from uuid import uuid4
 
-from meshcore_hub.common.models import Node, Route, RouteNode
+from meshcore_hub.collector.routes import derive_expected_hash
+from meshcore_hub.common.models import (
+    Node,
+    PacketPathHop,
+    RawPacket,
+    Route,
+    RouteNode,
+)
 
 
 def _make_node(session, public_key: str, name: str | None = None) -> Node:
@@ -15,6 +23,40 @@ def _make_node(session, public_key: str, name: str | None = None) -> Node:
 def _sample_nodes(session, count: int = 2) -> list[Node]:
     keys = [f"{chr(97 + i)}" * 64 for i in range(count)]
     return [_make_node(session, k, f"Node-{i}") for i, k in enumerate(keys)]
+
+
+def _make_reception(
+    session,
+    observer_node_id: str | None,
+    packet_hash: str,
+    path_hashes: list[str],
+    received_at: datetime | None = None,
+) -> str:
+    """Insert a RawPacket + PacketPathHop rows for a test reception."""
+    ts = received_at or datetime.now(timezone.utc)
+    rp_id = str(uuid4())
+    session.add(
+        RawPacket(
+            id=rp_id,
+            observer_node_id=observer_node_id,
+            packet_hash=packet_hash,
+            received_at=ts,
+        )
+    )
+    session.flush()
+    for pos, nh in enumerate(path_hashes):
+        session.add(
+            PacketPathHop(
+                raw_packet_id=rp_id,
+                position=pos,
+                node_hash=nh,
+                packet_hash=packet_hash,
+                received_at=ts,
+                observer_node_id=observer_node_id,
+            )
+        )
+    session.flush()
+    return rp_id
 
 
 class TestListRoutes:
@@ -426,3 +468,248 @@ class TestRouteHistory:
             assert entry["quality"] == "unknown"
             assert entry["state"] == "no_coverage"
             assert entry["matched_count"] == 0
+
+    def test_retention_clamp(self, client_no_auth, api_db_session, monkeypatch):
+        route = _make_route_with_nodes(
+            api_db_session, "A", "B", ["aa" + "0" * 62, "bb" + "0" * 62]
+        )
+        api_db_session.commit()
+
+        from unittest.mock import MagicMock
+
+        mock_settings = MagicMock(effective_raw_packet_retention_days=2)
+        monkeypatch.setattr(
+            "meshcore_hub.api.routes.routes.get_collector_settings",
+            lambda: mock_settings,
+        )
+
+        resp = client_no_auth.get(f"/api/v1/routes/{route.id}/history?days=7")
+        assert resp.status_code == 200
+        data = resp.json()
+        # retention=2 → days clamped to 2 → 3 entries (days + today)
+        assert len(data["data"]) == 3
+
+
+# ---------------------------------------------------------------------------
+# Additional coverage: update fields, observers, hidden detail, preview guards
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateRouteFields:
+    """Cover the per-field update branches and edge cases of update_route."""
+
+    def _make_route(self, session) -> Route:
+        nodes = _sample_nodes(session)
+        route = Route(from_label="OldFrom", to_label="OldTo")
+        session.add(route)
+        session.flush()
+        for pos, n in enumerate(nodes):
+            session.add(
+                RouteNode(
+                    route_id=route.id,
+                    node_id=n.id,
+                    position=pos,
+                    expected_hash=n.public_key[:2].upper(),
+                )
+            )
+        session.commit()
+        return route
+
+    def test_update_all_scalar_fields(self, client_no_auth, api_db_session):
+        route = self._make_route(api_db_session)
+
+        resp = client_no_auth.put(
+            f"/api/v1/routes/{route.id}",
+            json={
+                "description": "updated desc",
+                "visibility": "member",
+                "match_width": 2,
+                "window_hours": 48,
+                "packet_count_threshold": 5,
+                "clear_threshold": 8,
+                "max_hop_span": 4,
+                "enabled": False,
+                "reversible": False,
+            },
+            headers={"X-User-Roles": "admin"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["description"] == "updated desc"
+        assert data["visibility"] == "member"
+        assert data["match_width"] == 2
+        assert data["window_hours"] == 48
+        assert data["packet_count_threshold"] == 5
+        assert data["clear_threshold"] == 8
+        assert data["max_hop_span"] == 4
+        assert data["enabled"] is False
+        assert data["reversible"] is False
+
+    def test_update_duplicate_label_409(self, client_no_auth, api_db_session):
+        self._make_route(api_db_session)
+        api_db_session.add(Route(from_label="Other", to_label="Pair"))
+        api_db_session.commit()
+        other = api_db_session.query(Route).filter(Route.from_label == "Other").first()
+
+        resp = client_no_auth.put(
+            f"/api/v1/routes/{other.id}",
+            json={"from_label": "OldFrom", "to_label": "OldTo"},
+            headers={"X-User-Roles": "admin"},
+        )
+        assert resp.status_code == 409
+
+    def test_update_observers(self, client_no_auth, api_db_session):
+        route = self._make_route(api_db_session)
+        obs = _make_node(api_db_session, "c" * 64, "Observer")
+        api_db_session.commit()
+
+        resp = client_no_auth.put(
+            f"/api/v1/routes/{route.id}",
+            json={"observer_public_keys": [obs.public_key]},
+            headers={"X-User-Roles": "admin"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["route_observers"]) == 1
+        assert data["route_observers"][0]["public_key"] == obs.public_key
+
+    def test_update_unresolved_path_nodes_400(self, client_no_auth, api_db_session):
+        route = self._make_route(api_db_session)
+        api_db_session.commit()
+
+        resp = client_no_auth.put(
+            f"/api/v1/routes/{route.id}",
+            json={
+                "node_public_keys": ["ff" + "0" * 62, "ee" + "0" * 62],
+            },
+            headers={"X-User-Roles": "admin"},
+        )
+        assert resp.status_code == 400
+
+    def test_update_not_found(self, client_no_auth):
+        resp = client_no_auth.put(
+            "/api/v1/routes/nonexistent",
+            json={"description": "x"},
+            headers={"X-User-Roles": "admin"},
+        )
+        assert resp.status_code == 404
+
+
+class TestGetRouteVisibility:
+    def test_hidden_route_404(self, client_no_auth, api_db_session):
+        route = _make_route_with_nodes(
+            api_db_session,
+            "Secret",
+            "EP",
+            ["aa" + "0" * 62, "bb" + "0" * 62],
+            visibility="admin",
+        )
+        api_db_session.commit()
+
+        resp = client_no_auth.get(f"/api/v1/routes/{route.id}")
+        assert resp.status_code == 404
+
+    def test_admin_sees_hidden_route(self, client_no_auth, api_db_session):
+        route = _make_route_with_nodes(
+            api_db_session,
+            "Secret",
+            "EP",
+            ["aa" + "0" * 62, "bb" + "0" * 62],
+            visibility="admin",
+        )
+        api_db_session.commit()
+
+        resp = client_no_auth.get(
+            f"/api/v1/routes/{route.id}",
+            headers={"X-User-Roles": "admin"},
+        )
+        assert resp.status_code == 200
+
+    def test_contributing_observers(self, client_no_auth, api_db_session):
+        node_a = _make_node(api_db_session, "aa" + "0" * 62)
+        node_b = _make_node(api_db_session, "bb" + "0" * 62)
+        obs = _make_node(api_db_session, "cc" + "0" * 62, "Charlie")
+        route = Route(from_label="A", to_label="B", match_width=1)
+        api_db_session.add(route)
+        api_db_session.flush()
+        for pos, n in enumerate([node_a, node_b]):
+            api_db_session.add(
+                RouteNode(
+                    route_id=route.id,
+                    node_id=n.id,
+                    position=pos,
+                    expected_hash=derive_expected_hash(n.public_key, 1),
+                )
+            )
+        _make_reception(
+            api_db_session,
+            observer_node_id=obs.id,
+            packet_hash="pkt-contrib",
+            path_hashes=["AA", "BB"],
+        )
+        api_db_session.commit()
+
+        resp = client_no_auth.get(f"/api/v1/routes/{route.id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["contributing_observers"]) == 1
+        assert data["contributing_observers"][0]["node_id"] == obs.id
+        assert data["contributing_observers"][0]["match_count"] == 1
+        assert len(data["recent_matches"]) == 1
+
+
+class TestCreateWithObservers:
+    def test_create_with_observers(self, client_no_auth, api_db_session):
+        nodes = _sample_nodes(api_db_session)
+        obs = _make_node(api_db_session, "c" * 64, "Observer")
+        api_db_session.commit()
+
+        resp = client_no_auth.post(
+            "/api/v1/routes",
+            json={
+                "from_label": "Alpha",
+                "to_label": "Beta",
+                "node_public_keys": [n.public_key for n in nodes],
+                "observer_public_keys": [obs.public_key],
+            },
+            headers={"X-User-Roles": "admin"},
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert len(data["route_observers"]) == 1
+        assert data["route_observers"][0]["public_key"] == obs.public_key
+
+
+class TestPreviewGuards:
+    def test_preview_unresolved_nodes(self, client_no_auth, api_db_session):
+        api_db_session.commit()
+
+        resp = client_no_auth.post(
+            "/api/v1/routes/preview",
+            json={
+                "node_public_keys": ["ff" + "0" * 62, "ee" + "0" * 62],
+                "match_width": 1,
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["matched_count"] == 0
+        assert data["quality"] == "unknown"
+        assert data["state"] == "no_coverage"
+
+    def test_preview_with_observers(self, client_no_auth, api_db_session):
+        nodes = _sample_nodes(api_db_session)
+        obs = _make_node(api_db_session, "c" * 64, "Obs")
+        api_db_session.commit()
+
+        resp = client_no_auth.post(
+            "/api/v1/routes/preview",
+            json={
+                "node_public_keys": [n.public_key for n in nodes],
+                "observer_public_keys": [obs.public_key],
+                "match_width": 1,
+                "window_hours": 24,
+                "packet_count_threshold": 3,
+            },
+        )
+        assert resp.status_code == 200

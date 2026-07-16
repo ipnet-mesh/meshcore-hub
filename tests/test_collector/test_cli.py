@@ -5,9 +5,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
-from meshcore_hub.collector.cli import _import_channels, collector
+from meshcore_hub.collector.cli import _import_channels, _import_routes, collector
+from meshcore_hub.collector.routes import derive_expected_hash
 from meshcore_hub.common.database import DatabaseManager
 from meshcore_hub.common.models.channel import Channel
+from meshcore_hub.common.models.node import Node
+from meshcore_hub.common.models.route import Route
+from meshcore_hub.common.models.route_node import RouteNode
+from meshcore_hub.common.models.route_observer import RouteObserver
 
 
 def _make_mock_settings(db_url: str, seed_home: str = "/tmp/seed") -> MagicMock:
@@ -456,3 +461,254 @@ class TestChannelSeedImport:
 
         assert result.exit_code == 0
         assert "No seed files found" in result.output
+
+
+# 64-char lowercase hex public keys used across the route seed tests.
+_PK_A = "aa" + "0" * 62
+_PK_B = "bb" + "0" * 62
+_PK_C = "cc" + "0" * 62
+
+
+def _write_routes_yaml(path, body: str) -> str:
+    path.write_text(body)
+    return str(path)
+
+
+class TestImportRoutes:
+    """Unit tests for ``_import_routes`` (routes.yaml seed loader)."""
+
+    def _seed_two_nodes(self, db_manager) -> None:
+        with db_manager.session_scope() as session:
+            session.add(Node(public_key=_PK_A, name="Alpha"))
+            session.add(Node(public_key=_PK_B, name="Beta"))
+            session.add(Node(public_key=_PK_C, name="Charlie"))
+
+    def test_import_creates_route(self, db_manager, tmp_path):
+        self._seed_two_nodes(db_manager)
+        fp = _write_routes_yaml(
+            tmp_path / "routes.yaml",
+            (
+                "routes:\n"
+                "  - from: Alpha\n"
+                "    to: Beta\n"
+                f"    path:\n      - '{_PK_A}'\n      - '{_PK_B}'\n"
+                "    match_width: 1\n"
+                "    visibility: community\n"
+                "    description: a route\n"
+                "    window_hours: 48\n"
+                "    packet_count_threshold: 5\n"
+                "    clear_threshold: 8\n"
+                "    max_hop_span: 3\n"
+                "    enabled: true\n"
+                "    reversible: false\n"
+                f"    observers:\n      - '{_PK_C}'\n"
+            ),
+        )
+
+        stats = _import_routes(file_path=fp, db=db_manager, verbose=True)
+
+        assert stats["created"] == 1
+        assert stats["updated"] == 0
+        assert stats["errors"] == []
+        with db_manager.session_scope() as session:
+            route = session.query(Route).filter(Route.from_label == "Alpha").first()
+            assert route.to_label == "Beta"
+            assert route.visibility == "community"
+            assert route.match_width == 1
+            assert route.window_hours == 48
+            assert route.packet_count_threshold == 5
+            assert route.clear_threshold == 8
+            assert route.max_hop_span == 3
+            assert route.enabled is True
+            assert route.reversible is False
+            assert route.description == "a route"
+            nodes = (
+                session.query(RouteNode)
+                .filter(RouteNode.route_id == route.id)
+                .order_by(RouteNode.position)
+                .all()
+            )
+            assert len(nodes) == 2
+            assert nodes[0].expected_hash == derive_expected_hash(_PK_A, 1)
+            assert nodes[1].expected_hash == derive_expected_hash(_PK_B, 1)
+            obs = (
+                session.query(RouteObserver)
+                .filter(RouteObserver.route_id == route.id)
+                .all()
+            )
+            assert len(obs) == 1
+
+    def test_import_upserts_existing_route(self, db_manager, tmp_path):
+        self._seed_two_nodes(db_manager)
+        fp = _write_routes_yaml(
+            tmp_path / "routes.yaml",
+            (
+                "routes:\n"
+                "  - from: Alpha\n"
+                "    to: Beta\n"
+                f"    path:\n      - '{_PK_A}'\n      - '{_PK_B}'\n"
+            ),
+        )
+
+        first = _import_routes(file_path=fp, db=db_manager)
+        second = _import_routes(file_path=fp, db=db_manager)
+
+        assert first["created"] == 1 and first["updated"] == 0
+        assert second["created"] == 0 and second["updated"] == 1
+        assert second["errors"] == []
+        with db_manager.session_scope() as session:
+            routes = session.query(Route).filter(Route.from_label == "Alpha").all()
+            assert len(routes) == 1
+            nodes = (
+                session.query(RouteNode)
+                .filter(RouteNode.route_id == routes[0].id)
+                .all()
+            )
+            assert len(nodes) == 2
+
+    def test_import_empty_file(self, db_manager, tmp_path):
+        fp = _write_routes_yaml(tmp_path / "routes.yaml", "")
+        stats = _import_routes(file_path=fp, db=db_manager)
+        assert stats == {"created": 0, "updated": 0, "errors": []}
+
+    def test_import_non_dict_top_level(self, db_manager, tmp_path):
+        fp = _write_routes_yaml(tmp_path / "routes.yaml", "- just\n- a\n- list\n")
+        stats = _import_routes(file_path=fp, db=db_manager)
+        assert stats == {"created": 0, "updated": 0, "errors": []}
+
+    def test_import_missing_routes_key(self, db_manager, tmp_path):
+        fp = _write_routes_yaml(tmp_path / "routes.yaml", "other: value\n")
+        stats = _import_routes(file_path=fp, db=db_manager)
+        assert stats["created"] == 0
+        assert "must have a list under the 'routes:' key" in stats["errors"][0]
+
+    def test_import_routes_not_a_list(self, db_manager, tmp_path):
+        fp = _write_routes_yaml(tmp_path / "routes.yaml", "routes: notalist\n")
+        stats = _import_routes(file_path=fp, db=db_manager)
+        assert stats["created"] == 0
+        assert "must have a list under the 'routes:' key" in stats["errors"][0]
+
+    def test_import_entry_not_a_dict(self, db_manager, tmp_path):
+        fp = _write_routes_yaml(tmp_path / "routes.yaml", "routes:\n  - justastring\n")
+        stats = _import_routes(file_path=fp, db=db_manager)
+        assert stats["created"] == 0
+        assert any("entry must be a dict" in e for e in stats["errors"])
+
+    def test_import_missing_from_to(self, db_manager, tmp_path):
+        fp = _write_routes_yaml(
+            tmp_path / "routes.yaml",
+            "routes:\n  - path:\n      - foo\n      - bar\n",
+        )
+        stats = _import_routes(file_path=fp, db=db_manager)
+        assert stats["created"] == 0
+        assert any("'from' and 'to' are required" in e for e in stats["errors"])
+
+    def test_import_path_too_short(self, db_manager, tmp_path):
+        self._seed_two_nodes(db_manager)
+        fp = _write_routes_yaml(
+            tmp_path / "routes.yaml",
+            f"routes:\n  - from: A\n    to: B\n    path:\n      - '{_PK_A}'\n",
+        )
+        stats = _import_routes(file_path=fp, db=db_manager)
+        assert stats["created"] == 0
+        assert any("path needs >= 2 nodes" in e for e in stats["errors"])
+
+    def test_import_path_node_not_found(self, db_manager, tmp_path):
+        self._seed_two_nodes(db_manager)
+        missing = "ff" + "0" * 62
+        fp = _write_routes_yaml(
+            tmp_path / "routes.yaml",
+            (
+                "routes:\n  - from: A\n    to: B\n"
+                f"    path:\n      - '{_PK_A}'\n      - '{missing}'\n"
+            ),
+        )
+        stats = _import_routes(file_path=fp, db=db_manager)
+        assert stats["created"] == 0
+        assert any("path node" in e and "not found" in e for e in stats["errors"])
+
+    def test_import_observer_not_found_warns(self, db_manager, tmp_path, capsys):
+        self._seed_two_nodes(db_manager)
+        missing = "ff" + "0" * 62
+        fp = _write_routes_yaml(
+            tmp_path / "routes.yaml",
+            (
+                "routes:\n  - from: A\n    to: B\n"
+                f"    path:\n      - '{_PK_A}'\n      - '{_PK_B}'\n"
+                f"    observers:\n      - '{missing}'\n"
+            ),
+        )
+        stats = _import_routes(file_path=fp, db=db_manager, verbose=True)
+        assert stats["created"] == 1
+        assert stats["errors"] == []
+        captured = capsys.readouterr()
+        assert "observer node" in captured.out and "not found" in captured.out
+
+    def test_import_entry_exception_is_caught(self, db_manager, tmp_path, monkeypatch):
+        self._seed_two_nodes(db_manager)
+        fp = _write_routes_yaml(
+            tmp_path / "routes.yaml",
+            (
+                "routes:\n  - from: A\n    to: B\n"
+                f"    path:\n      - '{_PK_A}'\n      - '{_PK_B}'\n"
+            ),
+        )
+
+        def _boom(*_args, **_kwargs):
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr("meshcore_hub.collector.routes.derive_expected_hash", _boom)
+        stats = _import_routes(file_path=fp, db=db_manager)
+        assert any("boom" in e for e in stats["errors"])
+
+
+class TestRouteSeedImport:
+    """Integration tests for the ``seed`` command with routes.yaml."""
+
+    def test_seed_imports_routes_yaml(self, tmp_path):
+        runner = CliRunner()
+        seed_dir = tmp_path / "seed"
+        seed_dir.mkdir()
+
+        pk_a = "11" + "0" * 62
+        pk_b = "22" + "0" * 62
+        (seed_dir / "routes.yaml").write_text(
+            "routes:\n"
+            "  - from: NodeA\n"
+            "    to: NodeB\n"
+            f"    path:\n      - '{pk_a}'\n      - '{pk_b}'\n"
+        )
+
+        db_path = tmp_path / "seed_route.db"
+        db_url = f"sqlite:///{db_path}"
+        db = DatabaseManager(db_url)
+        db.create_tables()
+        with db.session_scope() as session:
+            session.add(Node(public_key=pk_a, name="NodeA"))
+            session.add(Node(public_key=pk_b, name="NodeB"))
+        db.dispose()
+
+        mock_settings = _make_mock_settings(db_url, seed_home=str(seed_dir))
+        with patch(
+            "meshcore_hub.common.config.get_collector_settings",
+            return_value=mock_settings,
+        ):
+            result = runner.invoke(
+                collector,
+                ["--database-url", db_url, "--seed-home", str(seed_dir), "seed"],
+                catch_exceptions=False,
+            )
+
+        assert result.exit_code == 0
+        assert "Routes: 1 created" in result.output
+
+        db = DatabaseManager(db_url)
+        with db.session_scope() as session:
+            route = session.query(Route).filter(Route.from_label == "NodeA").first()
+            assert route is not None
+            assert route.to_label == "NodeB"
+            nodes = (
+                session.query(RouteNode).filter(RouteNode.route_id == route.id).all()
+            )
+            assert len(nodes) == 2
+        db.dispose()

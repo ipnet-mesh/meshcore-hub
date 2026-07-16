@@ -759,3 +759,36 @@ class TestPacketGroupRedaction:
         ).json()
         assert data["redacted"] is False
         assert data["raw_hex"] == "SECRET"
+
+    def test_detail_representative_skips_redacted_reception(
+        self, client_no_auth, channel_packets, api_db_session
+    ):
+        """A group with both a redacted and a visible reception serves the
+        representative raw_hex/decoded from the first *visible* row."""
+        pub_idx, adm_idx = channel_packets
+        base = _now()
+        api_db_session.add_all(
+            [
+                RawPacket(
+                    raw_hex="SECRET",
+                    packet_hash="MIXED_HASH",
+                    channel_idx=adm_idx,
+                    decoded={"scope": "admin"},
+                    received_at=base,
+                ),
+                RawPacket(
+                    raw_hex="PUBLIC",
+                    packet_hash="MIXED_HASH",
+                    channel_idx=pub_idx,
+                    decoded={"scope": "community"},
+                    received_at=base.replace(microsecond=base.microsecond + 1),
+                ),
+            ]
+        )
+        api_db_session.commit()
+
+        data = client_no_auth.get("/api/v1/packet-groups/MIXED_HASH").json()
+        assert data["redacted"] is False
+        assert data["raw_hex"] == "PUBLIC"
+        assert data["decoded"] == {"scope": "community"}
+        assert data["reception_count"] == 2

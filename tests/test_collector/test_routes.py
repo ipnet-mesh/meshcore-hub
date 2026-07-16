@@ -6,6 +6,8 @@ from uuid import uuid4
 from sqlalchemy import select
 
 from meshcore_hub.collector.routes import (
+    _has_any_hops_per_day,
+    _route_expected_hashes,
     derive_expected_hash,
     derive_quality,
     detect_observed_widths,
@@ -14,6 +16,7 @@ from meshcore_hub.collector.routes import (
     evaluate_route,
     evaluate_route_day,
     evaluate_route_history,
+    fetch_candidate_paths,
     is_subsequence,
     preview_route,
     prefix_collision_counts,
@@ -828,3 +831,161 @@ class TestEvaluateRouteHistory:
         marginal_date = (now - timedelta(days=2)).date()
         assert by_date[clear_date][0] == RouteQuality.CLEAR.value
         assert by_date[marginal_date][0] == RouteQuality.MARGINAL.value
+
+
+# ---------------------------------------------------------------------------
+# Branch-coverage tests (guards, exception handlers, optional-param paths)
+# ---------------------------------------------------------------------------
+
+
+class TestEvaluateAllRoutesError:
+    def test_exception_logged_and_continues(self, db_session, monkeypatch):
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        _make_route(db_session, "Boom", [node_a, node_b])
+        db_session.commit()
+
+        def _boom(*_args, **_kwargs):
+            raise RuntimeError("eval failed")
+
+        monkeypatch.setattr("meshcore_hub.collector.routes.evaluate_route", _boom)
+        results = evaluate_all_routes(db_session, now=_NOW)
+        # Route is absent from results (exception swallowed), but no raise.
+        assert results == {}
+
+
+class TestPreviewGuards:
+    def test_single_node_guard(self, db_session):
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        db_session.commit()
+        since = _NOW - timedelta(hours=24)
+
+        result = preview_route(db_session, {"node_ids": [node_a.id]}, since)
+        assert result["matched_count"] == 0
+        assert result["quality"] == RouteQuality.UNKNOWN.value
+        assert result["state"] == RouteState.NO_COVERAGE.value
+        assert result["truncated"] is False
+
+    def test_unresolvable_nodes_guard(self, db_session):
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        db_session.commit()
+        since = _NOW - timedelta(hours=24)
+
+        result = preview_route(
+            db_session,
+            {"node_ids": [node_a.id, str(uuid4())]},
+            since,
+        )
+        assert result["matched_count"] == 0
+        assert result["state"] == RouteState.NO_COVERAGE.value
+
+    def test_preview_with_observers(self, db_session):
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        obs = _make_node(db_session, "cc" + "0" * 62, "Obs")
+        _make_reception(db_session, obs.id, "pkt1", ["AA", "BB"], received_at=_NOW)
+        db_session.commit()
+        since = _NOW - timedelta(hours=24)
+
+        result = preview_route(
+            db_session,
+            {
+                "node_ids": [node_a.id, node_b.id],
+                "match_width": 1,
+                "observer_ids": [obs.id],
+                "packet_count_threshold": 3,
+            },
+            since,
+        )
+        assert result["matched_count"] == 1
+        assert str(obs.id) in result["contributing_observers"]
+
+
+class TestRouteHistoryGuards:
+    def test_single_expected_hash_returns_unknown(self, db_session):
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        route = _make_route(db_session, "Solo", [node_a])
+        db_session.commit()
+
+        results = evaluate_route_history(db_session, route, days=3, now=_NOW)
+        assert len(results) == 3
+        for _d, quality, state, count in results:
+            assert quality == RouteQuality.UNKNOWN.value
+            assert state == RouteState.NO_COVERAGE.value
+            assert count == 0
+
+
+class TestFetchCandidatePathsParams:
+    def test_limit_caps_groups(self, db_session):
+        for i in range(3):
+            _make_reception(db_session, None, f"pkt{i}", ["AA", "BB"])
+        db_session.commit()
+        since = _NOW - timedelta(hours=24)
+
+        paths = fetch_candidate_paths(db_session, "AA", since, limit=1)
+        assert len(paths) == 1
+
+    def test_until_excludes_later(self, db_session):
+        _make_reception(
+            db_session, None, "old", ["AA"], received_at=_NOW - timedelta(hours=10)
+        )
+        _make_reception(
+            db_session, None, "new", ["AA"], received_at=_NOW - timedelta(hours=1)
+        )
+        db_session.commit()
+        since = _NOW - timedelta(hours=24)
+
+        paths = fetch_candidate_paths(
+            db_session, "AA", since, until=_NOW - timedelta(hours=5)
+        )
+        assert len(paths) == 1
+        hops = list(paths.values())[0]
+        assert hops[0]["packet_hash"] == "old"
+
+    def test_observer_filter(self, db_session):
+        obs1 = _make_node(db_session, "11" + "0" * 62)
+        obs2 = _make_node(db_session, "22" + "0" * 62)
+        _make_reception(db_session, obs1.id, "pkt1", ["AA"], received_at=_NOW)
+        _make_reception(db_session, obs2.id, "pkt2", ["AA"], received_at=_NOW)
+        db_session.commit()
+        since = _NOW - timedelta(hours=24)
+
+        paths = fetch_candidate_paths(db_session, "AA", since, observer_ids=[obs1.id])
+        assert len(paths) == 1
+        hops = list(paths.values())[0]
+        assert hops[0]["observer_node_id"] == obs1.id
+
+
+class TestRouteExpectedHashesDerive:
+    def test_derives_when_expected_hash_missing(self, db_session):
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        route = Route(from_label="A", to_label="B", match_width=1)
+        db_session.add(route)
+        db_session.flush()
+        # node_a gets expected_hash; node_b gets None (forces elif-derive)
+        db_session.add(
+            RouteNode(
+                route_id=route.id,
+                node_id=node_a.id,
+                position=0,
+                expected_hash="AA",
+            )
+        )
+        db_session.add(
+            RouteNode(
+                route_id=route.id,
+                node_id=node_b.id,
+                position=1,
+                expected_hash=None,
+            )
+        )
+        db_session.flush()
+
+        result = _route_expected_hashes(route)
+        assert result == ["AA", derive_expected_hash(node_b.public_key, 1)]
+
+
+class TestHasAnyHopsPerDayGuard:
+    def test_empty_day_starts_returns_empty(self, db_session):
+        assert _has_any_hops_per_day(db_session, [], []) == set()

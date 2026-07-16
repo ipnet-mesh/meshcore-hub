@@ -1507,3 +1507,109 @@ class TestSpamRescoreScheduler:
         sub._stop_spam_rescore_scheduler()
         assert sub._spam_rescore_thread is not None
         assert not sub._spam_rescore_thread.is_alive()
+
+
+class TestRouteEvaluatorScheduler:
+    """Tests for the background route health evaluator scheduler."""
+
+    @pytest.fixture
+    def mock_mqtt_client(self):
+        client = MagicMock()
+        client.topic_builder = MagicMock()
+        client.topic_builder.prefix = "meshcore"
+        return client
+
+    def test_disabled_does_not_start_thread(
+        self, mock_mqtt_client, db_manager, monkeypatch
+    ):
+        """With interval=0, no evaluator thread is created."""
+        from meshcore_hub.common.config import CollectorSettings
+
+        real_init = CollectorSettings.__init__
+
+        def patched_init(self, *args, **kwargs):
+            real_init(self, *args, _env_file=None, **kwargs)
+            self.route_evaluator_interval_seconds = 0
+
+        monkeypatch.setattr(CollectorSettings, "__init__", patched_init)
+
+        sub = Subscriber(mock_mqtt_client, db_manager)
+        sub._start_route_evaluator_scheduler()
+        assert sub._route_evaluator_thread is None
+        sub._stop_route_evaluator_scheduler()
+
+    def test_enabled_runs_evaluation_and_stops(
+        self, mock_mqtt_client, db_manager, monkeypatch
+    ):
+        """Enabled scheduler spawns a thread, runs evaluation, joins on stop."""
+        import threading
+
+        from meshcore_hub.common.config import CollectorSettings
+
+        real_init = CollectorSettings.__init__
+
+        def patched_init(self, *args, **kwargs):
+            real_init(self, *args, _env_file=None, **kwargs)
+            self.route_evaluator_interval_seconds = 1
+
+        monkeypatch.setattr(CollectorSettings, "__init__", patched_init)
+        monkeypatch.setattr(
+            "meshcore_hub.collector.subscriber.time.sleep", lambda *_: None
+        )
+
+        sub = Subscriber(mock_mqtt_client, db_manager)
+        called = threading.Event()
+
+        def fake_run_evaluation(db):
+            called.set()
+            sub._running = False
+            return 2
+
+        monkeypatch.setattr(
+            "meshcore_hub.collector.route_evaluator.run_evaluation",
+            fake_run_evaluation,
+        )
+
+        sub._running = True
+        sub._start_route_evaluator_scheduler()
+        assert called.wait(timeout=5.0)
+        sub._stop_route_evaluator_scheduler()
+
+        assert sub._route_evaluator_thread is not None
+        assert not sub._route_evaluator_thread.is_alive()
+
+    def test_evaluator_error_is_logged(self, mock_mqtt_client, db_manager, monkeypatch):
+        """An exception in run_evaluation is caught and logged."""
+        import threading
+
+        from meshcore_hub.common.config import CollectorSettings
+
+        real_init = CollectorSettings.__init__
+
+        def patched_init(self, *args, **kwargs):
+            real_init(self, *args, _env_file=None, **kwargs)
+            self.route_evaluator_interval_seconds = 1
+
+        monkeypatch.setattr(CollectorSettings, "__init__", patched_init)
+        monkeypatch.setattr(
+            "meshcore_hub.collector.subscriber.time.sleep", lambda *_: None
+        )
+
+        sub = Subscriber(mock_mqtt_client, db_manager)
+        called = threading.Event()
+
+        def boom(db):
+            sub._running = False
+            called.set()
+            raise RuntimeError("eval failed")
+
+        monkeypatch.setattr(
+            "meshcore_hub.collector.route_evaluator.run_evaluation", boom
+        )
+
+        sub._running = True
+        sub._start_route_evaluator_scheduler()
+        assert called.wait(timeout=5.0)
+        sub._stop_route_evaluator_scheduler()
+        assert sub._route_evaluator_thread is not None
+        assert not sub._route_evaluator_thread.is_alive()
