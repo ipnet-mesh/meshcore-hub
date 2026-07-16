@@ -580,19 +580,25 @@ class TestImportRoutes:
         fp = _write_routes_yaml(tmp_path / "routes.yaml", "other: value\n")
         stats = _import_routes(file_path=fp, db=db_manager)
         assert stats["created"] == 0
-        assert "must have a list under the 'routes:' key" in stats["errors"][0]
+        errors = stats["errors"]
+        assert isinstance(errors, list)
+        assert "must have a list under the 'routes:' key" in errors[0]
 
     def test_import_routes_not_a_list(self, db_manager, tmp_path):
         fp = _write_routes_yaml(tmp_path / "routes.yaml", "routes: notalist\n")
         stats = _import_routes(file_path=fp, db=db_manager)
         assert stats["created"] == 0
-        assert "must have a list under the 'routes:' key" in stats["errors"][0]
+        errors = stats["errors"]
+        assert isinstance(errors, list)
+        assert "must have a list under the 'routes:' key" in errors[0]
 
     def test_import_entry_not_a_dict(self, db_manager, tmp_path):
         fp = _write_routes_yaml(tmp_path / "routes.yaml", "routes:\n  - justastring\n")
         stats = _import_routes(file_path=fp, db=db_manager)
         assert stats["created"] == 0
-        assert any("entry must be a dict" in e for e in stats["errors"])
+        errors = stats["errors"]
+        assert isinstance(errors, list)
+        assert any("entry must be a dict" in e for e in errors)
 
     def test_import_missing_from_to(self, db_manager, tmp_path):
         fp = _write_routes_yaml(
@@ -601,7 +607,9 @@ class TestImportRoutes:
         )
         stats = _import_routes(file_path=fp, db=db_manager)
         assert stats["created"] == 0
-        assert any("'from' and 'to' are required" in e for e in stats["errors"])
+        errors = stats["errors"]
+        assert isinstance(errors, list)
+        assert any("'from' and 'to' are required" in e for e in errors)
 
     def test_import_path_too_short(self, db_manager, tmp_path):
         self._seed_two_nodes(db_manager)
@@ -611,7 +619,9 @@ class TestImportRoutes:
         )
         stats = _import_routes(file_path=fp, db=db_manager)
         assert stats["created"] == 0
-        assert any("path needs >= 2 nodes" in e for e in stats["errors"])
+        errors = stats["errors"]
+        assert isinstance(errors, list)
+        assert any("path needs >= 2 nodes" in e for e in errors)
 
     def test_import_path_node_not_found(self, db_manager, tmp_path):
         self._seed_two_nodes(db_manager)
@@ -625,7 +635,9 @@ class TestImportRoutes:
         )
         stats = _import_routes(file_path=fp, db=db_manager)
         assert stats["created"] == 0
-        assert any("path node" in e and "not found" in e for e in stats["errors"])
+        errors = stats["errors"]
+        assert isinstance(errors, list)
+        assert any("path node" in e and "not found" in e for e in errors)
 
     def test_import_observer_not_found_warns(self, db_manager, tmp_path, capsys):
         self._seed_two_nodes(db_manager)
@@ -659,7 +671,9 @@ class TestImportRoutes:
 
         monkeypatch.setattr("meshcore_hub.collector.routes.derive_expected_hash", _boom)
         stats = _import_routes(file_path=fp, db=db_manager)
-        assert any("boom" in e for e in stats["errors"])
+        errors = stats["errors"]
+        assert isinstance(errors, list)
+        assert any("boom" in e for e in errors)
 
 
 class TestRouteSeedImport:
