@@ -1,6 +1,6 @@
 import { apiGet, apiPost, apiPut, apiDelete, isAbortError } from '../api.js';
 import { html, litRender, nothing, t, errorAlert, getConfig, hasRole } from '../components.js';
-import { iconPath, iconPlus, iconEdit, iconTrash, iconPackets, iconClock, iconRuler, iconNodes, iconSatelliteDish } from '../icons.js';
+import { iconPath, iconPlus, iconEdit, iconTrash, iconPackets, iconClock, iconRuler, iconNodes, iconSatelliteDish, iconRouteFrom, iconRouteTo } from '../icons.js';
 
 const VISIBILITY_ORDER = ['community', 'member', 'operator', 'admin'];
 
@@ -147,14 +147,18 @@ function renderRouteCard(route, { isAdmin, onDelete, onEdit, detail, navigate, p
         <div class="card-body">
             <div class="flex items-start justify-between gap-2">
                 <div class="flex-1 min-w-0">
-                    <h2 class="card-title flex items-center gap-2 flex-wrap">
-                        <span>${route.from_label}</span>
-                        <span class="opacity-50">${arrow}</span>
-                        <span>${route.to_label}</span>
+                    <h2 class="card-title">
+                        <div class="grid grid-cols-[auto_1fr] gap-x-2 items-center min-w-0">
+                            <span class="flex items-center text-base-content/60">${iconRouteFrom('h-5 w-5')}</span>
+                            <span class="truncate" title=${route.from_label || ''}>${route.from_label}</span>
+                            <span class="flex items-center text-base-content/60">${iconRouteTo('h-5 w-5')}</span>
+                            <span class="truncate" title=${route.to_label || ''}>${route.to_label}</span>
+                        </div>
                     </h2>
                     ${route.description ? html`<p class="text-sm opacity-70 mt-1">${route.description}</p>` : nothing}
                 </div>
                 <div class="flex items-center gap-2 flex-shrink-0">
+                    <span class="badge badge-ghost badge-sm opacity-60 font-mono text-xl leading-none px-2 inline-flex items-center" title=${route.reversible !== false ? t('routes.reversible_label') : ''}>${arrow}</span>
                     ${badge}
                 </div>
             </div>
@@ -186,7 +190,7 @@ function renderDetailContent(route, detail, { navigate, packetsEnabled, history 
         ${historySection}
         ${matches.length > 0 ? html`<div>
             <strong class="opacity-70">${t('routes.recent_packets')}</strong>
-            <div class="mt-1 space-y-2">
+            <div class="mt-2 space-y-2">
                 ${matches.map(m => {
                     const prefixLen = 2 * (route.match_width || 1);
                     const pathLookup = new Map(
