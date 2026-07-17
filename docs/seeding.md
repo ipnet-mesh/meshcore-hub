@@ -111,6 +111,8 @@ meshcore-hub collector channel remove --name MyChannel
 
 ## Routes
 
+> See [routes.md](routes.md) for the route health monitoring feature overview and evaluation semantics.
+
 Routes define multi-hop mesh paths to monitor for health. Each route is keyed by its `from`/`to` endpoint labels and is upserted (created or updated) by that label pair.
 
 ### Routes YAML Format
