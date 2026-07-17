@@ -15,7 +15,7 @@ from sqlalchemy import select
 
 from meshcore_hub.collector.letsmesh_normalizer import LetsMeshNormalizer
 from meshcore_hub.common.database import DatabaseManager
-from meshcore_hub.common.models import Node, RawPacket
+from meshcore_hub.common.models import Node, PacketPathHop, RawPacket
 
 logger = logging.getLogger(__name__)
 
@@ -135,23 +135,36 @@ def store_raw_packet(
                 if not observer_node.is_observer:
                     observer_node.is_observer = True
 
-        session.add(
-            RawPacket(
-                observer_node_id=observer_node.id if observer_node else None,
-                packet_hash=packet_hash,
-                raw_hex=raw_hex,
-                packet_type=packet_type,
-                payload_type=payload_type,
-                event_type=event_type,
-                channel_idx=channel_idx,
-                source_pubkey_prefix=source_pubkey_prefix,
-                route_type=route_type,
-                path_len=path_len,
-                path_hash_bytes=path_hash_bytes,
-                snr=snr,
-                decoded=decoded_packet,
-                received_at=now,
-            )
+        raw_packet = RawPacket(
+            observer_node_id=observer_node.id if observer_node else None,
+            packet_hash=packet_hash,
+            raw_hex=raw_hex,
+            packet_type=packet_type,
+            payload_type=payload_type,
+            event_type=event_type,
+            channel_idx=channel_idx,
+            source_pubkey_prefix=source_pubkey_prefix,
+            route_type=route_type,
+            path_len=path_len,
+            path_hash_bytes=path_hash_bytes,
+            snr=snr,
+            decoded=decoded_packet,
+            received_at=now,
         )
+        session.add(raw_packet)
+        session.flush()
+
+        if path_hashes:
+            for position, node_hash in enumerate(path_hashes):
+                session.add(
+                    PacketPathHop(
+                        raw_packet_id=raw_packet.id,
+                        position=position,
+                        node_hash=node_hash,
+                        packet_hash=packet_hash,
+                        received_at=now,
+                        observer_node_id=(observer_node.id if observer_node else None),
+                    )
+                )
 
     logger.debug("Captured raw packet: %s (%s)", packet_hash or "unknown", event_type)

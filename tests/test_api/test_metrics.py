@@ -13,7 +13,13 @@ from meshcore_hub.api.dependencies import (
     get_db_session,
     get_mqtt_client,
 )
-from meshcore_hub.common.models import Node, UserProfile, UserProfileNode
+from meshcore_hub.common.models import (
+    Node,
+    Route,
+    RouteResult,
+    UserProfile,
+    UserProfileNode,
+)
 
 
 def _make_basic_auth(username: str, password: str) -> str:
@@ -395,3 +401,45 @@ class TestMetricsCache:
         response1 = client_no_auth.get("/metrics")
         response2 = client_no_auth.get("/metrics")
         assert response1.text == response2.text
+
+
+class TestRouteMetrics:
+    """Tests for route health metrics."""
+
+    def test_route_metrics_emitted(self, client_no_auth, api_db_session):
+        """Enabled routes with results emit the five route gauges."""
+        route = Route(
+            from_label="Test", to_label="Route", enabled=True, packet_count_threshold=3
+        )
+        api_db_session.add(route)
+        api_db_session.flush()
+        api_db_session.add(
+            RouteResult(
+                route_id=route.id,
+                state="healthy",
+                quality="clear",
+                matched_count=10,
+                threshold=3,
+                effective_clear=6,
+            )
+        )
+        api_db_session.commit()
+
+        _clear_metrics_cache()
+        response = client_no_auth.get("/metrics")
+        text = response.text
+        assert "meshcore_route_healthy" in text
+        assert "meshcore_route_quality" in text
+        assert "meshcore_route_matched_packets" in text
+        assert "meshcore_route_threshold" in text
+        assert "meshcore_route_clear_threshold" in text
+        assert 'route="Test -> Route"' in text
+
+    def test_disabled_routes_omitted(self, client_no_auth, api_db_session):
+        """Disabled routes are not emitted."""
+        api_db_session.add(Route(from_label="Off", to_label="Off", enabled=False))
+        api_db_session.commit()
+
+        _clear_metrics_cache()
+        response = client_no_auth.get("/metrics")
+        assert 'route="Off -> Off"' not in response.text

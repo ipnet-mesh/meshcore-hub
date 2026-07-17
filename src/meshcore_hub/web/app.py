@@ -162,6 +162,16 @@ def _build_endpoint_access(
             "PUT": frozenset({role_admin}),
             "DELETE": frozenset({role_admin}),
         },
+        "v1/routes": {
+            "GET": _OPEN,
+            "POST": frozenset({role_admin}),
+        },
+        "v1/routes/": {
+            "GET": _OPEN,
+            "PUT": frozenset({role_admin}),
+            "DELETE": frozenset({role_admin}),
+            "POST": _OPEN,
+        },
     }
 
 

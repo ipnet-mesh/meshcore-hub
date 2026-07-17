@@ -118,6 +118,21 @@ class TestCollectorSettings:
 
         assert settings.channel_refresh_interval_seconds == 60
 
+    def test_route_evaluator_interval_seconds_default(self) -> None:
+        """Route evaluator interval defaults to 60."""
+        settings = CollectorSettings(_env_file=None)
+
+        assert settings.route_evaluator_interval_seconds == 60
+
+    def test_route_evaluator_interval_seconds_custom(self) -> None:
+        """Route evaluator interval can be overridden (0 disables)."""
+        settings = CollectorSettings(
+            _env_file=None,
+            route_evaluator_interval_seconds=0,
+        )
+
+        assert settings.route_evaluator_interval_seconds == 0
+
     def test_channels_file_path(self) -> None:
         """channels_file property resolves to seed_home/channels.yaml."""
         settings = CollectorSettings(_env_file=None, seed_home="/seed/data")

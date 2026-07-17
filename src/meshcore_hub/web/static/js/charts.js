@@ -61,7 +61,18 @@ const ChartColors = {
         'oklch(0.7 0.19 80)',     // yellow-green
         'oklch(0.65 0.22 25)',    // orange
         'oklch(0.55 0 0)'        // neutral grey (for "other")
-    ]
+    ],
+
+    // Semantic quality palette for route health charts. Hardcoded oklch
+    // values (same approach as `breakdown`) — app.css defines no semantic
+    // status colors.
+    quality: {
+        clear:       'oklch(0.72 0.17 145)',
+        marginal:    'oklch(0.75 0.18 85)',
+        failing:     'oklch(0.62 0.24 25)',
+        no_coverage: 'oklch(0.65 0.15 250)',
+        disabled:    'oklch(0.55 0 0)'
+    }
 };
 
 /**
@@ -382,4 +393,67 @@ function initDashboardCharts(nodeData, advertData, messageData, packetData, even
             ChartColors.breakdown.slice(0, 3)
         );
     }
+}
+
+/**
+ * Create a per-route health status strip — single horizontal bar of N equal
+ * colored day-segments.
+ *
+ * @param {string} canvasId - ID of the canvas element
+ * @param {Object} routeData - RouteHistory payload with `data` array
+ * @returns {Chart|null}
+ */
+function createRouteDetailStrip(canvasId, routeData) {
+    var ctx = document.getElementById(canvasId);
+    if (!ctx || !routeData || !routeData.data || routeData.data.length === 0) {
+        return null;
+    }
+
+    var existing = Chart.getChart(ctx);
+    if (existing) existing.destroy();
+
+    var datasets = routeData.data.map(function(day) {
+        return {
+            label: day.date,
+            data: [1],
+            backgroundColor: ChartColors.quality[day.quality] || ChartColors.quality.no_coverage,
+            borderColor: ChartColors.quality[day.quality] || ChartColors.quality.no_coverage,
+            borderWidth: 1,
+            _quality: day.quality,
+            _matched_count: day.matched_count || 0
+        };
+    });
+
+    return new Chart(ctx, {
+        type: 'bar',
+        data: { labels: [''], datasets: datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y',
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: ChartColors.tooltipBg,
+                    titleColor: ChartColors.tooltipText,
+                    bodyColor: ChartColors.tooltipText,
+                    borderColor: ChartColors.tooltipBorder,
+                    borderWidth: 1,
+                    callbacks: {
+                        title: function(ctx) { return ctx[0].dataset.label; },
+                        label: function(ctx) {
+                            var q = ctx.dataset._quality || 'unknown';
+                            var label = (window.t && window.t('routes.quality_' + q)) || q;
+                            return label + ' (' + ctx.dataset._matched_count + ')';
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: { stacked: true, grid: { display: false }, ticks: { display: false } },
+                y: { stacked: true, grid: { display: false }, ticks: { display: false } }
+            },
+            interaction: { mode: 'nearest', intersect: true }
+        }
+    });
 }

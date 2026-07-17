@@ -4,7 +4,7 @@ This document is the **single source of truth** for MeshCore Hub environment var
 
 Variables are grouped by feature. Each section below links to the feature's dedicated document (where one exists) for setup, architecture, and operational details. The companion documents no longer duplicate these tables — they link back here.
 
-> **Cross-references:** [deployment.md](deployment.md) (production setup, scaling, Redis operational notes) · [database.md](database.md) (backend setup, migration runbook) · [observer.md](observer.md) (packet-capture observer vars, which live there because they configure an external image) · [auth.md](auth.md) (OIDC architecture, IdP guides) · [webhooks.md](webhooks.md) (payload format, URL routing) · [letsmesh.md](letsmesh.md) (packet decoding) · [content.md](content.md) (custom pages, media, logos) · [i18n.md](i18n.md) (translations) · [seeding.md](seeding.md) (seed YAML) · [maintenance.md](maintenance.md) (backup/restore)
+> **Cross-references:** [deployment.md](deployment.md) (production setup, scaling, Redis operational notes) · [database.md](database.md) (backend setup, migration runbook) · [observer.md](observer.md) (packet-capture observer vars, which live there because they configure an external image) · [routes.md](routes.md) (route health monitoring feature overview) · [auth.md](auth.md) (OIDC architecture, IdP guides) · [webhooks.md](webhooks.md) (payload format, URL routing) · [letsmesh.md](letsmesh.md) (packet decoding) · [content.md](content.md) (custom pages, media, logos) · [i18n.md](i18n.md) (translations) · [seeding.md](seeding.md) (seed YAML) · [maintenance.md](maintenance.md) (backup/restore)
 
 ---
 
@@ -71,6 +71,7 @@ The collector subscribes to MQTT events and persists them to the database. For p
 | Variable | Default | Description |
 | --- | --- | --- |
 | `CHANNEL_REFRESH_INTERVAL_SECONDS` | `300` | Seconds between channel-key refresh from the database (minimum `10`) |
+| `ROUTE_EVALUATOR_INTERVAL_SECONDS` | `60` | Seconds between route health evaluations. `0` disables the background evaluator (route cards then stay `unknown`). See [routes.md](routes.md) |
 
 ### Observer Ingestion Filters
 
@@ -233,6 +234,7 @@ Control which pages are visible in the web dashboard. Disabled features are full
 | `FEATURE_RADIO_CONFIG` | `true` | Show radio config panel on home page |
 | `FEATURE_PACKETS` | `true` | Enable the `/packets` raw-packet browser. In Compose this also drives `RAW_PACKET_CAPTURE_ENABLED` on the collector |
 | `FEATURE_SPAM_DETECTION` | `true` | Show the "show potential spam" toggle on `/messages`. In Compose this also drives `SPAM_DETECTION_ENABLED` on the collector + api — see [Spam Detection](#spam-detection) |
+| `FEATURE_ROUTES` | `true` | Enable the `/routes` page (route health monitoring). See [routes.md](routes.md) |
 
 **Dependencies:** Dashboard auto-disables when all of Nodes/Advertisements/Messages are disabled. Map auto-disables when Nodes is disabled. Members auto-disables when OIDC is disabled (set via `OIDC_ENABLED`).
 

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from meshcore_hub.common.models import Channel, Node, NodeTag, RawPacket
+from meshcore_hub.common.models import Channel, Node, NodeTag, PacketPathHop, RawPacket
 
 
 def _now() -> datetime:
@@ -584,23 +584,27 @@ class TestGetPacketGroup:
         assert r["observer_name"] == "ObsName"
         assert r["observer_tag_name"] == "TaggedObs"
 
-    def test_path_hashes_extracted(self, client_no_auth, api_db_session):
-        decoded = {
-            "payload": {
-                "decoded": {
-                    "pathHashes": ["AA", "BB", "CC"],
-                }
-            }
-        }
-        api_db_session.add(
-            RawPacket(
-                raw_hex="AA",
-                packet_hash="H1",
-                decoded=decoded,
-                path_len=3,
-                received_at=_now(),
-            )
+    def test_path_hashes_from_hop_table(self, client_no_auth, api_db_session):
+        """Path hashes are read from packet_path_hops, not decoded JSON."""
+        rp = RawPacket(
+            raw_hex="AA",
+            packet_hash="H1",
+            decoded={"payload": {"decoded": {"pathHashes": ["AA", "BB", "CC"]}}},
+            path_len=3,
+            received_at=_now(),
         )
+        api_db_session.add(rp)
+        api_db_session.flush()
+        for pos, nh in enumerate(["AA", "BB", "CC"]):
+            api_db_session.add(
+                PacketPathHop(
+                    raw_packet_id=rp.id,
+                    position=pos,
+                    node_hash=nh,
+                    packet_hash="H1",
+                    received_at=_now(),
+                )
+            )
         api_db_session.commit()
 
         data = client_no_auth.get("/api/v1/packet-groups/H1").json()
@@ -609,6 +613,7 @@ class TestGetPacketGroup:
         assert r["path_len"] == 3
 
     def test_path_hashes_missing_returns_none(self, client_no_auth, api_db_session):
+        """A raw_packet with no hop rows returns path_hashes=None."""
         api_db_session.add(
             RawPacket(
                 raw_hex="AA",
@@ -755,55 +760,35 @@ class TestPacketGroupRedaction:
         assert data["redacted"] is False
         assert data["raw_hex"] == "SECRET"
 
+    def test_detail_representative_skips_redacted_reception(
+        self, client_no_auth, channel_packets, api_db_session
+    ):
+        """A group with both a redacted and a visible reception serves the
+        representative raw_hex/decoded from the first *visible* row."""
+        pub_idx, adm_idx = channel_packets
+        base = _now()
+        api_db_session.add_all(
+            [
+                RawPacket(
+                    raw_hex="SECRET",
+                    packet_hash="MIXED_HASH",
+                    channel_idx=adm_idx,
+                    decoded={"scope": "admin"},
+                    received_at=base,
+                ),
+                RawPacket(
+                    raw_hex="PUBLIC",
+                    packet_hash="MIXED_HASH",
+                    channel_idx=pub_idx,
+                    decoded={"scope": "community"},
+                    received_at=base.replace(microsecond=base.microsecond + 1),
+                ),
+            ]
+        )
+        api_db_session.commit()
 
-class TestExtractPathHashes:
-    """Unit tests for the _extract_path_hashes helper."""
-
-    def test_extracts_valid_hashes(self):
-        from meshcore_hub.api.routes.packet_groups import _extract_path_hashes
-
-        decoded = {"payload": {"decoded": {"pathHashes": ["AA", "BB"]}}}
-        assert _extract_path_hashes(decoded) == ["AA", "BB"]
-
-    def test_extracts_top_level_path(self):
-        from meshcore_hub.api.routes.packet_groups import _extract_path_hashes
-
-        # Normal (flood/advertisement) packets carry the routing path here.
-        decoded = {"path": ["16", "69", "23"], "pathLength": 3}
-        assert _extract_path_hashes(decoded) == ["16", "69", "23"]
-
-    def test_top_level_path_takes_precedence(self):
-        from meshcore_hub.api.routes.packet_groups import _extract_path_hashes
-
-        decoded = {
-            "path": ["16", "69"],
-            "payload": {"decoded": {"pathHashes": ["AA"]}},
-        }
-        assert _extract_path_hashes(decoded) == ["16", "69"]
-
-    def test_empty_top_level_path_falls_back(self):
-        from meshcore_hub.api.routes.packet_groups import _extract_path_hashes
-
-        decoded = {"path": [], "payload": {"decoded": {"pathHashes": ["AA"]}}}
-        assert _extract_path_hashes(decoded) == ["AA"]
-
-    def test_none_input(self):
-        from meshcore_hub.api.routes.packet_groups import _extract_path_hashes
-
-        assert _extract_path_hashes(None) is None
-
-    def test_missing_path_hashes(self):
-        from meshcore_hub.api.routes.packet_groups import _extract_path_hashes
-
-        assert _extract_path_hashes({"payload": {"decoded": {}}}) is None
-
-    def test_non_list_path_hashes(self):
-        from meshcore_hub.api.routes.packet_groups import _extract_path_hashes
-
-        decoded = {"payload": {"decoded": {"pathHashes": "not-a-list"}}}
-        assert _extract_path_hashes(decoded) is None
-
-    def test_empty_decoded(self):
-        from meshcore_hub.api.routes.packet_groups import _extract_path_hashes
-
-        assert _extract_path_hashes({}) is None
+        data = client_no_auth.get("/api/v1/packet-groups/MIXED_HASH").json()
+        assert data["redacted"] is False
+        assert data["raw_hex"] == "PUBLIC"
+        assert data["decoded"] == {"scope": "community"}
+        assert data["reception_count"] == 2

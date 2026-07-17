@@ -4,6 +4,27 @@ This guide covers upgrading from a previous MeshCore Hub release to the current 
 
 ## v0.16.0
 
+### Route Health Monitoring
+
+A new **Routes** page lets operators define monitored multi-hop mesh routes (an ordered list of two or more nodes) and track each one's health. A background evaluator on the collector matches captured packet paths against each route's configured node sequence within a configurable time window and rolls the result up into a traffic-light **quality** band (`clear` / `marginal` / `failing` / `unknown`) plus a **state** (`healthy` / `unhealthy` / `no_coverage`). Routes carry the same role-based visibility levels as channels (`community` / `member` / `operator` / `admin`), can be scoped to specific observers, and are matched in both directions by default (`reversible`). Define them via `routes.yaml` in `SEED_HOME` (see [seeding.md → Routes](seeding.md#routes)) or the `/api/v1/routes` API; see [routes.md](routes.md) for the feature overview.
+
+**On by default** and non-breaking — the page renders and the evaluator runs with no configuration. Hide the page with `FEATURE_ROUTES=false`; stop the evaluator with `ROUTE_EVALUATOR_INTERVAL_SECONDS=0`.
+
+**Database migration required:**
+
+```
+meshcore-hub db upgrade
+```
+
+This creates five tables — `routes`, `route_nodes`, `route_observers`, `route_results`, `packet_path_hops` — and backfills `packet_path_hops` from existing `raw_packets.decoded`. Route health therefore relies on **Raw Packet Capture** being enabled (`FEATURE_PACKETS=true`, the default) so packet paths continue to be captured. The migration runs automatically on Docker startup; the schema change is additive and safe on both SQLite and Postgres.
+
+**New optional environment variables (all safe to omit):**
+
+| Variable                            | Default | Description                                                                                          |
+| ----------------------------------- | ------- | ---------------------------------------------------------------------------------------------------- |
+| `FEATURE_ROUTES`                    | `true`  | Show the `/routes` page and nav entry. On by default.                                                |
+| `ROUTE_EVALUATOR_INTERVAL_SECONDS`  | `60`    | Collector background evaluator cadence in seconds. `0` disables the evaluator (cards stay `unknown`). |
+
 ### Observer Ingestion Filters (allow/deny remote observers)
 
 Remote observers contribute to the Hub by publishing decoded packets to your MQTT broker, and anyone with broker access can do so. You can now restrict which observers are ingested by their public key with two new **optional** collector variables:

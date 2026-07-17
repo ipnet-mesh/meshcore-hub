@@ -256,6 +256,8 @@ services:
       - SPAM_WEIGHT_PATH=${SPAM_WEIGHT_PATH:-0.75}
       - SPAM_WEIGHT_NAME=${SPAM_WEIGHT_NAME:-0.25}
       - SPAM_RESCORE_INTERVAL_SECONDS=${SPAM_RESCORE_INTERVAL_SECONDS:-120}
+      # Route health monitoring (background evaluator cadence; 0 disables).
+      - ROUTE_EVALUATOR_INTERVAL_SECONDS=${ROUTE_EVALUATOR_INTERVAL_SECONDS:-60}
     command: ["collector"]
     healthcheck:
       test: ["CMD", "meshcore-hub", "health", "collector"]
@@ -419,6 +421,8 @@ services:
       # Spam detection toggle is on by default; this also drives the backend
       # scoring/hide switch on the collector and api.
       - FEATURE_SPAM_DETECTION=${FEATURE_SPAM_DETECTION:-true}
+      # Routes page (route health monitoring) is on by default.
+      - FEATURE_ROUTES=${FEATURE_ROUTES:-true}
     command: ["web"]
     healthcheck:
       test:

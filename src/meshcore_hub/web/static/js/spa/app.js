@@ -9,7 +9,7 @@ import { Router } from './router.js';
 import { isAbortError } from './api.js';
 import { html, litRender, getConfig, hasRole, renderAuthSection } from './components.js';
 import { loadLocale, t } from './i18n.js';
-import { iconHome, iconDashboard, iconNodes, iconAdvertisements, iconMessages, iconPackets, iconMap, iconMembers, iconPage, iconChannel } from './icons.js';
+import { iconHome, iconDashboard, iconNodes, iconAdvertisements, iconMessages, iconPackets, iconMap, iconMembers, iconPage, iconChannel, iconPath } from './icons.js';
 
 // Page modules (lazy-loaded)
 const pages = {
@@ -25,6 +25,7 @@ const pages = {
     map: () => import('./pages/map.js'),
     members: () => import('./pages/members.js'),
     channels: () => import('./pages/channels.js'),
+    routes: () => import('./pages/routes.js'),
     customPage: () => import('./pages/custom-page.js'),
     notFound: () => import('./pages/not-found.js'),
     profile: () => import('./pages/profile.js'),
@@ -89,6 +90,9 @@ if (features.nodes !== false) {
 }
 if (features.channels !== false) {
     router.addRoute('/channels', pageHandler(pages.channels));
+}
+if (features.routes !== false) {
+    router.addRoute('/routes', pageHandler(pages.routes));
 }
 if (features.messages !== false) {
     router.addRoute('/messages', pageHandler(pages.messages));
@@ -176,6 +180,7 @@ function updatePageTitle(pathname) {
     if (features.dashboard !== false) titles['/dashboard'] = composePageTitle('entities.dashboard');
     if (features.nodes !== false) titles['/nodes'] = composePageTitle('entities.nodes');
     if (features.channels !== false) titles['/channels'] = composePageTitle('entities.channels');
+    if (features.routes !== false) titles['/routes'] = composePageTitle('entities.routes');
     if (features.messages !== false) titles['/messages'] = composePageTitle('entities.messages');
     if (features.advertisements !== false) titles['/advertisements'] = composePageTitle('entities.advertisements');
     if (features.packets !== false) titles['/packets'] = composePageTitle('entities.packets');
@@ -228,6 +233,9 @@ function renderMobileNav(config) {
     }
     if (features.channels !== false) {
         items.push(html`<li><a href="/channels" data-nav-link>${iconChannel('h-5 w-5')} ${t('entities.channels')}</a></li>`);
+    }
+    if (features.routes !== false) {
+        items.push(html`<li><a href="/routes" data-nav-link>${iconPath('h-5 w-5')} ${t('entities.routes')}</a></li>`);
     }
     if (features.messages !== false) {
         items.push(html`<li><a href="/messages" data-nav-link>${iconMessages('h-5 w-5 nav-icon-messages')} ${t('entities.messages')}</a></li>`);

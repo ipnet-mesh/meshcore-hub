@@ -70,6 +70,7 @@ flowchart LR
 
 - **Event Persistence**: Store messages, advertisements, telemetry, and trace data
 - **Raw Packet Inspection**: Capture, browse, and search raw wire packets; a deduplicated packet view shows every observer reception and routing path, with clickable path-hash badges that look up the matching nodes
+- **Route Health Monitoring**: Define multi-hop mesh routes and track each link's health over time with traffic-light status, per-day history, and recent-match attribution
 - **REST API**: Query historical data with filtering and pagination
 - **Node Tagging**: Add custom metadata to nodes for organization
 - **Web Dashboard**: Visualize network status, node locations, and message history
@@ -334,6 +335,7 @@ meshcore-hub/
 │   ├── letsmesh.md          # LetsMesh packet decoding details
 │   ├── maintenance.md       # Backup and restore procedures
 │   ├── observer.md          # Remote observers and PACKETCAPTURE_* reference
+│   ├── routes.md            # Route health monitoring
 │   ├── seeding.md           # Seed data format and import guide
 │   ├── upgrading.md         # Upgrade guide for breaking changes
 │   └── webhooks.md          # Webhook configuration reference
@@ -347,6 +349,7 @@ meshcore-hub/
 - [docs/configuration.md](docs/configuration.md) - Single source of truth for environment variables
 - [docs/deployment.md](docs/deployment.md) - Production setup, reverse proxy, multi-instance, API scaling, Redis
 - [docs/observer.md](docs/observer.md) - Remote packet-capture observers and `PACKETCAPTURE_*` reference
+- [docs/routes.md](docs/routes.md) - Route health monitoring and link status
 - [docs/maintenance.md](docs/maintenance.md) - Backup and restore procedures
 - [docs/database.md](docs/database.md) - Database backends (SQLite/PostgreSQL) and migration
 - [docs/upgrading.md](docs/upgrading.md) - Upgrade guide for breaking changes
