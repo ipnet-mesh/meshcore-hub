@@ -4,6 +4,12 @@ from fastapi import APIRouter, HTTPException, Request, status
 from sqlalchemy import select
 
 from meshcore_hub.api.auth import RequireOperatorOrAdmin, RequireRead
+from meshcore_hub.api.cache_invalidation import (
+    invalidate_advertisements,
+    invalidate_dashboard,
+    invalidate_messages,
+    invalidate_nodes,
+)
 from meshcore_hub.api.dependencies import DbSession
 from meshcore_hub.common.models import Node, NodeTag, UserProfile, UserProfileNode
 from meshcore_hub.common.schemas.nodes import (
@@ -14,6 +20,19 @@ from meshcore_hub.common.schemas.nodes import (
 )
 
 router = APIRouter()
+
+
+def _invalidate_node_tag_caches(request: Request) -> None:
+    """Drop caches that embed or depend on node tags.
+
+    Tag values drive node display names and search/sort, message sender names,
+    advertisement tag labels, and dashboard counts/friendly names — so a tag
+    write invalidates all of them.
+    """
+    invalidate_nodes(request)
+    invalidate_messages(request)
+    invalidate_advertisements(request)
+    invalidate_dashboard(request)
 
 
 def _check_tag_access(
@@ -111,6 +130,7 @@ def create_node_tag(
     session.commit()
     session.refresh(node_tag)
 
+    _invalidate_node_tag_caches(request)
     return NodeTagRead.model_validate(node_tag)
 
 
@@ -167,6 +187,7 @@ def update_node_tag(
     session.commit()
     session.refresh(node_tag)
 
+    _invalidate_node_tag_caches(request)
     return NodeTagRead.model_validate(node_tag)
 
 
@@ -197,3 +218,4 @@ def delete_node_tag(
 
     session.delete(node_tag)
     session.commit()
+    _invalidate_node_tag_caches(request)

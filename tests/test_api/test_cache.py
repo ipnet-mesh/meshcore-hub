@@ -1330,3 +1330,320 @@ class TestKeyBuilders:
             key = _messages_key_builder(request)
             assert "role=admin" in key
             assert "limit=10" in key
+
+
+def _make_request_with_cache(cache):
+    """Build a Request whose ``app.state.redis_cache`` is *cache* (or absent)."""
+    app = FastAPI()
+    if cache is not None:
+        app.state.redis_cache = cache
+    return Request(
+        scope={"type": "http", "query_string": b"", "headers": [], "app": app}
+    )
+
+
+class TestCacheInvalidationHelpers:
+    """Unit tests for ``meshcore_hub.api.cache_invalidation`` helpers."""
+
+    def test_invalidate_channels_drops_url_path_prefix(self):
+        from meshcore_hub.api.cache_invalidation import invalidate_channels
+
+        cache = MagicMock()
+        invalidate_channels(_make_request_with_cache(cache))
+        cache.delete.assert_called_once_with("/api/v1/channels")
+
+    def test_invalidate_routes_drops_url_path_prefix(self):
+        from meshcore_hub.api.cache_invalidation import invalidate_routes
+
+        cache = MagicMock()
+        invalidate_routes(_make_request_with_cache(cache))
+        # Single prefix covers /routes, /routes/{id}, /routes/{id}/history
+        cache.delete.assert_called_once_with("/api/v1/routes")
+
+    def test_invalidate_nodes_drops_endpoint_name_prefix(self):
+        from meshcore_hub.api.cache_invalidation import invalidate_nodes
+
+        cache = MagicMock()
+        invalidate_nodes(_make_request_with_cache(cache))
+        cache.delete.assert_called_once_with("nodes")
+
+    def test_invalidate_profiles_drops_endpoint_name_prefix(self):
+        from meshcore_hub.api.cache_invalidation import invalidate_profiles
+
+        cache = MagicMock()
+        invalidate_profiles(_make_request_with_cache(cache))
+        cache.delete.assert_called_once_with("profiles")
+
+    def test_invalidate_messages_drops_url_path_prefix(self):
+        from meshcore_hub.api.cache_invalidation import invalidate_messages
+
+        cache = MagicMock()
+        invalidate_messages(_make_request_with_cache(cache))
+        cache.delete.assert_called_once_with("/api/v1/messages")
+
+    def test_invalidate_advertisements_drops_endpoint_name_prefix(self):
+        from meshcore_hub.api.cache_invalidation import invalidate_advertisements
+
+        cache = MagicMock()
+        invalidate_advertisements(_make_request_with_cache(cache))
+        cache.delete.assert_called_once_with("advertisements")
+
+    def test_invalidate_dashboard_drops_both_prefix_formats(self):
+        from meshcore_hub.api.cache_invalidation import invalidate_dashboard
+
+        cache = MagicMock()
+        invalidate_dashboard(_make_request_with_cache(cache))
+        # Dashboard endpoints split between endpoint-name keys and URL-path keys
+        cache.delete.assert_any_call("dashboard")
+        cache.delete.assert_any_call("/api/v1/dashboard")
+        assert cache.delete.call_count == 2
+
+    def test_helpers_are_noop_when_cache_missing(self):
+        # No redis_cache attribute on state — must not raise.
+        from meshcore_hub.api import cache_invalidation as inv
+
+        request = _make_request_with_cache(cache=None)
+        inv.invalidate_channels(request)
+        inv.invalidate_routes(request)
+        inv.invalidate_nodes(request)
+        inv.invalidate_profiles(request)
+        inv.invalidate_messages(request)
+        inv.invalidate_advertisements(request)
+        inv.invalidate_dashboard(request)
+
+    def test_helpers_swallow_backend_errors(self):
+        from meshcore_hub.api import cache_invalidation as inv
+
+        cache = MagicMock()
+        cache.delete.side_effect = Exception("redis down")
+        request = _make_request_with_cache(cache)
+        # Must not raise.
+        inv.invalidate_channels(request)
+        inv.invalidate_dashboard(request)
+
+
+class TestMutationInvalidationIntegration:
+    """End-to-end: mutation handlers must drop the expected cache prefixes."""
+
+    def _install_mock_cache(self, client) -> MagicMock:
+        """Attach a mock cache that always misses; return it for assertions."""
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+        client.app.state.redis_cache = mock_cache
+        client.app.state.redis_cache_ttl = 30
+        client.app.state.redis_cache_ttl_dashboard = 300
+        client.app.state.redis_cache_ttl_route_detail = 300
+        return mock_cache
+
+    # --- Channels ---------------------------------------------------------
+
+    def test_create_channel_invalidates_channels(self, client_no_auth, api_db_session):
+        mock_cache = self._install_mock_cache(client_no_auth)
+        resp = client_no_auth.post(
+            "/api/v1/channels",
+            json={
+                "name": "InvalidationTest",
+                "key_hex": "AABBCCDDEEFF00112233445566778899",
+                "visibility": "community",
+                "enabled": True,
+            },
+        )
+        assert resp.status_code == 201
+        mock_cache.delete.assert_any_call("/api/v1/channels")
+
+    def test_update_channel_invalidates_channels(self, client_no_auth, sample_channel):
+        mock_cache = self._install_mock_cache(client_no_auth)
+        resp = client_no_auth.put(
+            f"/api/v1/channels/{sample_channel.id}",
+            json={"enabled": False},
+        )
+        assert resp.status_code == 200
+        mock_cache.delete.assert_any_call("/api/v1/channels")
+
+    def test_delete_channel_invalidates_channels(self, client_no_auth, sample_channel):
+        mock_cache = self._install_mock_cache(client_no_auth)
+        resp = client_no_auth.delete(f"/api/v1/channels/{sample_channel.id}")
+        assert resp.status_code == 204
+        mock_cache.delete.assert_any_call("/api/v1/channels")
+
+    # --- Routes -----------------------------------------------------------
+
+    def test_create_route_invalidates_routes(self, client_no_auth, api_db_session):
+        from meshcore_hub.common.models import Node
+
+        n1 = Node(public_key="aa" * 16, name="A")
+        n2 = Node(public_key="bb" * 16, name="B")
+        api_db_session.add_all([n1, n2])
+        api_db_session.commit()
+
+        mock_cache = self._install_mock_cache(client_no_auth)
+        resp = client_no_auth.post(
+            "/api/v1/routes",
+            json={
+                "from_label": "A",
+                "to_label": "B",
+                "node_public_keys": [n1.public_key, n2.public_key],
+                "match_width": 2,
+            },
+            headers={"X-User-Roles": "admin"},
+        )
+        assert resp.status_code == 201
+        mock_cache.delete.assert_any_call("/api/v1/routes")
+
+    def test_update_route_invalidates_routes(self, client_no_auth, api_db_session):
+        from meshcore_hub.common.models import Node, Route, RouteNode
+
+        nodes = [Node(public_key=f"{c:02x}" * 16, name=str(c)) for c in (1, 2)]
+        api_db_session.add_all(nodes)
+        api_db_session.flush()
+        route = Route(from_label="X", to_label="Y")
+        api_db_session.add(route)
+        api_db_session.flush()
+        for pos, n in enumerate(nodes):
+            api_db_session.add(
+                RouteNode(
+                    route_id=route.id,
+                    node_id=n.id,
+                    position=pos,
+                    expected_hash=n.public_key[:2].upper(),
+                )
+            )
+        api_db_session.commit()
+
+        mock_cache = self._install_mock_cache(client_no_auth)
+        resp = client_no_auth.put(
+            f"/api/v1/routes/{route.id}",
+            json={"from_label": "NewFrom", "to_label": "NewTo"},
+            headers={"X-User-Roles": "admin"},
+        )
+        assert resp.status_code == 200
+        mock_cache.delete.assert_any_call("/api/v1/routes")
+
+    def test_delete_route_invalidates_routes(self, client_no_auth, api_db_session):
+        from meshcore_hub.common.models import Node, Route, RouteNode
+
+        nodes = [Node(public_key=f"{c:02x}" * 16, name=str(c)) for c in (3, 4)]
+        api_db_session.add_all(nodes)
+        api_db_session.flush()
+        route = Route(from_label="P", to_label="Q")
+        api_db_session.add(route)
+        api_db_session.flush()
+        for pos, n in enumerate(nodes):
+            api_db_session.add(
+                RouteNode(
+                    route_id=route.id,
+                    node_id=n.id,
+                    position=pos,
+                    expected_hash=n.public_key[:2].upper(),
+                )
+            )
+        api_db_session.commit()
+
+        mock_cache = self._install_mock_cache(client_no_auth)
+        resp = client_no_auth.delete(
+            f"/api/v1/routes/{route.id}",
+            headers={"X-User-Roles": "admin"},
+        )
+        assert resp.status_code == 204
+        mock_cache.delete.assert_any_call("/api/v1/routes")
+
+    # --- User profiles ----------------------------------------------------
+
+    def test_update_profile_invalidates_profiles_and_dashboard(
+        self, client_no_auth, sample_user_profile
+    ):
+        mock_cache = self._install_mock_cache(client_no_auth)
+        resp = client_no_auth.put(
+            f"/api/v1/user/profile/{sample_user_profile.id}",
+            json={"name": "Renamed"},
+            headers={
+                "X-User-Id": sample_user_profile.user_id,
+                "X-User-Roles": "operator",
+            },
+        )
+        assert resp.status_code == 200
+        mock_cache.delete.assert_any_call("profiles")
+        mock_cache.delete.assert_any_call("dashboard")
+        mock_cache.delete.assert_any_call("/api/v1/dashboard")
+
+    # --- Node tags --------------------------------------------------------
+
+    def test_create_node_tag_invalidates_cross_entity_caches(
+        self, client_no_auth, sample_node, sample_operator_adoption
+    ):
+        mock_cache = self._install_mock_cache(client_no_auth)
+        resp = client_no_auth.post(
+            f"/api/v1/nodes/{sample_node.public_key}/tags",
+            json={"key": "name", "value": "Friendly"},
+            headers={
+                "X-User-Id": "operator-123",
+                "X-User-Roles": "operator",
+            },
+        )
+        assert resp.status_code == 201
+        for prefix in ("nodes", "/api/v1/messages", "advertisements"):
+            mock_cache.delete.assert_any_call(prefix)
+        # Dashboard covers both key formats
+        mock_cache.delete.assert_any_call("dashboard")
+        mock_cache.delete.assert_any_call("/api/v1/dashboard")
+
+    def test_delete_node_tag_invalidates_cross_entity_caches(
+        self, client_no_auth, sample_node, sample_node_tag, sample_operator_adoption
+    ):
+        mock_cache = self._install_mock_cache(client_no_auth)
+        resp = client_no_auth.delete(
+            f"/api/v1/nodes/{sample_node.public_key}/tags/{sample_node_tag.key}",
+            headers={
+                "X-User-Id": "operator-123",
+                "X-User-Roles": "operator",
+            },
+        )
+        assert resp.status_code == 204
+        for prefix in ("nodes", "/api/v1/messages", "advertisements", "dashboard"):
+            mock_cache.delete.assert_any_call(prefix)
+
+    # --- Adoptions --------------------------------------------------------
+
+    def test_adopt_node_invalidates_cross_entity_caches(
+        self, client_no_auth, sample_node
+    ):
+        mock_cache = self._install_mock_cache(client_no_auth)
+        resp = client_no_auth.post(
+            "/api/v1/adoptions",
+            json={"public_key": sample_node.public_key},
+            headers={"X-User-Id": "adopter-1", "X-User-Roles": "operator"},
+        )
+        assert resp.status_code == 201
+        for prefix in ("nodes", "profiles", "advertisements", "dashboard"):
+            mock_cache.delete.assert_any_call(prefix)
+        mock_cache.delete.assert_any_call("/api/v1/dashboard")
+
+    def test_release_node_invalidates_cross_entity_caches(
+        self, client_no_auth, sample_node, sample_adopted_node
+    ):
+        mock_cache = self._install_mock_cache(client_no_auth)
+        resp = client_no_auth.delete(
+            f"/api/v1/adoptions/{sample_node.public_key}",
+            headers={"X-User-Id": "oidc-user-123", "X-User-Roles": "operator"},
+        )
+        assert resp.status_code == 204
+        for prefix in ("nodes", "profiles", "advertisements", "dashboard"):
+            mock_cache.delete.assert_any_call(prefix)
+
+    # --- Resilience -------------------------------------------------------
+
+    def test_cache_delete_error_does_not_break_mutation(
+        self, client_no_auth, sample_channel
+    ):
+        """If Redis is down, the mutation must still succeed."""
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+        mock_cache.delete.side_effect = Exception("redis down")
+        client_no_auth.app.state.redis_cache = mock_cache
+        client_no_auth.app.state.redis_cache_ttl = 30
+
+        resp = client_no_auth.put(
+            f"/api/v1/channels/{sample_channel.id}",
+            json={"enabled": False},
+        )
+        assert resp.status_code == 200

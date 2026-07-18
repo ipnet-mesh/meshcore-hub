@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from meshcore_hub.api.auth import RequireAdmin, RequireRead
 from meshcore_hub.api.cache import cached, sorted_query_string
+from meshcore_hub.api.cache_invalidation import invalidate_routes
 from meshcore_hub.api.channel_visibility import (
     VISIBILITY_LEVELS,
     get_max_visibility_level,
@@ -167,6 +168,7 @@ def create_route(
     __: RequireAdmin,
     session: DbSession,
     body: RouteCreate,
+    request: Request,
 ) -> RouteRead:
     """Create a new route (admin only)."""
     existing = session.execute(
@@ -210,6 +212,7 @@ def create_route(
     _sync_observers(session, route, observer_nodes)
     session.commit()
     session.refresh(route)
+    invalidate_routes(request)
     return _route_to_read(route)
 
 
@@ -320,6 +323,7 @@ def update_route(
     session: DbSession,
     route_id: str,
     body: RouteUpdate,
+    request: Request,
 ) -> RouteRead:
     """Update a route (admin only)."""
     route = session.execute(
@@ -379,6 +383,7 @@ def update_route(
 
     session.commit()
     session.refresh(route)
+    invalidate_routes(request)
     return _route_to_read(route)
 
 
@@ -387,6 +392,7 @@ def delete_route(
     __: RequireAdmin,
     session: DbSession,
     route_id: str,
+    request: Request,
 ) -> None:
     """Delete a route (admin only)."""
     route = session.execute(
@@ -396,6 +402,7 @@ def delete_route(
         raise HTTPException(status_code=404, detail="Route not found")
     session.delete(route)
     session.commit()
+    invalidate_routes(request)
 
 
 @router.post("/preview", response_model=RoutePreviewResponse)

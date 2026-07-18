@@ -5,6 +5,7 @@ from sqlalchemy import select
 
 from meshcore_hub.api.auth import RequireAdmin, RequireRead
 from meshcore_hub.api.cache import cached, sorted_query_string
+from meshcore_hub.api.cache_invalidation import invalidate_channels
 from meshcore_hub.api.channel_visibility import (
     VISIBILITY_LEVELS,
     get_max_visibility_level,
@@ -75,6 +76,7 @@ def create_channel(
     __: RequireAdmin,
     session: DbSession,
     body: ChannelCreate,
+    request: Request,
 ) -> ChannelRead:
     """Create a new channel (admin only)."""
     existing = session.execute(
@@ -106,6 +108,7 @@ def create_channel(
     session.commit()
     session.refresh(channel)
 
+    invalidate_channels(request)
     return _channel_to_read(channel, include_key=True)
 
 
@@ -115,6 +118,7 @@ def update_channel(
     session: DbSession,
     channel_id: str,
     body: ChannelUpdate,
+    request: Request,
 ) -> ChannelRead:
     """Update a channel (admin only, name is immutable)."""
     channel = session.execute(
@@ -145,6 +149,7 @@ def update_channel(
     session.commit()
     session.refresh(channel)
 
+    invalidate_channels(request)
     return _channel_to_read(channel, include_key=True)
 
 
@@ -153,6 +158,7 @@ def delete_channel(
     __: RequireAdmin,
     session: DbSession,
     channel_id: str,
+    request: Request,
 ) -> None:
     """Delete a channel (admin only)."""
     channel = session.execute(
@@ -163,3 +169,4 @@ def delete_channel(
 
     session.delete(channel)
     session.commit()
+    invalidate_channels(request)
