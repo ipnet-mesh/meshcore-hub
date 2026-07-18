@@ -214,6 +214,11 @@ def create_route(
 
 
 @router.get("/{route_id}", response_model=RouteDetail)
+@cached(
+    "routes/{id}",
+    ttl_setting="redis_cache_ttl_route_detail",
+    key_builder=_routes_key_builder,
+)
 def get_route(
     _: RequireRead,
     session: DbSession,

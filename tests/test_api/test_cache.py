@@ -430,6 +430,33 @@ class TestCachedDecorator:
         call_args = mock_cache.set.call_args
         assert call_args[0][2] == 60  # TTL should be 60, not 30
 
+    async def test_route_detail_ttl_override(self):
+        app = FastAPI()
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+        app.state.redis_cache = mock_cache
+        app.state.redis_cache_ttl = 30
+        app.state.redis_cache_ttl_route_detail = 90
+
+        @cached("routes/{id}", ttl_setting="redis_cache_ttl_route_detail")
+        async def handler(request: Request):
+            return {"id": "abc", "matches": []}
+
+        scope = {
+            "type": "http",
+            "query_string": b"",
+            "headers": [],
+            "app": app,
+        }
+        from starlette.datastructures import State
+
+        request = Request(scope)
+        request._state = State()
+
+        await handler(request=request)
+        call_args = mock_cache.set.call_args
+        assert call_args[0][2] == 90  # TTL should be 90, not 30
+
     async def test_serializes_pydantic_model_result(self):
         app = FastAPI()
         mock_cache = MagicMock()
@@ -455,8 +482,10 @@ class TestCachedDecorator:
         result = await handler(request=request)
         assert result.items == [1, 2]
         set_call = mock_cache.set.call_args
-        stored = json.loads(set_call[0][1])
-        assert stored == {"items": [1, 2], "total": 2}
+        envelope = json.loads(set_call[0][1])
+        assert envelope["body"] == {"items": [1, 2], "total": 2}
+        assert isinstance(envelope["etag"], str)
+        assert envelope["etag"].startswith('"')
 
     async def test_serializes_dict_result(self):
         app = FastAPI()
@@ -483,7 +512,9 @@ class TestCachedDecorator:
         result = await handler(request=request)
         assert result == {"key": "value"}
         set_call = mock_cache.set.call_args
-        assert set_call[0][1] == '{"key": "value"}'
+        envelope = json.loads(set_call[0][1])
+        assert envelope["body"] == {"key": "value"}
+        assert isinstance(envelope["etag"], str)
 
     async def test_serializes_other_result_with_default_str(self):
         app = FastAPI()
@@ -510,7 +541,8 @@ class TestCachedDecorator:
         result = await handler(request=request)
         assert result == ["a", "b"]
         set_call = mock_cache.set.call_args
-        assert json.loads(set_call[0][1]) == ["a", "b"]
+        envelope = json.loads(set_call[0][1])
+        assert envelope["body"] == ["a", "b"]
 
     async def test_cache_set_error_falls_through(self):
         app = FastAPI()
@@ -558,6 +590,394 @@ class TestCachedDecorator:
 
         result = await handler(request=request)
         assert result == {"items": ["direct"]}
+
+
+class TestCachedEtag:
+    """ETag / If-None-Match behavior of @cached."""
+
+    @staticmethod
+    def _make_request(app, headers=None):
+        scope = {
+            "type": "http",
+            "query_string": b"",
+            "headers": [(k.lower().encode(), v.encode()) for k, v in (headers or [])],
+            "app": app,
+        }
+        from starlette.datastructures import State
+
+        request = Request(scope)
+        request._state = State()
+        return request
+
+    async def test_miss_sets_request_state_etag(self):
+        app = FastAPI()
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+        app.state.redis_cache = mock_cache
+        app.state.redis_cache_ttl = 30
+
+        @cached("nodes")
+        async def handler(request: Request):
+            return {"items": ["a"], "total": 1}
+
+        request = self._make_request(app)
+        result = await handler(request=request)
+        assert result == {"items": ["a"], "total": 1}
+        etag = request.state.api_etag
+        assert isinstance(etag, str)
+        assert etag.startswith('"')
+
+    async def test_hit_reads_etag_from_envelope(self):
+        app = FastAPI()
+        mock_cache = MagicMock()
+        body = {"items": [], "total": 0}
+        etag = '"deadbeefdeadbeefdeadbeefdeadbeef"'
+        mock_cache.get.return_value = json.dumps({"body": body, "etag": etag})
+        app.state.redis_cache = mock_cache
+        app.state.redis_cache_ttl = 30
+
+        @cached("nodes")
+        async def handler(request: Request):
+            return {"items": ["should not appear"], "total": 1}
+
+        request = self._make_request(app)
+        result = await handler(request=request)
+        assert result == body
+        assert request.state.api_etag == etag
+        assert request.state.cache_status == "HIT"
+
+    async def test_hit_computes_etag_for_legacy_entry(self):
+        """Legacy bare-JSON cache entries (no etag envelope) still serve and
+        get an ETag computed on the fly."""
+        app = FastAPI()
+        mock_cache = MagicMock()
+        body = {"items": [], "total": 0}
+        mock_cache.get.return_value = json.dumps(body)
+        app.state.redis_cache = mock_cache
+        app.state.redis_cache_ttl = 30
+
+        @cached("nodes")
+        async def handler(request: Request):
+            return {"items": ["should not appear"], "total": 1}
+
+        request = self._make_request(app)
+        result = await handler(request=request)
+        assert result == body
+        assert request.state.cache_status == "HIT"
+        # ETag is computed deterministically from the legacy body bytes.
+        assert request.state.api_etag.startswith('"')
+
+    async def test_garbage_cache_entry_treated_as_miss(self):
+        app = FastAPI()
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = "not valid json {"
+        app.state.redis_cache = mock_cache
+        app.state.redis_cache_ttl = 30
+
+        @cached("nodes")
+        async def handler(request: Request):
+            return {"items": ["real"], "total": 1}
+
+        request = self._make_request(app)
+        result = await handler(request=request)
+        assert result == {"items": ["real"], "total": 1}
+        assert request.state.cache_status == "MISS"
+
+    async def test_if_none_match_returns_304_on_miss(self):
+        app = FastAPI()
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+        app.state.redis_cache = mock_cache
+        app.state.redis_cache_ttl = 30
+
+        @cached("nodes")
+        async def handler(request: Request):
+            return {"items": ["a"], "total": 1}
+
+        # First call to learn the ETag.
+        request = self._make_request(app)
+        await handler(request=request)
+        etag = request.state.api_etag
+
+        # Second call with matching If-None-Match.
+        request2 = self._make_request(app, headers=[("if-none-match", etag)])
+        response = await handler(request=request2)
+        from fastapi.responses import Response
+
+        assert isinstance(response, Response)
+        assert response.status_code == 304
+        assert response.headers["ETag"] == etag
+
+    async def test_if_none_match_returns_304_on_hit(self):
+        app = FastAPI()
+        mock_cache = MagicMock()
+        body = {"items": [], "total": 0}
+        etag = '"abc123abc123abc123abc123abc123ab"'
+        mock_cache.get.return_value = json.dumps({"body": body, "etag": etag})
+        app.state.redis_cache = mock_cache
+        app.state.redis_cache_ttl = 30
+
+        @cached("nodes")
+        async def handler(request: Request):
+            return {"items": ["should not appear"], "total": 1}
+
+        request = self._make_request(app, headers=[("if-none-match", etag)])
+        response = await handler(request=request)
+        from fastapi.responses import Response
+
+        assert isinstance(response, Response)
+        assert response.status_code == 304
+        assert response.headers["ETag"] == etag
+
+    async def test_if_none_match_non_matching_returns_body(self):
+        app = FastAPI()
+        mock_cache = MagicMock()
+        body = {"items": [], "total": 0}
+        etag = '"abc123abc123abc123abc123abc123ab"'
+        mock_cache.get.return_value = json.dumps({"body": body, "etag": etag})
+        app.state.redis_cache = mock_cache
+        app.state.redis_cache_ttl = 30
+
+        @cached("nodes")
+        async def handler(request: Request):
+            return {"items": ["should not appear"], "total": 1}
+
+        request = self._make_request(
+            app, headers=[("if-none-match", '"different-etag-value"')]
+        )
+        result = await handler(request=request)
+        assert result == body
+
+    async def test_if_none_match_wildcard_matches_any_etag(self):
+        app = FastAPI()
+        mock_cache = MagicMock()
+        body = {"items": [], "total": 0}
+        etag = '"abc123abc123abc123abc123abc123ab"'
+        mock_cache.get.return_value = json.dumps({"body": body, "etag": etag})
+        app.state.redis_cache = mock_cache
+        app.state.redis_cache_ttl = 30
+
+        @cached("nodes")
+        async def handler(request: Request):
+            return {"items": ["nope"], "total": 1}
+
+        request = self._make_request(app, headers=[("if-none-match", "*")])
+        from fastapi.responses import Response
+
+        response = await handler(request=request)
+        assert isinstance(response, Response)
+        assert response.status_code == 304
+
+    async def test_if_none_match_accepts_weak_indicator(self):
+        app = FastAPI()
+        mock_cache = MagicMock()
+        body = {"items": [], "total": 0}
+        etag = '"abc123abc123abc123abc123abc123ab"'
+        mock_cache.get.return_value = json.dumps({"body": body, "etag": etag})
+        app.state.redis_cache = mock_cache
+        app.state.redis_cache_ttl = 30
+
+        @cached("nodes")
+        async def handler(request: Request):
+            return {"items": ["nope"], "total": 1}
+
+        request = self._make_request(app, headers=[("if-none-match", f"W/{etag}")])
+        from fastapi.responses import Response
+
+        response = await handler(request=request)
+        assert isinstance(response, Response)
+        assert response.status_code == 304
+
+    async def test_cache_control_ttl_always_set(self):
+        """Even when Redis is NullCache, request.state.cache_control_ttl
+        is set so the middleware can emit Cache-Control."""
+        app = FastAPI()
+        app.state.redis_cache = NullCache()
+        app.state.redis_cache_ttl = 30
+
+        @cached("nodes")
+        async def handler(request: Request):
+            return {"items": [], "total": 0}
+
+        request = self._make_request(app)
+        await handler(request=request)
+        assert request.state.cache_control_ttl == 30
+
+    async def test_cache_control_ttl_uses_overridden_setting(self):
+        app = FastAPI()
+        app.state.redis_cache = NullCache()
+        app.state.redis_cache_ttl = 30
+        app.state.redis_cache_ttl_route_detail = 90
+
+        @cached("routes/{id}", ttl_setting="redis_cache_ttl_route_detail")
+        async def handler(request: Request):
+            return {"id": "abc"}
+
+        request = self._make_request(app)
+        await handler(request=request)
+        assert request.state.cache_control_ttl == 90
+
+
+class TestCachedEtagHelpers:
+    """Direct unit tests for the etag helpers."""
+
+    def test_compute_etag_is_quoted_hex(self):
+        from meshcore_hub.api.cache import _compute_etag
+
+        etag = _compute_etag('{"a": 1}')
+        assert etag.startswith('"')
+        assert etag.endswith('"')
+        assert len(etag) == 34  # 32 hex chars + 2 quotes
+
+    def test_compute_etag_is_deterministic(self):
+        from meshcore_hub.api.cache import _compute_etag
+
+        assert _compute_etag("body") == _compute_etag("body")
+
+    def test_compute_etag_changes_with_input(self):
+        from meshcore_hub.api.cache import _compute_etag
+
+        assert _compute_etag("body1") != _compute_etag("body2")
+
+    def test_etag_matches_strong_equality(self):
+        from meshcore_hub.api.cache import _etag_matches
+
+        etag = '"abc123"'
+        assert _etag_matches('"abc123"', etag)
+
+    def test_etag_matches_wildcard(self):
+        from meshcore_hub.api.cache import _etag_matches
+
+        assert _etag_matches("*", '"any"')
+
+    def test_etag_matches_weak_indicator(self):
+        from meshcore_hub.api.cache import _etag_matches
+
+        etag = '"abc123"'
+        assert _etag_matches('W/"abc123"', etag)
+
+    def test_etag_matches_one_of_list(self):
+        from meshcore_hub.api.cache import _etag_matches
+
+        etag = '"abc123"'
+        assert _etag_matches('"xyz", "abc123", "def"', etag)
+
+    def test_etag_no_match(self):
+        from meshcore_hub.api.cache import _etag_matches
+
+        assert not _etag_matches('"other"', '"abc123"')
+
+
+class TestCacheControlMiddleware:
+    """End-to-end Cache-Control / ETag tests via the FastAPI test client."""
+
+    def test_cached_get_emits_cache_control_and_etag(self, client_no_auth):
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+        client_no_auth.app.state.redis_cache = mock_cache
+        client_no_auth.app.state.redis_cache_ttl = 30
+        response = client_no_auth.get("/api/v1/nodes")
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "private, max-age=30"
+        assert "etag" in response.headers
+
+    def test_cached_get_cache_control_uses_overridden_ttl(self, client_no_auth):
+        """Route detail endpoint should use the route-detail TTL (300s)."""
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+        client_no_auth.app.state.redis_cache = mock_cache
+        client_no_auth.app.state.redis_cache_ttl = 30
+        client_no_auth.app.state.redis_cache_ttl_route_detail = 300
+        # Need a route to exist; this is a happy-path check of the header value
+        # so we stub the cache and just hit the endpoint with a fake id. The
+        # endpoint will return 404 but still flow through the @cached decorator
+        # and the middleware.
+        response = client_no_auth.get("/api/v1/routes/nonexistent-id")
+        # 404 is fine; we only care about the header applied by the decorator
+        # via request.state.cache_control_ttl.
+        assert response.headers.get("cache-control") == "private, max-age=300"
+
+    def test_cached_get_304_on_matching_if_none_match(self, client_no_auth):
+        mock_cache = MagicMock()
+        body = {
+            "items": [],
+            "total": 0,
+            "limit": 50,
+            "offset": 0,
+        }
+        etag = '"abc123abc123abc123abc123abc123ab"'
+        mock_cache.get.return_value = json.dumps({"body": body, "etag": etag})
+        client_no_auth.app.state.redis_cache = mock_cache
+        client_no_auth.app.state.redis_cache_ttl = 30
+
+        response = client_no_auth.get("/api/v1/nodes", headers={"If-None-Match": etag})
+        assert response.status_code == 304
+        assert response.headers["ETag"] == etag
+        assert response.headers["cache-control"] == "private, max-age=30"
+        assert response.headers["x-cache"] == "HIT"
+        # 304 must not carry a body.
+        assert response.content in (b"", b"null")
+
+    def test_uncached_get_emits_must_revalidate(self, client_no_auth, sample_node):
+        """Uncached GET detail endpoints get max-age=0, must-revalidate."""
+        # Force the @cached list endpoint to NOT be the target by hitting the
+        # per-id endpoint, which is not cached.
+        if hasattr(client_no_auth.app.state, "redis_cache"):
+            del client_no_auth.app.state.redis_cache
+        response = client_no_auth.get(f"/api/v1/nodes/{sample_node.public_key}")
+        assert response.status_code == 200
+        assert (
+            response.headers["cache-control"] == "private, max-age=0, must-revalidate"
+        )
+
+    def test_post_emits_no_store(self, client_no_auth, api_db_session):
+        """POST endpoints always get Cache-Control: no-store.
+
+        Depends on ``api_db_session`` so its teardown truncates the channel
+        row even if the create succeeds (channel creates mutate the DB and
+        would otherwise leak into later tests in the same module).
+        """
+        response = client_no_auth.post(
+            "/api/v1/channels",
+            json={
+                "name": "CacheControlTestChan",
+                "key_hex": "AABBCCDDEEFF00112233445566778899",
+                "visibility": "community",
+            },
+        )
+        # May succeed (201) or fail (400/500) depending on validation; we
+        # only care that the middleware set no-store on the response.
+        assert response.headers["cache-control"] == "no-store"
+
+    def test_health_emits_no_store(self, client_no_auth):
+        response = client_no_auth.get("/health")
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "no-store"
+
+    def test_health_ready_emits_no_store(self, client_no_auth):
+        response = client_no_auth.get("/health/ready")
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "no-store"
+
+    def test_kill_switch_suppresses_cache_control(self, client_no_auth):
+        """When api_cache_control_enabled is False, no Cache-Control is added."""
+        client_no_auth.app.state.api_cache_control_enabled = False
+        if hasattr(client_no_auth.app.state, "redis_cache"):
+            del client_no_auth.app.state.redis_cache
+        response = client_no_auth.get("/api/v1/nodes")
+        assert "cache-control" not in response.headers
+
+    def test_kill_switch_preserves_x_cache_header(self, client_no_auth):
+        """X-Cache is observability, not a client-caching directive, so the
+        kill switch should not suppress it."""
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+        client_no_auth.app.state.redis_cache = mock_cache
+        client_no_auth.app.state.redis_cache_ttl = 30
+        client_no_auth.app.state.api_cache_control_enabled = False
+        response = client_no_auth.get("/api/v1/nodes")
+        assert response.headers.get("x-cache") == "MISS"
+        assert "cache-control" not in response.headers
 
 
 class TestLifespanRedis:
@@ -750,6 +1170,9 @@ class TestCliRedis:
                             "60",
                             "--redis-cache-ttl-dashboard",
                             "120",
+                            "--redis-cache-ttl-route-detail",
+                            "90",
+                            "--no-api-cache-control",
                         ],
                         catch_exceptions=False,
                     )
@@ -762,6 +1185,50 @@ class TestCliRedis:
                     assert call_kwargs["redis_key_prefix"] == "pre"
                     assert call_kwargs["redis_cache_ttl"] == 60
                     assert call_kwargs["redis_cache_ttl_dashboard"] == 120
+                    assert call_kwargs["redis_cache_ttl_route_detail"] == 90
+                    assert call_kwargs["api_cache_control_enabled"] is False
+
+    def test_api_cache_control_enabled_default(self):
+        """Without --no-api-cache-control, the flag defaults to True."""
+        from click.testing import CliRunner
+
+        from meshcore_hub.api.cli import api
+
+        runner = CliRunner()
+        with patch("uvicorn.run"):
+            with patch("meshcore_hub.common.config.get_api_settings") as mock_settings:
+                mock_settings.return_value = MagicMock(
+                    data_home="/tmp/test",
+                    effective_database_url="sqlite:///test.db",
+                )
+                with patch("meshcore_hub.api.app.create_app") as mock_create_app:
+                    mock_create_app.return_value = MagicMock()
+                    runner.invoke(api, catch_exceptions=False)
+                    call_kwargs = mock_create_app.call_args[1]
+                    assert call_kwargs["api_cache_control_enabled"] is True
+
+    def test_redis_cache_ttl_dashboard_default(self):
+        """--redis-cache-ttl-dashboard defaults to 300 (raised from 30).
+
+        Covers /dashboard/* endpoints and /routes/{id}/history. Trend data
+        tolerates longer staleness than the original 30s default.
+        """
+        from click.testing import CliRunner
+
+        from meshcore_hub.api.cli import api
+
+        runner = CliRunner()
+        with patch("uvicorn.run"):
+            with patch("meshcore_hub.common.config.get_api_settings") as mock_settings:
+                mock_settings.return_value = MagicMock(
+                    data_home="/tmp/test",
+                    effective_database_url="sqlite:///test.db",
+                )
+                with patch("meshcore_hub.api.app.create_app") as mock_create_app:
+                    mock_create_app.return_value = MagicMock()
+                    runner.invoke(api, catch_exceptions=False)
+                    call_kwargs = mock_create_app.call_args[1]
+                    assert call_kwargs["redis_cache_ttl_dashboard"] == 300
 
 
 class TestKeyBuilders:

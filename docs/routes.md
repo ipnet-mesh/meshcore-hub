@@ -10,13 +10,15 @@ For the environment-variable reference, see [configuration.md → Feature Flags]
 
 A route is an ordered list of two or more nodes (the configured path). For each captured packet reception, the evaluator walks the reception's path-hash sequence and checks whether the route's nodes appear **in order, as a subsequence** (intermediate hops are allowed). When `reversible` is set (the default), the reverse-ordered path is also accepted, so a packet travelling `B → ... → A` counts toward an `A → B` route.
 
+Matches are deduplicated by their **underlying event identity**, not per on-air transmission. The collector denormalizes the structured event's `event_hash` (the same key used to dedup advertisements, messages, telemetry, and traces at the structured-event layer) onto each captured raw packet at ingest time. The evaluator prefers `event_hash` when set, so retransmissions or floods of the same underlying advert/message count once toward `packet_count_threshold` instead of once per on-air copy. Packets captured before this column existed (and any unclassified wire packets) have `event_hash IS NULL` and fall back to the wire `packet_hash`, preserving the previous behaviour until they age out of the configured `window_hours`.
+
 Each route carries these knobs:
 
 | Field | Default | Description |
 | --- | --- | --- |
 | `match_width` | `1` | Path-hash prefix width in bytes (1/2/3). Higher widths disambiguate nodes that share a short public-key prefix. |
 | `window_hours` | `24` | Rolling lookback window for the live status card. |
-| `packet_count_threshold` | `3` | Distinct matching packets at/above which the route is `healthy`. |
+| `packet_count_threshold` | `3` | Distinct matching packets at/above which the route is `healthy`. "Distinct" is per underlying event, not per transmission — see [How health is evaluated](#how-health-is-evaluated) above. |
 | `clear_threshold` | _(2× threshold)_ | Comfort bar for the `clear`/`marginal` split. Omit/null to use twice the threshold. |
 | `max_hop_span` | _(unlimited)_ | Caps the position gap between the first and last matched node, to reject matches that wander too far. |
 | `reversible` | `true` | Also match the path in reverse direction. |

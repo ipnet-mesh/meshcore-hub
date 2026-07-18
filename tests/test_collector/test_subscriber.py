@@ -154,6 +154,136 @@ class TestSubscriber:
         finally:
             session.close()
 
+    def test_event_hash_backfilled_after_dispatch(self, mock_mqtt_client, db_manager):
+        """When the structured handler returns an event_hash, the subscriber
+        propagates it onto the captured raw_packet (and its hops)."""
+        from sqlalchemy import select
+
+        from meshcore_hub.common.models import PacketPathHop, RawPacket
+
+        mock_mqtt_client.topic_builder.parse_letsmesh_upload_topic.return_value = (
+            "a" * 64,
+            "packets",
+        )
+        subscriber = Subscriber(
+            mock_mqtt_client, db_manager, raw_packet_capture_enabled=True
+        )
+        subscriber._normalize_letsmesh_event = MagicMock(  # type: ignore[method-assign]
+            return_value=("a" * 64, "channel_msg_recv", {"text": "hi"})
+        )
+        subscriber._letsmesh_decoder.decode_payload = MagicMock(  # type: ignore[method-assign]
+            return_value={
+                "payloadType": 4,
+                "path": ["aa", "bb"],
+                "payload": {"decoded": {}},
+            }
+        )
+        # Structured handler resolves the underlying event and returns its hash.
+        subscriber.register_handler(
+            "channel_msg_recv", lambda pk, et, payload, db: "evt-resolved"
+        )
+
+        subscriber._handle_mqtt_message(
+            topic="meshcore/STN/abc/packets",
+            pattern="meshcore/+/+/packets",
+            payload={"raw": "0011", "hash": "wire1"},
+        )
+
+        session = db_manager.get_session()
+        try:
+            rp = session.execute(select(RawPacket)).scalar_one()
+            session.refresh(rp)
+            assert rp.event_hash == "evt-resolved"
+
+            hops = session.execute(select(PacketPathHop)).scalars().all()
+            assert len(hops) == 2
+            for hop in hops:
+                session.refresh(hop)
+                assert hop.event_hash == "evt-resolved"
+        finally:
+            session.close()
+
+    def test_event_hash_skipped_when_handler_returns_none(
+        self, mock_mqtt_client, db_manager
+    ):
+        """A handler that returns None (or no handler) leaves event_hash NULL."""
+        from sqlalchemy import select
+
+        from meshcore_hub.common.models import RawPacket
+
+        mock_mqtt_client.topic_builder.parse_letsmesh_upload_topic.return_value = (
+            "a" * 64,
+            "packets",
+        )
+        subscriber = Subscriber(
+            mock_mqtt_client, db_manager, raw_packet_capture_enabled=True
+        )
+        subscriber._normalize_letsmesh_event = MagicMock(  # type: ignore[method-assign]
+            return_value=("a" * 64, "channel_msg_recv", {"text": "hi"})
+        )
+        subscriber._letsmesh_decoder.decode_payload = MagicMock(  # type: ignore[method-assign]
+            return_value={"payloadType": 4, "payload": {"decoded": {}}}
+        )
+        # Handler returns None (event unresolvable / unclassified).
+        subscriber.register_handler(
+            "channel_msg_recv", lambda pk, et, payload, db: None
+        )
+
+        subscriber._handle_mqtt_message(
+            topic="meshcore/STN/abc/packets",
+            pattern="meshcore/+/+/packets",
+            payload={"raw": "0011", "hash": "wire1"},
+        )
+
+        session = db_manager.get_session()
+        try:
+            rp = session.execute(select(RawPacket)).scalar_one()
+            session.refresh(rp)
+            assert rp.event_hash is None
+        finally:
+            session.close()
+
+    def test_event_hash_skipped_when_handler_raises(self, mock_mqtt_client, db_manager):
+        """A throwing handler leaves event_hash NULL but the raw_packet is
+        still captured (capture happens before dispatch)."""
+        from sqlalchemy import select
+
+        from meshcore_hub.common.models import RawPacket
+
+        mock_mqtt_client.topic_builder.parse_letsmesh_upload_topic.return_value = (
+            "a" * 64,
+            "packets",
+        )
+        subscriber = Subscriber(
+            mock_mqtt_client, db_manager, raw_packet_capture_enabled=True
+        )
+        subscriber._normalize_letsmesh_event = MagicMock(  # type: ignore[method-assign]
+            return_value=("a" * 64, "channel_msg_recv", {"text": "hi"})
+        )
+        subscriber._letsmesh_decoder.decode_payload = MagicMock(  # type: ignore[method-assign]
+            return_value={"payloadType": 4, "payload": {"decoded": {}}}
+        )
+
+        def _boom(pk, et, payload, db):
+            raise RuntimeError("handler failed")
+
+        subscriber.register_handler("channel_msg_recv", _boom)
+
+        subscriber._handle_mqtt_message(
+            topic="meshcore/STN/abc/packets",
+            pattern="meshcore/+/+/packets",
+            payload={"raw": "0011", "hash": "wire1"},
+        )
+
+        session = db_manager.get_session()
+        try:
+            rp = session.execute(select(RawPacket)).scalar_one()
+            session.refresh(rp)
+            assert rp.event_hash is None
+            assert rp.raw_hex == "0011"  # capture survived the handler failure
+        finally:
+            session.close()
+
     def test_raw_capture_skips_status_feed(self, mock_mqtt_client, db_manager):
         """Capture is packets-feed only; status feed writes no raw rows."""
         from sqlalchemy import select

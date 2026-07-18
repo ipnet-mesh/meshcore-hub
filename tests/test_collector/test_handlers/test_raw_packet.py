@@ -2,7 +2,10 @@
 
 from sqlalchemy import select
 
-from meshcore_hub.collector.handlers.raw_packet import store_raw_packet
+from meshcore_hub.collector.handlers.raw_packet import (
+    store_raw_packet,
+    update_raw_packet_event_hash,
+)
 from meshcore_hub.common.models import Node, PacketPathHop, RawPacket
 
 
@@ -28,7 +31,7 @@ class TestStoreRawPacket:
         """A single packet writes exactly one raw_packets row."""
         payload = {"raw": "0011223344", "hash": "deadbeef", "SNR": 9.5, "path": "0102"}
 
-        store_raw_packet(
+        rp_id = store_raw_packet(
             "a" * 64, payload, _channel_decoded(), "channel_msg_recv", db_manager
         )
 
@@ -39,6 +42,7 @@ class TestStoreRawPacket:
         assert rp.packet_hash == "deadbeef"
         assert rp.event_type == "channel_msg_recv"
         assert rp.snr == 9.5
+        assert rp_id == rp.id
 
     def test_derives_channel_idx_and_source_prefix(self, db_manager, db_session):
         """channel_idx from channelHash; source prefix from sourceHash."""
@@ -309,3 +313,69 @@ class TestStoreRawPacketPathHops:
         )
         assert len(hops) == 2
         assert [h.node_hash for h in hops] == ["AABB", "CCDD"]
+
+
+class TestUpdateRawPacketEventHash:
+    """Tests for the post-dispatch event_hash backfill."""
+
+    def test_backfills_raw_packet_and_hops(self, db_manager, db_session):
+        """update_raw_packet_event_hash writes event_hash onto both rows."""
+        decoded = {
+            "payloadType": 1,
+            "path": ["aa", "bb"],
+            "payload": {"decoded": {}},
+        }
+        rp_id = store_raw_packet(
+            "a" * 64, {"raw": "00", "hash": "wire1"}, decoded, "flood", db_manager
+        )
+        assert rp_id is not None
+
+        update_raw_packet_event_hash(rp_id, "evt-aaa", db_manager)
+
+        rp = db_session.execute(select(RawPacket)).scalar_one()
+        db_session.refresh(rp)
+        assert rp.event_hash == "evt-aaa"
+
+        hops = db_session.execute(select(PacketPathHop)).scalars().all()
+        assert len(hops) == 2
+        for hop in hops:
+            db_session.refresh(hop)
+            assert hop.event_hash == "evt-aaa"
+
+    def test_backfill_idempotent_on_replay(self, db_manager, db_session):
+        """Calling backfill twice with the same hash is a no-op."""
+        decoded = {"payloadType": 1, "path": ["aa"], "payload": {"decoded": {}}}
+        rp_id = store_raw_packet(
+            "a" * 64, {"raw": "00", "hash": "wire1"}, decoded, "flood", db_manager
+        )
+        assert rp_id is not None
+
+        update_raw_packet_event_hash(rp_id, "evt-aaa", db_manager)
+        update_raw_packet_event_hash(rp_id, "evt-aaa", db_manager)
+
+        rp = db_session.execute(select(RawPacket)).scalar_one()
+        db_session.refresh(rp)
+        assert rp.event_hash == "evt-aaa"
+
+    def test_backfill_overwrites_prior_value(self, db_manager, db_session):
+        """A second backfill with a different hash replaces the prior one."""
+        decoded = {"payloadType": 1, "path": ["aa"], "payload": {"decoded": {}}}
+        rp_id = store_raw_packet(
+            "a" * 64, {"raw": "00", "hash": "wire1"}, decoded, "flood", db_manager
+        )
+        assert rp_id is not None
+
+        update_raw_packet_event_hash(rp_id, "evt-first", db_manager)
+        update_raw_packet_event_hash(rp_id, "evt-second", db_manager)
+
+        rp = db_session.execute(select(RawPacket)).scalar_one()
+        db_session.refresh(rp)
+        assert rp.event_hash == "evt-second"
+
+    def test_backfill_no_op_when_row_missing(self, db_manager, db_session):
+        """Backfilling a non-existent id silently does nothing (retention
+        cleanup may have removed the row between capture and dispatch)."""
+        # No row created; just verify it doesn't raise.
+        update_raw_packet_event_hash("nonexistent-id", "evt-aaa", db_manager)
+
+        assert db_session.execute(select(RawPacket)).scalars().all() == []

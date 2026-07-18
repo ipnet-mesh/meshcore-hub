@@ -11,7 +11,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from meshcore_hub.collector.letsmesh_normalizer import LetsMeshNormalizer
 from meshcore_hub.common.database import DatabaseManager
@@ -56,7 +56,7 @@ def store_raw_packet(
     decoded_packet: Optional[dict[str, Any]],
     event_type: str,
     db: DatabaseManager,
-) -> None:
+) -> Optional[str]:
     """Capture a single raw packet from the LetsMesh ``packets`` feed.
 
     Args:
@@ -65,6 +65,11 @@ def store_raw_packet(
         decoded_packet: Decoder output already produced during normalization
         event_type: How the collector classified the packet
         db: Database manager
+
+    Returns:
+        The ``raw_packet.id`` of the inserted row, or ``None`` on failure.
+        The caller uses the id to backfill ``event_hash`` after the
+        structured handler resolves the underlying event identity.
     """
     now = datetime.now(timezone.utc)
 
@@ -168,3 +173,34 @@ def store_raw_packet(
                 )
 
     logger.debug("Captured raw packet: %s (%s)", packet_hash or "unknown", event_type)
+    return raw_packet.id
+
+
+def update_raw_packet_event_hash(
+    raw_packet_id: str,
+    event_hash: str,
+    db: DatabaseManager,
+) -> None:
+    """Backfill ``event_hash`` onto a captured raw packet and its hops.
+
+    Called by the subscriber after the structured handler resolves the
+    underlying event identity.  Two single-row UPDATEs scoped by
+    ``raw_packet_id``; no-op if the row no longer exists (e.g. retention
+    cleanup ran between capture and dispatch).
+
+    Args:
+        raw_packet_id: The id returned by :func:`store_raw_packet`.
+        event_hash: The ``event_hash`` returned by the structured handler.
+        db: Database manager.
+    """
+    with db.session_scope() as session:
+        session.execute(
+            update(RawPacket)
+            .where(RawPacket.id == raw_packet_id)
+            .values(event_hash=event_hash)
+        )
+        session.execute(
+            update(PacketPathHop)
+            .where(PacketPathHop.raw_packet_id == raw_packet_id)
+            .values(event_hash=event_hash)
+        )

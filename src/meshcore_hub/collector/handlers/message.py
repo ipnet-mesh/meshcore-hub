@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -25,7 +25,7 @@ def handle_contact_message(
     event_type: str,
     payload: dict[str, Any],
     db: DatabaseManager,
-) -> None:
+) -> Optional[str]:
     """Handle a contact message event.
 
     Args:
@@ -33,8 +33,12 @@ def handle_contact_message(
         event_type: Event type name
         payload: Message payload
         db: Database manager
+
+    Returns:
+        The ``event_hash`` of the underlying message, or ``None`` on early
+        exit.
     """
-    _handle_message(public_key, "contact", payload, db)
+    return _handle_message(public_key, "contact", payload, db)
 
 
 def handle_channel_message(
@@ -42,7 +46,7 @@ def handle_channel_message(
     event_type: str,
     payload: dict[str, Any],
     db: DatabaseManager,
-) -> None:
+) -> Optional[str]:
     """Handle a channel message event.
 
     Args:
@@ -50,8 +54,12 @@ def handle_channel_message(
         event_type: Event type name
         payload: Message payload
         db: Database manager
+
+    Returns:
+        The ``event_hash`` of the underlying message, or ``None`` on early
+        exit.
     """
-    _handle_message(public_key, "channel", payload, db)
+    return _handle_message(public_key, "channel", payload, db)
 
 
 def _handle_message(
@@ -59,7 +67,7 @@ def _handle_message(
     message_type: str,
     payload: dict[str, Any],
     db: DatabaseManager,
-) -> None:
+) -> Optional[str]:
     """Handle a message event (contact or channel).
 
     Args:
@@ -67,11 +75,15 @@ def _handle_message(
         message_type: Message type ('contact' or 'channel')
         payload: Message payload
         db: Database manager
+
+    Returns:
+        The ``event_hash`` of the underlying message, or ``None`` on early
+        exit.
     """
     text = payload.get("text")
     if not text:
         logger.warning("Message missing text content")
-        return
+        return None
 
     now = datetime.now(timezone.utc)
 
@@ -144,7 +156,7 @@ def _handle_message(
                         f"Added receiver {public_key[:12]}... to message "
                         f"(hash={event_hash[:8]}...)"
                     )
-            return
+            return event_hash
 
         # Spam scoring (online): only on the first insert of an event_hash, and
         # only when the feature is switched on. When off, the columns stay null
@@ -227,7 +239,7 @@ def _handle_message(
                     path_len=path_len,
                     observed_at=now,
                 )
-            return
+            return event_hash
 
     # Surface the spam score (and the signals that drove it) in the log so it is
     # observable without querying the DB. Likely-spam (>= threshold) is logged at
@@ -252,3 +264,5 @@ def _handle_message(
         logger.warning(line)
     else:
         logger.info(line)
+
+    return event_hash

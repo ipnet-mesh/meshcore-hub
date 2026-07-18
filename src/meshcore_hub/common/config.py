@@ -418,8 +418,25 @@ class APISettings(CommonSettings):
         description="Default cache TTL in seconds",
     )
     redis_cache_ttl_dashboard: int = Field(
-        default=30,
-        description="Cache TTL for dashboard endpoints (seconds)",
+        default=300,
+        description=(
+            "Cache TTL in seconds for dashboard endpoints and per-route "
+            "health history (trend/aggregation data tolerates longer staleness)"
+        ),
+    )
+    redis_cache_ttl_route_detail: int = Field(
+        default=300,
+        description="Cache TTL for /routes/{id} detail endpoint (seconds)",
+    )
+
+    # HTTP Cache-Control headers
+    api_cache_control_enabled: bool = Field(
+        default=True,
+        description=(
+            "Emit HTTP Cache-Control headers on /api/v1/* responses and ETag / "
+            "If-None-Match handling on @cached endpoints. Disable to suppress "
+            "all client-side caching directives."
+        ),
     )
 
 

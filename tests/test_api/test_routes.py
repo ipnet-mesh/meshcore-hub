@@ -247,6 +247,86 @@ class TestGetRouteDetail:
         resp = client_no_auth.get("/api/v1/routes/nonexistent")
         assert resp.status_code == 404
 
+    def test_detail_response_is_cached(self, client_no_auth, api_db_session):
+        """Detail endpoint writes its response to the cache after a miss."""
+        import json
+        from unittest.mock import MagicMock
+
+        nodes = _sample_nodes(api_db_session, 2)
+        route = Route(from_label="Alpha", to_label="Beta")
+        api_db_session.add(route)
+        api_db_session.flush()
+        for pos, n in enumerate(nodes):
+            api_db_session.add(
+                RouteNode(
+                    route_id=route.id,
+                    node_id=n.id,
+                    position=pos,
+                    expected_hash=n.public_key[:2].upper(),
+                )
+            )
+        api_db_session.commit()
+
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+        client_no_auth.app.state.redis_cache = mock_cache
+        client_no_auth.app.state.redis_cache_ttl_route_detail = 90
+
+        resp = client_no_auth.get(f"/api/v1/routes/{route.id}")
+        assert resp.status_code == 200
+        assert resp.headers.get("x-cache") == "MISS"
+
+        mock_cache.set.assert_called_once()
+        cache_key, serialized, ttl = mock_cache.set.call_args[0]
+        assert cache_key.startswith(f"/api/v1/routes/{route.id}:")
+        assert "role=anonymous" in cache_key
+        assert ttl == 90
+        envelope = json.loads(serialized)
+        assert envelope["body"]["from_label"] == "Alpha"
+        assert isinstance(envelope["etag"], str)
+
+    def test_detail_serves_from_cache_on_hit(self, client_no_auth, api_db_session):
+        """A second call within the TTL window is served from the cache."""
+        nodes = _sample_nodes(api_db_session, 2)
+        route = Route(from_label="Alpha", to_label="Beta")
+        api_db_session.add(route)
+        api_db_session.flush()
+        for pos, n in enumerate(nodes):
+            api_db_session.add(
+                RouteNode(
+                    route_id=route.id,
+                    node_id=n.id,
+                    position=pos,
+                    expected_hash=n.public_key[:2].upper(),
+                )
+            )
+        api_db_session.commit()
+
+        store: dict[str, str] = {}
+
+        class _FakeCache:
+            def get(self, key):
+                return store.get(key)
+
+            def set(self, key, value, ttl):
+                store[key] = value
+
+            def ping(self):
+                return True
+
+        client_no_auth.app.state.redis_cache = _FakeCache()
+        client_no_auth.app.state.redis_cache_ttl_route_detail = 60
+
+        first = client_no_auth.get(f"/api/v1/routes/{route.id}")
+        assert first.status_code == 200
+        assert first.headers.get("x-cache") == "MISS"
+        first_body = first.json()
+
+        second = client_no_auth.get(f"/api/v1/routes/{route.id}")
+        assert second.status_code == 200
+        assert second.headers.get("x-cache") == "HIT"
+        assert second.json() == first_body
+
 
 class TestUpdateRoute:
     def test_update_from_to(self, client_no_auth, api_db_session):

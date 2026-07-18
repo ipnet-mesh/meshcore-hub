@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Optional
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -33,7 +33,7 @@ def handle_advertisement(
     event_type: str,
     payload: dict[str, Any],
     db: DatabaseManager,
-) -> None:
+) -> Optional[str]:
     """Handle an advertisement event.
 
     1. Upserts the node in the nodes table
@@ -45,11 +45,16 @@ def handle_advertisement(
         event_type: Event type name
         payload: Advertisement payload
         db: Database manager
+
+    Returns:
+        The ``event_hash`` of the underlying advertisement (used by the
+        subscriber to denormalize the identity onto the captured raw
+        packet), or ``None`` on early exit.
     """
     adv_public_key = payload.get("public_key")
     if not adv_public_key:
         logger.warning("Advertisement missing public_key")
-        return
+        return None
 
     name = payload.get("name")
     adv_type = payload.get("adv_type")
@@ -154,7 +159,7 @@ def handle_advertisement(
                         f"Added receiver {public_key[:12]}... to advertisement "
                         f"(hash={event_hash[:8]}...)"
                     )
-            return
+            return event_hash
 
         # Find or create advertised node
         node_query = select(Node).where(Node.public_key == adv_public_key)
@@ -237,8 +242,9 @@ def handle_advertisement(
                     path_len=path_len,
                     observed_at=now,
                 )
-            return
+            return event_hash
 
     logger.info(
         f"Stored advertisement from {name or adv_public_key[:12]!r} (type={adv_type})"
     )
+    return event_hash

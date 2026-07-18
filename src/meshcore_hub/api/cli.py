@@ -173,9 +173,25 @@ import click
 @click.option(
     "--redis-cache-ttl-dashboard",
     type=int,
-    default=30,
+    default=300,
     envvar="REDIS_CACHE_TTL_DASHBOARD",
     help="Cache TTL for dashboard endpoints (seconds)",
+)
+@click.option(
+    "--redis-cache-ttl-route-detail",
+    type=int,
+    default=300,
+    envvar="REDIS_CACHE_TTL_ROUTE_DETAIL",
+    help="Cache TTL for /routes/{id} detail endpoint (seconds)",
+)
+@click.option(
+    "--api-cache-control-enabled/--no-api-cache-control",
+    default=True,
+    envvar="API_CACHE_CONTROL_ENABLED",
+    help=(
+        "Emit HTTP Cache-Control headers on /api/v1/* responses and ETag / "
+        "If-None-Match handling on @cached endpoints"
+    ),
 )
 @click.option(
     "--reload",
@@ -223,6 +239,8 @@ def api(
     redis_key_prefix: str,
     redis_cache_ttl: int,
     redis_cache_ttl_dashboard: int,
+    redis_cache_ttl_route_detail: int,
+    api_cache_control_enabled: bool,
     reload: bool,
     workers: int,
 ) -> None:
@@ -280,8 +298,11 @@ def api(
         click.echo(f"Redis: {redis_host}:{redis_port}/{redis_db}")
         click.echo(f"Redis key prefix: {redis_key_prefix}")
         click.echo(
-            f"Redis cache TTL: {redis_cache_ttl}s (dashboard: {redis_cache_ttl_dashboard}s)"
+            f"Redis cache TTL: {redis_cache_ttl}s "
+            f"(dashboard: {redis_cache_ttl_dashboard}s, "
+            f"route detail: {redis_cache_ttl_route_detail}s)"
         )
+    click.echo(f"API Cache-Control enabled: {api_cache_control_enabled}")
     click.echo(f"Reload mode: {reload}")
     click.echo(f"Workers: {workers}")
     click.echo("=" * 50)
@@ -343,6 +364,8 @@ def api(
             redis_key_prefix=redis_key_prefix,
             redis_cache_ttl=redis_cache_ttl,
             redis_cache_ttl_dashboard=redis_cache_ttl_dashboard,
+            redis_cache_ttl_route_detail=redis_cache_ttl_route_detail,
+            api_cache_control_enabled=api_cache_control_enabled,
         )
 
         click.echo("\nStarting API server...")
