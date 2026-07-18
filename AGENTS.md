@@ -95,6 +95,8 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile core ex
 
 Every mutation handler (POST/PUT/DELETE) on a user/admin-mutable entity MUST call the matching `invalidate_*` helper from `meshcore_hub.api.cache_invalidation` after `session.commit()` succeeds, so the UI reflects the change on the next page load instead of waiting for the Redis TTL. The helper is a no-op when Redis is disabled and swallows backend errors, so it's always safe to call.
 
+The HTTP-layer cache policy on `/api/v1/*` GETs is `private, no-cache` (i.e. must-revalidate) precisely so this works: the browser always sends `If-None-Match` on navigation, the server answers 304 when Redis is warm and unchanged (cheap — no body) or 200 after an invalidation. Do NOT change this back to `max-age>0` — server-side cache invalidation cannot reach the browser's HTTP cache, so any freshness window would let stale responses survive a mutation until expiry.
+
 ```python
 from meshcore_hub.api.cache_invalidation import invalidate_channels
 

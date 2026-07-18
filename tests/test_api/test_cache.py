@@ -878,24 +878,32 @@ class TestCacheControlMiddleware:
         client_no_auth.app.state.redis_cache_ttl = 30
         response = client_no_auth.get("/api/v1/nodes")
         assert response.status_code == 200
-        assert response.headers["cache-control"] == "private, max-age=30"
+        # no-cache (must-revalidate) — see api/app.py middleware docstring.
+        # The Redis TTL still flows to cache.set(...); only HTTP max-age is
+        # dropped so server-side invalidation can reach the browser.
+        assert response.headers["cache-control"] == "private, no-cache"
         assert "etag" in response.headers
 
-    def test_cached_get_cache_control_uses_overridden_ttl(self, client_no_auth):
-        """Route detail endpoint should use the route-detail TTL (300s)."""
+    def test_cached_get_ttl_flows_to_redis_not_http(self, client_no_auth):
+        """Route detail endpoint's TTL must drive cache.set, not Cache-Control.
+
+        Regression: previously the per-endpoint TTL (e.g. 300s for
+        ``/routes/{id}``) was emitted as ``Cache-Control: max-age=300``,
+        which let the browser serve stale data for 5 min after a mutation.
+        The TTL now only bounds the Redis cache lifetime; HTTP-layer is
+        always ``private, no-cache`` so the browser revalidates and the
+        server-side invalidation wins.
+        """
         mock_cache = MagicMock()
         mock_cache.get.return_value = None
         client_no_auth.app.state.redis_cache = mock_cache
         client_no_auth.app.state.redis_cache_ttl = 30
         client_no_auth.app.state.redis_cache_ttl_route_detail = 300
-        # Need a route to exist; this is a happy-path check of the header value
-        # so we stub the cache and just hit the endpoint with a fake id. The
-        # endpoint will return 404 but still flow through the @cached decorator
-        # and the middleware.
+        # Hit the route detail endpoint with a fake id. The endpoint returns
+        # 404 but still flows through the @cached decorator; we only care
+        # that the TTL is NOT surfaced as an HTTP header.
         response = client_no_auth.get("/api/v1/routes/nonexistent-id")
-        # 404 is fine; we only care about the header applied by the decorator
-        # via request.state.cache_control_ttl.
-        assert response.headers.get("cache-control") == "private, max-age=300"
+        assert response.headers.get("cache-control") == "private, no-cache"
 
     def test_cached_get_304_on_matching_if_none_match(self, client_no_auth):
         mock_cache = MagicMock()
@@ -913,22 +921,20 @@ class TestCacheControlMiddleware:
         response = client_no_auth.get("/api/v1/nodes", headers={"If-None-Match": etag})
         assert response.status_code == 304
         assert response.headers["ETag"] == etag
-        assert response.headers["cache-control"] == "private, max-age=30"
+        assert response.headers["cache-control"] == "private, no-cache"
         assert response.headers["x-cache"] == "HIT"
         # 304 must not carry a body.
         assert response.content in (b"", b"null")
 
-    def test_uncached_get_emits_must_revalidate(self, client_no_auth, sample_node):
-        """Uncached GET detail endpoints get max-age=0, must-revalidate."""
+    def test_uncached_get_emits_no_cache(self, client_no_auth, sample_node):
+        """Uncached GET detail endpoints get the same no-cache policy."""
         # Force the @cached list endpoint to NOT be the target by hitting the
         # per-id endpoint, which is not cached.
         if hasattr(client_no_auth.app.state, "redis_cache"):
             del client_no_auth.app.state.redis_cache
         response = client_no_auth.get(f"/api/v1/nodes/{sample_node.public_key}")
         assert response.status_code == 200
-        assert (
-            response.headers["cache-control"] == "private, max-age=0, must-revalidate"
-        )
+        assert response.headers["cache-control"] == "private, no-cache"
 
     def test_post_emits_no_store(self, client_no_auth, api_db_session):
         """POST endpoints always get Cache-Control: no-store.
@@ -1647,3 +1653,128 @@ class TestMutationInvalidationIntegration:
             json={"enabled": False},
         )
         assert resp.status_code == 200
+
+
+class TestMutationVisibilityThroughHttpCache:
+    """Regression: stale browser HTTP cache after a mutation.
+
+    Scenario reported in the wild: user edits a Route, the routes list page
+    keeps showing old values for ~30s. Root cause was the API emitting
+    ``Cache-Control: private, max-age=30`` on ``@cached`` GETs, which lets
+    the browser serve its local copy without revalidating — so the
+    server-side invalidation never had a chance to fire.
+
+    The policy is now ``private, no-cache`` for all ``@cached`` GETs, which
+    forces the browser to send ``If-None-Match`` on every navigation. This
+    test models the full round trip: cache-fill, conditional 304, mutation
+    (invalidating Redis), then conditional 200 with the fresh body.
+    """
+
+    def test_routes_list_refresh_after_mutation(self, client_no_auth, api_db_session):
+        from meshcore_hub.common.models import Node, Route, RouteNode
+
+        # Seed a route the user will later edit.
+        nodes = [Node(public_key=f"{c:02x}" * 16, name=str(c)) for c in (1, 2)]
+        api_db_session.add_all(nodes)
+        api_db_session.flush()
+        route = Route(from_label="Origin", to_label="Dest")
+        api_db_session.add(route)
+        api_db_session.flush()
+        for pos, n in enumerate(nodes):
+            api_db_session.add(
+                RouteNode(
+                    route_id=route.id,
+                    node_id=n.id,
+                    position=pos,
+                    expected_hash=n.public_key[:2].upper(),
+                )
+            )
+        api_db_session.commit()
+
+        # Real in-memory cache so set/get/delete behave end-to-end. Keys
+        # store the envelope the @cached decorator writes.
+        store: dict[str, str] = {}
+
+        class _FakeCache:
+            def get(self, key):
+                return store.get(key)
+
+            def set(self, key, value, ttl):
+                store[key] = value
+
+            def delete(self, prefix):
+                # SCAN-style prefix glob, matching RedisCacheBackend.delete.
+                for k in list(store.keys()):
+                    if k.startswith(prefix):
+                        del store[k]
+
+            def ping(self):
+                return True
+
+        client_no_auth.app.state.redis_cache = _FakeCache()
+        client_no_auth.app.state.redis_cache_ttl = 30
+
+        # 1) Initial GET — populates cache and returns an ETag.
+        first = client_no_auth.get("/api/v1/routes", headers={"X-User-Roles": "admin"})
+        assert first.status_code == 200
+        assert first.headers["x-cache"] == "MISS"
+        assert first.headers["cache-control"] == "private, no-cache"
+        first_etag = first.headers["etag"]
+        first_body = first.json()
+        assert first_body["items"][0]["from_label"] == "Origin"
+
+        # 2) Immediate re-fetch with If-None-Match must 304 (cache HIT,
+        #    ETag matches). This is the cheap fast path the policy
+        #    preserves: browser revalidates, server answers 304, no body.
+        cond = client_no_auth.get(
+            "/api/v1/routes",
+            headers={"X-User-Roles": "admin", "If-None-Match": first_etag},
+        )
+        assert cond.status_code == 304
+        assert cond.headers["x-cache"] == "HIT"
+        assert cond.headers["cache-control"] == "private, no-cache"
+        assert cond.content in (b"", b"null")
+
+        # 3) Mutate the route. The handler calls invalidate_routes(request),
+        #    which must drop the cached entry so the next GET is a MISS.
+        mut = client_no_auth.put(
+            f"/api/v1/routes/{route.id}",
+            json={"from_label": "NewOrigin", "to_label": "NewDest"},
+            headers={"X-User-Roles": "admin"},
+        )
+        assert mut.status_code == 200
+        # Mutations are always no-store.
+        assert mut.headers["cache-control"] == "no-store"
+
+        # 4) Browser navigates again, sending the stale If-None-Match from
+        #    step 1. The server MUST NOT 304 here: Redis was invalidated,
+        #    so the handler re-runs, produces a new ETag, and returns 200
+        #    with the fresh body. This is exactly the bug the user hit —
+        #    under the old max-age=30 policy the browser never sent this
+        #    request at all.
+        after = client_no_auth.get(
+            "/api/v1/routes",
+            headers={"X-User-Roles": "admin", "If-None-Match": first_etag},
+        )
+        assert after.status_code == 200
+        assert after.headers["x-cache"] == "MISS"
+        assert after.headers["etag"] != first_etag
+        assert after.json()["items"][0]["from_label"] == "NewOrigin"
+
+    def test_cached_gets_always_emit_no_cache_regardless_of_ttl(self, client_no_auth):
+        """Even a 300s dashboard TTL must not surface as max-age=300.
+
+        The dashboard endpoints have ``redis_cache_ttl_dashboard=300``, but
+        that bound applies only to the Redis cache. The HTTP policy is
+        always ``private, no-cache`` so server-side invalidation can reach
+        the browser after any mutation.
+        """
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+        client_no_auth.app.state.redis_cache = mock_cache
+        client_no_auth.app.state.redis_cache_ttl = 30
+        client_no_auth.app.state.redis_cache_ttl_dashboard = 300
+
+        resp = client_no_auth.get("/api/v1/dashboard/activity")
+        assert resp.status_code == 200
+        assert resp.headers["cache-control"] == "private, no-cache"

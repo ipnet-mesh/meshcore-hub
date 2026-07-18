@@ -182,9 +182,8 @@ def create_app(
 
         Buckets (only when ``app.state.api_cache_control_enabled`` is True):
           * ``@cached`` endpoints (``request.state.cache_control_ttl`` set by
-            the decorator): ``private, max-age=<ttl>`` + ``ETag`` echoed back.
-          * Uncached GETs under ``/api/v1``: ``private, max-age=0,
-            must-revalidate`` so browsers revalidate but may store.
+            the decorator): ``private, no-cache`` + ``ETag`` echoed back.
+          * Other GETs under ``/api/v1``: ``private, no-cache`` as well.
           * Mutating methods (POST/PUT/DELETE/PATCH): ``no-store``.
           * ``/health*`` endpoints: ``no-store``.
 
@@ -192,6 +191,18 @@ def create_app(
         role-aware — their response shape/redaction varies by trusted-proxy
         ``X-User-Id`` / ``X-User-Roles`` headers, so shared/CDN caches must
         never store them.
+
+        ``no-cache`` (i.e. ``max-age=0, must-revalidate``) is used uniformly
+        for GETs under ``/api/`` rather than ``max-age=<ttl>`` because the
+        server-side cache invalidation in ``api.cache_invalidation`` cannot
+        reach the browser's HTTP cache. Any ``max-age>0`` would let the
+        browser reuse a stale response after a mutation until the freshness
+        window expires. ``no-cache`` forces a conditional request
+        (``If-None-Match``) on every navigation, so the server can answer
+        304 when nothing changed (cheap — no body) or 200 after a mutation.
+        The Redis cache layer (TTL-bounded by ``cache_control_ttl``) still
+        shields the database; only the browser's local reuse window goes
+        away.
         """
         response = await call_next(request)
 
@@ -224,13 +235,11 @@ def create_app(
         elif path.startswith("/health"):
             response.headers["Cache-Control"] = "no-store"
         elif path.startswith("/api/"):
-            ttl = getattr(request.state, "cache_control_ttl", 0)
-            if isinstance(ttl, int) and ttl > 0:
-                response.headers["Cache-Control"] = f"private, max-age={ttl}"
-            else:
-                response.headers["Cache-Control"] = (
-                    "private, max-age=0, must-revalidate"
-                )
+            # Force revalidation: server-side cache invalidation can't reach
+            # the browser's HTTP cache, so any max-age>0 would serve stale
+            # data after a mutation. ETag/If-None-Match still gives us cheap
+            # 304s on the hot path; the Redis cache layer still protects DB.
+            response.headers["Cache-Control"] = "private, no-cache"
 
         return response
 
