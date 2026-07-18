@@ -1778,3 +1778,177 @@ class TestMutationVisibilityThroughHttpCache:
         resp = client_no_auth.get("/api/v1/dashboard/activity")
         assert resp.status_code == 200
         assert resp.headers["cache-control"] == "private, no-cache"
+
+
+class TestInvalidationLogging:
+    """Diagnostic logging for cache invalidation.
+
+    These tests pin down the log lines that operators grep for when
+    diagnosing whether mutation handlers actually fire invalidation and
+    whether Redis SCAN matches stored keys. The shape of the log output
+    is part of the contract — changing it breaks log dashboards and the
+    diagnostic runbook.
+    """
+
+    def test_drop_logs_start_and_ok_on_success(self, caplog):
+        from meshcore_hub.api.cache_invalidation import invalidate_routes
+
+        cache = MagicMock()
+        cache.__class__.__name__ = "RedisCacheBackend"
+        request = _make_request_with_cache(cache)
+
+        with caplog.at_level("INFO", logger="meshcore_hub.api.cache_invalidation"):
+            invalidate_routes(request)
+
+        messages = [r.message for r in caplog.records]
+        assert any(
+            "Cache invalidate start" in m
+            and "prefix=/api/v1/routes" in m
+            and "backend=RedisCacheBackend" in m
+            for m in messages
+        ), f"start line missing or malformed: {messages}"
+        assert any(
+            "Cache invalidate ok" in m and "prefix=/api/v1/routes" in m
+            for m in messages
+        ), f"ok line missing or malformed: {messages}"
+
+    def test_drop_logs_warning_on_backend_error(self, caplog):
+        from meshcore_hub.api.cache_invalidation import invalidate_channels
+
+        cache = MagicMock()
+        cache.delete.side_effect = Exception("redis down")
+        request = _make_request_with_cache(cache)
+
+        with caplog.at_level("WARNING", logger="meshcore_hub.api.cache_invalidation"):
+            invalidate_channels(request)
+
+        # Must not raise; warning must carry prefix + error text.
+        assert any(
+            "Cache invalidate error" in r.message
+            and "prefix=/api/v1/channels" in r.message
+            and "redis down" in r.message
+            for r in caplog.records
+        ), [r.message for r in caplog.records]
+
+    def test_drop_logs_skipped_when_no_backend(self, caplog):
+        from meshcore_hub.api.cache_invalidation import invalidate_nodes
+
+        # No redis_cache attribute on app.state.
+        request = _make_request_with_cache(cache=None)
+
+        with caplog.at_level("DEBUG", logger="meshcore_hub.api.cache_invalidation"):
+            invalidate_nodes(request)
+
+        assert any(
+            "Cache invalidate skipped" in r.message and "prefix=nodes" in r.message
+            for r in caplog.records
+        ), [r.message for r in caplog.records]
+
+    def test_drop_logs_backend_name_distinguishes_nullcache(self, caplog):
+        """If NullCache is wired in, the start log must say so.
+
+        Catches the 'REDIS_ENABLED is actually false in production' case
+        in one log line.
+        """
+        from meshcore_hub.api.cache_invalidation import invalidate_routes
+
+        null_cache = NullCache()
+        request = _make_request_with_cache(null_cache)
+
+        with caplog.at_level("INFO", logger="meshcore_hub.api.cache_invalidation"):
+            invalidate_routes(request)
+
+        messages = [r.message for r in caplog.records]
+        assert any(
+            "backend=NullCache" in m and "prefix=/api/v1/routes" in m for m in messages
+        ), f"expected backend=NullCache in start log, got: {messages}"
+
+    def test_redis_delete_logs_keys_deleted_count(self, caplog):
+        with patch("redis.Redis") as mock_redis_cls:
+            mock_client = MagicMock()
+            mock_redis_cls.return_value = mock_client
+            mock_client.scan.return_value = (0, [b"hub:nodes:1", b"hub:nodes:2"])
+
+            backend = RedisCacheBackend(key_prefix="hub")
+            with caplog.at_level("INFO", logger="meshcore_hub.common.redis"):
+                backend.delete("nodes")
+
+        # One INFO line with prefix, full_prefix, and keys_deleted=2.
+        info_records = [r for r in caplog.records if r.levelname == "INFO"]
+        assert len(info_records) == 1, [r.message for r in caplog.records]
+        msg = info_records[0].message
+        assert "Redis cache delete" in msg
+        assert "prefix=nodes" in msg
+        assert "full_prefix=hub:nodes" in msg
+        assert "keys_deleted=2" in msg
+        assert "scan_iterations=1" in msg
+
+    def test_redis_delete_logs_zero_keys_on_empty_scan(self, caplog):
+        """The smoking-gun signal for the production bug.
+
+        If invalidation fires but SCAN matches nothing, ``keys_deleted=0``
+        appears in the log. That points directly at a cache-key mismatch
+        between the store path (key_builder) and the delete path (prefix).
+        """
+        with patch("redis.Redis") as mock_redis_cls:
+            mock_client = MagicMock()
+            mock_redis_cls.return_value = mock_client
+            mock_client.scan.return_value = (0, [])
+
+            backend = RedisCacheBackend(key_prefix="hub")
+            with caplog.at_level("INFO", logger="meshcore_hub.common.redis"):
+                backend.delete("/api/v1/routes")
+
+        info_records = [r for r in caplog.records if r.levelname == "INFO"]
+        assert len(info_records) == 1
+        msg = info_records[0].message
+        assert "keys_deleted=0" in msg
+        assert "prefix=/api/v1/routes" in msg
+        assert "full_prefix=hub:/api/v1/routes" in msg
+
+    def test_redis_delete_warning_includes_full_prefix(self, caplog):
+        with patch("redis.Redis") as mock_redis_cls:
+            mock_client = MagicMock()
+            mock_redis_cls.return_value = mock_client
+            mock_client.scan.side_effect = Exception("scan timeout")
+
+            backend = RedisCacheBackend(key_prefix="hub")
+            with caplog.at_level("WARNING", logger="meshcore_hub.common.redis"):
+                backend.delete("nodes")
+
+        warning_records = [r for r in caplog.records if r.levelname == "WARNING"]
+        assert len(warning_records) == 1
+        msg = warning_records[0].message
+        assert "Redis DELETE error" in msg
+        assert "prefix=nodes" in msg
+        assert "full_prefix=hub:nodes" in msg
+        assert "scan timeout" in msg
+
+    def test_redis_delete_multi_page_scan_logs_total_keys(self, caplog):
+        """Multi-page SCAN must accumulate keys_deleted across iterations."""
+        with patch("redis.Redis") as mock_redis_cls:
+            mock_client = MagicMock()
+            mock_redis_cls.return_value = mock_client
+            mock_client.scan.side_effect = [
+                (42, [b"hub:nodes:1", b"hub:nodes:2"]),
+                (0, [b"hub:nodes:3"]),
+            ]
+
+            backend = RedisCacheBackend(key_prefix="hub")
+            with caplog.at_level("INFO", logger="meshcore_hub.common.redis"):
+                backend.delete("nodes")
+
+        info_records = [r for r in caplog.records if r.levelname == "INFO"]
+        assert len(info_records) == 1
+        msg = info_records[0].message
+        assert "keys_deleted=3" in msg
+        assert "scan_iterations=2" in msg
+
+    def test_nullcache_delete_emits_debug_log(self, caplog):
+        cache = NullCache()
+        with caplog.at_level("DEBUG", logger="meshcore_hub.common.redis"):
+            cache.delete("nodes")
+        assert any(
+            "NullCache delete" in r.message and "prefix=nodes" in r.message
+            for r in caplog.records
+        ), [r.message for r in caplog.records]

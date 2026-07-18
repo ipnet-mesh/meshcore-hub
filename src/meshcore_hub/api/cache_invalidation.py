@@ -47,14 +47,35 @@ def _cache(request: Request) -> Optional[CacheBackend]:
 
 
 def _drop(request: Request, prefix: str) -> None:
-    """Best-effort ``delete(prefix)``; never raises."""
+    """Best-effort ``delete(prefix)``; never raises.
+
+    Emits structured log lines so production traces can confirm a mutation
+    handler actually fired invalidation and see how many Redis keys were
+    deleted. The ``backend=`` field distinguishes ``RedisCacheBackend``
+    (real Redis) from ``NullCache`` (Redis disabled) in one glance — useful
+    when ``REDIS_ENABLED`` is misconfigured.
+    """
     cache = _cache(request)
     if cache is None:
+        logger.debug(
+            "Cache invalidate skipped (no backend on app.state): prefix=%s",
+            prefix,
+        )
         return
+    logger.info(
+        "Cache invalidate start: prefix=%s backend=%s",
+        prefix,
+        type(cache).__name__,
+    )
     try:
         cache.delete(prefix)
+        logger.info("Cache invalidate ok: prefix=%s", prefix)
     except Exception as e:
-        logger.warning("Cache invalidation error for prefix %s: %s", prefix, e)
+        logger.warning(
+            "Cache invalidate error: prefix=%s error=%s",
+            prefix,
+            e,
+        )
 
 
 def invalidate_channels(request: Request) -> None:

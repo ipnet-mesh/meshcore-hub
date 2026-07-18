@@ -32,7 +32,9 @@ class NullCache(CacheBackend):
         pass
 
     def delete(self, prefix: str) -> None:
-        pass
+        # Logged so production traces can distinguish "Redis disabled" from
+        # "Redis enabled but matched no keys" when diagnosing invalidation.
+        logger.debug("NullCache delete: prefix=%s", prefix)
 
     def ping(self) -> bool:
         return False
@@ -84,19 +86,40 @@ class RedisCacheBackend(CacheBackend):
             logger.warning("Redis SET error for %s: %s", key, e)
 
     def delete(self, prefix: str) -> None:
+        # Diagnostic logging: emit one INFO line per call with the prefix,
+        # full prefix (incl. key_prefix), total keys deleted, and SCAN
+        # iterations. ``keys_deleted=0`` after a mutation that should have
+        # invalidated entries is the smoking gun for a cache-key mismatch
+        # between the store path (key_builder) and the delete path (prefix).
+        full_prefix = self._full_key(prefix)
+        total_deleted = 0
+        iterations = 0
         try:
-            full_prefix = self._full_key(prefix)
             cursor = 0
             while True:
                 cursor, keys = self._client.scan(
                     cursor, match=f"{full_prefix}*", count=100
                 )
+                iterations += 1
                 if keys:
                     self._client.delete(*keys)
+                    total_deleted += len(keys)
                 if cursor == 0:
                     break
+            logger.info(
+                "Redis cache delete: prefix=%s full_prefix=%s keys_deleted=%d scan_iterations=%d",
+                prefix,
+                full_prefix,
+                total_deleted,
+                iterations,
+            )
         except Exception as e:
-            logger.warning("Redis DELETE error for prefix %s: %s", prefix, e)
+            logger.warning(
+                "Redis DELETE error: prefix=%s full_prefix=%s error=%s",
+                prefix,
+                full_prefix,
+                e,
+            )
 
     def ping(self) -> bool:
         try:
