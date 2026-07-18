@@ -16,9 +16,11 @@ from meshcore_hub.api.channel_visibility import (
 from meshcore_hub.api.dependencies import DbSession
 from meshcore_hub.collector.routes import (
     derive_expected_hash,
+    evaluate_route,
     evaluate_route_history,
     preview_route,
     recent_matches,
+    upsert_route_result,
 )
 from meshcore_hub.common.config import get_collector_settings
 from meshcore_hub.common.models.node import Node
@@ -143,6 +145,28 @@ def _sync_observers(
         session.add(RouteObserver(route_id=route.id, node_id=node.id))
 
 
+def _reevaluate_route(session: DbSession, route: Route) -> None:
+    """Synchronously evaluate *route* and persist the fresh ``RouteResult``.
+
+    The background evaluator (collector.route_evaluator) writes
+    ``RouteResult`` on a schedule (default 60s). Without this synchronous
+    re-eval, the route's ``packet_count_threshold`` / ``clear_threshold``
+    changes take up to that interval to surface in the UI — the list card
+    displays ``route_result.threshold`` / ``effective_clear``, not the
+    route's just-updated direct fields, so it shows the stale snapshot
+    until the next evaluator cycle. Running the eval inline on every
+    create/update keeps the post-mutation GET consistent with the new
+    config at the cost of one bounded DB scan per write.
+    """
+    if not route.enabled:
+        return
+    since = datetime.now(timezone.utc) - timedelta(hours=route.window_hours)
+    state, quality, matched_count = evaluate_route(session, route, since)
+    upsert_route_result(session, route, state, quality, matched_count)
+    session.commit()
+    session.refresh(route)
+
+
 @router.get("", response_model=RouteList)
 @cached("routes", key_builder=_routes_key_builder)
 def list_routes(
@@ -212,6 +236,7 @@ def create_route(
     _sync_observers(session, route, observer_nodes)
     session.commit()
     session.refresh(route)
+    _reevaluate_route(session, route)
     invalidate_routes(request)
     return _route_to_read(route)
 
@@ -383,6 +408,7 @@ def update_route(
 
     session.commit()
     session.refresh(route)
+    _reevaluate_route(session, route)
     invalidate_routes(request)
     return _route_to_read(route)
 
