@@ -91,6 +91,37 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile core ex
 
 ## Conventions
 
+### Cache invalidation on writes
+
+Every mutation handler (POST/PUT/DELETE) on a user/admin-mutable entity MUST call the matching `invalidate_*` helper from `meshcore_hub.api.cache_invalidation` after `session.commit()` succeeds, so the UI reflects the change on the next page load instead of waiting for the Redis TTL. The helper is a no-op when Redis is disabled and swallows backend errors, so it's always safe to call.
+
+The HTTP-layer cache policy on `/api/v1/*` GETs is `private, no-cache` (i.e. must-revalidate) precisely so this works: the browser always sends `If-None-Match` on navigation, the server answers 304 when Redis is warm and unchanged (cheap — no body) or 200 after an invalidation. Do NOT change this back to `max-age>0` — server-side cache invalidation cannot reach the browser's HTTP cache, so any freshness window would let stale responses survive a mutation until expiry.
+
+```python
+from meshcore_hub.api.cache_invalidation import invalidate_channels
+
+@router.put("/{channel_id}")
+def update_channel(__: RequireAdmin, session: DbSession, channel_id: str,
+                   body: ChannelUpdate, request: Request) -> ChannelRead:
+    # ... mutate ...
+    session.commit()
+    session.refresh(channel)
+    invalidate_channels(request)   # after commit, before return
+    return _channel_to_read(channel)
+```
+
+Mapping (see `api/cache_invalidation.py` for the canonical prefix knowledge):
+
+| Mutation | Helper(s) |
+|---|---|
+| `POST/PUT/DELETE /channels` | `invalidate_channels` |
+| `POST/PUT/DELETE /routes` | `invalidate_routes` (covers list, detail, history) |
+| `PUT /user/profile/{id}` | `invalidate_profiles` + `invalidate_dashboard` |
+| `POST/PUT/DELETE /nodes/{pk}/tags` | `invalidate_nodes` + `invalidate_messages` + `invalidate_advertisements` + `invalidate_dashboard` (tags drive names/filters across these) |
+| `POST/DELETE /adoptions` | `invalidate_nodes` + `invalidate_profiles` + `invalidate_advertisements` + `invalidate_dashboard` (`adopted_by` embedded across these) |
+
+When adding a new `@cached` read endpoint, decide whether its key namespace belongs in an existing invalidate helper, and add a test in `tests/test_api/test_cache.py::TestMutationInvalidationIntegration`. Cache keys split across two formats (endpoint-name keys like `nodes:` vs URL-path keys like `/api/v1/channels:`) — the helper module encapsulates that, don't hand-roll prefixes.
+
 ```python
 # Imports: stdlib, third-party, local
 import os

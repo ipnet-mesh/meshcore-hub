@@ -384,6 +384,124 @@ class TestUpdateRoute:
         public_keys = [rn["public_key"] for rn in data["route_nodes"]]
         assert new_node.public_key in public_keys
 
+    def test_update_threshold_immediately_reflects_in_route_result(
+        self, client_no_auth, api_db_session
+    ):
+        """Regression: PUT-changed threshold must surface in route_result now.
+
+        Before this fix, ``route_result`` (written by a background
+        evaluator on a 30-60s schedule) kept the OLD threshold until the
+        next evaluator cycle. The routes list card displays
+        ``route_result.threshold`` / ``effective_clear``, so the UI showed
+        stale values for ~30s after a PUT even though the server returned
+        ``x-cache: MISS`` with the route's direct fields updated. The
+        PUT handler now runs ``_reevaluate_route`` synchronously after
+        commit so the very next GET sees a fresh ``route_result``.
+        """
+        from meshcore_hub.common.models.route_result import RouteResult
+
+        nodes = _sample_nodes(api_db_session, 2)
+        route = Route(
+            from_label="Sync",
+            to_label="Eval",
+            packet_count_threshold=6,
+            clear_threshold=12,
+            enabled=True,
+        )
+        api_db_session.add(route)
+        api_db_session.flush()
+        for pos, n in enumerate(nodes):
+            api_db_session.add(
+                RouteNode(
+                    route_id=route.id,
+                    node_id=n.id,
+                    position=pos,
+                    expected_hash=n.public_key[:2].upper(),
+                )
+            )
+        # Seed a stale RouteResult snapshot from a hypothetical prior
+        # evaluator run using the OLD config (threshold=6, clear=12).
+        # Without synchronous re-eval, this is what the PUT response
+        # would continue to return until the next background sweep.
+        api_db_session.add(
+            RouteResult(
+                route_id=route.id,
+                state="healthy",
+                quality="clear",
+                matched_count=24,
+                threshold=6,
+                effective_clear=12,
+                evaluated_at=datetime.now(timezone.utc),
+            )
+        )
+        api_db_session.commit()
+
+        resp = client_no_auth.put(
+            f"/api/v1/routes/{route.id}",
+            json={"packet_count_threshold": 3, "clear_threshold": 6},
+            headers={"X-User-Roles": "admin"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        # The route's direct fields reflect the new config...
+        assert data["packet_count_threshold"] == 3
+        assert data["clear_threshold"] == 6
+        # ...AND route_result must reflect them too, not the stale
+        # snapshot from the seeded prior evaluation.
+        assert data["route_result"] is not None
+        assert (
+            data["route_result"]["threshold"] == 3
+        ), "route_result.threshold should reflect the new packet_count_threshold"
+        assert (
+            data["route_result"]["effective_clear"] == 6
+        ), "route_result.effective_clear should reflect the new clear_threshold"
+
+    def test_disabled_route_does_not_trigger_evaluation(
+        self, client_no_auth, api_db_session, monkeypatch
+    ):
+        """Disabled routes short-circuit ``_reevaluate_route`` (no point
+        evaluating a route that won't be displayed as active). Guards
+        against unnecessary DB scans on bulk config changes."""
+        from meshcore_hub.api.routes import routes as routes_module
+
+        called = {"count": 0}
+
+        def _spy_evaluate(*args, **kwargs):
+            called["count"] += 1
+            return ("healthy", "clear", 0)
+
+        monkeypatch.setattr(routes_module, "evaluate_route", _spy_evaluate)
+
+        nodes = _sample_nodes(api_db_session, 2)
+        route = Route(
+            from_label="Off",
+            to_label="Line",
+            packet_count_threshold=3,
+            enabled=False,
+        )
+        api_db_session.add(route)
+        api_db_session.flush()
+        for pos, n in enumerate(nodes):
+            api_db_session.add(
+                RouteNode(
+                    route_id=route.id,
+                    node_id=n.id,
+                    position=pos,
+                    expected_hash=n.public_key[:2].upper(),
+                )
+            )
+        api_db_session.commit()
+
+        resp = client_no_auth.put(
+            f"/api/v1/routes/{route.id}",
+            json={"description": "still off"},
+            headers={"X-User-Roles": "admin"},
+        )
+        assert resp.status_code == 200
+        assert (
+            called["count"] == 0
+        ), "evaluate_route must not be called for disabled routes"
+
 
 class TestDeleteRoute:
     def test_delete_success(self, client_no_auth, api_db_session):

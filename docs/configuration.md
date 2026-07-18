@@ -77,13 +77,13 @@ Responses fall into three buckets:
 
 | Bucket | Endpoints | `Cache-Control` | `ETag` |
 | --- | --- | --- | --- |
-| `@cached` GETs | All Redis-cached endpoints (`/nodes`, `/routes`, `/routes/{id}`, `/dashboard/*`, `/packets`, `/packet-groups`, `/messages`, `/advertisements`, `/channels`, `/user/profiles`) | `private, max-age=<redis_ttl>` | Strong SHA-256 hash of the body; `If-None-Match` returns `304 Not Modified` |
-| Other GETs | Per-id detail endpoints (`/nodes/{key}`, `/packets/{id}`, `/messages/{id}`, `/user/profile/{id}`, `/trace-paths`, `/telemetry`, etc.) | `private, max-age=0, must-revalidate` | _(none)_ |
+| `@cached` GETs | All Redis-cached endpoints (`/nodes`, `/routes`, `/routes/{id}`, `/dashboard/*`, `/packets`, `/packet-groups`, `/messages`, `/advertisements`, `/channels`, `/user/profiles`) | `private, no-cache` | Strong SHA-256 hash of the body; `If-None-Match` returns `304 Not Modified` |
+| Other GETs | Per-id detail endpoints (`/nodes/{key}`, `/packets/{id}`, `/messages/{id}`, `/user/profile/{id}`, `/trace-paths`, `/telemetry`, etc.) | `private, no-cache` | _(none)_ |
 | Mutating + health | `POST`/`PUT`/`DELETE` + `/health*` | `no-store` | _(none)_ |
 
 All API responses use `private` because several `@cached` endpoints are role-aware — their response shape/redaction varies by trusted-proxy `X-User-Id` / `X-User-Roles` headers, so shared/CDN caches must never store them. Browser caches key by URL + request headers and so remain correct.
 
-Client `max-age` matches the configured Redis TTL for the endpoint (e.g. 300 s on `/routes/{id}`, 30 s on `/dashboard/*`). The `X-Cache: HIT|MISS` observability header continues to be emitted regardless of this setting.
+The `no-cache` policy (synonymous with `max-age=0, must-revalidate`) forces the browser to revalidate via `If-None-Match` on every navigation. This is required because the server-side cache invalidation fired by mutation handlers cannot reach the browser's HTTP cache — any `max-age>0` window would let stale responses survive a mutation until expiry. The Redis cache layer (TTL-bounded per endpoint — 30 s default, 300 s on `/routes/{id}` and `/dashboard/*`) still shields the database; only the browser's local reuse window goes away. Most revalidations answer `304 Not Modified` (no body), so the cost is one cheap round-trip per navigation. The `X-Cache: HIT|MISS` observability header continues to be emitted regardless of this setting.
 
 ## Collector
 

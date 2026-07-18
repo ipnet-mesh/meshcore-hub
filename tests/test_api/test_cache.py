@@ -878,24 +878,32 @@ class TestCacheControlMiddleware:
         client_no_auth.app.state.redis_cache_ttl = 30
         response = client_no_auth.get("/api/v1/nodes")
         assert response.status_code == 200
-        assert response.headers["cache-control"] == "private, max-age=30"
+        # no-cache (must-revalidate) — see api/app.py middleware docstring.
+        # The Redis TTL still flows to cache.set(...); only HTTP max-age is
+        # dropped so server-side invalidation can reach the browser.
+        assert response.headers["cache-control"] == "private, no-cache"
         assert "etag" in response.headers
 
-    def test_cached_get_cache_control_uses_overridden_ttl(self, client_no_auth):
-        """Route detail endpoint should use the route-detail TTL (300s)."""
+    def test_cached_get_ttl_flows_to_redis_not_http(self, client_no_auth):
+        """Route detail endpoint's TTL must drive cache.set, not Cache-Control.
+
+        Regression: previously the per-endpoint TTL (e.g. 300s for
+        ``/routes/{id}``) was emitted as ``Cache-Control: max-age=300``,
+        which let the browser serve stale data for 5 min after a mutation.
+        The TTL now only bounds the Redis cache lifetime; HTTP-layer is
+        always ``private, no-cache`` so the browser revalidates and the
+        server-side invalidation wins.
+        """
         mock_cache = MagicMock()
         mock_cache.get.return_value = None
         client_no_auth.app.state.redis_cache = mock_cache
         client_no_auth.app.state.redis_cache_ttl = 30
         client_no_auth.app.state.redis_cache_ttl_route_detail = 300
-        # Need a route to exist; this is a happy-path check of the header value
-        # so we stub the cache and just hit the endpoint with a fake id. The
-        # endpoint will return 404 but still flow through the @cached decorator
-        # and the middleware.
+        # Hit the route detail endpoint with a fake id. The endpoint returns
+        # 404 but still flows through the @cached decorator; we only care
+        # that the TTL is NOT surfaced as an HTTP header.
         response = client_no_auth.get("/api/v1/routes/nonexistent-id")
-        # 404 is fine; we only care about the header applied by the decorator
-        # via request.state.cache_control_ttl.
-        assert response.headers.get("cache-control") == "private, max-age=300"
+        assert response.headers.get("cache-control") == "private, no-cache"
 
     def test_cached_get_304_on_matching_if_none_match(self, client_no_auth):
         mock_cache = MagicMock()
@@ -913,22 +921,20 @@ class TestCacheControlMiddleware:
         response = client_no_auth.get("/api/v1/nodes", headers={"If-None-Match": etag})
         assert response.status_code == 304
         assert response.headers["ETag"] == etag
-        assert response.headers["cache-control"] == "private, max-age=30"
+        assert response.headers["cache-control"] == "private, no-cache"
         assert response.headers["x-cache"] == "HIT"
         # 304 must not carry a body.
         assert response.content in (b"", b"null")
 
-    def test_uncached_get_emits_must_revalidate(self, client_no_auth, sample_node):
-        """Uncached GET detail endpoints get max-age=0, must-revalidate."""
+    def test_uncached_get_emits_no_cache(self, client_no_auth, sample_node):
+        """Uncached GET detail endpoints get the same no-cache policy."""
         # Force the @cached list endpoint to NOT be the target by hitting the
         # per-id endpoint, which is not cached.
         if hasattr(client_no_auth.app.state, "redis_cache"):
             del client_no_auth.app.state.redis_cache
         response = client_no_auth.get(f"/api/v1/nodes/{sample_node.public_key}")
         assert response.status_code == 200
-        assert (
-            response.headers["cache-control"] == "private, max-age=0, must-revalidate"
-        )
+        assert response.headers["cache-control"] == "private, no-cache"
 
     def test_post_emits_no_store(self, client_no_auth, api_db_session):
         """POST endpoints always get Cache-Control: no-store.
@@ -1330,3 +1336,619 @@ class TestKeyBuilders:
             key = _messages_key_builder(request)
             assert "role=admin" in key
             assert "limit=10" in key
+
+
+def _make_request_with_cache(cache):
+    """Build a Request whose ``app.state.redis_cache`` is *cache* (or absent)."""
+    app = FastAPI()
+    if cache is not None:
+        app.state.redis_cache = cache
+    return Request(
+        scope={"type": "http", "query_string": b"", "headers": [], "app": app}
+    )
+
+
+class TestCacheInvalidationHelpers:
+    """Unit tests for ``meshcore_hub.api.cache_invalidation`` helpers."""
+
+    def test_invalidate_channels_drops_url_path_prefix(self):
+        from meshcore_hub.api.cache_invalidation import invalidate_channels
+
+        cache = MagicMock()
+        invalidate_channels(_make_request_with_cache(cache))
+        cache.delete.assert_called_once_with("/api/v1/channels")
+
+    def test_invalidate_routes_drops_url_path_prefix(self):
+        from meshcore_hub.api.cache_invalidation import invalidate_routes
+
+        cache = MagicMock()
+        invalidate_routes(_make_request_with_cache(cache))
+        # Single prefix covers /routes, /routes/{id}, /routes/{id}/history
+        cache.delete.assert_called_once_with("/api/v1/routes")
+
+    def test_invalidate_nodes_drops_endpoint_name_prefix(self):
+        from meshcore_hub.api.cache_invalidation import invalidate_nodes
+
+        cache = MagicMock()
+        invalidate_nodes(_make_request_with_cache(cache))
+        cache.delete.assert_called_once_with("nodes")
+
+    def test_invalidate_profiles_drops_endpoint_name_prefix(self):
+        from meshcore_hub.api.cache_invalidation import invalidate_profiles
+
+        cache = MagicMock()
+        invalidate_profiles(_make_request_with_cache(cache))
+        cache.delete.assert_called_once_with("profiles")
+
+    def test_invalidate_messages_drops_url_path_prefix(self):
+        from meshcore_hub.api.cache_invalidation import invalidate_messages
+
+        cache = MagicMock()
+        invalidate_messages(_make_request_with_cache(cache))
+        cache.delete.assert_called_once_with("/api/v1/messages")
+
+    def test_invalidate_advertisements_drops_endpoint_name_prefix(self):
+        from meshcore_hub.api.cache_invalidation import invalidate_advertisements
+
+        cache = MagicMock()
+        invalidate_advertisements(_make_request_with_cache(cache))
+        cache.delete.assert_called_once_with("advertisements")
+
+    def test_invalidate_dashboard_drops_both_prefix_formats(self):
+        from meshcore_hub.api.cache_invalidation import invalidate_dashboard
+
+        cache = MagicMock()
+        invalidate_dashboard(_make_request_with_cache(cache))
+        # Dashboard endpoints split between endpoint-name keys and URL-path keys
+        cache.delete.assert_any_call("dashboard")
+        cache.delete.assert_any_call("/api/v1/dashboard")
+        assert cache.delete.call_count == 2
+
+    def test_helpers_are_noop_when_cache_missing(self):
+        # No redis_cache attribute on state — must not raise.
+        from meshcore_hub.api import cache_invalidation as inv
+
+        request = _make_request_with_cache(cache=None)
+        inv.invalidate_channels(request)
+        inv.invalidate_routes(request)
+        inv.invalidate_nodes(request)
+        inv.invalidate_profiles(request)
+        inv.invalidate_messages(request)
+        inv.invalidate_advertisements(request)
+        inv.invalidate_dashboard(request)
+
+    def test_helpers_swallow_backend_errors(self):
+        from meshcore_hub.api import cache_invalidation as inv
+
+        cache = MagicMock()
+        cache.delete.side_effect = Exception("redis down")
+        request = _make_request_with_cache(cache)
+        # Must not raise.
+        inv.invalidate_channels(request)
+        inv.invalidate_dashboard(request)
+
+
+class TestMutationInvalidationIntegration:
+    """End-to-end: mutation handlers must drop the expected cache prefixes."""
+
+    def _install_mock_cache(self, client) -> MagicMock:
+        """Attach a mock cache that always misses; return it for assertions."""
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+        client.app.state.redis_cache = mock_cache
+        client.app.state.redis_cache_ttl = 30
+        client.app.state.redis_cache_ttl_dashboard = 300
+        client.app.state.redis_cache_ttl_route_detail = 300
+        return mock_cache
+
+    # --- Channels ---------------------------------------------------------
+
+    def test_create_channel_invalidates_channels(self, client_no_auth, api_db_session):
+        mock_cache = self._install_mock_cache(client_no_auth)
+        resp = client_no_auth.post(
+            "/api/v1/channels",
+            json={
+                "name": "InvalidationTest",
+                "key_hex": "AABBCCDDEEFF00112233445566778899",
+                "visibility": "community",
+                "enabled": True,
+            },
+        )
+        assert resp.status_code == 201
+        mock_cache.delete.assert_any_call("/api/v1/channels")
+
+    def test_update_channel_invalidates_channels(self, client_no_auth, sample_channel):
+        mock_cache = self._install_mock_cache(client_no_auth)
+        resp = client_no_auth.put(
+            f"/api/v1/channels/{sample_channel.id}",
+            json={"enabled": False},
+        )
+        assert resp.status_code == 200
+        mock_cache.delete.assert_any_call("/api/v1/channels")
+
+    def test_delete_channel_invalidates_channels(self, client_no_auth, sample_channel):
+        mock_cache = self._install_mock_cache(client_no_auth)
+        resp = client_no_auth.delete(f"/api/v1/channels/{sample_channel.id}")
+        assert resp.status_code == 204
+        mock_cache.delete.assert_any_call("/api/v1/channels")
+
+    # --- Routes -----------------------------------------------------------
+
+    def test_create_route_invalidates_routes(self, client_no_auth, api_db_session):
+        from meshcore_hub.common.models import Node
+
+        n1 = Node(public_key="aa" * 16, name="A")
+        n2 = Node(public_key="bb" * 16, name="B")
+        api_db_session.add_all([n1, n2])
+        api_db_session.commit()
+
+        mock_cache = self._install_mock_cache(client_no_auth)
+        resp = client_no_auth.post(
+            "/api/v1/routes",
+            json={
+                "from_label": "A",
+                "to_label": "B",
+                "node_public_keys": [n1.public_key, n2.public_key],
+                "match_width": 2,
+            },
+            headers={"X-User-Roles": "admin"},
+        )
+        assert resp.status_code == 201
+        mock_cache.delete.assert_any_call("/api/v1/routes")
+
+    def test_update_route_invalidates_routes(self, client_no_auth, api_db_session):
+        from meshcore_hub.common.models import Node, Route, RouteNode
+
+        nodes = [Node(public_key=f"{c:02x}" * 16, name=str(c)) for c in (1, 2)]
+        api_db_session.add_all(nodes)
+        api_db_session.flush()
+        route = Route(from_label="X", to_label="Y")
+        api_db_session.add(route)
+        api_db_session.flush()
+        for pos, n in enumerate(nodes):
+            api_db_session.add(
+                RouteNode(
+                    route_id=route.id,
+                    node_id=n.id,
+                    position=pos,
+                    expected_hash=n.public_key[:2].upper(),
+                )
+            )
+        api_db_session.commit()
+
+        mock_cache = self._install_mock_cache(client_no_auth)
+        resp = client_no_auth.put(
+            f"/api/v1/routes/{route.id}",
+            json={"from_label": "NewFrom", "to_label": "NewTo"},
+            headers={"X-User-Roles": "admin"},
+        )
+        assert resp.status_code == 200
+        mock_cache.delete.assert_any_call("/api/v1/routes")
+
+    def test_delete_route_invalidates_routes(self, client_no_auth, api_db_session):
+        from meshcore_hub.common.models import Node, Route, RouteNode
+
+        nodes = [Node(public_key=f"{c:02x}" * 16, name=str(c)) for c in (3, 4)]
+        api_db_session.add_all(nodes)
+        api_db_session.flush()
+        route = Route(from_label="P", to_label="Q")
+        api_db_session.add(route)
+        api_db_session.flush()
+        for pos, n in enumerate(nodes):
+            api_db_session.add(
+                RouteNode(
+                    route_id=route.id,
+                    node_id=n.id,
+                    position=pos,
+                    expected_hash=n.public_key[:2].upper(),
+                )
+            )
+        api_db_session.commit()
+
+        mock_cache = self._install_mock_cache(client_no_auth)
+        resp = client_no_auth.delete(
+            f"/api/v1/routes/{route.id}",
+            headers={"X-User-Roles": "admin"},
+        )
+        assert resp.status_code == 204
+        mock_cache.delete.assert_any_call("/api/v1/routes")
+
+    # --- User profiles ----------------------------------------------------
+
+    def test_update_profile_invalidates_profiles_and_dashboard(
+        self, client_no_auth, sample_user_profile
+    ):
+        mock_cache = self._install_mock_cache(client_no_auth)
+        resp = client_no_auth.put(
+            f"/api/v1/user/profile/{sample_user_profile.id}",
+            json={"name": "Renamed"},
+            headers={
+                "X-User-Id": sample_user_profile.user_id,
+                "X-User-Roles": "operator",
+            },
+        )
+        assert resp.status_code == 200
+        mock_cache.delete.assert_any_call("profiles")
+        mock_cache.delete.assert_any_call("dashboard")
+        mock_cache.delete.assert_any_call("/api/v1/dashboard")
+
+    # --- Node tags --------------------------------------------------------
+
+    def test_create_node_tag_invalidates_cross_entity_caches(
+        self, client_no_auth, sample_node, sample_operator_adoption
+    ):
+        mock_cache = self._install_mock_cache(client_no_auth)
+        resp = client_no_auth.post(
+            f"/api/v1/nodes/{sample_node.public_key}/tags",
+            json={"key": "name", "value": "Friendly"},
+            headers={
+                "X-User-Id": "operator-123",
+                "X-User-Roles": "operator",
+            },
+        )
+        assert resp.status_code == 201
+        for prefix in ("nodes", "/api/v1/messages", "advertisements"):
+            mock_cache.delete.assert_any_call(prefix)
+        # Dashboard covers both key formats
+        mock_cache.delete.assert_any_call("dashboard")
+        mock_cache.delete.assert_any_call("/api/v1/dashboard")
+
+    def test_delete_node_tag_invalidates_cross_entity_caches(
+        self, client_no_auth, sample_node, sample_node_tag, sample_operator_adoption
+    ):
+        mock_cache = self._install_mock_cache(client_no_auth)
+        resp = client_no_auth.delete(
+            f"/api/v1/nodes/{sample_node.public_key}/tags/{sample_node_tag.key}",
+            headers={
+                "X-User-Id": "operator-123",
+                "X-User-Roles": "operator",
+            },
+        )
+        assert resp.status_code == 204
+        for prefix in ("nodes", "/api/v1/messages", "advertisements", "dashboard"):
+            mock_cache.delete.assert_any_call(prefix)
+
+    # --- Adoptions --------------------------------------------------------
+
+    def test_adopt_node_invalidates_cross_entity_caches(
+        self, client_no_auth, sample_node
+    ):
+        mock_cache = self._install_mock_cache(client_no_auth)
+        resp = client_no_auth.post(
+            "/api/v1/adoptions",
+            json={"public_key": sample_node.public_key},
+            headers={"X-User-Id": "adopter-1", "X-User-Roles": "operator"},
+        )
+        assert resp.status_code == 201
+        for prefix in ("nodes", "profiles", "advertisements", "dashboard"):
+            mock_cache.delete.assert_any_call(prefix)
+        mock_cache.delete.assert_any_call("/api/v1/dashboard")
+
+    def test_release_node_invalidates_cross_entity_caches(
+        self, client_no_auth, sample_node, sample_adopted_node
+    ):
+        mock_cache = self._install_mock_cache(client_no_auth)
+        resp = client_no_auth.delete(
+            f"/api/v1/adoptions/{sample_node.public_key}",
+            headers={"X-User-Id": "oidc-user-123", "X-User-Roles": "operator"},
+        )
+        assert resp.status_code == 204
+        for prefix in ("nodes", "profiles", "advertisements", "dashboard"):
+            mock_cache.delete.assert_any_call(prefix)
+
+    # --- Resilience -------------------------------------------------------
+
+    def test_cache_delete_error_does_not_break_mutation(
+        self, client_no_auth, sample_channel
+    ):
+        """If Redis is down, the mutation must still succeed."""
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+        mock_cache.delete.side_effect = Exception("redis down")
+        client_no_auth.app.state.redis_cache = mock_cache
+        client_no_auth.app.state.redis_cache_ttl = 30
+
+        resp = client_no_auth.put(
+            f"/api/v1/channels/{sample_channel.id}",
+            json={"enabled": False},
+        )
+        assert resp.status_code == 200
+
+
+class TestMutationVisibilityThroughHttpCache:
+    """Regression: stale browser HTTP cache after a mutation.
+
+    Scenario reported in the wild: user edits a Route, the routes list page
+    keeps showing old values for ~30s. Root cause was the API emitting
+    ``Cache-Control: private, max-age=30`` on ``@cached`` GETs, which lets
+    the browser serve its local copy without revalidating — so the
+    server-side invalidation never had a chance to fire.
+
+    The policy is now ``private, no-cache`` for all ``@cached`` GETs, which
+    forces the browser to send ``If-None-Match`` on every navigation. This
+    test models the full round trip: cache-fill, conditional 304, mutation
+    (invalidating Redis), then conditional 200 with the fresh body.
+    """
+
+    def test_routes_list_refresh_after_mutation(self, client_no_auth, api_db_session):
+        from meshcore_hub.common.models import Node, Route, RouteNode
+
+        # Seed a route the user will later edit.
+        nodes = [Node(public_key=f"{c:02x}" * 16, name=str(c)) for c in (1, 2)]
+        api_db_session.add_all(nodes)
+        api_db_session.flush()
+        route = Route(from_label="Origin", to_label="Dest")
+        api_db_session.add(route)
+        api_db_session.flush()
+        for pos, n in enumerate(nodes):
+            api_db_session.add(
+                RouteNode(
+                    route_id=route.id,
+                    node_id=n.id,
+                    position=pos,
+                    expected_hash=n.public_key[:2].upper(),
+                )
+            )
+        api_db_session.commit()
+
+        # Real in-memory cache so set/get/delete behave end-to-end. Keys
+        # store the envelope the @cached decorator writes.
+        store: dict[str, str] = {}
+
+        class _FakeCache:
+            def get(self, key):
+                return store.get(key)
+
+            def set(self, key, value, ttl):
+                store[key] = value
+
+            def delete(self, prefix):
+                # SCAN-style prefix glob, matching RedisCacheBackend.delete.
+                for k in list(store.keys()):
+                    if k.startswith(prefix):
+                        del store[k]
+
+            def ping(self):
+                return True
+
+        client_no_auth.app.state.redis_cache = _FakeCache()
+        client_no_auth.app.state.redis_cache_ttl = 30
+
+        # 1) Initial GET — populates cache and returns an ETag.
+        first = client_no_auth.get("/api/v1/routes", headers={"X-User-Roles": "admin"})
+        assert first.status_code == 200
+        assert first.headers["x-cache"] == "MISS"
+        assert first.headers["cache-control"] == "private, no-cache"
+        first_etag = first.headers["etag"]
+        first_body = first.json()
+        assert first_body["items"][0]["from_label"] == "Origin"
+
+        # 2) Immediate re-fetch with If-None-Match must 304 (cache HIT,
+        #    ETag matches). This is the cheap fast path the policy
+        #    preserves: browser revalidates, server answers 304, no body.
+        cond = client_no_auth.get(
+            "/api/v1/routes",
+            headers={"X-User-Roles": "admin", "If-None-Match": first_etag},
+        )
+        assert cond.status_code == 304
+        assert cond.headers["x-cache"] == "HIT"
+        assert cond.headers["cache-control"] == "private, no-cache"
+        assert cond.content in (b"", b"null")
+
+        # 3) Mutate the route. The handler calls invalidate_routes(request),
+        #    which must drop the cached entry so the next GET is a MISS.
+        mut = client_no_auth.put(
+            f"/api/v1/routes/{route.id}",
+            json={"from_label": "NewOrigin", "to_label": "NewDest"},
+            headers={"X-User-Roles": "admin"},
+        )
+        assert mut.status_code == 200
+        # Mutations are always no-store.
+        assert mut.headers["cache-control"] == "no-store"
+
+        # 4) Browser navigates again, sending the stale If-None-Match from
+        #    step 1. The server MUST NOT 304 here: Redis was invalidated,
+        #    so the handler re-runs, produces a new ETag, and returns 200
+        #    with the fresh body. This is exactly the bug the user hit —
+        #    under the old max-age=30 policy the browser never sent this
+        #    request at all.
+        after = client_no_auth.get(
+            "/api/v1/routes",
+            headers={"X-User-Roles": "admin", "If-None-Match": first_etag},
+        )
+        assert after.status_code == 200
+        assert after.headers["x-cache"] == "MISS"
+        assert after.headers["etag"] != first_etag
+        assert after.json()["items"][0]["from_label"] == "NewOrigin"
+
+    def test_cached_gets_always_emit_no_cache_regardless_of_ttl(self, client_no_auth):
+        """Even a 300s dashboard TTL must not surface as max-age=300.
+
+        The dashboard endpoints have ``redis_cache_ttl_dashboard=300``, but
+        that bound applies only to the Redis cache. The HTTP policy is
+        always ``private, no-cache`` so server-side invalidation can reach
+        the browser after any mutation.
+        """
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+        client_no_auth.app.state.redis_cache = mock_cache
+        client_no_auth.app.state.redis_cache_ttl = 30
+        client_no_auth.app.state.redis_cache_ttl_dashboard = 300
+
+        resp = client_no_auth.get("/api/v1/dashboard/activity")
+        assert resp.status_code == 200
+        assert resp.headers["cache-control"] == "private, no-cache"
+
+
+class TestInvalidationLogging:
+    """Diagnostic logging for cache invalidation.
+
+    These tests pin down the log lines that operators grep for when
+    diagnosing whether mutation handlers actually fire invalidation and
+    whether Redis SCAN matches stored keys. The shape of the log output
+    is part of the contract — changing it breaks log dashboards and the
+    diagnostic runbook.
+    """
+
+    def test_drop_logs_start_and_ok_on_success(self, caplog):
+        from meshcore_hub.api.cache_invalidation import invalidate_routes
+
+        cache = MagicMock()
+        cache.__class__.__name__ = "RedisCacheBackend"
+        request = _make_request_with_cache(cache)
+
+        with caplog.at_level("INFO", logger="meshcore_hub.api.cache_invalidation"):
+            invalidate_routes(request)
+
+        messages = [r.message for r in caplog.records]
+        assert any(
+            "Cache invalidate start" in m
+            and "prefix=/api/v1/routes" in m
+            and "backend=RedisCacheBackend" in m
+            for m in messages
+        ), f"start line missing or malformed: {messages}"
+        assert any(
+            "Cache invalidate ok" in m and "prefix=/api/v1/routes" in m
+            for m in messages
+        ), f"ok line missing or malformed: {messages}"
+
+    def test_drop_logs_warning_on_backend_error(self, caplog):
+        from meshcore_hub.api.cache_invalidation import invalidate_channels
+
+        cache = MagicMock()
+        cache.delete.side_effect = Exception("redis down")
+        request = _make_request_with_cache(cache)
+
+        with caplog.at_level("WARNING", logger="meshcore_hub.api.cache_invalidation"):
+            invalidate_channels(request)
+
+        # Must not raise; warning must carry prefix + error text.
+        assert any(
+            "Cache invalidate error" in r.message
+            and "prefix=/api/v1/channels" in r.message
+            and "redis down" in r.message
+            for r in caplog.records
+        ), [r.message for r in caplog.records]
+
+    def test_drop_logs_skipped_when_no_backend(self, caplog):
+        from meshcore_hub.api.cache_invalidation import invalidate_nodes
+
+        # No redis_cache attribute on app.state.
+        request = _make_request_with_cache(cache=None)
+
+        with caplog.at_level("DEBUG", logger="meshcore_hub.api.cache_invalidation"):
+            invalidate_nodes(request)
+
+        assert any(
+            "Cache invalidate skipped" in r.message and "prefix=nodes" in r.message
+            for r in caplog.records
+        ), [r.message for r in caplog.records]
+
+    def test_drop_logs_backend_name_distinguishes_nullcache(self, caplog):
+        """If NullCache is wired in, the start log must say so.
+
+        Catches the 'REDIS_ENABLED is actually false in production' case
+        in one log line.
+        """
+        from meshcore_hub.api.cache_invalidation import invalidate_routes
+
+        null_cache = NullCache()
+        request = _make_request_with_cache(null_cache)
+
+        with caplog.at_level("INFO", logger="meshcore_hub.api.cache_invalidation"):
+            invalidate_routes(request)
+
+        messages = [r.message for r in caplog.records]
+        assert any(
+            "backend=NullCache" in m and "prefix=/api/v1/routes" in m for m in messages
+        ), f"expected backend=NullCache in start log, got: {messages}"
+
+    def test_redis_delete_logs_keys_deleted_count(self, caplog):
+        with patch("redis.Redis") as mock_redis_cls:
+            mock_client = MagicMock()
+            mock_redis_cls.return_value = mock_client
+            mock_client.scan.return_value = (0, [b"hub:nodes:1", b"hub:nodes:2"])
+
+            backend = RedisCacheBackend(key_prefix="hub")
+            with caplog.at_level("INFO", logger="meshcore_hub.common.redis"):
+                backend.delete("nodes")
+
+        # One INFO line with prefix, full_prefix, and keys_deleted=2.
+        info_records = [r for r in caplog.records if r.levelname == "INFO"]
+        assert len(info_records) == 1, [r.message for r in caplog.records]
+        msg = info_records[0].message
+        assert "Redis cache delete" in msg
+        assert "prefix=nodes" in msg
+        assert "full_prefix=hub:nodes" in msg
+        assert "keys_deleted=2" in msg
+        assert "scan_iterations=1" in msg
+
+    def test_redis_delete_logs_zero_keys_on_empty_scan(self, caplog):
+        """The smoking-gun signal for the production bug.
+
+        If invalidation fires but SCAN matches nothing, ``keys_deleted=0``
+        appears in the log. That points directly at a cache-key mismatch
+        between the store path (key_builder) and the delete path (prefix).
+        """
+        with patch("redis.Redis") as mock_redis_cls:
+            mock_client = MagicMock()
+            mock_redis_cls.return_value = mock_client
+            mock_client.scan.return_value = (0, [])
+
+            backend = RedisCacheBackend(key_prefix="hub")
+            with caplog.at_level("INFO", logger="meshcore_hub.common.redis"):
+                backend.delete("/api/v1/routes")
+
+        info_records = [r for r in caplog.records if r.levelname == "INFO"]
+        assert len(info_records) == 1
+        msg = info_records[0].message
+        assert "keys_deleted=0" in msg
+        assert "prefix=/api/v1/routes" in msg
+        assert "full_prefix=hub:/api/v1/routes" in msg
+
+    def test_redis_delete_warning_includes_full_prefix(self, caplog):
+        with patch("redis.Redis") as mock_redis_cls:
+            mock_client = MagicMock()
+            mock_redis_cls.return_value = mock_client
+            mock_client.scan.side_effect = Exception("scan timeout")
+
+            backend = RedisCacheBackend(key_prefix="hub")
+            with caplog.at_level("WARNING", logger="meshcore_hub.common.redis"):
+                backend.delete("nodes")
+
+        warning_records = [r for r in caplog.records if r.levelname == "WARNING"]
+        assert len(warning_records) == 1
+        msg = warning_records[0].message
+        assert "Redis DELETE error" in msg
+        assert "prefix=nodes" in msg
+        assert "full_prefix=hub:nodes" in msg
+        assert "scan timeout" in msg
+
+    def test_redis_delete_multi_page_scan_logs_total_keys(self, caplog):
+        """Multi-page SCAN must accumulate keys_deleted across iterations."""
+        with patch("redis.Redis") as mock_redis_cls:
+            mock_client = MagicMock()
+            mock_redis_cls.return_value = mock_client
+            mock_client.scan.side_effect = [
+                (42, [b"hub:nodes:1", b"hub:nodes:2"]),
+                (0, [b"hub:nodes:3"]),
+            ]
+
+            backend = RedisCacheBackend(key_prefix="hub")
+            with caplog.at_level("INFO", logger="meshcore_hub.common.redis"):
+                backend.delete("nodes")
+
+        info_records = [r for r in caplog.records if r.levelname == "INFO"]
+        assert len(info_records) == 1
+        msg = info_records[0].message
+        assert "keys_deleted=3" in msg
+        assert "scan_iterations=2" in msg
+
+    def test_nullcache_delete_emits_debug_log(self, caplog):
+        cache = NullCache()
+        with caplog.at_level("DEBUG", logger="meshcore_hub.common.redis"):
+            cache.delete("nodes")
+        assert any(
+            "NullCache delete" in r.message and "prefix=nodes" in r.message
+            for r in caplog.records
+        ), [r.message for r in caplog.records]

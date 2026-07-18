@@ -7,6 +7,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from meshcore_hub.api.auth import RequireOperatorOrAdmin
+from meshcore_hub.api.cache_invalidation import (
+    invalidate_advertisements,
+    invalidate_dashboard,
+    invalidate_nodes,
+    invalidate_profiles,
+)
 from meshcore_hub.api.dependencies import DbSession
 from meshcore_hub.api.profile_utils import get_or_create_profile
 from meshcore_hub.common.models import Node, UserProfileNode
@@ -15,6 +21,19 @@ from meshcore_hub.common.schemas.user_profiles import AdoptedNodeRead, NodeAdopt
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _invalidate_adoption_caches(request: Request) -> None:
+    """Drop caches that embed adoption info.
+
+    ``adopted_by`` and the ``?adopted_by=`` filter surface inside nodes,
+    profiles, and advertisements listings; dashboard operator/node counts
+    also depend on adoptions.
+    """
+    invalidate_nodes(request)
+    invalidate_profiles(request)
+    invalidate_advertisements(request)
+    invalidate_dashboard(request)
 
 
 @router.post("", response_model=AdoptedNodeRead, status_code=201)
@@ -58,6 +77,8 @@ def adopt_node(
     session.add(association)
     session.commit()
     session.refresh(association)
+
+    _invalidate_adoption_caches(request)
 
     logger.info(
         "User %s adopted node %s",
@@ -119,6 +140,7 @@ def release_node(
 
     session.delete(association)
     session.commit()
+    _invalidate_adoption_caches(request)
 
     logger.info(
         "User %s released node %s",

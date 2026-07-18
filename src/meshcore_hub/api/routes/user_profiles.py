@@ -9,6 +9,10 @@ from sqlalchemy.orm import selectinload
 
 from meshcore_hub.api.auth import RequireRead, RequireUserOwner, X_USER_ID_HEADER
 from meshcore_hub.api.cache import cached
+from meshcore_hub.api.cache_invalidation import (
+    invalidate_dashboard,
+    invalidate_profiles,
+)
 from meshcore_hub.api.dependencies import DbSession
 from meshcore_hub.api.profile_utils import get_or_create_profile
 from meshcore_hub.common.config import get_web_settings
@@ -236,4 +240,6 @@ def update_profile(
     session.commit()
     session.refresh(profile)
 
+    invalidate_profiles(request)
+    invalidate_dashboard(request)
     return UserProfileRead.model_validate(profile)
