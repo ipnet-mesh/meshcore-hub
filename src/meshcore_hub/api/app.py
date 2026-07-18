@@ -90,7 +90,9 @@ def create_app(
     redis_password: str | None = None,
     redis_key_prefix: str = "hub",
     redis_cache_ttl: int = 30,
-    redis_cache_ttl_dashboard: int = 30,
+    redis_cache_ttl_dashboard: int = 300,
+    redis_cache_ttl_route_detail: int = 300,
+    api_cache_control_enabled: bool = True,
     spam_detection_enabled: bool = False,
     spam_score_threshold: float = 0.65,
 ) -> FastAPI:
@@ -119,6 +121,9 @@ def create_app(
         redis_key_prefix: Prefix for all cache keys
         redis_cache_ttl: Default cache TTL in seconds
         redis_cache_ttl_dashboard: Cache TTL for dashboard endpoints
+        redis_cache_ttl_route_detail: Cache TTL for /routes/{id} detail endpoint
+        api_cache_control_enabled: Emit HTTP Cache-Control on /api/v1/* and
+            ETag/If-None-Match handling on @cached endpoints.
 
     Returns:
         Configured FastAPI application
@@ -154,6 +159,8 @@ def create_app(
     app.state.redis_key_prefix = redis_key_prefix
     app.state.redis_cache_ttl = redis_cache_ttl
     app.state.redis_cache_ttl_dashboard = redis_cache_ttl_dashboard
+    app.state.redis_cache_ttl_route_detail = redis_cache_ttl_route_detail
+    app.state.api_cache_control_enabled = api_cache_control_enabled
     app.state.spam_detection_enabled = spam_detection_enabled
     app.state.spam_score_threshold = spam_score_threshold
 
@@ -170,11 +177,61 @@ def create_app(
     )
 
     @app.middleware("http")
-    async def cache_header_middleware(request: Request, call_next: Any) -> Any:
+    async def api_cache_middleware(request: Request, call_next: Any) -> Any:
+        """Apply X-Cache observability + HTTP Cache-Control / ETag headers.
+
+        Buckets (only when ``app.state.api_cache_control_enabled`` is True):
+          * ``@cached`` endpoints (``request.state.cache_control_ttl`` set by
+            the decorator): ``private, max-age=<ttl>`` + ``ETag`` echoed back.
+          * Uncached GETs under ``/api/v1``: ``private, max-age=0,
+            must-revalidate`` so browsers revalidate but may store.
+          * Mutating methods (POST/PUT/DELETE/PATCH): ``no-store``.
+          * ``/health*`` endpoints: ``no-store``.
+
+        ``private`` is used everywhere because several cached endpoints are
+        role-aware — their response shape/redaction varies by trusted-proxy
+        ``X-User-Id`` / ``X-User-Roles`` headers, so shared/CDN caches must
+        never store them.
+        """
         response = await call_next(request)
+
+        # X-Cache observability header (always emitted, even when the kill
+        # switch is on, so monitoring can still see hit/miss ratios).
         cache_status = getattr(request.state, "cache_status", None)
         if cache_status is not None:
             response.headers["X-Cache"] = cache_status
+
+        # ETag from the @cached decorator (304 responses already carry it;
+        # this branch covers the 200 path where the decorator returned a
+        # plain model and FastAPI serialized it).
+        etag = getattr(request.state, "api_etag", None)
+        if etag is not None and "etag" not in response.headers:
+            response.headers["ETag"] = etag
+
+        if not getattr(app.state, "api_cache_control_enabled", True):
+            return response
+
+        # Don't overwrite a Cache-Control header set explicitly by a handler
+        # or by the @cached decorator's 304 Response.
+        if "cache-control" in response.headers:
+            return response
+
+        method = request.method.upper()
+        path = request.url.path
+
+        if method in ("POST", "PUT", "DELETE", "PATCH"):
+            response.headers["Cache-Control"] = "no-store"
+        elif path.startswith("/health"):
+            response.headers["Cache-Control"] = "no-store"
+        elif path.startswith("/api/"):
+            ttl = getattr(request.state, "cache_control_ttl", 0)
+            if isinstance(ttl, int) and ttl > 0:
+                response.headers["Cache-Control"] = f"private, max-age={ttl}"
+            else:
+                response.headers["Cache-Control"] = (
+                    "private, max-age=0, must-revalidate"
+                )
+
         return response
 
     # Include routers
@@ -272,6 +329,8 @@ def create_app_from_env() -> FastAPI:
         redis_key_prefix=settings.redis_key_prefix,
         redis_cache_ttl=settings.redis_cache_ttl,
         redis_cache_ttl_dashboard=settings.redis_cache_ttl_dashboard,
+        redis_cache_ttl_route_detail=settings.redis_cache_ttl_route_detail,
+        api_cache_control_enabled=settings.api_cache_control_enabled,
         spam_detection_enabled=settings.spam_detection_enabled,
         spam_score_threshold=settings.spam_score_threshold,
     )

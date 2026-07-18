@@ -74,6 +74,23 @@ def derive_quality(
     return RouteQuality.UNKNOWN.value
 
 
+def _match_identity(hops: list[dict[str, Any]]) -> Optional[str]:
+    """Identity used to dedup matched receptions into one match per event.
+
+    Prefers the denormalized ``event_hash`` (the underlying structured
+    event's identity, populated at ingest) so that retransmissions of the
+    same advert/message/telemetry/trace count once instead of once per
+    on-air copy.  Falls back to the per-transmission wire ``packet_hash``
+    when ``event_hash`` is NULL (legacy rows captured before the column
+    existed, or unclassified packets that didn't trigger a structured
+    handler).
+    """
+    if not hops:
+        return None
+    first = hops[0]
+    return first.get("event_hash") or first.get("packet_hash")
+
+
 def _subsequence_indices(
     path: list[dict[str, Any]],
     expected: list[str],
@@ -281,6 +298,7 @@ def fetch_candidate_paths(
             PacketPathHop.position,
             PacketPathHop.node_hash,
             PacketPathHop.packet_hash,
+            PacketPathHop.event_hash,
             PacketPathHop.received_at,
             PacketPathHop.observer_node_id,
         )
@@ -298,6 +316,7 @@ def fetch_candidate_paths(
                 "position": row.position,
                 "node_hash": row.node_hash,
                 "packet_hash": row.packet_hash,
+                "event_hash": row.event_hash,
                 "received_at": row.received_at,
                 "observer_node_id": row.observer_node_id,
             }
@@ -337,6 +356,7 @@ def _fetch_matching_hops(
             PacketPathHop.position,
             PacketPathHop.node_hash,
             PacketPathHop.packet_hash,
+            PacketPathHop.event_hash,
             PacketPathHop.received_at,
         )
         .where(
@@ -359,6 +379,7 @@ def _fetch_matching_hops(
                 "position": row.position,
                 "node_hash": row.node_hash,
                 "packet_hash": row.packet_hash,
+                "event_hash": row.event_hash,
                 "received_at": row.received_at,
             }
         )
@@ -475,9 +496,9 @@ def evaluate_route(
     matched_packets: set[str] = set()
     for hops in paths.values():
         if _match_hops(hops, expected, route.max_hop_span, reversible):
-            ph = hops[0]["packet_hash"]
-            if ph:
-                matched_packets.add(ph)
+            identity = _match_identity(hops)
+            if identity:
+                matched_packets.add(identity)
                 if len(matched_packets) >= eff_clear:
                     return (
                         RouteState.HEALTHY.value,
@@ -528,9 +549,9 @@ def evaluate_route_day(
     matched_packets: set[str] = set()
     for hops in paths.values():
         if _match_hops(hops, expected, route.max_hop_span, reversible):
-            ph = hops[0]["packet_hash"]
-            if ph:
-                matched_packets.add(ph)
+            identity = _match_identity(hops)
+            if identity:
+                matched_packets.add(identity)
                 if len(matched_packets) >= eff_clear:
                     return (
                         RouteQuality.CLEAR.value,
@@ -673,9 +694,9 @@ def evaluate_route_history(
         matched_packets: set[str] = set()
         for hops in day_paths[i].values():
             if _match_hops(hops, expected, route.max_hop_span, reversible):
-                ph = hops[0]["packet_hash"]
-                if ph:
-                    matched_packets.add(ph)
+                identity = _match_identity(hops)
+                if identity:
+                    matched_packets.add(identity)
                     if len(matched_packets) >= eff_clear:
                         break
 
@@ -765,7 +786,13 @@ def recent_matches(
     limit: int = 3,
     now: Optional[datetime] = None,
 ) -> list[dict[str, Any]]:
-    """Return the latest *limit* matching paths for a route."""
+    """Return the latest *limit* matching paths for a route.
+
+    Deduplicates by event identity (preferring ``event_hash``, falling back
+    to wire ``packet_hash``) so the UI shows one row per underlying event
+    rather than one row per retransmission. When multiple receptions share
+    an identity, the newest is returned.
+    """
     expected = _route_expected_hashes(route)
     if len(expected) < 2:
         return []
@@ -781,22 +808,37 @@ def recent_matches(
         session, expected, since, observer_ids, reversible
     )
 
-    matches: list[dict[str, Any]] = []
+    # Keep the newest match per identity so the UI lists distinct underlying
+    # events rather than every retransmission of the same event.
+    matches_by_identity: dict[str, dict[str, Any]] = {}
     for hops in paths.values():
         subpath = _matched_subpath(hops, expected, route.max_hop_span, reversible)
         if not subpath:
             continue
+        identity = _match_identity(subpath)
+        if identity is None:
+            # Fall back to a synthetic unique key so unmatched-identity
+            # receptions still surface (one row each).
+            identity = f"__rawid_{id(subpath)}"
         first = subpath[0] if subpath else {}
-        matches.append(
-            {
-                "packet_hash": first.get("packet_hash"),
-                "hops": subpath,
-                "received_at": first.get("received_at"),
-                "observer_node_id": first.get("observer_node_id"),
-            }
+        received_at = first.get("received_at") or datetime.min.replace(
+            tzinfo=timezone.utc
         )
+        candidate = {
+            "packet_hash": first.get("packet_hash"),
+            "event_hash": first.get("event_hash"),
+            "hops": subpath,
+            "received_at": first.get("received_at"),
+            "observer_node_id": first.get("observer_node_id"),
+        }
+        existing = matches_by_identity.get(identity)
+        if existing is None or received_at > (
+            existing.get("received_at") or datetime.min.replace(tzinfo=timezone.utc)
+        ):
+            matches_by_identity[identity] = candidate
 
-    matches.sort(
+    matches = sorted(
+        matches_by_identity.values(),
         key=lambda m: m["received_at"] or datetime.min.replace(tzinfo=timezone.utc),
         reverse=True,
     )
@@ -878,9 +920,9 @@ def preview_route(
 
     for hops in paths.values():
         if _match_hops(hops, expected, max_hop_span, reversible):
-            ph = hops[0]["packet_hash"]
-            if ph:
-                matched_packets.add(ph)
+            identity = _match_identity(hops)
+            if identity:
+                matched_packets.add(identity)
             obs = hops[0]["observer_node_id"]
             if obs:
                 contributing[obs] = contributing.get(obs, 0) + 1

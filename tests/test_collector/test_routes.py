@@ -51,6 +51,7 @@ def _make_reception(
     packet_hash: str,
     path_hashes: list[str],
     received_at: datetime | None = None,
+    event_hash: str | None = None,
 ) -> str:
     """Insert a RawPacket + PacketPathHop rows for a test reception."""
     ts = received_at or _NOW
@@ -59,6 +60,7 @@ def _make_reception(
         id=rp_id,
         observer_node_id=observer_node_id,
         packet_hash=packet_hash,
+        event_hash=event_hash,
         received_at=ts,
     )
     db_session.add(rp)
@@ -70,6 +72,7 @@ def _make_reception(
                 position=pos,
                 node_hash=nh,
                 packet_hash=packet_hash,
+                event_hash=event_hash,
                 received_at=ts,
                 observer_node_id=observer_node_id,
             )
@@ -326,6 +329,92 @@ class TestEvaluateRoute:
         assert count == 1
         assert state == RouteState.HEALTHY.value
 
+    def test_retransmissions_dedup_by_event_hash(self, db_session):
+        """Three retransmissions of the same underlying event count once.
+
+        Each reception has a distinct wire ``packet_hash`` (the LetsMesh
+        ``payload["hash"]`` is unique per transmission) but shares the same
+        underlying ``event_hash``. Without the event_hash dedup a single
+        advert broadcast three times would satisfy ``threshold=3`` within
+        seconds and bias the route's health.
+        """
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        route = _make_route(db_session, "R1", [node_a, node_b], threshold=3)
+
+        _make_reception(
+            db_session, None, "wire1", ["AA", "BB"], event_hash="evt-shared"
+        )
+        _make_reception(
+            db_session, None, "wire2", ["AA", "BB"], event_hash="evt-shared"
+        )
+        _make_reception(
+            db_session, None, "wire3", ["AA", "BB"], event_hash="evt-shared"
+        )
+        db_session.commit()
+
+        since = _NOW - timedelta(hours=24)
+        state, quality, count = evaluate_route(db_session, route, since)
+        assert count == 1
+        assert state == RouteState.UNHEALTHY.value
+
+    def test_distinct_event_hashes_count_separately(self, db_session):
+        """Two underlying events (distinct event_hash) count as two matches."""
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        route = _make_route(db_session, "R1", [node_a, node_b], threshold=2)
+
+        _make_reception(db_session, None, "wire1", ["AA", "BB"], event_hash="evt-aaa")
+        _make_reception(db_session, None, "wire2", ["AA", "BB"], event_hash="evt-bbb")
+        db_session.commit()
+
+        since = _NOW - timedelta(hours=24)
+        state, _, count = evaluate_route(db_session, route, since)
+        assert count == 2
+        assert state == RouteState.HEALTHY.value
+
+    def test_null_event_hash_falls_back_to_packet_hash(self, db_session):
+        """Legacy rows with NULL event_hash dedup by wire packet_hash only."""
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        route = _make_route(db_session, "R1", [node_a, node_b], threshold=3)
+
+        # Three distinct wire hashes, no event_hash (legacy/NULL).
+        _make_reception(db_session, None, "wire1", ["AA", "BB"])
+        _make_reception(db_session, None, "wire2", ["AA", "BB"])
+        _make_reception(db_session, None, "wire3", ["AA", "BB"])
+        db_session.commit()
+
+        since = _NOW - timedelta(hours=24)
+        state, _, count = evaluate_route(db_session, route, since)
+        assert count == 3
+        assert state == RouteState.HEALTHY.value
+
+    def test_mixed_event_and_wire_identities(self, db_session):
+        """Mix of NULL and shared event_hash: each NULL is unique, shared
+        event_hash collapses to one."""
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        route = _make_route(db_session, "R1", [node_a, node_b], threshold=3)
+
+        # Two legacy rows (distinct wire hashes, NULL event_hash) → 2 matches.
+        _make_reception(db_session, None, "wire1", ["AA", "BB"])
+        _make_reception(db_session, None, "wire2", ["AA", "BB"])
+        # Three retransmissions of one event → 1 match.
+        for i in range(3):
+            _make_reception(
+                db_session,
+                None,
+                f"wire-shared-{i}",
+                ["AA", "BB"],
+                event_hash="evt-shared",
+            )
+        db_session.commit()
+
+        since = _NOW - timedelta(hours=24)
+        _, _, count = evaluate_route(db_session, route, since)
+        assert count == 3  # 2 legacy + 1 collapsed event
+
     def test_observer_scope_filter(self, db_session):
         """Only in-scope observers are considered."""
         node_a = _make_node(db_session, "aa" + "0" * 62)
@@ -496,6 +585,84 @@ class TestRecentMatches:
         assert len(matches) == 1
         hops = matches[0]["hops"]
         assert [h["node_hash"] for h in hops] == ["BB", "YY", "AA"]
+
+    def test_dedup_by_event_hash_keeps_newest(self, db_session):
+        """Multiple retransmissions of one event return one row, newest first.
+
+        Without this dedup, the recent-matches list showed three rows with
+        near-identical timestamps whenever a single advert traversed the
+        route multiple times — the symptom that surfaced this bug.
+        """
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        route = _make_route(db_session, "R1", [node_a, node_b])
+
+        # Three retransmissions of one event with monotonic timestamps.
+        base = _NOW - timedelta(hours=5)
+        for i in range(3):
+            _make_reception(
+                db_session,
+                None,
+                f"wire{i}",
+                ["AA", "BB"],
+                received_at=base + timedelta(minutes=i),
+                event_hash="evt-shared",
+            )
+        db_session.commit()
+
+        matches = recent_matches(db_session, route, limit=3, now=_NOW)
+        assert len(matches) == 1
+        # The newest reception of the shared event is the one returned.
+        assert matches[0]["packet_hash"] == "wire2"
+        assert matches[0]["event_hash"] == "evt-shared"
+
+    def test_distinct_events_returned_in_newest_first_order(self, db_session):
+        """Two distinct events surface as two rows, newest first."""
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        route = _make_route(db_session, "R1", [node_a, node_b])
+
+        _make_reception(
+            db_session,
+            None,
+            "wire-older",
+            ["AA", "BB"],
+            received_at=_NOW - timedelta(hours=2),
+            event_hash="evt-older",
+        )
+        _make_reception(
+            db_session,
+            None,
+            "wire-newer",
+            ["AA", "BB"],
+            received_at=_NOW - timedelta(hours=1),
+            event_hash="evt-newer",
+        )
+        db_session.commit()
+
+        matches = recent_matches(db_session, route, limit=3, now=_NOW)
+        assert len(matches) == 2
+        assert matches[0]["event_hash"] == "evt-newer"
+        assert matches[1]["event_hash"] == "evt-older"
+
+    def test_legacy_null_event_hash_one_row_per_wire_hash(self, db_session):
+        """NULL event_hash rows preserve today's per-wire-hash behaviour."""
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        route = _make_route(db_session, "R1", [node_a, node_b])
+
+        for i in range(3):
+            _make_reception(
+                db_session,
+                None,
+                f"wire{i}",
+                ["AA", "BB"],
+                received_at=_NOW - timedelta(hours=i),
+            )
+        db_session.commit()
+
+        matches = recent_matches(db_session, route, limit=3, now=_NOW)
+        assert len(matches) == 3
 
 
 class TestPreviewRoute:

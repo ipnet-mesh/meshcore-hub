@@ -31,8 +31,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-# Handler type: receives (public_key, event_type, payload, db_manager)
-EventHandler = Callable[[str, str, dict[str, Any], DatabaseManager], None]
+# Handler type: receives (public_key, event_type, payload, db_manager),
+# returns the underlying event's event_hash (or None) so the subscriber can
+# denormalize the identity onto the captured raw packet.
+EventHandler = Callable[[str, str, dict[str, Any], DatabaseManager], Optional[str]]
 
 
 class Subscriber(LetsMeshNormalizer):
@@ -253,13 +255,22 @@ class Subscriber(LetsMeshNormalizer):
         public_key, event_type, normalized_payload = parsed
         logger.debug("Received event: %s from %s...", event_type, public_key[:12])
 
-        # Capture the raw packet (packets feed only) independent of, and before,
-        # structured dispatch so the raw_packets table is complete. The boolean
-        # short-circuit avoids the insert entirely when capture is disabled.
+        # Capture the raw packet (packets feed only) independent of, and
+        # before, structured dispatch so the raw_packets table is complete.
+        # The boolean short-circuit avoids the insert entirely when capture
+        # is disabled. The returned id lets us backfill ``event_hash`` onto
+        # the row (and its hops) once the structured handler resolves the
+        # underlying event identity.
+        raw_packet_id: str | None = None
         if self._raw_packet_capture_enabled:
-            self._maybe_capture_raw_packet(topic, public_key, event_type, payload)
+            raw_packet_id = self._maybe_capture_raw_packet(
+                topic, public_key, event_type, payload
+            )
 
-        self._dispatch_event(public_key, event_type, normalized_payload)
+        event_hash = self._dispatch_event(public_key, event_type, normalized_payload)
+
+        if raw_packet_id and event_hash:
+            self._backfill_raw_packet_event_hash(raw_packet_id, event_hash)
 
     def _maybe_capture_raw_packet(
         self,
@@ -267,41 +278,76 @@ class Subscriber(LetsMeshNormalizer):
         public_key: str,
         event_type: str,
         payload: dict[str, Any],
-    ) -> None:
+    ) -> str | None:
         """Persist a raw_packets row for a packets-feed reception.
 
         Reuses the decode the normalizer already performed (the decoder caches
         per raw hex, so this ``decode_payload`` call is a cache hit). Capture
         failures are logged and never block event dispatch.
+
+        Returns:
+            The inserted ``raw_packet.id``, or ``None`` when the topic is
+            not a packets-feed message or capture fails. The caller uses the
+            id to backfill ``event_hash`` after dispatch.
         """
         try:
             parsed_topic = self.mqtt.topic_builder.parse_letsmesh_upload_topic(topic)
             if not parsed_topic:
-                return
+                return None
             _, feed_type = parsed_topic
             if feed_type != "packets":
-                return
+                return None
 
             from meshcore_hub.collector.handlers.raw_packet import store_raw_packet
 
             decoded_packet = self._letsmesh_decoder.decode_payload(payload)
-            store_raw_packet(public_key, payload, decoded_packet, event_type, self.db)
+            return store_raw_packet(
+                public_key, payload, decoded_packet, event_type, self.db
+            )
         except Exception as e:
             logger.error("Error capturing raw packet: %s", e)
+            return None
+
+    def _backfill_raw_packet_event_hash(
+        self,
+        raw_packet_id: str,
+        event_hash: str,
+    ) -> None:
+        """Propagate ``event_hash`` onto a captured raw packet and its hops.
+
+        Runs after structured dispatch resolves the underlying event. Two
+        single-row UPDATEs scoped by ``raw_packet_id``; failures are logged
+        and swallowed so they never affect subsequent ingest.
+        """
+        try:
+            from meshcore_hub.collector.handlers.raw_packet import (
+                update_raw_packet_event_hash,
+            )
+
+            update_raw_packet_event_hash(raw_packet_id, event_hash, self.db)
+        except Exception as e:
+            logger.error("Error backfilling raw packet event_hash: %s", e)
 
     def _dispatch_event(
         self,
         public_key: str,
         event_type: str,
         payload: dict[str, Any],
-    ) -> None:
-        """Route a normalized event to the appropriate handler."""
+    ) -> str | None:
+        """Route a normalized event to the appropriate handler.
+
+        Returns:
+            The ``event_hash`` returned by the structured handler (used by
+            the caller to denormalize the identity onto the captured raw
+            packet), or ``None`` when no handler ran or it returned None.
+        """
+        event_hash: str | None = None
 
         # Find and call handler
         handler = self._handlers.get(event_type)
         if handler:
             try:
-                handler(public_key, event_type, payload, self.db)
+                event_hash = handler(public_key, event_type, payload, self.db)
             except Exception as e:
                 logger.error(f"Error handling {event_type}: {e}")
         else:
@@ -316,6 +362,8 @@ class Subscriber(LetsMeshNormalizer):
         # Queue event for webhook dispatch
         if self._webhook_dispatcher and self._webhook_dispatcher.webhooks:
             self._queue_webhook_event(event_type, payload, public_key)
+
+        return event_hash
 
     def _queue_webhook_event(
         self, event_type: str, payload: dict[str, Any], public_key: str

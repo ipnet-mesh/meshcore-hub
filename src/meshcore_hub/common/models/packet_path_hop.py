@@ -27,6 +27,12 @@ class PacketPathHop(Base, UUIDMixin, TimestampMixin):
         position: Zero-based hop position in the ordered path
         node_hash: Normalized (uppercase) hex prefix for this hop
         packet_hash: Denormalized packet hash from raw_packets
+        event_hash: Denormalized identity of the underlying structured event
+            from raw_packets. The route evaluator prefers ``event_hash`` over
+            ``packet_hash`` when deduplicating matches, so retransmissions
+            of the same underlying advert/message/telemetry/trace count once
+            instead of once per on-air copy. ``NULL`` for legacy rows and
+            unclassified packets; the evaluator falls back to ``packet_hash``.
         received_at: Denormalized reception timestamp from raw_packets
         observer_node_id: Denormalized observer node FK
     """
@@ -46,6 +52,10 @@ class PacketPathHop(Base, UUIDMixin, TimestampMixin):
         nullable=False,
     )
     packet_hash: Mapped[Optional[str]] = mapped_column(
+        String(32),
+        nullable=True,
+    )
+    event_hash: Mapped[Optional[str]] = mapped_column(
         String(32),
         nullable=True,
     )
@@ -71,6 +81,11 @@ class PacketPathHop(Base, UUIDMixin, TimestampMixin):
         ),
         Index(
             "ix_packet_path_hops_received_at",
+            "received_at",
+        ),
+        Index(
+            "ix_packet_path_hops_event_hash_received_at",
+            "event_hash",
             "received_at",
         ),
     )

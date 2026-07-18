@@ -22,6 +22,14 @@ class RawPacket(Base, UUIDMixin, TimestampMixin):
         observer_node_id: FK to nodes (the receiving interface)
         packet_hash: LetsMesh packet hash, links rows to structured records and
             groups multi-observer receptions
+        event_hash: Denormalized identity of the underlying structured event
+            (advertisement / message / telemetry / trace) computed by the
+            structured handler. Populated after dispatch by the subscriber.
+            ``NULL`` for packets that did not trigger a structured handler and
+            for rows captured before this column was added. The route
+            evaluator prefers ``event_hash`` over ``packet_hash`` when
+            deduplicating matches, so retransmissions of the same underlying
+            event count once instead of once per on-air copy.
         raw_hex: The on-air bytes from ``payload["raw"]``
         packet_type: Wire packet type
         payload_type: Decoder payload type
@@ -47,6 +55,11 @@ class RawPacket(Base, UUIDMixin, TimestampMixin):
         index=True,
     )
     packet_hash: Mapped[Optional[str]] = mapped_column(
+        String(32),
+        nullable=True,
+        index=True,
+    )
+    event_hash: Mapped[Optional[str]] = mapped_column(
         String(32),
         nullable=True,
         index=True,

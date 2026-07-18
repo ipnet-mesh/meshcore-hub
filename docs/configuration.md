@@ -62,7 +62,28 @@ Optional Redis-backed caching for API responses. When disabled or unavailable, t
 | `REDIS_PASSWORD` | _(none)_ | Redis password (optional) |
 | `REDIS_KEY_PREFIX` | `hub` | Cache key prefix for multi-instance isolation |
 | `REDIS_CACHE_TTL` | `30` | Default cache TTL in seconds |
-| `REDIS_CACHE_TTL_DASHBOARD` | `30` | Cache TTL for dashboard endpoints in seconds |
+| `REDIS_CACHE_TTL_DASHBOARD` | `300` | Cache TTL for `/dashboard/*` endpoints and `/routes/{id}/history` (seconds). Trend/aggregation data tolerates longer staleness than the default TTL. |
+| `REDIS_CACHE_TTL_ROUTE_DETAIL` | `300` | Cache TTL for `/routes/{id}` detail endpoint in seconds |
+
+### HTTP Cache-Control
+
+On top of the Redis server cache, the API emits HTTP-layer caching directives so browsers and HTTP clients can reuse recent responses without re-fetching. Disabled with `API_CACHE_CONTROL_ENABLED=false` (default `true`).
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `API_CACHE_CONTROL_ENABLED` | `true` | Emit HTTP `Cache-Control` on `/api/v1/*` responses and `ETag` / `If-None-Match` handling on `@cached` endpoints |
+
+Responses fall into three buckets:
+
+| Bucket | Endpoints | `Cache-Control` | `ETag` |
+| --- | --- | --- | --- |
+| `@cached` GETs | All Redis-cached endpoints (`/nodes`, `/routes`, `/routes/{id}`, `/dashboard/*`, `/packets`, `/packet-groups`, `/messages`, `/advertisements`, `/channels`, `/user/profiles`) | `private, max-age=<redis_ttl>` | Strong SHA-256 hash of the body; `If-None-Match` returns `304 Not Modified` |
+| Other GETs | Per-id detail endpoints (`/nodes/{key}`, `/packets/{id}`, `/messages/{id}`, `/user/profile/{id}`, `/trace-paths`, `/telemetry`, etc.) | `private, max-age=0, must-revalidate` | _(none)_ |
+| Mutating + health | `POST`/`PUT`/`DELETE` + `/health*` | `no-store` | _(none)_ |
+
+All API responses use `private` because several `@cached` endpoints are role-aware — their response shape/redaction varies by trusted-proxy `X-User-Id` / `X-User-Roles` headers, so shared/CDN caches must never store them. Browser caches key by URL + request headers and so remain correct.
+
+Client `max-age` matches the configured Redis TTL for the endpoint (e.g. 300 s on `/routes/{id}`, 30 s on `/dashboard/*`). The `X-Cache: HIT|MISS` observability header continues to be emitted regardless of this setting.
 
 ## Collector
 

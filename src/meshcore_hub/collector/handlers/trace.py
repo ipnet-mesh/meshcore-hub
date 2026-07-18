@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -19,7 +19,7 @@ def handle_trace_data(
     event_type: str,
     payload: dict[str, Any],
     db: DatabaseManager,
-) -> None:
+) -> Optional[str]:
     """Handle a trace data event.
 
     Args:
@@ -27,11 +27,15 @@ def handle_trace_data(
         event_type: Event type name
         payload: Trace data payload
         db: Database manager
+
+    Returns:
+        The ``event_hash`` of the underlying trace record, or ``None`` on
+        early exit.
     """
     initiator_tag = payload.get("initiator_tag")
     if initiator_tag is None:
         logger.warning("Trace data missing initiator_tag")
-        return
+        return None
 
     now = datetime.now(timezone.utc)
 
@@ -86,7 +90,7 @@ def handle_trace_data(
                         f"Added receiver {public_key[:12]}... to trace "
                         f"(tag={initiator_tag})"
                     )
-            return
+            return event_hash
 
         # Create trace path record
         trace_path = TracePath(
@@ -135,6 +139,7 @@ def handle_trace_data(
                     path_len=path_len,
                     observed_at=now,
                 )
-            return
+            return event_hash
 
     logger.info(f"Stored trace data: tag={initiator_tag}, hops={hop_count}")
+    return event_hash

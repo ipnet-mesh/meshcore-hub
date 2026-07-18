@@ -40,6 +40,39 @@ Remote observers contribute to the Hub by publishing decoded packets to your MQT
 
 In Docker Compose, set `OBSERVER_ALLOWLIST` / `OBSERVER_DENYLIST` in your `.env`; they are wired into the collector service. See [configuration.md → Observer Ingestion Filters](configuration.md#observer-ingestion-filters) and [observer.md](observer.md).
 
+### HTTP Cache-Control on API responses
+
+The API now emits HTTP `Cache-Control` headers on every `/api/v1/*` response and supports `ETag` / `If-None-Match` → `304 Not Modified` on Redis-cached endpoints. **On by default**, non-breaking, no migration required.
+
+- `@cached` GET endpoints get `Cache-Control: private, max-age=<redis_ttl>` (matching their existing Redis TTL) plus a strong `ETag`. On a matching `If-None-Match`, the server returns `304 Not Modified` with an empty body — saving bandwidth on cache hits.
+- Uncached GETs under `/api/v1/*` get `Cache-Control: private, max-age=0, must-revalidate` so browsers may store but always revalidate.
+- `POST`/`PUT`/`DELETE`/`PATCH` and `/health*` get `Cache-Control: no-store`.
+- All API responses are `private` (browser cache only) because several `@cached` endpoints are role-aware — their response shape varies by `X-User-Id`/`X-User-Roles`. Shared/CDN caches must not store them.
+
+Existing Redis entries written in the legacy bare-JSON format are still read; they're transparently upgraded to the new `{"body": ..., "etag": ...}` envelope on the next cache miss. No manual Redis flush is required; old entries expire within one TTL period (≤ 300 s by default).
+
+To suppress all client-side caching directives (e.g. for debugging):
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `API_CACHE_CONTROL_ENABLED` | `true` | Emit `Cache-Control` on `/api/v1/*` + `ETag`/`If-None-Match` on `@cached` endpoints. Set `false` to disable. |
+
+The `X-Cache: HIT|MISS` observability header is unaffected — it is still emitted whenever a request flows through the `@cached` decorator, regardless of this setting.
+
+### Dashboard Cache TTL default raised (30s → 300s)
+
+The default for `REDIS_CACHE_TTL_DASHBOARD` has been raised from **30 s** to **300 s** (5 minutes). This setting covers all `/dashboard/*` endpoints (`stats`, `activity`, `packet-activity`, `packet-breakdown`, `message-activity`, `node-count`) **and** the per-route health strip `GET /api/v1/routes/{id}/history`. These all return trend/aggregation data where minute-level staleness is invisible to operators but every cache miss costs seconds of SQL/aggregation work — the old 30 s default was leaving most of that work unpaid on typical dashboards.
+
+| Variable | Old default | New default |
+| --- | --- | --- |
+| `REDIS_CACHE_TTL_DASHBOARD` | `30` | `300` |
+
+- **Operators who already set the env var explicitly:** no change — your value still wins.
+- **Operators on the default:** silently bumped to 5 min staleness on the dashboard and route health strips. If you relied on the old 30 s behaviour (e.g. for development or tight freshness SLOs), set `REDIS_CACHE_TTL_DASHBOARD=30` to restore it.
+- **Existing Redis entries at deploy time:** keep their original TTL and expire naturally within ≤ 30 s. No flush is required.
+- **Browser `max-age`:** the HTTP `Cache-Control: max-age=<ttl>` emitted by the middleware follows the Redis TTL, so browser-side caching on these endpoints also extends to 5 min. Clicking around the dashboard will be instant for that window. A hard refresh (`Ctrl+Shift+R`) bypasses this if you need the latest data.
+- **Side-effect fix:** the reported short-TTL behaviour on the per-route healthchart (which shares this setting) is resolved.
+
 ## v0.15.0
 
 ### Spam Detection (score, hide, and toggle likely-spam messages)
@@ -260,6 +293,7 @@ A new optional Redis-backed caching layer reduces database load for read-heavy A
 | `REDIS_KEY_PREFIX`          | `hub`       | Cache key prefix (change per instance for multi-instance setups) |
 | `REDIS_CACHE_TTL`           | `30`        | Default cache TTL in seconds                                     |
 | `REDIS_CACHE_TTL_DASHBOARD` | `30`        | Cache TTL for dashboard endpoints                                |
+| `REDIS_CACHE_TTL_ROUTE_DETAIL` | `300`   | Cache TTL for `/routes/{id}` detail endpoint                     |
 
 **Docker Compose:** Redis is available via the `cache` profile:
 

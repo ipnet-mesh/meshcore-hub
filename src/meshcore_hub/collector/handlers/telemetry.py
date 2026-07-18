@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -19,7 +19,7 @@ def handle_telemetry(
     event_type: str,
     payload: dict[str, Any],
     db: DatabaseManager,
-) -> None:
+) -> Optional[str]:
     """Handle a telemetry response event.
 
     Args:
@@ -27,11 +27,15 @@ def handle_telemetry(
         event_type: Event type name
         payload: Telemetry payload
         db: Database manager
+
+    Returns:
+        The ``event_hash`` of the underlying telemetry record, or ``None``
+        on early exit.
     """
     node_public_key = payload.get("node_public_key")
     if not node_public_key:
         logger.warning("Telemetry missing node_public_key")
-        return
+        return None
 
     now = datetime.now(timezone.utc)
 
@@ -100,7 +104,7 @@ def handle_telemetry(
                         f"Added receiver {public_key[:12]}... to telemetry "
                         f"(node={node_public_key[:12]}...)"
                     )
-            return
+            return event_hash
 
         # Find or create reporting node
         reporting_node = None
@@ -164,7 +168,7 @@ def handle_telemetry(
                     path_len=path_len,
                     observed_at=now,
                 )
-            return
+            return event_hash
 
     # Log telemetry values
     if parsed_data:
@@ -172,3 +176,5 @@ def handle_telemetry(
         logger.info(f"Stored telemetry from {node_public_key[:12]!r}: {values}")
     else:
         logger.info(f"Stored telemetry from {node_public_key[:12]!r}")
+
+    return event_hash

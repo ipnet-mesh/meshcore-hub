@@ -200,15 +200,41 @@ function renderDetailContent(route, detail, { navigate, packetsEnabled, history 
                     const detailUrl = packetDetailUrl(m.packet_hash);
                     return html`<div class="flex flex-wrap items-center gap-0.5 text-xs pb-1 border-b border-base-300 last:border-0 ${detailUrl ? 'hover:bg-base-200 cursor-pointer -mx-1 px-1 rounded transition-colors' : ''}"
                         @click=${detailUrl ? (e) => { e.stopPropagation(); navigate(detailUrl); } : undefined}>
-                        ${(m.hops || []).map((h, i) => {
-                            const rn = pathLookup.get((h.node_hash || '').toLowerCase().slice(0, prefixLen));
-                            return html`
-                                ${i > 0 ? html`<span class="opacity-30 mx-0.5">\u2192</span>` : nothing}
-                                ${rn
-                                    ? html`<span class="badge badge-primary badge-sm">${(h.node_hash || '').toLowerCase()}</span>`
-                                    : html`<span class="badge badge-ghost badge-sm opacity-50">${(h.node_hash || '').toLowerCase()}</span>`}
-                            `;
-                        })}
+                        ${(() => {
+                            const hops = m.hops || [];
+                            const PATH_MAX = 5;
+                            const PATH_HEAD = 2;
+                            const PATH_TAIL = 2;
+                            let entries;
+                            if (hops.length > PATH_MAX) {
+                                const hidden = hops.length - PATH_HEAD - PATH_TAIL;
+                                const head = hops.slice(0, PATH_HEAD);
+                                const tail = hops.slice(-PATH_TAIL);
+                                const ellipsis = html`<span class="badge badge-ghost badge-sm cursor-help" title=${t('packets.hops_hidden', { count: hidden })}>\u2026</span>`;
+                                entries = [
+                                    ...head.map(h => [h, true]),
+                                    [ellipsis, false],
+                                    ...tail.map(h => [h, true]),
+                                ];
+                            } else {
+                                entries = hops.map(h => [h, true]);
+                            }
+                            return entries.map(([h, isHop], i) => {
+                                if (!isHop) {
+                                    return html`
+                                        ${i > 0 ? html`<span class="opacity-30 mx-0.5">\u2192</span>` : nothing}
+                                        ${h}
+                                    `;
+                                }
+                                const rn = pathLookup.get((h.node_hash || '').toLowerCase().slice(0, prefixLen));
+                                return html`
+                                    ${i > 0 ? html`<span class="opacity-30 mx-0.5">\u2192</span>` : nothing}
+                                    ${rn
+                                        ? html`<span class="badge badge-primary badge-sm">${(h.node_hash || '').toLowerCase()}</span>`
+                                        : html`<span class="badge badge-ghost badge-sm opacity-50">${(h.node_hash || '').toLowerCase()}</span>`}
+                                `;
+                            });
+                        })()}
                         ${m.received_at ? html`<span class="ml-auto opacity-40 whitespace-nowrap">${new Date(m.received_at).toLocaleString()}</span>` : nothing}
                     </div>`;
                 })}
