@@ -548,9 +548,10 @@ export async function render(container, params, router) {
             for (const vis of VISIBILITY_ORDER) {
                 const group = groups.get(vis);
                 if (!group || group.length === 0) continue;
-                group.sort((a, b) =>
-                    (a.from_label || '').localeCompare(b.from_label || '')
-                );
+                group.sort((a, b) => {
+                    const cmp = (a.from_label || '').localeCompare(b.from_label || '');
+                    return cmp !== 0 ? cmp : (a.to_label || '').localeCompare(b.to_label || '');
+                });
                 groupedSections.push(html`
                     <h2 class="text-lg font-semibold mt-6 mb-3 opacity-70">${t(`routes.visibility_${vis}`)}</h2>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
