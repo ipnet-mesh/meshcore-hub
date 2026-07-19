@@ -212,14 +212,14 @@ class TestEffectiveClear:
         )
         assert effective_clear_threshold(route) == 20
 
-    def test_default_2x(self, db_session):
+    def test_default_3x(self, db_session):
         route = Route(
             from_label="t",
             to_label="t",
             packet_count_threshold=5,
             clear_threshold=None,
         )
-        assert effective_clear_threshold(route) == 10
+        assert effective_clear_threshold(route) == 15
 
 
 class TestDeriveExpectedHash:
@@ -681,7 +681,7 @@ class TestPreviewRoute:
         node_a = _make_node(db_session, "aa" + "0" * 62)
         node_b = _make_node(db_session, "bb" + "0" * 62)
 
-        for i in range(7):
+        for i in range(10):
             _make_reception(db_session, None, f"pkt{i}", ["AA", "BB"])
         db_session.commit()
 
@@ -695,7 +695,7 @@ class TestPreviewRoute:
             },
             since,
         )
-        assert result["matched_count"] == 7
+        assert result["matched_count"] == 10
         assert result["quality"] == RouteQuality.CLEAR.value
         assert result["truncated"] is False
 

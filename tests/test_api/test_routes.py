@@ -390,7 +390,7 @@ class TestRouteQualityAvg:
                     quality="clear",
                     matched_count=1,
                     threshold=route.packet_count_threshold,
-                    effective_clear=route.packet_count_threshold * 2,
+                    effective_clear=route.packet_count_threshold * 3,
                     quality_avg=value,
                 )
             )

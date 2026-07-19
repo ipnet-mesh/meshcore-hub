@@ -348,7 +348,7 @@ def collect_metrics(session: Any) -> bytes:
     )
     route_clear = Gauge(
         "meshcore_route_clear_threshold",
-        "Effective clear threshold (2x threshold when unset)",
+        "Effective clear threshold (3x threshold when unset)",
         ["route"],
         registry=registry,
     )

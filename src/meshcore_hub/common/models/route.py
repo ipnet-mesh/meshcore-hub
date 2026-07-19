@@ -41,7 +41,7 @@ class Route(Base, UUIDMixin, TimestampMixin):
         match_width: Path-hash prefix width in bytes (1/2/3)
         window_hours: Evaluation lookback window in hours
         packet_count_threshold: Minimum distinct packets for healthy
-        clear_threshold: Comfort bar for the clear/marginal split (null = 2x threshold)
+        clear_threshold: Comfort bar for the clear/marginal split (null = 3x threshold)
         max_hop_span: Max hops between first and last configured node (null = unlimited)
         enabled: Whether this route is actively evaluated
     """
@@ -74,7 +74,7 @@ class Route(Base, UUIDMixin, TimestampMixin):
     )
     packet_count_threshold: Mapped[int] = mapped_column(
         Integer,
-        default=3,
+        default=5,
         nullable=False,
     )
     clear_threshold: Mapped[Optional[int]] = mapped_column(

@@ -104,7 +104,7 @@ class TestRunEvaluation:
         route = _make_route(
             db_session, "R1", [node_a, node_b], packet_count_threshold=3
         )
-        for i in range(7):
+        for i in range(10):
             _make_reception(db_session, f"pkt{i}", ["AA", "BB"])
         db_session.commit()
 
@@ -117,7 +117,7 @@ class TestRunEvaluation:
         assert result.state == RouteState.HEALTHY.value
         assert result.quality == RouteQuality.CLEAR.value
         assert result.threshold == 3
-        assert result.effective_clear == 6
+        assert result.effective_clear == 9
 
     def test_evaluation_error_logged(self, db_manager, db_session, monkeypatch):
         """An exception evaluating one route is caught; count stays 0."""
