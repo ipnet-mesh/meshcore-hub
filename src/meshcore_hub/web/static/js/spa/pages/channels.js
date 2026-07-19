@@ -63,7 +63,7 @@ function renderAddButton(onAdd) {
     </button>`;
 }
 
-function renderChannelModal({ channel, isEdit, onSave, onCancel }) {
+function renderChannelModal({ channel, isEdit, onSave, onCancel, saving }) {
     const title = isEdit ? t('channels.edit_channel') : t('channels.add_channel');
 
     return html`<dialog open class="modal modal-open">
@@ -98,8 +98,8 @@ function renderChannelModal({ channel, isEdit, onSave, onCancel }) {
                     </label>
                 </div>
                 <div class="modal-action">
-                    <button type="button" class="btn btn-ghost" @click=${onCancel}>${t('common.cancel')}</button>
-                    <button type="submit" class="btn btn-primary">${t('common.save')}</button>
+                    <button type="button" class="btn btn-ghost" @click=${onCancel} ?disabled=${saving}>${t('common.cancel')}</button>
+                    <button type="submit" class="btn btn-primary" ?disabled=${saving}>${saving ? html`<span class="loading loading-spinner loading-sm"></span> ` : null}${t('common.save')}</button>
                 </div>
             </form>
         </div>
@@ -107,14 +107,14 @@ function renderChannelModal({ channel, isEdit, onSave, onCancel }) {
     </dialog>`;
 }
 
-function renderDeleteModal({ channel, onConfirm, onCancel }) {
+function renderDeleteModal({ channel, onConfirm, onCancel, saving }) {
     return html`<dialog open class="modal modal-open">
         <div class="modal-box">
             <h3 class="font-bold text-lg mb-4">${t('channels.delete_channel')}</h3>
             <p>${t('channels.delete_confirm', { name: channel.name })}</p>
             <div class="modal-action">
-                <button class="btn btn-ghost" @click=${onCancel}>${t('common.cancel')}</button>
-                <button class="btn btn-error" @click=${onConfirm}>${t('common.delete')}</button>
+                <button class="btn btn-ghost" @click=${onCancel} ?disabled=${saving}>${t('common.cancel')}</button>
+                <button class="btn btn-error" @click=${onConfirm} ?disabled=${saving}>${saving ? html`<span class="loading loading-spinner loading-sm"></span> ` : null}${t('common.delete')}</button>
             </div>
         </div>
         <form method="dialog" class="modal-backdrop"><button @click=${onCancel}></button></form>
@@ -186,12 +186,14 @@ export async function render(container, params, router) {
                     isEdit: modalState.type === 'edit',
                     onSave: handleSave,
                     onCancel: () => { modalState = null; renderPage(channelsList); },
+                    saving: !!modalState.saving,
                 });
             } else if (modalState?.type === 'delete') {
                 modalHtml = renderDeleteModal({
                     channel: modalState.channel,
                     onConfirm: handleDeleteConfirm,
                     onCancel: () => { modalState = null; renderPage(channelsList); },
+                    saving: !!modalState.saving,
                 });
             }
 
@@ -258,6 +260,8 @@ export async function render(container, params, router) {
                 }
             }
 
+            modalState = { ...modalState, saving: true };
+            renderPage(channels);
             try {
                 if (isEdit) {
                     await apiPut(`/api/v1/channels/${modalState.channel.id}`, body);
@@ -267,16 +271,22 @@ export async function render(container, params, router) {
                 modalState = null;
                 await refresh();
             } catch (e) {
+                modalState = { ...modalState, saving: false };
+                renderPage(channels);
                 alert(e.message || 'Failed to save channel');
             }
         }
 
         async function handleDeleteConfirm() {
+            modalState = { ...modalState, saving: true };
+            renderPage(channels);
             try {
                 await apiDelete(`/api/v1/channels/${modalState.channel.id}`);
                 modalState = null;
                 await refresh();
             } catch (e) {
+                modalState = { ...modalState, saving: false };
+                renderPage(channels);
                 alert(e.message || 'Failed to delete channel');
             }
         }

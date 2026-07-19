@@ -262,7 +262,7 @@ function renderNodeSearchResult(node, onSelect) {
         </li>`;
 }
 
-function renderRouteModal({ modalState, onSave, onCancel }) {
+function renderRouteModal({ modalState, onSave, onCancel, saving }) {
     const route = modalState.route;
     const isEdit = modalState.isEdit;
     const title = isEdit ? t('routes.edit_route') : t('routes.add_route');
@@ -434,8 +434,8 @@ function renderRouteModal({ modalState, onSave, onCancel }) {
                     </div>
                 </div>
                 <div class="modal-action">
-                    <button type="button" class="btn btn-ghost" @click=${onCancel}>${t('common.cancel')}</button>
-                    <button type="submit" class="btn btn-primary">${t('common.save')}</button>
+                    <button type="button" class="btn btn-ghost" @click=${onCancel} ?disabled=${saving}>${t('common.cancel')}</button>
+                    <button type="submit" class="btn btn-primary" ?disabled=${saving}>${saving ? html`<span class="loading loading-spinner loading-sm"></span> ` : null}${t('common.save')}</button>
                 </div>
             </form>
         </div>
@@ -443,7 +443,7 @@ function renderRouteModal({ modalState, onSave, onCancel }) {
     </dialog>`;
 }
 
-function renderDeleteModal({ route, onConfirm, onCancel }) {
+function renderDeleteModal({ route, onConfirm, onCancel, saving }) {
     const arrow = route.reversible !== false ? '\u2194' : '\u2192';
     const label = `${route.from_label} ${arrow} ${route.to_label}`;
     return html`<dialog open class="modal modal-open">
@@ -451,8 +451,8 @@ function renderDeleteModal({ route, onConfirm, onCancel }) {
             <h3 class="font-bold text-lg mb-4">${t('routes.delete_route')}</h3>
             <p>${t('routes.delete_confirm', { label })}</p>
             <div class="modal-action">
-                <button class="btn btn-ghost" @click=${onCancel}>${t('common.cancel')}</button>
-                <button class="btn btn-error" @click=${onConfirm}>${t('common.delete')}</button>
+                <button class="btn btn-ghost" @click=${onCancel} ?disabled=${saving}>${t('common.cancel')}</button>
+                <button class="btn btn-error" @click=${onConfirm} ?disabled=${saving}>${saving ? html`<span class="loading loading-spinner loading-sm"></span> ` : null}${t('common.delete')}</button>
             </div>
         </div>
         <form method="dialog" class="modal-backdrop"><button @click=${onCancel}></button></form>
@@ -548,9 +548,10 @@ export async function render(container, params, router) {
             for (const vis of VISIBILITY_ORDER) {
                 const group = groups.get(vis);
                 if (!group || group.length === 0) continue;
-                group.sort((a, b) =>
-                    (a.from_label || '').localeCompare(b.from_label || '')
-                );
+                group.sort((a, b) => {
+                    const cmp = (a.from_label || '').localeCompare(b.from_label || '');
+                    return cmp !== 0 ? cmp : (a.to_label || '').localeCompare(b.to_label || '');
+                });
                 groupedSections.push(html`
                     <h2 class="text-lg font-semibold mt-6 mb-3 opacity-70">${t(`routes.visibility_${vis}`)}</h2>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -569,12 +570,14 @@ export async function render(container, params, router) {
                     modalState,
                     onSave: handleSave,
                     onCancel: () => { modalState = null; renderPage(routesList); },
+                    saving: !!modalState.saving,
                 });
             } else if (modalState?.type === 'delete') {
                 modalHtml = renderDeleteModal({
                     route: modalState.route,
                     onConfirm: handleDeleteConfirm,
                     onCancel: () => { modalState = null; renderPage(routesList); },
+                    saving: !!modalState.saving,
                 });
             }
 
@@ -814,6 +817,8 @@ export async function render(container, params, router) {
                 body.clear_threshold = parseInt(clearVal, 10);
             }
 
+            modalState = { ...modalState, saving: true };
+            renderPage(routes);
             try {
                 if (isEdit) {
                     await apiPut(`/api/v1/routes/${modalState.route.id}`, body);
@@ -825,16 +830,22 @@ export async function render(container, params, router) {
                 modalState = null;
                 await refresh();
             } catch (e) {
+                modalState = { ...modalState, saving: false };
+                renderPage(routes);
                 alert(e.message || 'Failed to save route');
             }
         }
 
         async function handleDeleteConfirm() {
+            modalState = { ...modalState, saving: true };
+            renderPage(routes);
             try {
                 await apiDelete(`/api/v1/routes/${modalState.route.id}`);
                 modalState = null;
                 await refresh();
             } catch (e) {
+                modalState = { ...modalState, saving: false };
+                renderPage(routes);
                 alert(e.message || 'Failed to delete route');
             }
         }
