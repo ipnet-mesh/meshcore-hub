@@ -17,10 +17,10 @@ Each route carries these knobs:
 | Field | Default | Description |
 | --- | --- | --- |
 | `match_width` | `1` | Path-hash prefix width in bytes (1/2/3). Higher widths disambiguate nodes that share a short public-key prefix. |
-| `window_hours` | `24` | Rolling lookback window for the live status card. |
-| `packet_count_threshold` | `3` | Distinct matching packets at/above which the route is `healthy`. "Distinct" is per underlying event, not per transmission — see [How health is evaluated](#how-health-is-evaluated) above. |
-| `clear_threshold` | _(2× threshold)_ | Comfort bar for the `clear`/`marginal` split. Omit/null to use twice the threshold. |
-| `max_hop_span` | _(unlimited)_ | Caps the position gap between the first and last matched node, to reject matches that wander too far. |
+| `window_hours` | `48` | Rolling lookback window for the live status card. |
+| `packet_count_threshold` | `5` | Distinct matching packets at/above which the route is `healthy`. "Distinct" is per underlying event, not per transmission — see [How health is evaluated](#how-health-is-evaluated) above. |
+| `clear_threshold` | _(3× threshold)_ | Comfort bar for the `clear`/`marginal` split. Omit/null to use three times the threshold. |
+| `max_hop_span` | `8` | Caps the position gap between the first and last matched node, to reject matches that wander too far. |
 | `reversible` | `true` | Also match the path in reverse direction. |
 | `enabled` | `true` | When `false`, the route is skipped by the evaluator and reports `unknown`/`no_coverage`. |
 

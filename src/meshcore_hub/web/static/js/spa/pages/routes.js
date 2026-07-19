@@ -405,13 +405,13 @@ function renderRouteModal({ modalState, onSave, onCancel, saving }) {
                         <div>
                             <label class="text-sm opacity-70">${t('routes.threshold_label')}</label>
                             <input type="number" id="route-modal-threshold" class="input input-sm w-full"
-                                .value=${route.packet_count_threshold || 3} min="1" max="10000" />
+                                .value=${route.packet_count_threshold || 5} min="1" max="10000" />
                         </div>
                         <div>
                             <label class="text-sm opacity-70">${t('routes.clear_label')}</label>
                             <input type="number" id="route-modal-clear" class="input input-sm w-full"
                                 .value=${route.clear_threshold || ''}
-                                placeholder="${2 * (route.packet_count_threshold || 3)}" min="1" />
+                                placeholder="${3 * (route.packet_count_threshold || 5)}" min="1" />
                         </div>
                         <div>
                             <label class="text-sm opacity-70">${t('routes.span_label')}</label>
@@ -633,7 +633,7 @@ export async function render(container, params, router) {
         }
 
         function handleAdd() {
-            modalState = _newModalState('add', { visibility: 'community', enabled: true, match_width: 1, window_hours: 48, max_hop_span: 8 });
+            modalState = _newModalState('add', { visibility: 'community', enabled: true, match_width: 1, window_hours: 48, max_hop_span: 8, packet_count_threshold: 5 });
             renderPage(routes);
         }
 
@@ -804,7 +804,7 @@ export async function render(container, params, router) {
                 visibility: visEl.value,
                 match_width: parseInt(widthEl.value, 10) || 1,
                 window_hours: parseInt(windowEl.value, 10) || 48,
-                packet_count_threshold: parseInt(thresholdEl.value, 10) || 3,
+                packet_count_threshold: parseInt(thresholdEl.value, 10) || 5,
                 max_hop_span: spanEl.value ? parseInt(spanEl.value, 10) : null,
                 enabled: enabledEl.checked,
                 reversible: reversibleEl.checked,

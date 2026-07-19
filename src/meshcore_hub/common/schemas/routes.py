@@ -67,10 +67,10 @@ class RouteCreate(BaseModel):
         default=48, ge=1, le=720, description="Evaluation window in hours"
     )
     packet_count_threshold: int = Field(
-        default=3, ge=1, le=10000, description="Minimum distinct packets for healthy"
+        default=5, ge=1, le=10000, description="Minimum distinct packets for healthy"
     )
     clear_threshold: Optional[int] = Field(
-        default=None, description="Comfort bar (null = 2x threshold)"
+        default=None, description="Comfort bar (null = 3x threshold)"
     )
     max_hop_span: Optional[int] = Field(
         default=8, description="Max hop distance between first and last node"
@@ -233,7 +233,7 @@ class RoutePreviewRequest(BaseModel):
     )
     match_width: int = Field(default=1, ge=1, le=3)
     window_hours: int = Field(default=48, ge=1, le=720)
-    packet_count_threshold: int = Field(default=3, ge=1, le=10000)
+    packet_count_threshold: int = Field(default=5, ge=1, le=10000)
     clear_threshold: Optional[int] = None
     max_hop_span: Optional[int] = Field(default=8)
     observer_public_keys: Optional[list[str]] = None

@@ -126,9 +126,9 @@ routes:
     description: A140 corridor route
     visibility: community
     match_width: 1
-    window_hours: 24
-    packet_count_threshold: 3
-    # clear_threshold: 10      # optional; omit/null = 2x threshold
+    window_hours: 48
+    packet_count_threshold: 5
+    # clear_threshold: 15      # optional; omit/null = 3x threshold
     # max_hop_span: 8           # optional; omit/null = unlimited
     enabled: true
     reversible: true              # match both directions (A->B and B->A)

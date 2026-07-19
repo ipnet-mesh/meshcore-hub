@@ -27,8 +27,8 @@ from meshcore_hub.common.models.route_result_history import RouteResultHistory
 logger = logging.getLogger(__name__)
 
 #: Multiplier for the relative default comfort bar (``clear_threshold = None``
-#: means ``effective_clear = 2 × packet_count_threshold``).
-CLEAR_DEFAULT_MULTIPLIER = 2
+#: means ``effective_clear = 3 × packet_count_threshold``).
+CLEAR_DEFAULT_MULTIPLIER = 3
 
 #: Cap on candidate receptions for preview to bound work per call.
 PREVIEW_CANDIDATE_CAP = 5000
@@ -54,7 +54,7 @@ def derive_expected_hash(public_key: str, match_width: int) -> str:
 
 
 def effective_clear_threshold(route: Route) -> int:
-    """The effective comfort bar: explicit value or ``2 × threshold``."""
+    """The effective comfort bar: explicit value or ``3 × threshold``."""
     return route.clear_threshold or (
         route.packet_count_threshold * CLEAR_DEFAULT_MULTIPLIER
     )
@@ -1239,7 +1239,7 @@ def preview_route(
     match_width: int = config.get("match_width") or 1
     observer_ids: Optional[list[str]] = config.get("observer_ids") or None
     max_hop_span: Optional[int] = config.get("max_hop_span")
-    threshold: int = config.get("packet_count_threshold") or 3
+    threshold: int = config.get("packet_count_threshold") or 5
     clear_bar: Optional[int] = config.get("clear_threshold")
     reversible: bool = config.get("reversible", True)
 
