@@ -1499,8 +1499,13 @@ class TestRoutesOverview:
             "no_coverage",
         }
 
-    def test_visibility_filter_hides_admin_routes(self, client_no_auth, api_db_session):
-        """Anonymous users must not see admin-only routes in the overview."""
+    def test_dashboard_only_shows_community_routes_regardless_of_role(
+        self, client_no_auth, api_db_session
+    ):
+        """The dashboard widget surfaces only ``community``-visibility routes,
+        regardless of the caller's role — admins still see member/operator/
+        admin-tier routes on the dedicated ``/routes`` page, but the dashboard
+        is intentionally limited to the community fleet."""
         _make_route_with_nodes(
             api_db_session,
             "Public",
@@ -1510,25 +1515,36 @@ class TestRoutesOverview:
         )
         _make_route_with_nodes(
             api_db_session,
-            "Secret",
+            "MembersOnly",
             "Endpoint",
             ["c" * 64, "d" * 64],
+            visibility="member",
+        )
+        _make_route_with_nodes(
+            api_db_session,
+            "OperatorsOnly",
+            "Endpoint",
+            ["e" * 64, "f" * 64],
+            visibility="operator",
+        )
+        _make_route_with_nodes(
+            api_db_session,
+            "AdminOnly",
+            "Endpoint",
+            ["g" * 64, "h" * 64],
             visibility="admin",
         )
         api_db_session.commit()
 
-        # Anonymous: only the community route.
-        anon = client_no_auth.get("/api/v1/dashboard/routes-overview").json()
-        labels = [r["from_label"] for r in anon["routes"]]
-        assert labels == ["Public"]
-
-        # Admin sees both.
-        admin = client_no_auth.get(
-            "/api/v1/dashboard/routes-overview",
-            headers={"X-User-Roles": "admin"},
-        ).json()
-        admin_labels = sorted(r["from_label"] for r in admin["routes"])
-        assert admin_labels == ["Public", "Secret"]
+        for role_header in (None, "member", "operator", "admin"):
+            headers = {"X-User-Roles": role_header} if role_header else {}
+            resp = client_no_auth.get(
+                "/api/v1/dashboard/routes-overview", headers=headers
+            )
+            labels = [r["from_label"] for r in resp.json()["routes"]]
+            assert labels == [
+                "Public"
+            ], f"role={role_header!r} saw {labels!r}; expected ['Public'] only"
 
     def test_by_state_buckets_current_state(self, client_no_auth, api_db_session):
         """``by_state`` counts route current state across the fleet."""
@@ -1604,9 +1620,10 @@ class TestRoutesOverview:
         assert route["state"] == "disabled"
         assert route["matched_count"] is None
 
-    def test_cache_key_is_role_scoped(self, client_no_auth, api_db_session):
-        """Different roles get independent cache entries (sanity: both
-        return 200, response differs when visibility-filtered)."""
+    def test_cache_key_is_role_agnostic(self, client_no_auth, api_db_session):
+        """The dashboard widget returns the same payload for every role, so the
+        cache key must not vary by role — one cache fill is reused across
+        anonymous / member / operator / admin callers."""
         from unittest.mock import MagicMock
 
         _make_route_with_nodes(
@@ -1615,6 +1632,13 @@ class TestRoutesOverview:
             "End",
             ["a" * 64, "b" * 64],
             visibility="admin",
+        )
+        _make_route_with_nodes(
+            api_db_session,
+            "Public",
+            "End",
+            ["c" * 64, "d" * 64],
+            visibility="community",
         )
         api_db_session.commit()
 
@@ -1633,13 +1657,26 @@ class TestRoutesOverview:
         client_no_auth.get("/api/v1/dashboard/routes-overview")
         client_no_auth.get(
             "/api/v1/dashboard/routes-overview",
+            headers={"X-User-Roles": "member"},
+        )
+        client_no_auth.get(
+            "/api/v1/dashboard/routes-overview",
+            headers={"X-User-Roles": "operator"},
+        )
+        client_no_auth.get(
+            "/api/v1/dashboard/routes-overview",
             headers={"X-User-Roles": "admin"},
         )
 
-        # Two cache fills, role differs between them.
-        assert len(keys_seen) == 2
-        assert any("anonymous" in k for k in keys_seen)
-        assert any("admin" in k for k in keys_seen)
+        # Every caller produces the SAME key — no role dimension. The mock
+        # cache always misses (``get`` returns None), so all four requests
+        # re-fill; the point is that they all fill the SAME slot.
+        assert len(keys_seen) == 4
+        assert len(set(keys_seen)) == 1
+        key = keys_seen[0]
+        assert "role=" not in key
+        assert "anonymous" not in key
+        assert "admin" not in key
 
     def test_history_served_from_precomputed_table(
         self, client_no_auth, api_db_session
