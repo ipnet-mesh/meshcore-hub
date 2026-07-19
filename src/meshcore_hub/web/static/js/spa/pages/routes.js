@@ -52,7 +52,10 @@ function renderSummaryStrip(routes) {
     const counts = { clear: 0, marginal: 0, failing: 0, no_coverage: 0, disabled: 0 };
     for (const r of routes) {
         if (!r.enabled) { counts.disabled++; continue; }
-        const q = r.route_result?.quality || 'unknown';
+        // Prefer the 7-day rolling average so the strip matches the card
+        // badges (which also display ``quality_avg``). Falls back to the
+        // latest snapshot for brand-new routes that have no history yet.
+        const q = r.quality_avg || r.route_result?.quality || 'unknown';
         if (q === 'clear') counts.clear++;
         else if (q === 'marginal') counts.marginal++;
         else if (q === 'failing') counts.failing++;
@@ -116,7 +119,11 @@ function renderStatsRow(route) {
 }
 
 function renderRouteCard(route, { isAdmin, onDelete, onEdit, detail, navigate, packetsEnabled, history }) {
-    const q = route.route_result?.quality || 'unknown';
+    // Badge reflects the 7-day rolling average (``quality_avg``) rather
+    // than the latest snapshot, so a flapping route that's currently up
+    // still shows as marginal/failing if it's been mostly down. Falls
+    // back to the snapshot for brand-new routes with no history.
+    const q = route.quality_avg || route.route_result?.quality || 'unknown';
     const badgeCls = qualityBadgeClass(q, route.enabled);
     const label = qualityLabel(q, route.enabled);
     const dot = qualityDot(q, route.enabled);

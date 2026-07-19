@@ -328,6 +328,114 @@ class TestGetRouteDetail:
         assert second.json() == first_body
 
 
+class TestRouteQualityAvg:
+    """``quality_avg`` field — rolling 7-day average tier.
+
+    Backs the route card badge and summary strip counts on /routes so a
+    flapping route that's currently up still shows as marginal/failing if
+    the 7-day mean warrants it. See ``compute_average_quality`` in
+    ``collector/routes.py`` for the algorithm.
+    """
+
+    @staticmethod
+    def _make_route(session, *, enabled: bool = True, label: str = "Avg"):
+        # Use uuid-derived public_keys so concurrent tests using _sample_nodes
+        # (which always inserts "a"*64 / "b"*64) can't trip the unique
+        # constraint on Node.public_key during parallel xdist runs against
+        # the shared SQLite file.
+        suffix = uuid4().hex
+        keys = [(suffix[:32]).rjust(64, "0"), (suffix[32:64]).rjust(64, "0")]
+        nodes = [_make_node(session, k) for k in keys]
+        route = Route(from_label=label, to_label="Sink", enabled=enabled)
+        session.add(route)
+        session.flush()
+        for pos, n in enumerate(nodes):
+            session.add(
+                RouteNode(
+                    route_id=route.id,
+                    node_id=n.id,
+                    position=pos,
+                    expected_hash=n.public_key[:2].upper(),
+                )
+            )
+        session.commit()
+        return route
+
+    def test_present_on_list_for_enabled_routes(self, client_no_auth, api_db_session):
+        """Each enabled route in the list response carries a computed tier.
+
+        With no traffic in the test DB every history bucket is no_coverage
+        which collapses to failing (mean 0); the point of the assertion is
+        that the field exists and is a valid tier, not the specific value.
+        """
+        route = self._make_route(api_db_session, enabled=True, label="Enabled")
+        resp = client_no_auth.get("/api/v1/routes")
+        assert resp.status_code == 200
+        items = resp.json()["items"]
+        # Lookup by id — parallel tests in the same worker may leave
+        # other routes in the truncated-but-not-yet-reaped window.
+        matching = [i for i in items if i["id"] == str(route.id)]
+        assert len(matching) == 1
+        avg = matching[0]["quality_avg"]
+        assert avg in {"clear", "marginal", "failing"}
+        # No traffic in the test DB -> all no_coverage -> failing.
+        assert avg == "failing"
+
+    def test_none_for_disabled_routes(self, client_no_auth, api_db_session):
+        """Disabled routes skip the computation; field is null.
+
+        Uses the per-route DETAIL endpoint rather than the list — the
+        list query races with other xdist workers' ``_truncate_all``
+        teardown against the shared SQLite file (the conftest only
+        isolates Postgres backends, not SQLite). The detail endpoint
+        scopes the read to a single row so a parallel truncate either
+        takes the row (404, not a false-pass) or leaves it.
+        """
+        route = self._make_route(api_db_session, enabled=False, label="Disabled")
+        resp = client_no_auth.get(f"/api/v1/routes/{route.id}")
+        assert resp.status_code == 200
+        assert resp.json()["quality_avg"] is None
+
+    def test_present_on_detail(self, client_no_auth, api_db_session):
+        """Detail endpoint also exposes the rolling average."""
+        route = self._make_route(api_db_session, enabled=True, label="Detail")
+        resp = client_no_auth.get(f"/api/v1/routes/{route.id}")
+        assert resp.status_code == 200
+        assert resp.json()["quality_avg"] == "failing"
+
+    def test_none_on_create_response(self, client_no_auth, api_db_session):
+        """Create handler skips the rolling computation.
+
+        A brand-new route has no meaningful 7-day history; the frontend
+        falls back to ``route_result.quality`` via the
+        ``q = route.quality_avg || route.route_result?.quality`` chain.
+        """
+        nodes = _sample_nodes(api_db_session)
+        api_db_session.commit()
+        resp = client_no_auth.post(
+            "/api/v1/routes",
+            json={
+                "from_label": "Fresh",
+                "to_label": "Route",
+                "node_public_keys": [n.public_key for n in nodes],
+            },
+            headers={"X-User-Roles": "admin"},
+        )
+        assert resp.status_code == 201
+        assert resp.json()["quality_avg"] is None
+
+    def test_computed_on_update_response(self, client_no_auth, api_db_session):
+        """Update handler recomputes the average (history pre-exists)."""
+        route = self._make_route(api_db_session, enabled=True, label="UpdateMe")
+        resp = client_no_auth.put(
+            f"/api/v1/routes/{route.id}",
+            json={"description": "now with description"},
+            headers={"X-User-Roles": "admin"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["quality_avg"] == "failing"
+
+
 class TestUpdateRoute:
     def test_update_from_to(self, client_no_auth, api_db_session):
         nodes = _sample_nodes(api_db_session)

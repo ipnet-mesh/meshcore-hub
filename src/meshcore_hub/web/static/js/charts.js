@@ -325,6 +325,48 @@ function createStackedBarChart(canvasId, buckets, colors) {
 }
 
 /**
+ * Map a route-quality enum value to the merged 3-tier space used by the
+ * dashboard trend chart and Route Health widget.
+ *
+ *   ``clear``       → clear
+ *   ``marginal``    → marginal
+ *   anything else   → failing   (covers ``failing``, ``unknown``,
+ *                                 ``no_coverage``, ``disabled``, null)
+ */
+function routeQualityToTier(q) {
+    if (q === 'clear') return 'clear';
+    if (q === 'marginal') return 'marginal';
+    return 'failing';
+}
+
+/**
+ * Mean tier over the displayed window. Maps the 3-tier space onto a
+ * 0/1/2 numeric scale (failing < marginal < clear), averages, then
+ * buckets back: >=1.5 → clear, >=0.75 → marginal, else failing.
+ * Empty history falls through to failing (matches routeQualityToTier's
+ * default for unknown / null quality).
+ *
+ * Kept in sync with ``compute_average_quality`` in
+ * ``src/meshcore_hub/collector/routes.py`` so the server-side rolling
+ * badge matches the client-side chart line color.
+ *
+ * @param {Array<{quality: string}>|null} history
+ * @returns {string} tier name (``clear`` / ``marginal`` / ``failing``)
+ */
+function averageRouteTier(history) {
+    if (!history || history.length === 0) return 'failing';
+    var sum = 0;
+    for (var i = 0; i < history.length; i++) {
+        var tier = routeQualityToTier(history[i].quality);
+        sum += (tier === 'clear' ? 2 : tier === 'marginal' ? 1 : 0);
+    }
+    var mean = sum / history.length;
+    if (mean >= 1.5) return 'clear';
+    if (mean >= 0.75) return 'marginal';
+    return 'failing';
+}
+
+/**
  * Create a multi-line route-status trend chart for the dashboard.
  *
  * Each route becomes one line plotted on a 3-tier categorical Y axis
@@ -358,32 +400,8 @@ function createRoutesTrendChart(canvasId, routes, maxRoutes) {
     // Bottom-to-top tier order on the categorical Y axis.
     var tierOrder = ['failing', 'marginal', 'clear'];
 
-    function qualityToTier(q) {
-        if (q === 'clear') return 'clear';
-        if (q === 'marginal') return 'marginal';
-        return 'failing';
-    }
-
     function tierColor(tier) {
         return ChartColors.quality[tier] || ChartColors.quality.failing;
-    }
-
-    // Mean tier over the displayed window. Maps the 3-tier space onto a
-    // 0/1/2 numeric scale (failing < marginal < clear), averages, then
-    // buckets back: >=1.5 → clear, >=0.75 → marginal, else failing.
-    // Empty history falls through to failing (matches qualityToTier's
-    // default for unknown / null quality).
-    function averageTier(history) {
-        if (!history || history.length === 0) return 'failing';
-        var sum = 0;
-        for (var i = 0; i < history.length; i++) {
-            var tier = qualityToTier(history[i].quality);
-            sum += (tier === 'clear' ? 2 : tier === 'marginal' ? 1 : 0);
-        }
-        var mean = sum / history.length;
-        if (mean >= 1.5) return 'clear';
-        if (mean >= 0.75) return 'marginal';
-        return 'failing';
     }
 
     // Sort by current matched_count desc; routes with null matched_count
@@ -407,10 +425,10 @@ function createRoutesTrendChart(canvasId, routes, maxRoutes) {
 
     var datasets = top.map(function(entry) {
         var history = entry.history || [];
-        var avgTier = averageTier(history);
+        var avgTier = averageRouteTier(history);
         return {
             label: entry.from_label + ' \u2192 ' + entry.to_label,
-            data: history.map(function(d) { return qualityToTier(d.quality); }),
+            data: history.map(function(d) { return routeQualityToTier(d.quality); }),
             borderColor: tierColor(avgTier),
             backgroundColor: 'transparent',
             fill: false,

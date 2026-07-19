@@ -154,6 +154,14 @@ class RouteRead(BaseModel):
     route_nodes: list[RouteNodeRead] = []
     route_observers: list[RouteObserverRead] = []
     route_result: Optional[RouteResultSummary] = None
+    quality_avg: Optional[str] = Field(
+        default=None,
+        description=(
+            "Rolling 7-day average quality (clear/marginal/failing). "
+            "Null when the route is disabled or has no history yet; falls "
+            "back to ``route_result.quality`` for brand-new routes."
+        ),
+    )
     created_at: datetime
     updated_at: datetime
 
@@ -202,6 +210,13 @@ class RouteDetail(BaseModel):
     route_nodes: list[RouteNodeRead] = []
     route_observers: list[RouteObserverRead] = []
     route_result: Optional[RouteResultSummary] = None
+    quality_avg: Optional[str] = Field(
+        default=None,
+        description=(
+            "Rolling 7-day average quality (clear/marginal/failing). "
+            "Null when the route is disabled or has no history yet."
+        ),
+    )
     contributing_observers: list[ContributingObserver] = []
     recent_matches: list[RecentMatchPath] = []
     created_at: datetime

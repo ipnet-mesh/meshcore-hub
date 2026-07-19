@@ -738,6 +738,52 @@ def evaluate_route_history(
     return results
 
 
+# Thresholds for ``compute_average_quality`` — kept in sync with the
+# ``averageTier`` helper in ``web/static/js/charts.js`` so the server-side
+# rolling-average badge matches the chart's per-route line color.
+AVERAGE_QUALITY_CLEAR_AT = 1.5
+AVERAGE_QUALITY_MARGINAL_AT = 0.75
+
+
+def compute_average_quality(
+    history: list[tuple[date, str, str, int]],
+    *,
+    fallback: Optional[str] = None,
+) -> str:
+    """Average per-day quality over a history window.
+
+    Maps each day's quality onto a 0/1/2 scale (failing < marginal < clear);
+    ``no_coverage`` / ``unknown`` / ``disabled`` / ``None`` all collapse to
+    0, matching the merged-3-tier design used by the dashboard trend chart.
+    Returns ``clear`` / ``marginal`` / ``failing`` based on the mean:
+
+        mean >= 1.5  -> clear
+        mean >= 0.75 -> marginal
+        else         -> failing
+
+    Empty history returns *fallback* (or ``"failing"`` if also ``None``) so
+    brand-new routes don't flash a misleading failing badge before their
+    first evaluation cycle.
+    """
+    if not history:
+        return fallback or RouteQuality.FAILING.value
+
+    total = 0.0
+    for _d, quality, _s, _c in history:
+        if quality == RouteQuality.CLEAR.value:
+            total += 2.0
+        elif quality == RouteQuality.MARGINAL.value:
+            total += 1.0
+        # failing / unknown / no_coverage / disabled / None -> 0
+
+    mean = total / len(history)
+    if mean >= AVERAGE_QUALITY_CLEAR_AT:
+        return RouteQuality.CLEAR.value
+    if mean >= AVERAGE_QUALITY_MARGINAL_AT:
+        return RouteQuality.MARGINAL.value
+    return RouteQuality.FAILING.value
+
+
 def evaluate_all_routes(
     session: Session, now: datetime
 ) -> dict[str, tuple[str, str, int]]:

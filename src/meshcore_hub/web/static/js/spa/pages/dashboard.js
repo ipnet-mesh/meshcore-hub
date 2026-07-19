@@ -149,7 +149,15 @@ function renderRoutesHealth(routes) {
             <div class="route-health-cell"
                  style="background:${colorFor(d.quality)}"
                  title="${d.date} \u2014 ${labelFor(d.quality)} (${d.matched_count})"></div>`);
-        const current = r.quality || (r.enabled ? 'no_coverage' : 'disabled');
+        // Right-most dot = rolling 7-day average tier (same computation as
+        // the chart line color and the route-card badge on /routes). Falls
+        // back to the snapshot if history is missing (e.g. backend degraded).
+        const hist = r.history || [];
+        const avgTier = (window.averageRouteTier && hist.length > 0)
+            ? window.averageRouteTier(hist)
+            : null;
+        const current = avgTier
+            || (r.enabled ? (r.quality || 'no_coverage') : 'disabled');
         return html`<div class="flex items-center gap-2">
             <span class="flex-1 min-w-0 truncate text-sm"
                title="${r.from_label} \u2192 ${r.to_label}">
