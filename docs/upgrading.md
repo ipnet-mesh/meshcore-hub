@@ -16,14 +16,17 @@ A new **Routes** page lets operators define monitored multi-hop mesh routes (an 
 meshcore-hub db upgrade
 ```
 
-This creates five tables — `routes`, `route_nodes`, `route_observers`, `route_results`, `packet_path_hops` — and backfills `packet_path_hops` from existing `raw_packets.decoded`. Route health therefore relies on **Raw Packet Capture** being enabled (`FEATURE_PACKETS=true`, the default) so packet paths continue to be captured. The migration runs automatically on Docker startup; the schema change is additive and safe on both SQLite and Postgres.
+This creates seven tables — `routes`, `route_nodes`, `route_observers`, `route_results`, `packet_path_hops`, `route_result_history`, `route_recent_matches` — plus a nullable `quality_avg` column on `route_results` and a nullable `event_hash` column on `raw_packets` / `packet_path_hops` (the latter denormalizes the underlying structured event's identity so the evaluator can deduplicate matches by event rather than by per-transmission wire hash). It also backfills `packet_path_hops` from existing `raw_packets.decoded`. Route health therefore relies on **Raw Packet Capture** being enabled (`FEATURE_PACKETS=true`, the default) so packet paths continue to be captured. The migration runs automatically on Docker startup; the schema change is additive and safe on both SQLite and Postgres.
+
+**Precomputed route health.** The 60 s background evaluator writes the route snapshot, the 7-day rolling `quality_avg`, and the top-3 recent matches (normalized into `route_recent_matches`) on every sweep; an hourly backfill (`ROUTE_HISTORY_BACKFILL_INTERVAL_SECONDS`) recomputes completed-day buckets across the retention window. The dashboard strip and `/routes/{id}/history` read from `route_result_history` (single bulk SELECT for all visible routes), and `/routes/{id}` detail reads recent matches via a JOIN with a live-compute fallback for the moments between sweeps.
 
 **New optional environment variables (all safe to omit):**
 
-| Variable                            | Default | Description                                                                                          |
-| ----------------------------------- | ------- | ---------------------------------------------------------------------------------------------------- |
-| `FEATURE_ROUTES`                    | `true`  | Show the `/routes` page and nav entry. On by default.                                                |
-| `ROUTE_EVALUATOR_INTERVAL_SECONDS`  | `60`    | Collector background evaluator cadence in seconds. `0` disables the evaluator (cards stay `unknown`). |
+| Variable                                    | Default | Description                                                                                                                            |
+| ------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `FEATURE_ROUTES`                            | `true`  | Show the `/routes` page and nav entry. On by default.                                                                                  |
+| `ROUTE_EVALUATOR_INTERVAL_SECONDS`          | `60`    | Collector background evaluator cadence in seconds. `0` disables the evaluator (cards stay `unknown`).                                  |
+| `ROUTE_HISTORY_BACKFILL_INTERVAL_SECONDS`   | `3600`  | Collector hourly history backfill cadence (recomputes completed-day buckets). `0` disables the backfill; strips reflect only live sweeps. |
 
 ### Observer Ingestion Filters (allow/deny remote observers)
 
@@ -59,33 +62,28 @@ To suppress all client-side caching directives (e.g. for debugging):
 
 The `X-Cache: HIT|MISS` observability header is unaffected — it is still emitted whenever a request flows through the `@cached` decorator, regardless of this setting.
 
-### Dashboard / Route cache consolidation (1h dashboard TTL, dedicated route-detail TTL removed)
+### API endpoint reorganization (route-detail TTL removed, recent-activity split)
 
 Two related changes to the Redis cache layer:
 
-1. **`REDIS_CACHE_TTL_DASHBOARD` default raised from 300 s to 3600 s (1 hour).** This setting now covers all `/dashboard/*` endpoints **and** `/routes/{id}` detail **and** `/routes/{id}/history` — trend/aggregation data where minute-level staleness is invisible to operators but every cache miss costs seconds of SQL/aggregation work. The 5-minute window shipped earlier in v0.16.0 was still leaving most of that work unpaid on busy meshes.
+1. **`REDIS_CACHE_TTL_ROUTE_DETAIL` removed.** The dedicated 300 s TTL for `/routes/{id}` detail has been folded into `REDIS_CACHE_TTL_DASHBOARD` (default 300 s), so the route detail page now uses the same TTL as the dashboard aggregates. Operators who had set `REDIS_CACHE_TTL_ROUTE_DETAIL` explicitly should delete that line from their `.env` — the variable is now ignored.
 
-2. **`REDIS_CACHE_TTL_ROUTE_DETAIL` removed.** The dedicated 300 s TTL for `/routes/{id}` detail has been folded into `REDIS_CACHE_TTL_DASHBOARD` (so the route detail page now also serves from the 1 h cache). Operators who had set `REDIS_CACHE_TTL_ROUTE_DETAIL` explicitly should delete that line from their `.env` — the variable is now ignored.
-
-3. **`GET /dashboard/recent-activity` split out of `GET /dashboard/stats`.** The Recent Adverts and Recent Channel Messages widgets used to live as fields inside `/dashboard/stats`, so they inherited the long dashboard TTL and went stale for the full window. They now have their own endpoint, `/dashboard/recent-activity`, which is cached at the **default** `REDIS_CACHE_TTL` (30 s) — so the Recent panels stay fresh even while the aggregate counts alongside them are cached for an hour. The two fields were **removed from the `/dashboard/stats` response**:
+2. **`GET /dashboard/recent-activity` split out of `GET /dashboard/stats`.** The Recent Adverts and Recent Channel Messages widgets used to live as fields inside `/dashboard/stats`, so they inherited the dashboard TTL and went stale for the full window. They now have their own endpoint, `/dashboard/recent-activity`, which is cached at the **default** `REDIS_CACHE_TTL` (30 s) — so the Recent panels stay fresh even while the aggregate counts alongside them are cached at the dashboard TTL. The two fields were **removed from the `/dashboard/stats` response**:
 
    | Field                       | Old location              | New location                          |
    | --------------------------- | ------------------------- | ------------------------------------- |
    | `recent_advertisements`     | `/dashboard/stats` field  | `/dashboard/recent-activity` field    |
    | `channel_messages`          | `/dashboard/stats` field  | `/dashboard/recent-activity` field    |
 
-   `/dashboard/stats` still returns `channel_message_counts` (the per-channel counts); only the message bodies moved. The SPA's dashboard page now fires one extra parallel request to `/dashboard/recent-activity`. `home.js` only used the counts and needs no change — it silently benefits from the longer `/dashboard/stats` TTL.
+   `/dashboard/stats` still returns `channel_message_counts` (the per-channel counts); only the message bodies moved. The SPA's dashboard page now fires one extra parallel request to `/dashboard/recent-activity`. `home.js` only used the counts and needs no change — it silently benefits from the `/dashboard/stats` cache.
 
 | Variable                      | Old default | New default |
 | ----------------------------- | ----------- | ----------- |
-| `REDIS_CACHE_TTL_DASHBOARD`   | `300`       | `3600`      |
 | `REDIS_CACHE_TTL_ROUTE_DETAIL`| `300`       | _(removed)_ |
 
-- **Operators who already set `REDIS_CACHE_TTL_DASHBOARD` explicitly:** no change — your value still wins.
-- **Operators on the default:** silently bumped from 5 min to 1 h staleness on dashboard aggregates, route detail, and route health strips. If you relied on the previous 5 min freshness (e.g. for development), set `REDIS_CACHE_TTL_DASHBOARD=300` (or lower) to restore it.
-- **Operators who set `REDIS_CACHE_TTL_ROUTE_DETAIL`:** delete the line — the variable is now ignored, the route detail page uses `REDIS_CACHE_TTL_DASHBOARD` like everything else in this group.
+- **Operators who set `REDIS_CACHE_TTL_ROUTE_DETAIL`:** delete the line — the variable is now ignored; the route detail page uses `REDIS_CACHE_TTL_DASHBOARD` like everything else in this group.
 - **Existing Redis entries at deploy time:** keep their original TTL and expire naturally. No flush is required.
-- **Browser `max-age`:** the HTTP `Cache-Control: max-age=<ttl>` emitted by the middleware follows the Redis TTL, so browser-side caching on these endpoints also extends to 1 h. The Recent Adverts / Recent Channel Messages widgets are unaffected because `/dashboard/recent-activity` still uses the short default TTL.
+- **Browser `max-age`:** the HTTP `Cache-Control: max-age=<ttl>` emitted by the middleware follows the Redis TTL on each endpoint. The Recent Adverts / Recent Channel Messages widgets stay at the short default TTL via `/dashboard/recent-activity`; the aggregates and route detail use the dashboard TTL.
 - **External API consumers** reading `recent_advertisements` / `channel_messages` from `/dashboard/stats`: switch to `/dashboard/recent-activity` (same field shapes, same role-visibility filtering).
 
 ## v0.15.0
