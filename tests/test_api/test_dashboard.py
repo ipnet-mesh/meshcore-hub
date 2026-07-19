@@ -16,6 +16,11 @@ from meshcore_hub.common.models import (
     RawPacket,
 )
 from meshcore_hub.common.models import UserProfile
+from meshcore_hub.common.models import (
+    PacketPathHop,
+    Route,
+    RouteNode,
+)
 
 
 class TestDateBucketKey:
@@ -59,6 +64,9 @@ class TestDashboardStats:
         assert data["total_packets"] == 0
         assert data["packets_7d"] == 0
         assert data["channel_message_counts"] == {}
+        # recent_advertisements / channel_messages moved to /recent-activity
+        assert "recent_advertisements" not in data
+        assert "channel_messages" not in data
 
     def test_get_stats_with_data(
         self, client_no_auth, sample_node, sample_message, sample_advertisement
@@ -838,7 +846,7 @@ class TestDashboardFloodOnlyFilter:
         api_db_session.add_all([direct_ad, flood_ad])
         api_db_session.commit()
 
-        response = client_no_auth.get("/api/v1/dashboard/stats")
+        response = client_no_auth.get("/api/v1/dashboard/recent-activity")
         assert response.status_code == 200
         data = response.json()
         assert len(data["recent_advertisements"]) == 1
@@ -874,55 +882,61 @@ class TestDashboardFloodOnlyFilter:
         assert total_count == 1
 
 
+@pytest.fixture
+def channels_with_messages(api_db_session):
+    """Create public and admin channels with messages.
+
+    Module-level so both TestDashboardChannelVisibility (channel_message_counts
+    on /dashboard/stats) and TestDashboardRecentActivity (channel_messages on
+    /dashboard/recent-activity) can share the same setup.
+    """
+    pub_key = "AABBCCDDEEFF00112233445566778899"
+    adm_key = "FFEEDDCCBBAA99887766554433221100"
+    pub_idx = int(Channel.compute_channel_hash(pub_key), 16)
+    adm_idx = int(Channel.compute_channel_hash(adm_key), 16)
+
+    pub_ch = Channel(
+        name="CommunityCh",
+        key_hex=pub_key,
+        channel_hash=Channel.compute_channel_hash(pub_key),
+        visibility="community",
+        enabled=True,
+    )
+    adm_ch = Channel(
+        name="AdminCh",
+        key_hex=adm_key,
+        channel_hash=Channel.compute_channel_hash(adm_key),
+        visibility="admin",
+        enabled=True,
+    )
+    api_db_session.add_all([pub_ch, adm_ch])
+
+    pub_msg = Message(
+        message_type="channel",
+        channel_idx=pub_idx,
+        text="Public message",
+        received_at=datetime.now(timezone.utc),
+    )
+    adm_msg = Message(
+        message_type="channel",
+        channel_idx=adm_idx,
+        text="Admin message",
+        received_at=datetime.now(timezone.utc),
+    )
+    direct_msg = Message(
+        message_type="direct",
+        pubkey_prefix="abc123",
+        text="Direct message",
+        received_at=datetime.now(timezone.utc),
+    )
+    api_db_session.add_all([pub_msg, adm_msg, direct_msg])
+    api_db_session.commit()
+
+    return pub_idx, adm_idx
+
+
 class TestDashboardChannelVisibility:
     """Tests for channel visibility filtering on dashboard stats."""
-
-    @pytest.fixture
-    def channels_with_messages(self, api_db_session):
-        """Create public and admin channels with messages."""
-        pub_key = "AABBCCDDEEFF00112233445566778899"
-        adm_key = "FFEEDDCCBBAA99887766554433221100"
-        pub_idx = int(Channel.compute_channel_hash(pub_key), 16)
-        adm_idx = int(Channel.compute_channel_hash(adm_key), 16)
-
-        pub_ch = Channel(
-            name="CommunityCh",
-            key_hex=pub_key,
-            channel_hash=Channel.compute_channel_hash(pub_key),
-            visibility="community",
-            enabled=True,
-        )
-        adm_ch = Channel(
-            name="AdminCh",
-            key_hex=adm_key,
-            channel_hash=Channel.compute_channel_hash(adm_key),
-            visibility="admin",
-            enabled=True,
-        )
-        api_db_session.add_all([pub_ch, adm_ch])
-
-        pub_msg = Message(
-            message_type="channel",
-            channel_idx=pub_idx,
-            text="Public message",
-            received_at=datetime.now(timezone.utc),
-        )
-        adm_msg = Message(
-            message_type="channel",
-            channel_idx=adm_idx,
-            text="Admin message",
-            received_at=datetime.now(timezone.utc),
-        )
-        direct_msg = Message(
-            message_type="direct",
-            pubkey_prefix="abc123",
-            text="Direct message",
-            received_at=datetime.now(timezone.utc),
-        )
-        api_db_session.add_all([pub_msg, adm_msg, direct_msg])
-        api_db_session.commit()
-
-        return pub_idx, adm_idx
 
     def test_anonymous_sees_only_community_messages(
         self, client_no_auth, channels_with_messages
@@ -1038,7 +1052,7 @@ class TestDashboardChannelVisibility:
         api_db_session.add(ad)
         api_db_session.commit()
 
-        response = client_no_auth.get("/api/v1/dashboard/stats")
+        response = client_no_auth.get("/api/v1/dashboard/recent-activity")
         assert response.status_code == 200
         data = response.json()
         assert len(data["recent_advertisements"]) == 1
@@ -1084,7 +1098,7 @@ class TestDashboardChannelVisibility:
         api_db_session.add(observer)
         api_db_session.commit()
 
-        response = client_no_auth.get("/api/v1/dashboard/stats")
+        response = client_no_auth.get("/api/v1/dashboard/recent-activity")
         assert response.status_code == 200
         data = response.json()
         assert len(data["recent_advertisements"]) == 1
@@ -1118,7 +1132,7 @@ class TestDashboardChannelVisibility:
         api_db_session.add(ad)
         api_db_session.commit()
 
-        response = client_no_auth.get("/api/v1/dashboard/stats")
+        response = client_no_auth.get("/api/v1/dashboard/recent-activity")
         assert response.status_code == 200
         data = response.json()
         assert len(data["recent_advertisements"]) == 1
@@ -1176,6 +1190,76 @@ class TestDashboardChannelVisibility:
         assert str(pub_idx) in data["channel_message_counts"]
         assert str(mem_idx) in data["channel_message_counts"]
         assert str(adm_idx) not in data["channel_message_counts"]
+
+
+class TestDashboardRecentActivity:
+    """Tests for GET /dashboard/recent-activity (split from /dashboard/stats)."""
+
+    def test_recent_activity_empty(self, client_no_auth):
+        """Recent activity endpoint with empty database returns empty shapes."""
+        response = client_no_auth.get("/api/v1/dashboard/recent-activity")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["recent_advertisements"] == []
+        assert data["channel_messages"] == {}
+
+    def test_recent_activity_does_not_return_counts(
+        self, client_no_auth, channels_with_messages
+    ):
+        """The recent-activity endpoint drops channel_message_counts (those
+        stay on /dashboard/stats as aggregate counts)."""
+        response = client_no_auth.get("/api/v1/dashboard/recent-activity")
+        assert response.status_code == 200
+        data = response.json()
+        assert "channel_message_counts" not in data
+
+    def test_recent_activity_channel_messages_visibility(
+        self, client_no_auth, channels_with_messages
+    ):
+        """Anonymous viewers only see community-channel messages."""
+        pub_idx, adm_idx = channels_with_messages
+        response = client_no_auth.get("/api/v1/dashboard/recent-activity")
+        assert response.status_code == 200
+        data = response.json()
+        assert str(pub_idx) in data["channel_messages"]
+        assert str(adm_idx) not in data["channel_messages"]
+
+    def test_recent_activity_admin_sees_all_channels(
+        self, client_no_auth, channels_with_messages
+    ):
+        """Admin role sees messages on every channel."""
+        pub_idx, adm_idx = channels_with_messages
+        response = client_no_auth.get(
+            "/api/v1/dashboard/recent-activity",
+            headers={"X-User-Roles": "admin"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert str(pub_idx) in data["channel_messages"]
+        assert str(adm_idx) in data["channel_messages"]
+
+    def test_recent_activity_caches_at_default_ttl_not_dashboard(
+        self, client_no_auth, api_db_session
+    ):
+        """The recent-activity endpoint uses the default redis_cache_ttl
+        (not redis_cache_ttl_dashboard), so the Recent Adverts / Recent
+        Channel Messages widgets stay fresh at the 30 s default while the
+        aggregate counts on /dashboard/stats cache for an hour."""
+        from unittest.mock import MagicMock
+
+        client_no_auth.app.state.redis_cache = MagicMock()
+        client_no_auth.app.state.redis_cache.get.return_value = None
+        client_no_auth.app.state.redis_cache_ttl = 30
+        client_no_auth.app.state.redis_cache_ttl_dashboard = 3600
+
+        client_no_auth.get("/api/v1/dashboard/recent-activity")
+
+        # First MISS stores the response at the default TTL (30 s), not
+        # the dashboard TTL (3600 s) — that's the whole point of the split.
+        # cache.set is invoked positionally as set(key, envelope, ttl).
+        client_no_auth.app.state.redis_cache.set.assert_called_once()
+        args, _ = client_no_auth.app.state.redis_cache.set.call_args
+        assert args[2] == 30
 
 
 class TestDashboardDateBucketRegression:
@@ -1281,3 +1365,278 @@ class TestDashboardDateBucketRegression:
         assert data["data"][seeded_idx]["count"] == 1
         if seeded_idx > 0:
             assert data["data"][seeded_idx - 1]["count"] == 0
+
+
+# ---------------------------------------------------------------------------
+# GET /dashboard/routes-overview
+# ---------------------------------------------------------------------------
+
+
+def _make_node_with_pk(session, public_key: str, name: str | None = None) -> Node:
+    node = Node(public_key=public_key, name=name)
+    session.add(node)
+    session.flush()
+    return node
+
+
+def _make_route_with_nodes(
+    session,
+    from_label: str,
+    to_label: str,
+    pubkeys: list[str],
+    visibility: str = "community",
+    enabled: bool = True,
+    threshold: int = 3,
+    clear_bar: int | None = None,
+    match_width: int = 1,
+) -> Route:
+    nodes = [_make_node_with_pk(session, pk) for pk in pubkeys]
+    route = Route(
+        from_label=from_label,
+        to_label=to_label,
+        visibility=visibility,
+        enabled=enabled,
+        match_width=match_width,
+        packet_count_threshold=threshold,
+        clear_threshold=clear_bar,
+    )
+    session.add(route)
+    session.flush()
+    for pos, n in enumerate(nodes):
+        session.add(
+            RouteNode(
+                route_id=route.id,
+                node_id=n.id,
+                position=pos,
+                expected_hash=n.public_key[: 2 * match_width].upper(),
+            )
+        )
+    session.flush()
+    return route
+
+
+def _make_reception_for_route(
+    session,
+    packet_hash: str,
+    path_hashes: list[str],
+    received_at: datetime,
+) -> None:
+    """Insert a RawPacket + PacketPathHop rows for a test reception."""
+    from uuid import uuid4
+
+    rp_id = str(uuid4())
+    session.add(
+        RawPacket(
+            id=rp_id,
+            packet_hash=packet_hash,
+            received_at=received_at,
+        )
+    )
+    session.flush()
+    for pos, nh in enumerate(path_hashes):
+        session.add(
+            PacketPathHop(
+                raw_packet_id=rp_id,
+                position=pos,
+                node_hash=nh,
+                packet_hash=packet_hash,
+                received_at=received_at,
+            )
+        )
+    session.flush()
+
+
+class TestRoutesOverview:
+    """Tests for GET /dashboard/routes-overview."""
+
+    def test_empty(self, client_no_auth):
+        """No routes seeded → empty routes array and by_state."""
+        resp = client_no_auth.get("/api/v1/dashboard/routes-overview")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["routes"] == []
+        assert data["by_state"] == []
+        assert data["days"] == 7
+
+    def test_default_days_is_7(self, client_no_auth, api_db_session):
+        resp = client_no_auth.get("/api/v1/dashboard/routes-overview")
+        assert resp.json()["days"] == 7
+
+    def test_custom_days(self, client_no_auth, api_db_session):
+        resp = client_no_auth.get("/api/v1/dashboard/routes-overview?days=3")
+        assert resp.json()["days"] == 3
+
+    def test_days_clamped_to_retention(self, client_no_auth, api_db_session):
+        from meshcore_hub.common.config import get_collector_settings
+
+        retention = get_collector_settings().effective_raw_packet_retention_days
+        resp = client_no_auth.get(
+            f"/api/v1/dashboard/routes-overview?days={retention + 30}"
+        )
+        assert resp.json()["days"] == retention
+
+    def test_history_includes_today_segment(self, client_no_auth, api_db_session):
+        """Each route's history has ``days + 1`` entries (include_today)."""
+        _make_route_with_nodes(api_db_session, "A", "B", ["a" * 64, "b" * 64])
+        api_db_session.commit()
+
+        data = client_no_auth.get("/api/v1/dashboard/routes-overview?days=7").json()
+        assert len(data["routes"]) == 1
+        history = data["routes"][0]["history"]
+        # 7 calendar days + today segment = 8 entries.
+        assert len(history) == 8
+        # Today's entry has the rolling-window state semantics.
+        today_entry = history[-1]
+        assert today_entry["quality"] in {
+            "clear",
+            "marginal",
+            "failing",
+            "unknown",
+        }
+        assert today_entry["state"] in {
+            "healthy",
+            "unhealthy",
+            "no_coverage",
+        }
+
+    def test_visibility_filter_hides_admin_routes(self, client_no_auth, api_db_session):
+        """Anonymous users must not see admin-only routes in the overview."""
+        _make_route_with_nodes(
+            api_db_session,
+            "Public",
+            "Endpoint",
+            ["a" * 64, "b" * 64],
+            visibility="community",
+        )
+        _make_route_with_nodes(
+            api_db_session,
+            "Secret",
+            "Endpoint",
+            ["c" * 64, "d" * 64],
+            visibility="admin",
+        )
+        api_db_session.commit()
+
+        # Anonymous: only the community route.
+        anon = client_no_auth.get("/api/v1/dashboard/routes-overview").json()
+        labels = [r["from_label"] for r in anon["routes"]]
+        assert labels == ["Public"]
+
+        # Admin sees both.
+        admin = client_no_auth.get(
+            "/api/v1/dashboard/routes-overview",
+            headers={"X-User-Roles": "admin"},
+        ).json()
+        admin_labels = sorted(r["from_label"] for r in admin["routes"])
+        assert admin_labels == ["Public", "Secret"]
+
+    def test_by_state_buckets_current_state(self, client_no_auth, api_db_session):
+        """``by_state`` counts route current state across the fleet."""
+        from meshcore_hub.collector.routes import (
+            evaluate_route,
+            upsert_route_result,
+        )
+
+        # Healthy route (3 packets in window, low clear bar) → healthy.
+        healthy = _make_route_with_nodes(
+            api_db_session,
+            "Healthy",
+            "End",
+            ["a" * 64, "b" * 64],
+            threshold=3,
+            clear_bar=3,
+        )
+        now = datetime.now(timezone.utc)
+        for i in range(3):
+            _make_reception_for_route(
+                api_db_session,
+                f"pk{i}",
+                ["AA", "BB"],
+                now - timedelta(hours=1, seconds=i),
+            )
+        # Disabled route → state=disabled regardless of packets.
+        _make_route_with_nodes(
+            api_db_session,
+            "Disabled",
+            "End",
+            ["c" * 64, "e" * 64],
+            enabled=False,
+        )
+        # Fresh route (no result yet, no packets) → no_coverage fallback.
+        _make_route_with_nodes(
+            api_db_session,
+            "Fresh",
+            "End",
+            ["f" * 64, "9" * 64],
+        )
+        # Populate route_result for the healthy route like the evaluator does.
+        since = now - timedelta(hours=healthy.window_hours)
+        state, quality, matched = evaluate_route(api_db_session, healthy, since)
+        upsert_route_result(api_db_session, healthy, state, quality, matched)
+        api_db_session.commit()
+
+        data = client_no_auth.get("/api/v1/dashboard/routes-overview").json()
+        state_map = {b["label"]: b["count"] for b in data["by_state"]}
+        # Healthy route picks up `healthy`; disabled picks up `disabled`;
+        # fresh route with no route_result falls back to `no_coverage`.
+        assert state_map.get("healthy", 0) >= 1
+        assert state_map.get("disabled", 0) >= 1
+        assert state_map.get("no_coverage", 0) >= 1
+
+        # The healthy route's per-route entry carries the matching state.
+        healthy_entry = next(r for r in data["routes"] if r["from_label"] == "Healthy")
+        assert healthy_entry["state"] == "healthy"
+        assert healthy_entry["quality"] == "clear"
+        assert healthy_entry["matched_count"] == 3
+
+    def test_disabled_route_matched_count_is_none(self, client_no_auth, api_db_session):
+        _make_route_with_nodes(
+            api_db_session,
+            "Off",
+            "End",
+            ["a" * 64, "b" * 64],
+            enabled=False,
+        )
+        api_db_session.commit()
+
+        data = client_no_auth.get("/api/v1/dashboard/routes-overview").json()
+        route = data["routes"][0]
+        assert route["state"] == "disabled"
+        assert route["matched_count"] is None
+
+    def test_cache_key_is_role_scoped(self, client_no_auth, api_db_session):
+        """Different roles get independent cache entries (sanity: both
+        return 200, response differs when visibility-filtered)."""
+        from unittest.mock import MagicMock
+
+        _make_route_with_nodes(
+            api_db_session,
+            "AdminOnly",
+            "End",
+            ["a" * 64, "b" * 64],
+            visibility="admin",
+        )
+        api_db_session.commit()
+
+        # Mock cache that records every set() call's key.
+        keys_seen: list[str] = []
+        mock = MagicMock()
+        mock.get.return_value = None
+
+        def _set(key, value, ttl):
+            keys_seen.append(key)
+
+        mock.set.side_effect = _set
+        client_no_auth.app.state.redis_cache = mock
+        client_no_auth.app.state.redis_cache_ttl = 30
+
+        client_no_auth.get("/api/v1/dashboard/routes-overview")
+        client_no_auth.get(
+            "/api/v1/dashboard/routes-overview",
+            headers={"X-User-Roles": "admin"},
+        )
+
+        # Two cache fills, role differs between them.
+        assert len(keys_seen) == 2
+        assert any("anonymous" in k for k in keys_seen)
+        assert any("admin" in k for k in keys_seen)

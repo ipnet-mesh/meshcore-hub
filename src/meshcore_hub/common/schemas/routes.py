@@ -260,3 +260,38 @@ class RouteHistory(BaseModel):
     route_id: str
     days: int
     data: list[RouteDayQuality]
+
+
+class RouteOverviewEntry(BaseModel):
+    """One route's current state plus its recent history (dashboard widget)."""
+
+    id: str
+    from_label: str
+    to_label: str
+    visibility: str
+    enabled: bool
+    state: Optional[str] = None
+    quality: Optional[str] = None
+    matched_count: Optional[int] = None
+    history: list[RouteDayQuality] = []
+
+
+class RoutesOverview(BaseModel):
+    """Aggregate route-fleet snapshot for the dashboard.
+
+    - ``by_state`` buckets routes by their current ``state`` (clear /
+      marginal / failing / no_coverage / disabled) so a single stacked
+      bar can render fleet health.
+    - ``routes`` carries per-route 7-day history for the trend line and
+      the per-route strip grid. The frontend slices the top N by
+      ``matched_count`` for display.
+    """
+
+    days: int
+    by_state: list["BreakdownBucket"]
+    routes: list[RouteOverviewEntry]
+
+
+from meshcore_hub.common.schemas.messages import BreakdownBucket  # noqa: E402
+
+RoutesOverview.model_rebuild()

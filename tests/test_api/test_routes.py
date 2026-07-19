@@ -270,7 +270,7 @@ class TestGetRouteDetail:
         mock_cache = MagicMock()
         mock_cache.get.return_value = None
         client_no_auth.app.state.redis_cache = mock_cache
-        client_no_auth.app.state.redis_cache_ttl_route_detail = 90
+        client_no_auth.app.state.redis_cache_ttl_dashboard = 90
 
         resp = client_no_auth.get(f"/api/v1/routes/{route.id}")
         assert resp.status_code == 200
@@ -315,7 +315,7 @@ class TestGetRouteDetail:
                 return True
 
         client_no_auth.app.state.redis_cache = _FakeCache()
-        client_no_auth.app.state.redis_cache_ttl_route_detail = 60
+        client_no_auth.app.state.redis_cache_ttl_dashboard = 60
 
         first = client_no_auth.get(f"/api/v1/routes/{route.id}")
         assert first.status_code == 200
@@ -686,6 +686,63 @@ class TestRouteHistory:
         data = resp.json()
         # retention=2 → days clamped to 2 → 3 entries (days + today)
         assert len(data["data"]) == 3
+
+    def test_today_segment_matches_route_result_badge(
+        self, client_no_auth, api_db_session
+    ):
+        """The rightmost history segment must match route_result (the badge).
+
+        Regression for the rolling-window/calendar-day mismatch: packets
+        placed yesterday evening are inside the rolling 24h window used by
+        the badge but outside today's UTC calendar bucket. After this fix,
+        the history endpoint's today segment must reflect the same
+        matched_count/quality/state as route_result.
+        """
+        from datetime import timedelta
+
+        from meshcore_hub.collector.routes import (
+            evaluate_route,
+            upsert_route_result,
+        )
+
+        route = _make_route_with_nodes(
+            api_db_session, "A", "B", ["aa" + "0" * 62, "bb" + "0" * 62]
+        )
+        api_db_session.commit()
+
+        # Place 3 matching packets 6h ago — within the 24h rolling window.
+        # If "now" is early in the UTC day, this may land in yesterday's
+        # calendar bucket, which is exactly the scenario we're fixing.
+        now = datetime.now(timezone.utc)
+        for i in range(3):
+            _make_reception(
+                api_db_session,
+                None,
+                f"badge{i}",
+                ["AA", "BB"],
+                received_at=now - timedelta(hours=6, seconds=i),
+            )
+        api_db_session.commit()
+
+        # Populate route_result the same way the background evaluator does.
+        rolling_start = now - timedelta(hours=route.window_hours)
+        state, quality, matched = evaluate_route(api_db_session, route, rolling_start)
+        upsert_route_result(api_db_session, route, state, quality, matched)
+        api_db_session.commit()
+        api_db_session.refresh(route)
+
+        badge = route.route_result
+        assert badge is not None, "fixture: route_result must be populated"
+
+        # Bypass cache to read fresh state.
+        client_no_auth.app.dependency_overrides = {}
+
+        resp = client_no_auth.get(f"/api/v1/routes/{route.id}/history?days=3")
+        assert resp.status_code == 200
+        today_segment = resp.json()["data"][-1]
+        assert today_segment["matched_count"] == badge.matched_count
+        assert today_segment["quality"] == badge.quality
+        assert today_segment["state"] == badge.state
 
 
 # ---------------------------------------------------------------------------

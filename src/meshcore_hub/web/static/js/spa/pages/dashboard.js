@@ -119,12 +119,62 @@ function gridCols(count) {
     return '';
 }
 
-function renderChartCards({ showNodes, showAdverts, showMessages, showPackets, stats, packetBreakdown }) {
+function renderRoutesHealth(routes) {
+    if (!routes || routes.length === 0) {
+        return html`<p class="text-sm opacity-70">${t('dashboard.routes_empty')}</p>`;
+    }
+    // Top 6 by current matched_count, mirroring the trend chart cap so the
+    // two widgets surface the same routes.
+    const sorted = routes.slice().sort((a, b) => (b.matched_count || 0) - (a.matched_count || 0));
+    const maxRows = 6;
+    const visible = sorted.slice(0, maxRows);
+    const hidden = sorted.length - visible.length;
+
+    const colorFor = (q) => {
+        // Mirrors ChartColors.quality in charts.js but reads CSS vars so the
+        // strips stay in sync with the legend.
+        const map = {
+            clear:       'oklch(0.72 0.17 145)',
+            marginal:    'oklch(0.75 0.18 85)',
+            failing:     'oklch(0.62 0.24 25)',
+            no_coverage: 'oklch(0.65 0.15 250)',
+            disabled:    'oklch(0.55 0 0)',
+        };
+        return map[q] || map.no_coverage;
+    };
+    const labelFor = (q) => t('routes.quality_' + (q || 'unknown'));
+
+    const rows = visible.map(r => {
+        const cells = (r.history || []).map(d => html`
+            <div class="route-health-cell"
+                 style="background:${colorFor(d.quality)}"
+                 title="${d.date} \u2014 ${labelFor(d.quality)} (${d.matched_count})"></div>`);
+        const current = r.quality || (r.enabled ? 'no_coverage' : 'disabled');
+        return html`<div class="flex items-center gap-2">
+            <span class="flex-1 min-w-0 truncate text-sm"
+               title="${r.from_label} \u2192 ${r.to_label}">
+                ${r.from_label} <span class="opacity-50">\u2192</span> ${r.to_label}
+            </span>
+            <div class="flex gap-0.5 flex-shrink-0">${cells}</div>
+            <span class="w-2 h-2 rounded-full flex-shrink-0"
+                  style="background:${colorFor(current)}"
+                  title="${labelFor(current)}"></span>
+        </div>`;
+    });
+
+    return html`<div class="space-y-2">
+        ${rows}
+        ${hidden > 0 ? html`<p class="text-xs opacity-60 pt-1">${t('dashboard.routes_more', { count: hidden })}</p>` : nothing}
+    </div>`;
+}
+
+function renderChartCards({ showNodes, showAdverts, showMessages, showPackets, showRoutes, stats, packetBreakdown, routesOverview }) {
     const visibleCount = (showNodes ? 1 : 0) + (showAdverts ? 1 : 0) + (showMessages ? 1 : 0) + (showPackets ? 1 : 0);
     if (visibleCount === 0) return nothing;
 
     const eventTypeTotal = packetBreakdown?.by_event_type?.reduce((s, b) => s + b.count, 0) ?? 0;
     const pathWidthTotal = packetBreakdown?.by_path_width?.reduce((s, b) => s + b.count, 0) ?? 0;
+    const hasRoutes = !!(routesOverview && routesOverview.routes && routesOverview.routes.length);
 
     return html`
 <div class="grid grid-cols-1 ${gridCols(visibleCount)} gap-6 mb-8">
@@ -213,8 +263,9 @@ function renderChartCards({ showNodes, showAdverts, showMessages, showPackets, s
     </div>` : nothing}
 </div>
 
-${showPackets ? html`
-<div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
+${(showPackets || (showRoutes && hasRoutes)) ? html`
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    ${showPackets ? html`
     <div class="card bg-base-100 shadow-xl panel-accent" style="--panel-color: var(--color-packets)">
         <div class="card-body">
             <div class="flex items-start justify-between gap-2">
@@ -233,8 +284,9 @@ ${showPackets ? html`
                 <canvas id="packetEventTypeChart"></canvas>
             </div>
         </div>
-    </div>
+    </div>` : nothing}
 
+    ${showPackets ? html`
     <div class="card bg-base-100 shadow-xl panel-accent" style="--panel-color: var(--color-packets)">
         <div class="card-body">
             <div class="flex items-start justify-between gap-2">
@@ -253,7 +305,39 @@ ${showPackets ? html`
                 <canvas id="packetPathWidthChart"></canvas>
             </div>
         </div>
-    </div>
+    </div>` : nothing}
+
+    ${(showRoutes && hasRoutes) ? html`
+    <div class="card bg-base-100 shadow-xl panel-accent" style="--panel-color: var(--color-routes)">
+        <div class="card-body">
+            <div class="flex items-start justify-between gap-2">
+                <div>
+                    <h2 class="card-title text-base">
+                        ${t('dashboard.route_health')}
+                    </h2>
+                    <p class="text-xs opacity-80">${t('time.last_7_days')}</p>
+                </div>
+            </div>
+            ${renderRoutesHealth(routesOverview.routes)}
+        </div>
+    </div>` : nothing}
+
+    ${(showRoutes && hasRoutes) ? html`
+    <div class="card bg-base-100 shadow-xl panel-accent" style="--panel-color: var(--color-routes)">
+        <div class="card-body">
+            <div class="flex items-start justify-between gap-2">
+                <div>
+                    <h2 class="card-title text-base">
+                        ${t('dashboard.routes_trend')}
+                    </h2>
+                    <p class="text-xs opacity-80">${t('time.routes_over_last_n_days', { n: routesOverview.days })}</p>
+                </div>
+            </div>
+            <div class="h-32">
+                <canvas id="routesTrendChart"></canvas>
+            </div>
+        </div>
+    </div>` : nothing}
 </div>` : nothing}`;
 }
 
@@ -267,14 +351,17 @@ export async function render(container, params, router) {
         const showAdverts = features.advertisements !== false;
         const showMessages = features.messages !== false;
         const showPackets = features.packets !== false;
+        const showRoutes = features.routes !== false;
 
-        const [stats, advertActivity, messageActivity, nodeCount, packetActivity, packetBreakdown, channelsData] = await Promise.all([
+        const [stats, recentActivity, advertActivity, messageActivity, nodeCount, packetActivity, packetBreakdown, routesOverview, channelsData] = await Promise.all([
             apiGet('/api/v1/dashboard/stats', {}, { signal }),
+            apiGet('/api/v1/dashboard/recent-activity', {}, { signal }),
             apiGet('/api/v1/dashboard/activity', { days: 7 }, { signal }),
             apiGet('/api/v1/dashboard/message-activity', { days: 7 }, { signal }),
             apiGet('/api/v1/dashboard/node-count', { days: 7 }, { signal }),
             apiGet('/api/v1/dashboard/packet-activity', { days: 7 }, { signal }),
             apiGet('/api/v1/dashboard/packet-breakdown', { days: 7 }, { signal }),
+            showRoutes ? apiGet('/api/v1/dashboard/routes-overview', { days: 7 }, { signal }) : Promise.resolve(null),
             apiGet('/api/v1/channels', {}, { signal }),
         ]);
         channelLabels = new Map([
@@ -294,7 +381,7 @@ export async function render(container, params, router) {
 </div>
 
 ${(showNodes || showAdverts || showMessages || showPackets) ? html`
-${renderChartCards({ showNodes, showAdverts, showMessages, showPackets, stats, packetBreakdown })}` : nothing}
+${renderChartCards({ showNodes, showAdverts, showMessages, showPackets, showRoutes, stats, packetBreakdown, routesOverview })}` : nothing}
 
 ${bottomCount > 0 ? html`
 <div class="grid grid-cols-1 ${bottomGrid} gap-6">
@@ -305,11 +392,11 @@ ${bottomCount > 0 ? html`
                 ${iconAdvertisements('h-6 w-6')}
                 ${t('common.recent_entity', { entity: t('entities.advertisements') })}
             </h2>
-            ${renderRecentAds(stats.recent_advertisements)}
+            ${renderRecentAds(recentActivity.recent_advertisements)}
         </div>
     </div>` : nothing}
 
-    ${showMessages ? renderChannelMessages(stats.channel_messages, channelLabels) : nothing}
+    ${showMessages ? renderChannelMessages(recentActivity.channel_messages, channelLabels) : nothing}
 </div>` : nothing}`, container);
 
         window.initDashboardCharts(
@@ -319,9 +406,10 @@ ${bottomCount > 0 ? html`
             showPackets ? packetActivity : null,
             showPackets ? packetBreakdown.by_event_type : null,
             showPackets ? packetBreakdown.by_path_width : null,
+            (showRoutes && routesOverview && routesOverview.routes) ? routesOverview.routes : null,
         );
 
-        const chartIds = ['nodeChart', 'advertChart', 'messageChart', 'packetChart', 'packetEventTypeChart', 'packetPathWidthChart'];
+        const chartIds = ['nodeChart', 'advertChart', 'messageChart', 'packetChart', 'packetEventTypeChart', 'packetPathWidthChart', 'routesTrendChart'];
         return () => {
             chartIds.forEach(id => {
                 const canvas = document.getElementById(id);

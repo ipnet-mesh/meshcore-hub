@@ -89,8 +89,14 @@ def invalidate_routes(request: Request) -> None:
     All three endpoints share the ``/api/v1/routes`` URL-path prefix in their
     cache keys (the ``{id}`` and ``{id}/history`` sub-paths glob-match the
     same SCAN), so a single ``delete`` covers them.
+
+    The dashboard's ``GET /dashboard/routes-overview`` endpoint also embeds
+    per-route state and history, so it must be invalidated alongside the
+    per-route caches. That key lives under the ``dashboard/routes-overview``
+    endpoint-name namespace (no ``key_builder``), so it needs its own drop.
     """
     _drop(request, "/api/v1/routes")
+    _drop(request, "dashboard/routes-overview")
 
 
 def invalidate_nodes(request: Request) -> None:

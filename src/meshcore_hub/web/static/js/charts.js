@@ -42,6 +42,8 @@ const ChartColors = {
     get messagesFill() { return withAlpha(this.messages, 0.1); },
     get packets()      { return getCSSColor('--color-packets', 'oklch(0.72 0.17 145)'); },
     get packetsFill()  { return withAlpha(this.packets, 0.1); },
+    get routes()       { return getCSSColor('--color-routes', 'oklch(0.72 0.17 30)'); },
+    get routesFill()   { return withAlpha(this.routes, 0.1); },
 
     // Neutral grays (not page-specific)
     grid: 'oklch(0.4 0 0 / 0.2)',
@@ -323,8 +325,141 @@ function createStackedBarChart(canvasId, buckets, colors) {
 }
 
 /**
+ * Create a multi-line route-status trend chart for the dashboard.
+ *
+ * Each route becomes one line plotted on a 3-tier categorical Y axis
+ * (``failing`` → ``marginal`` → ``clear``, bottom to top). The line's
+ * color reflects the route's CURRENT quality (its latest evaluation),
+ * so multiple routes in the same health band share a color — the chart
+ * reads as a fleet-health overview rather than per-route identity.
+ * Hover tooltips still show the route label, tier, and matched_count.
+ *
+ * Input is the ``routes`` array from ``GET /dashboard/routes-overview``.
+ * The top ``maxRoutes`` routes by current ``matched_count`` are drawn;
+ * the rest are dropped silently (summing quality tiers is meaningless).
+ *
+ * Quality → tier mapping (per the merged-3-tier design):
+ *   ``clear``       → clear
+ *   ``marginal``    → marginal
+ *   anything else   → failing   (covers ``failing``, ``unknown``,
+ *                                 ``no_coverage``, ``disabled``, null)
+ *
+ * @param {string} canvasId - ID of the canvas element
+ * @param {Array|null} routes - Array of RouteOverviewEntry objects
+ * @param {number} [maxRoutes=6] - Top-N routes drawn distinctly
+ * @returns {Chart|null}
+ */
+function createRoutesTrendChart(canvasId, routes, maxRoutes) {
+    var ctx = document.getElementById(canvasId);
+    if (!ctx || !routes || routes.length === 0) return null;
+
+    maxRoutes = maxRoutes || 6;
+
+    // Bottom-to-top tier order on the categorical Y axis.
+    var tierOrder = ['failing', 'marginal', 'clear'];
+
+    function qualityToTier(q) {
+        if (q === 'clear') return 'clear';
+        if (q === 'marginal') return 'marginal';
+        return 'failing';
+    }
+
+    function tierColor(tier) {
+        return ChartColors.quality[tier] || ChartColors.quality.failing;
+    }
+
+    // Mean tier over the displayed window. Maps the 3-tier space onto a
+    // 0/1/2 numeric scale (failing < marginal < clear), averages, then
+    // buckets back: >=1.5 → clear, >=0.75 → marginal, else failing.
+    // Empty history falls through to failing (matches qualityToTier's
+    // default for unknown / null quality).
+    function averageTier(history) {
+        if (!history || history.length === 0) return 'failing';
+        var sum = 0;
+        for (var i = 0; i < history.length; i++) {
+            var tier = qualityToTier(history[i].quality);
+            sum += (tier === 'clear' ? 2 : tier === 'marginal' ? 1 : 0);
+        }
+        var mean = sum / history.length;
+        if (mean >= 1.5) return 'clear';
+        if (mean >= 0.75) return 'marginal';
+        return 'failing';
+    }
+
+    // Sort by current matched_count desc; routes with null matched_count
+    // (disabled / never evaluated) sort to the end.
+    var sorted = routes.slice().sort(function(a, b) {
+        var am = a.matched_count || 0;
+        var bm = b.matched_count || 0;
+        return bm - am;
+    });
+    var top = sorted.slice(0, maxRoutes);
+
+    // Use the longest history as the X-axis label source (all routes
+    // share the same window in practice, but be defensive).
+    var labels = [];
+    for (var i = 0; i < top.length; i++) {
+        if (top[i].history && top[i].history.length > labels.length) {
+            labels = formatDateLabels(top[i].history);
+        }
+    }
+    if (labels.length === 0) return null;
+
+    var datasets = top.map(function(entry) {
+        var history = entry.history || [];
+        var avgTier = averageTier(history);
+        return {
+            label: entry.from_label + ' \u2192 ' + entry.to_label,
+            data: history.map(function(d) { return qualityToTier(d.quality); }),
+            borderColor: tierColor(avgTier),
+            backgroundColor: 'transparent',
+            fill: false,
+            tension: 0.3,
+            cubicInterpolationMode: 'monotone',
+            pointRadius: 2,
+            pointHoverRadius: 5,
+            spanGaps: true,
+            _matched: history.map(function(d) { return d.matched_count || 0; })
+        };
+    });
+
+    var opts = createChartOptions(false);
+    // Replace the default numeric Y axis with a 3-tier categorical axis.
+    opts.scales.y = {
+        type: 'category',
+        labels: tierOrder,
+        reverse: true,
+        grid: { color: ChartColors.grid },
+        ticks: {
+            color: ChartColors.text,
+            callback: function(_value, index) {
+                var tier = tierOrder[index];
+                return (window.t && window.t('routes.quality_' + tier)) || tier;
+            }
+        }
+    };
+    // The default tooltip formatter calls formatNumber(ctx.parsed.y),
+    // which is wrong for categorical string values; emit tier + matched.
+    opts.plugins.tooltip.callbacks = {
+        title: function(items) { return items[0].label; },
+        label: function(ctx) {
+            var tier = tierOrder[ctx.parsed.y] || 'failing';
+            var tierLabel = (window.t && window.t('routes.quality_' + tier)) || tier;
+            var matched = (ctx.dataset._matched && ctx.dataset._matched[ctx.dataIndex]) || 0;
+            return ctx.dataset.label + ': ' + tierLabel + ' (' + matched + ')';
+        }
+    };
+
+    return new Chart(ctx, {
+        type: 'line',
+        data: { labels: labels, datasets: datasets },
+        options: opts
+    });
+}
+
+/**
  * Initialize dashboard charts (nodes, advertisements, messages, packets,
- * plus optional packet-breakdown stacked bars).
+ * plus optional packet-breakdown stacked bars and routes overview).
  * Pass null for any data parameter to skip that chart.
  * @param {Object|null} nodeData - Node count data, or null to skip
  * @param {Object|null} advertData - Advertisement data, or null to skip
@@ -332,8 +467,9 @@ function createStackedBarChart(canvasId, buckets, colors) {
  * @param {Object|null} packetData - Raw-packet trend data, or null to skip
  * @param {Array|null} [eventTypeData] - Packet event-type breakdown buckets
  * @param {Array|null} [pathWidthData] - Packet path-width breakdown buckets
+ * @param {Array|null} [routesData] - Routes overview ``routes`` array
  */
-function initDashboardCharts(nodeData, advertData, messageData, packetData, eventTypeData, pathWidthData) {
+function initDashboardCharts(nodeData, advertData, messageData, packetData, eventTypeData, pathWidthData, routesData) {
     if (nodeData) {
         createLineChart(
             'nodeChart',
@@ -392,6 +528,10 @@ function initDashboardCharts(nodeData, advertData, messageData, packetData, even
             pathWidthData,
             ChartColors.breakdown.slice(0, 3)
         );
+    }
+
+    if (routesData && routesData.length > 0) {
+        createRoutesTrendChart('routesTrendChart', routesData);
     }
 }
 

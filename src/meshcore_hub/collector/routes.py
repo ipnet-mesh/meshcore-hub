@@ -585,13 +585,20 @@ def evaluate_route_history(
     """Evaluate a route over *days* calendar-day buckets (oldest first).
 
     Returns a list of ``(date, quality, state, matched_count)`` tuples.
-    When *include_today* is True, an extra partial-day entry for today is
-    appended.  For a disabled route, every day returns ``unknown`` /
-    ``no_coverage`` / ``0`` without hitting the DB.
+    When *include_today* is True, an extra entry is appended whose
+    ``quality``/``state``/``matched_count`` are computed via
+    :func:`evaluate_route` over the route's rolling ``window_hours`` window
+    (the same call used to populate ``route_result`` for the badge), so the
+    rightmost chart segment matches the card's badge. The ``date`` of that
+    entry is today's date — its underlying window may extend into yesterday
+    when ``window_hours`` > time elapsed since UTC midnight. Historical
+    segments remain UTC calendar-day buckets. For a disabled route, every
+    day returns ``unknown`` / ``no_coverage`` / ``0`` without hitting the DB.
 
     Performance: fetches only hops matching the route's expected prefixes
     (one DB query) plus one GROUP BY existence check, then partitions by
-    day in Python.
+    day in Python. When *include_today* is True, an additional bounded
+    ``evaluate_route`` call is made for the rolling-window segment.
     """
     current = now or datetime.now(timezone.utc)
     today_midnight = current.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -667,7 +674,16 @@ def evaluate_route_history(
         last_prefix = expected[-1]
         last_prefix_end = _hex_prefix_end(last_prefix)
 
-    day_paths: list[dict[str, list[dict[str, Any]]]] = [{} for _ in range(total_days)]
+    # When include_today is set, the rightmost segment is evaluated via
+    # ``evaluate_route`` over the route's rolling ``window_hours`` window
+    # so that it matches ``route_result.quality`` (the badge). Historical
+    # segments remain UTC calendar-day buckets. We therefore partition
+    # packets only into the historical indices and append today separately.
+    historical_days = total_days - (1 if include_today else 0)
+
+    day_paths: list[dict[str, list[dict[str, Any]]]] = [
+        {} for _ in range(historical_days)
+    ]
     for rp_id, hops in all_paths.items():
         for hop in hops:
             h = hop["node_hash"]
@@ -679,18 +695,18 @@ def evaluate_route_history(
                 or (last_prefix is not None and last_prefix <= h < last_prefix_end)
             ):
                 continue
-            for i in range(total_days):
+            for i in range(historical_days):
                 if day_starts[i] <= ra < day_ends[i]:
                     if rp_id not in day_paths[i]:
                         day_paths[i][rp_id] = hops
                     break
 
-    # --- Evaluate each day (CPU-only, no DB) ---
+    # --- Evaluate each historical day (CPU-only, no DB) ---
     eff_clear = effective_clear_threshold(route)
     threshold = route.packet_count_threshold
 
     results: list[tuple[date, str, str, int]] = []
-    for i in range(total_days):
+    for i in range(historical_days):
         matched_packets: set[str] = set()
         for hops in day_paths[i].values():
             if _match_hops(hops, expected, route.max_hop_span, reversible):
@@ -710,6 +726,14 @@ def evaluate_route_history(
 
         quality = derive_quality(state, matched_count, threshold, eff_clear)
         results.append((day_dates[i], quality, state, matched_count))
+
+    # --- Today segment: rolling window, same call as the badge evaluator ---
+    if include_today:
+        rolling_start = current - timedelta(hours=route.window_hours)
+        today_state, today_quality, today_matched = evaluate_route(
+            session, route, rolling_start
+        )
+        results.append((day_dates[-1], today_quality, today_state, today_matched))
 
     return results
 

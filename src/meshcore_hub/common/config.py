@@ -418,15 +418,14 @@ class APISettings(CommonSettings):
         description="Default cache TTL in seconds",
     )
     redis_cache_ttl_dashboard: int = Field(
-        default=300,
+        default=3600,
         description=(
-            "Cache TTL in seconds for dashboard endpoints and per-route "
-            "health history (trend/aggregation data tolerates longer staleness)"
+            "Cache TTL in seconds for dashboard endpoints, /routes/{id} detail "
+            "and per-route health history (trend/aggregation data tolerates "
+            "longer staleness than the default TTL). The Recent Adverts / "
+            "Recent Channel Messages widgets live on a separate "
+            "/dashboard/recent-activity endpoint cached at redis_cache_ttl."
         ),
-    )
-    redis_cache_ttl_route_detail: int = Field(
-        default=300,
-        description="Cache TTL for /routes/{id} detail endpoint (seconds)",
     )
 
     # HTTP Cache-Control headers

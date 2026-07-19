@@ -138,7 +138,8 @@
     "last_7_days": "Last 7 days",
     "per_day_last_7_days": "Per day (last 7 days)",
     "over_time_last_7_days": "Over time (last 7 days)",
-    "activity_per_day_last_7_days": "Activity per day (last 7 days)"
+    "activity_per_day_last_7_days": "Activity per day (last 7 days)",
+    "routes_over_last_n_days": "Matched packets per route (last {{n}} days)"
   },
   "node_types": {
     "chat": "Chat",
@@ -161,7 +162,11 @@
   "dashboard": {
     "all_discovered_nodes": "All discovered nodes",
     "recent_channel_messages": "Recent Channel Messages",
-    "channel": "Channel {{number}}"
+    "channel": "Channel {{number}}",
+    "routes_trend": "Route Trends",
+    "route_health": "Route Health",
+    "routes_more": "+{{count}} more routes",
+    "routes_empty": "No routes configured yet."
   },
   "nodes": {
     "scan_to_add": "Scan to add as contact",
@@ -346,7 +351,9 @@
     "quality_no_coverage": "No Coverage",
     "quality_unknown": "Unknown",
     "recent_packets": "Recent Packets",
-    "min_nodes_error": "At least 2 path nodes are required."
+    "last_n_hours": "Last {{n}}h",
+    "min_nodes_error": "At least 2 path nodes are required.",
+    "other_routes": "Other routes"
   },
   "not_found": {
     "description": "The page you're looking for doesn't exist or has been moved."

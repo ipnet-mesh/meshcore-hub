@@ -86,6 +86,8 @@
 .nav-icon-dashboard { color: var(--color-dashboard); }
 .nav-icon-nodes { color: var(--color-nodes); }
 .nav-icon-adverts { color: var(--color-adverts); }
+.nav-icon-channels { color: var(--color-channels); }
+.nav-icon-routes { color: var(--color-routes); }
 .nav-icon-messages { color: var(--color-messages); }
 .nav-icon-packets { color: var(--color-packets); }
 .nav-icon-map { color: var(--color-map); }
@@ -95,6 +97,8 @@
 .navbar .menu li:has(.nav-icon-dashboard) { --nav-color: var(--color-dashboard); }
 .navbar .menu li:has(.nav-icon-nodes) { --nav-color: var(--color-nodes); }
 .navbar .menu li:has(.nav-icon-adverts) { --nav-color: var(--color-adverts); }
+.navbar .menu li:has(.nav-icon-channels) { --nav-color: var(--color-channels); }
+.navbar .menu li:has(.nav-icon-routes) { --nav-color: var(--color-routes); }
 .navbar .menu li:has(.nav-icon-messages) { --nav-color: var(--color-messages); }
 .navbar .menu li:has(.nav-icon-packets) { --nav-color: var(--color-packets); }
 .navbar .menu li:has(.nav-icon-map) { --nav-color: var(--color-map); }
@@ -123,6 +127,16 @@
 .panel-solid {
     background-color: color-mix(in oklch, var(--panel-color, transparent) var(--panel-tint-strength), var(--panel-tint-bg));
     border-left: 5px solid color-mix(in oklch, var(--panel-color, transparent) 55%, transparent);
+}
+
+/* Route-health strip grid (dashboard widget).
+   Each cell is a fixed-width colored square; the row flexes so long
+   route labels truncate while the strip stays compact. */
+.route-health-cell {
+    width: 14px;
+    height: 14px;
+    border-radius: 2px;
+    display: inline-block;
 }
 
 .radio-tile-icon {

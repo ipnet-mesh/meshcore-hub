@@ -267,7 +267,12 @@ class ChannelMessage(BaseModel):
 
 
 class DashboardStats(BaseModel):
-    """Schema for dashboard statistics."""
+    """Schema for dashboard aggregate statistics (counts only).
+
+    The Recent Adverts / Recent Channel Messages lists used to live here
+    but were split into ``GET /dashboard/recent-activity`` so they can
+    carry a shorter cache TTL than the expensive aggregate counts.
+    """
 
     total_nodes: int = Field(..., description="Total number of nodes")
     active_nodes: int = Field(..., description="Nodes active in last 24h")
@@ -281,16 +286,9 @@ class DashboardStats(BaseModel):
     advertisements_7d: int = Field(
         default=0, description="Advertisements received in last 7 days"
     )
-    recent_advertisements: list[RecentAdvertisement] = Field(
-        default_factory=list, description="Last 10 advertisements"
-    )
     channel_message_counts: dict[int, int] = Field(
         default_factory=dict,
         description="Message count per channel",
-    )
-    channel_messages: dict[int, list[ChannelMessage]] = Field(
-        default_factory=dict,
-        description="Recent messages per channel (up to 5 each)",
     )
     total_operators: int = Field(default=0, description="Number of operator-role users")
     total_members: int = Field(
@@ -298,6 +296,25 @@ class DashboardStats(BaseModel):
     )
     total_packets: int = Field(default=0, description="Total raw packets captured")
     packets_7d: int = Field(default=0, description="Packets captured in last 7 days")
+
+
+class RecentActivity(BaseModel):
+    """Schema for ``GET /dashboard/recent-activity``.
+
+    Hosts the recent-adverts / recent-channel-messages lists that used to
+    be embedded in ``DashboardStats``. Cached at the default ``redis_cache_ttl``
+    (30 s) so the dashboard's Recent panels stay fresh even while the
+    aggregate counts are cached at the longer ``redis_cache_ttl_dashboard``.
+    Channel visibility is role-scoped via the cache key builder.
+    """
+
+    recent_advertisements: list[RecentAdvertisement] = Field(
+        default_factory=list, description="Last 10 advertisements"
+    )
+    channel_messages: dict[int, list[ChannelMessage]] = Field(
+        default_factory=dict,
+        description="Recent messages per channel (up to 5 each, role-visible only)",
+    )
 
 
 class DailyActivityPoint(BaseModel):

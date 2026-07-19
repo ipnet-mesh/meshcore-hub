@@ -61,9 +61,8 @@ Optional Redis-backed caching for API responses. When disabled or unavailable, t
 | `REDIS_DB` | `0` | Redis database number |
 | `REDIS_PASSWORD` | _(none)_ | Redis password (optional) |
 | `REDIS_KEY_PREFIX` | `hub` | Cache key prefix for multi-instance isolation |
-| `REDIS_CACHE_TTL` | `30` | Default cache TTL in seconds |
-| `REDIS_CACHE_TTL_DASHBOARD` | `300` | Cache TTL for `/dashboard/*` endpoints and `/routes/{id}/history` (seconds). Trend/aggregation data tolerates longer staleness than the default TTL. |
-| `REDIS_CACHE_TTL_ROUTE_DETAIL` | `300` | Cache TTL for `/routes/{id}` detail endpoint in seconds |
+| `REDIS_CACHE_TTL` | `30` | Default cache TTL in seconds. Also covers `GET /dashboard/recent-activity` (Recent Adverts / Recent Channel Messages widgets) so those panels stay fresh independently of the longer dashboard TTL below. |
+| `REDIS_CACHE_TTL_DASHBOARD` | `3600` | Cache TTL in seconds for `/dashboard/*` endpoints (except `/recent-activity`), `/routes/{id}` detail, and `/routes/{id}/history`. Trend/aggregation data tolerates much longer staleness than the default TTL. |
 
 ### HTTP Cache-Control
 
