@@ -659,12 +659,12 @@ export function observerFilterBadges({ areas, disabled, onToggle, extraClass = '
             const title = enabled
                 ? t('common.filter_observer_disable')
                 : t('common.filter_observer_enable');
-            const emoji = extractFirstEmoji(n._displayName);
-            const label = emoji ? (n._displayName.replace(emoji, '').trim() || n._displayName) : n._displayName;
+            const emoji = extractFirstEmoji(area);
+            const label = emoji ? (area.replace(emoji, '').trim() || area) : area;
             return html`<button type="button"
                 class="${cls} cursor-pointer"
                 title=${title}
-                @click=${() => onToggle(n.public_key)}>${emoji ? html`<span class="mr-1">${emoji}</span>` : nothing}${label}</button>`;
+                @click=${() => onToggle(area)}>${emoji ? html`<span class="mr-1">${emoji}</span>` : nothing}${label}</button>`;
         })}
     </div>`;
 }
