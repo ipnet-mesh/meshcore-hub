@@ -59,19 +59,34 @@ To suppress all client-side caching directives (e.g. for debugging):
 
 The `X-Cache: HIT|MISS` observability header is unaffected — it is still emitted whenever a request flows through the `@cached` decorator, regardless of this setting.
 
-### Dashboard Cache TTL default raised (30s → 300s)
+### Dashboard / Route cache consolidation (1h dashboard TTL, dedicated route-detail TTL removed)
 
-The default for `REDIS_CACHE_TTL_DASHBOARD` has been raised from **30 s** to **300 s** (5 minutes). This setting covers all `/dashboard/*` endpoints (`stats`, `activity`, `packet-activity`, `packet-breakdown`, `message-activity`, `node-count`) **and** the per-route health strip `GET /api/v1/routes/{id}/history`. These all return trend/aggregation data where minute-level staleness is invisible to operators but every cache miss costs seconds of SQL/aggregation work — the old 30 s default was leaving most of that work unpaid on typical dashboards.
+Two related changes to the Redis cache layer:
 
-| Variable | Old default | New default |
-| --- | --- | --- |
-| `REDIS_CACHE_TTL_DASHBOARD` | `30` | `300` |
+1. **`REDIS_CACHE_TTL_DASHBOARD` default raised from 300 s to 3600 s (1 hour).** This setting now covers all `/dashboard/*` endpoints **and** `/routes/{id}` detail **and** `/routes/{id}/history` — trend/aggregation data where minute-level staleness is invisible to operators but every cache miss costs seconds of SQL/aggregation work. The 5-minute window shipped earlier in v0.16.0 was still leaving most of that work unpaid on busy meshes.
 
-- **Operators who already set the env var explicitly:** no change — your value still wins.
-- **Operators on the default:** silently bumped to 5 min staleness on the dashboard and route health strips. If you relied on the old 30 s behaviour (e.g. for development or tight freshness SLOs), set `REDIS_CACHE_TTL_DASHBOARD=30` to restore it.
-- **Existing Redis entries at deploy time:** keep their original TTL and expire naturally within ≤ 30 s. No flush is required.
-- **Browser `max-age`:** the HTTP `Cache-Control: max-age=<ttl>` emitted by the middleware follows the Redis TTL, so browser-side caching on these endpoints also extends to 5 min. Clicking around the dashboard will be instant for that window. A hard refresh (`Ctrl+Shift+R`) bypasses this if you need the latest data.
-- **Side-effect fix:** the reported short-TTL behaviour on the per-route healthchart (which shares this setting) is resolved.
+2. **`REDIS_CACHE_TTL_ROUTE_DETAIL` removed.** The dedicated 300 s TTL for `/routes/{id}` detail has been folded into `REDIS_CACHE_TTL_DASHBOARD` (so the route detail page now also serves from the 1 h cache). Operators who had set `REDIS_CACHE_TTL_ROUTE_DETAIL` explicitly should delete that line from their `.env` — the variable is now ignored.
+
+3. **`GET /dashboard/recent-activity` split out of `GET /dashboard/stats`.** The Recent Adverts and Recent Channel Messages widgets used to live as fields inside `/dashboard/stats`, so they inherited the long dashboard TTL and went stale for the full window. They now have their own endpoint, `/dashboard/recent-activity`, which is cached at the **default** `REDIS_CACHE_TTL` (30 s) — so the Recent panels stay fresh even while the aggregate counts alongside them are cached for an hour. The two fields were **removed from the `/dashboard/stats` response**:
+
+   | Field                       | Old location              | New location                          |
+   | --------------------------- | ------------------------- | ------------------------------------- |
+   | `recent_advertisements`     | `/dashboard/stats` field  | `/dashboard/recent-activity` field    |
+   | `channel_messages`          | `/dashboard/stats` field  | `/dashboard/recent-activity` field    |
+
+   `/dashboard/stats` still returns `channel_message_counts` (the per-channel counts); only the message bodies moved. The SPA's dashboard page now fires one extra parallel request to `/dashboard/recent-activity`. `home.js` only used the counts and needs no change — it silently benefits from the longer `/dashboard/stats` TTL.
+
+| Variable                      | Old default | New default |
+| ----------------------------- | ----------- | ----------- |
+| `REDIS_CACHE_TTL_DASHBOARD`   | `300`       | `3600`      |
+| `REDIS_CACHE_TTL_ROUTE_DETAIL`| `300`       | _(removed)_ |
+
+- **Operators who already set `REDIS_CACHE_TTL_DASHBOARD` explicitly:** no change — your value still wins.
+- **Operators on the default:** silently bumped from 5 min to 1 h staleness on dashboard aggregates, route detail, and route health strips. If you relied on the previous 5 min freshness (e.g. for development), set `REDIS_CACHE_TTL_DASHBOARD=300` (or lower) to restore it.
+- **Operators who set `REDIS_CACHE_TTL_ROUTE_DETAIL`:** delete the line — the variable is now ignored, the route detail page uses `REDIS_CACHE_TTL_DASHBOARD` like everything else in this group.
+- **Existing Redis entries at deploy time:** keep their original TTL and expire naturally. No flush is required.
+- **Browser `max-age`:** the HTTP `Cache-Control: max-age=<ttl>` emitted by the middleware follows the Redis TTL, so browser-side caching on these endpoints also extends to 1 h. The Recent Adverts / Recent Channel Messages widgets are unaffected because `/dashboard/recent-activity` still uses the short default TTL.
+- **External API consumers** reading `recent_advertisements` / `channel_messages` from `/dashboard/stats`: switch to `/dashboard/recent-activity` (same field shapes, same role-visibility filtering).
 
 ## v0.15.0
 

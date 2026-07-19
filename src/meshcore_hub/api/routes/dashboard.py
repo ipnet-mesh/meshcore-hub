@@ -9,6 +9,7 @@ from sqlalchemy.sql.elements import ColumnElement
 from meshcore_hub.api.auth import RequireRead
 from meshcore_hub.api.cache import cached, sorted_query_string
 from meshcore_hub.api.channel_visibility import (
+    VISIBILITY_LEVELS,
     get_max_visibility_level,
     get_visible_channel_indices,
     resolve_user_role,
@@ -18,12 +19,15 @@ from meshcore_hub.api.observer_utils import (
     fetch_observers_for_events,
     resolve_sender_names,
 )
+from meshcore_hub.collector.routes import evaluate_route_history
+from meshcore_hub.common.config import get_collector_settings
 from meshcore_hub.common.models import (
     Advertisement,
     Message,
     Node,
     NodeTag,
     RawPacket,
+    Route,
     UserProfile,
 )
 from meshcore_hub.common.schemas.messages import (
@@ -35,7 +39,13 @@ from meshcore_hub.common.schemas.messages import (
     MessageActivity,
     NodeCountHistory,
     PacketBreakdown,
+    RecentActivity,
     RecentAdvertisement,
+)
+from meshcore_hub.common.schemas.routes import (
+    RouteDayQuality,
+    RouteOverviewEntry,
+    RoutesOverview,
 )
 
 router = APIRouter()
@@ -51,6 +61,29 @@ def _dashboard_stats_key_builder(request: Request) -> str:
 def _dashboard_msg_activity_key_builder(request: Request) -> str:
     role = resolve_user_role(request) or "anonymous"
     return f"dashboard/message-activity:role={role}:{sorted_query_string(request)}"
+
+
+def _dashboard_recent_activity_key_builder(request: Request) -> str:
+    """Role-scoped key for ``GET /dashboard/recent-activity``.
+
+    The response filters channel messages by visibility, so the cache key
+    must vary by role — otherwise an anonymous GET would fill the cache
+    with a redacted response served to a subsequent admin GET.
+    """
+    role = resolve_user_role(request) or "anonymous"
+    return f"dashboard/recent-activity:role={role}:{sorted_query_string(request)}"
+
+
+def _dashboard_routes_overview_key_builder(request: Request) -> str:
+    """Role-scoped key for ``GET /dashboard/routes-overview``.
+
+    The endpoint filters admin/operator-only routes by visibility, so the
+    cache key must vary by role — otherwise an anonymous GET could fill the
+    cache with a response that hides admin routes, and a subsequent admin
+    GET would receive that same redacted response.
+    """
+    role = resolve_user_role(request) or "anonymous"
+    return f"dashboard/routes-overview:role={role}:{sorted_query_string(request)}"
 
 
 def _flood_only_filter(
@@ -166,6 +199,89 @@ def get_stats(
     total_packets = packet_row[0] or 0
     packets_7d = packet_row[1] or 0
 
+    # Channel message counts (only visible channels). The recent messages
+    # themselves live on /dashboard/recent-activity so they can carry a
+    # shorter cache TTL than these aggregate counts.
+    channel_counts_query = (
+        select(Message.channel_idx, func.count())
+        .where(Message.message_type == "channel")
+        .where(Message.channel_idx.isnot(None))
+        .where(Message.channel_idx.in_(visible_indices))
+        .group_by(Message.channel_idx)
+    )
+    channel_results = session.execute(channel_counts_query).all()
+    channel_message_counts = {
+        int(channel): int(count) for channel, count in channel_results
+    }
+
+    from meshcore_hub.common.config import get_web_settings
+
+    web_settings = get_web_settings()
+    operator_role = web_settings.oidc_role_operator
+    member_role = web_settings.oidc_role_member
+    test_role = web_settings.oidc_role_test
+
+    # Operator + member counts in one query. The optional test-role exclusion
+    # is folded into each conditional branch.
+    operator_cond = UserProfile.roles.contains(operator_role)
+    member_cond = UserProfile.roles.contains(member_role)
+    if test_role:
+        not_test = ~UserProfile.roles.contains(test_role)
+        operator_cond = and_(operator_cond, not_test)
+        member_cond = and_(member_cond, not_test)
+
+    profile_row = session.execute(
+        select(
+            func.sum(case((operator_cond, 1), else_=0)),
+            func.sum(case((member_cond, 1), else_=0)),
+        ).select_from(UserProfile)
+    ).one()
+    total_operators = profile_row[0] or 0
+    total_members = profile_row[1] or 0
+
+    return DashboardStats(
+        total_nodes=total_nodes,
+        active_nodes=active_nodes,
+        total_messages=total_messages,
+        messages_today=messages_today,
+        messages_7d=messages_7d,
+        total_advertisements=total_advertisements,
+        advertisements_24h=advertisements_24h,
+        advertisements_7d=advertisements_7d,
+        channel_message_counts=channel_message_counts,
+        total_operators=total_operators,
+        total_members=total_members,
+        total_packets=total_packets,
+        packets_7d=packets_7d,
+    )
+
+
+@router.get("/recent-activity", response_model=RecentActivity)
+@cached(
+    "dashboard/recent-activity",
+    key_builder=_dashboard_recent_activity_key_builder,
+)
+def get_recent_activity(
+    _: RequireRead,
+    session: DbSession,
+    request: Request,
+) -> RecentActivity:
+    """Get the recent-adverts and recent-channel-messages lists.
+
+    Split out of ``GET /dashboard/stats`` so they can be cached at the
+    default ``redis_cache_ttl`` (30 s) instead of the much longer
+    ``redis_cache_ttl_dashboard`` that covers the aggregate counts — the
+    Recent Adverts / Recent Channel Messages panels are the only
+    dashboard widgets that need minute-level freshness.
+
+    Role-visibility filtered the same way as the rest of the dashboard:
+    anonymous viewers see only public-channel messages, while operators
+    see every channel. Cache key is role-scoped accordingly.
+    """
+    role = resolve_user_role(request)
+    max_level = get_max_visibility_level(role)
+    visible_indices = get_visible_channel_indices(session, max_level)
+
     # Recent advertisements (last 10, flood-only)
     recent_ads = (
         session.execute(
@@ -241,22 +357,11 @@ def get_stats(
         for ad in recent_ads
     ]
 
-    # Channel message counts (only visible channels)
-    channel_counts_query = (
-        select(Message.channel_idx, func.count())
-        .where(Message.message_type == "channel")
-        .where(Message.channel_idx.isnot(None))
-        .where(Message.channel_idx.in_(visible_indices))
-        .group_by(Message.channel_idx)
-    )
-    channel_results = session.execute(channel_counts_query).all()
-    channel_message_counts = {
-        int(channel): int(count) for channel, count in channel_results
-    }
-
-    # Get latest 5 messages for each channel that has messages
+    # Channel messages for each visible channel (up to 5 latest each).
+    # The per-channel counts stay on /dashboard/stats (they're aggregate
+    # counts, not a "recent" list); only the message bodies live here.
     channel_messages: dict[int, list[ChannelMessage]] = {}
-    for channel_idx, _ in channel_results:
+    for channel_idx in visible_indices:
         messages_query = (
             select(Message)
             .where(Message.message_type == "channel")
@@ -265,6 +370,8 @@ def get_stats(
             .limit(5)
         )
         channel_msgs = session.execute(messages_query).scalars().all()
+        if not channel_msgs:
+            continue
 
         # Look up sender names for these messages
         msg_prefixes = [m.pubkey_prefix for m in channel_msgs if m.pubkey_prefix]
@@ -285,47 +392,9 @@ def get_stats(
             for m in channel_msgs
         ]
 
-    from meshcore_hub.common.config import get_web_settings
-
-    web_settings = get_web_settings()
-    operator_role = web_settings.oidc_role_operator
-    member_role = web_settings.oidc_role_member
-    test_role = web_settings.oidc_role_test
-
-    # Operator + member counts in one query. The optional test-role exclusion
-    # is folded into each conditional branch.
-    operator_cond = UserProfile.roles.contains(operator_role)
-    member_cond = UserProfile.roles.contains(member_role)
-    if test_role:
-        not_test = ~UserProfile.roles.contains(test_role)
-        operator_cond = and_(operator_cond, not_test)
-        member_cond = and_(member_cond, not_test)
-
-    profile_row = session.execute(
-        select(
-            func.sum(case((operator_cond, 1), else_=0)),
-            func.sum(case((member_cond, 1), else_=0)),
-        ).select_from(UserProfile)
-    ).one()
-    total_operators = profile_row[0] or 0
-    total_members = profile_row[1] or 0
-
-    return DashboardStats(
-        total_nodes=total_nodes,
-        active_nodes=active_nodes,
-        total_messages=total_messages,
-        messages_today=messages_today,
-        messages_7d=messages_7d,
-        total_advertisements=total_advertisements,
-        advertisements_24h=advertisements_24h,
-        advertisements_7d=advertisements_7d,
+    return RecentActivity(
         recent_advertisements=recent_advertisements,
-        channel_message_counts=channel_message_counts,
         channel_messages=channel_messages,
-        total_operators=total_operators,
-        total_members=total_members,
-        total_packets=total_packets,
-        packets_7d=packets_7d,
     )
 
 
@@ -633,3 +702,104 @@ def get_node_count_history(
         data.append(DailyActivityPoint(date=date_str, count=running))
 
     return NodeCountHistory(days=days, data=data)
+
+
+@router.get("/routes-overview", response_model=RoutesOverview)
+@cached(
+    "dashboard/routes-overview",
+    ttl_setting="redis_cache_ttl_dashboard",
+    key_builder=_dashboard_routes_overview_key_builder,
+)
+def get_routes_overview(
+    _: RequireRead,
+    session: DbSession,
+    request: Request,
+    days: int = 7,
+) -> RoutesOverview:
+    """Get an aggregate snapshot of route fleet health for the dashboard.
+
+    Returns:
+
+    - ``by_state``: route counts bucketed by their current ``state``
+      (clear / marginal / failing / no_coverage / disabled).
+    - ``routes``: one entry per visible route carrying its current
+      ``state``/``quality``/``matched_count`` (from the latest
+      ``RouteResult`` written by the background evaluator) plus a
+      ``days``-long history (includes today) for the trend chart and
+      per-route strip grid.
+
+    Role-visibility filtered the same way as ``GET /routes`` so members
+    don't see admin-only routes. ``days`` is clamped to the configured
+    raw-packet retention window so history queries can't scan purged data.
+    """
+    days = min(days, 90)
+    retention = get_collector_settings().effective_raw_packet_retention_days
+    days = min(days, retention)
+
+    role = resolve_user_role(request)
+    max_level = get_max_visibility_level(role)
+
+    routes = session.execute(select(Route).order_by(Route.from_label)).scalars().all()
+    visible = [r for r in routes if VISIBILITY_LEVELS.get(r.visibility, 0) <= max_level]
+
+    # State buckets — ``disabled`` for switched-off routes, otherwise the
+    # evaluator's last persisted state (falling back to ``no_coverage``
+    # when no result exists yet, e.g. a freshly created route).
+    state_counts: dict[str, int] = {}
+    entries: list[RouteOverviewEntry] = []
+    for route in visible:
+        history_tuples = evaluate_route_history(
+            session, route, days, include_today=True
+        )
+        history = [
+            RouteDayQuality(date=d, quality=q, state=s, matched_count=c)
+            for d, q, s, c in history_tuples
+        ]
+
+        if not route.enabled:
+            state = "disabled"
+            quality = "disabled"
+            matched: int | None = None
+        elif route.route_result is not None:
+            state = route.route_result.state or "no_coverage"
+            quality = route.route_result.quality or "no_coverage"
+            matched = route.route_result.matched_count
+        else:
+            state = "no_coverage"
+            quality = "no_coverage"
+            matched = None
+
+        state_counts[state] = state_counts.get(state, 0) + 1
+        entries.append(
+            RouteOverviewEntry(
+                id=str(route.id),
+                from_label=route.from_label,
+                to_label=route.to_label,
+                visibility=route.visibility,
+                enabled=route.enabled,
+                state=state,
+                quality=quality,
+                matched_count=matched,
+                history=history,
+            )
+        )
+
+    # Stable, UI-friendly bucket order. State values come from the
+    # evaluator's ``RouteState`` enum (``healthy`` / ``unhealthy`` /
+    # ``no_coverage``) plus the synthetic ``disabled`` we emit for
+    # switched-off routes. Any unknown state sorts after the known set.
+    preferred_order = [
+        "healthy",
+        "unhealthy",
+        "no_coverage",
+        "disabled",
+    ]
+    by_state: list[BreakdownBucket] = []
+    for label in preferred_order:
+        count = state_counts.pop(label, 0)
+        if count:
+            by_state.append(BreakdownBucket(label=label, count=count))
+    for label, count in sorted(state_counts.items()):
+        by_state.append(BreakdownBucket(label=label, count=count))
+
+    return RoutesOverview(days=days, by_state=by_state, routes=entries)

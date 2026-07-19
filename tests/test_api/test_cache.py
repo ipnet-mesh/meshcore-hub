@@ -436,9 +436,9 @@ class TestCachedDecorator:
         mock_cache.get.return_value = None
         app.state.redis_cache = mock_cache
         app.state.redis_cache_ttl = 30
-        app.state.redis_cache_ttl_route_detail = 90
+        app.state.redis_cache_ttl_dashboard = 90
 
-        @cached("routes/{id}", ttl_setting="redis_cache_ttl_route_detail")
+        @cached("routes/{id}", ttl_setting="redis_cache_ttl_dashboard")
         async def handler(request: Request):
             return {"id": "abc", "matches": []}
 
@@ -807,9 +807,9 @@ class TestCachedEtag:
         app = FastAPI()
         app.state.redis_cache = NullCache()
         app.state.redis_cache_ttl = 30
-        app.state.redis_cache_ttl_route_detail = 90
+        app.state.redis_cache_ttl_dashboard = 90
 
-        @cached("routes/{id}", ttl_setting="redis_cache_ttl_route_detail")
+        @cached("routes/{id}", ttl_setting="redis_cache_ttl_dashboard")
         async def handler(request: Request):
             return {"id": "abc"}
 
@@ -898,7 +898,7 @@ class TestCacheControlMiddleware:
         mock_cache.get.return_value = None
         client_no_auth.app.state.redis_cache = mock_cache
         client_no_auth.app.state.redis_cache_ttl = 30
-        client_no_auth.app.state.redis_cache_ttl_route_detail = 300
+        client_no_auth.app.state.redis_cache_ttl_dashboard = 300
         # Hit the route detail endpoint with a fake id. The endpoint returns
         # 404 but still flows through the @cached decorator; we only care
         # that the TTL is NOT surfaced as an HTTP header.
@@ -1176,8 +1176,6 @@ class TestCliRedis:
                             "60",
                             "--redis-cache-ttl-dashboard",
                             "120",
-                            "--redis-cache-ttl-route-detail",
-                            "90",
                             "--no-api-cache-control",
                         ],
                         catch_exceptions=False,
@@ -1191,7 +1189,6 @@ class TestCliRedis:
                     assert call_kwargs["redis_key_prefix"] == "pre"
                     assert call_kwargs["redis_cache_ttl"] == 60
                     assert call_kwargs["redis_cache_ttl_dashboard"] == 120
-                    assert call_kwargs["redis_cache_ttl_route_detail"] == 90
                     assert call_kwargs["api_cache_control_enabled"] is False
 
     def test_api_cache_control_enabled_default(self):
@@ -1214,10 +1211,13 @@ class TestCliRedis:
                     assert call_kwargs["api_cache_control_enabled"] is True
 
     def test_redis_cache_ttl_dashboard_default(self):
-        """--redis-cache-ttl-dashboard defaults to 300 (raised from 30).
+        """--redis-cache-ttl-dashboard defaults to 3600 (1 hour).
 
-        Covers /dashboard/* endpoints and /routes/{id}/history. Trend data
-        tolerates longer staleness than the original 30s default.
+        Covers /dashboard/* endpoints, /routes/{id} detail, and
+        /routes/{id}/history. Trend/aggregation data tolerates much longer
+        staleness than the default 30 s TTL — Recent Adverts / Recent
+        Channel Messages widgets were split into /dashboard/recent-activity
+        so they can stay on the short default TTL independently.
         """
         from click.testing import CliRunner
 
@@ -1234,7 +1234,7 @@ class TestCliRedis:
                     mock_create_app.return_value = MagicMock()
                     runner.invoke(api, catch_exceptions=False)
                     call_kwargs = mock_create_app.call_args[1]
-                    assert call_kwargs["redis_cache_ttl_dashboard"] == 300
+                    assert call_kwargs["redis_cache_ttl_dashboard"] == 3600
 
 
 class TestKeyBuilders:
@@ -1363,8 +1363,12 @@ class TestCacheInvalidationHelpers:
 
         cache = MagicMock()
         invalidate_routes(_make_request_with_cache(cache))
-        # Single prefix covers /routes, /routes/{id}, /routes/{id}/history
-        cache.delete.assert_called_once_with("/api/v1/routes")
+        # Two prefixes: /api/v1/routes covers the list, detail, and history
+        # endpoints (URL-path key_builder); dashboard/routes-overview covers
+        # the dashboard aggregate (endpoint-name key namespace).
+        assert cache.delete.call_count == 2
+        cache.delete.assert_any_call("/api/v1/routes")
+        cache.delete.assert_any_call("dashboard/routes-overview")
 
     def test_invalidate_nodes_drops_endpoint_name_prefix(self):
         from meshcore_hub.api.cache_invalidation import invalidate_nodes
@@ -1438,7 +1442,6 @@ class TestMutationInvalidationIntegration:
         client.app.state.redis_cache = mock_cache
         client.app.state.redis_cache_ttl = 30
         client.app.state.redis_cache_ttl_dashboard = 300
-        client.app.state.redis_cache_ttl_route_detail = 300
         return mock_cache
 
     # --- Channels ---------------------------------------------------------
@@ -1495,6 +1498,10 @@ class TestMutationInvalidationIntegration:
         )
         assert resp.status_code == 201
         mock_cache.delete.assert_any_call("/api/v1/routes")
+        # Dashboard routes-overview embeds per-route state, so it must be
+        # dropped too — otherwise the new route stays invisible on the
+        # dashboard until TTL expiry.
+        mock_cache.delete.assert_any_call("dashboard/routes-overview")
 
     def test_update_route_invalidates_routes(self, client_no_auth, api_db_session):
         from meshcore_hub.common.models import Node, Route, RouteNode
@@ -1524,6 +1531,7 @@ class TestMutationInvalidationIntegration:
         )
         assert resp.status_code == 200
         mock_cache.delete.assert_any_call("/api/v1/routes")
+        mock_cache.delete.assert_any_call("dashboard/routes-overview")
 
     def test_delete_route_invalidates_routes(self, client_no_auth, api_db_session):
         from meshcore_hub.common.models import Node, Route, RouteNode
@@ -1552,6 +1560,7 @@ class TestMutationInvalidationIntegration:
         )
         assert resp.status_code == 204
         mock_cache.delete.assert_any_call("/api/v1/routes")
+        mock_cache.delete.assert_any_call("dashboard/routes-overview")
 
     # --- User profiles ----------------------------------------------------
 

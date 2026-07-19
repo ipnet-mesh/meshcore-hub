@@ -320,8 +320,7 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - REDIS_KEY_PREFIX=${REDIS_KEY_PREFIX:-hub}
       - REDIS_CACHE_TTL=${REDIS_CACHE_TTL:-30}
-      - REDIS_CACHE_TTL_DASHBOARD=${REDIS_CACHE_TTL_DASHBOARD:-300}
-      - REDIS_CACHE_TTL_ROUTE_DETAIL=${REDIS_CACHE_TTL_ROUTE_DETAIL:-300}
+      - REDIS_CACHE_TTL_DASHBOARD=${REDIS_CACHE_TTL_DASHBOARD:-3600}
       - API_CACHE_CONTROL_ENABLED=${API_CACHE_CONTROL_ENABLED:-true}
       # Spam detection: hide-filter switch + threshold (bridged from
       # FEATURE_SPAM_DETECTION so it tracks the collector and web toggle). On by

@@ -270,7 +270,7 @@ class TestGetRouteDetail:
         mock_cache = MagicMock()
         mock_cache.get.return_value = None
         client_no_auth.app.state.redis_cache = mock_cache
-        client_no_auth.app.state.redis_cache_ttl_route_detail = 90
+        client_no_auth.app.state.redis_cache_ttl_dashboard = 90
 
         resp = client_no_auth.get(f"/api/v1/routes/{route.id}")
         assert resp.status_code == 200
@@ -315,7 +315,7 @@ class TestGetRouteDetail:
                 return True
 
         client_no_auth.app.state.redis_cache = _FakeCache()
-        client_no_auth.app.state.redis_cache_ttl_route_detail = 60
+        client_no_auth.app.state.redis_cache_ttl_dashboard = 60
 
         first = client_no_auth.get(f"/api/v1/routes/{route.id}")
         assert first.status_code == 200
@@ -326,6 +326,114 @@ class TestGetRouteDetail:
         assert second.status_code == 200
         assert second.headers.get("x-cache") == "HIT"
         assert second.json() == first_body
+
+
+class TestRouteQualityAvg:
+    """``quality_avg`` field — rolling 7-day average tier.
+
+    Backs the route card badge and summary strip counts on /routes so a
+    flapping route that's currently up still shows as marginal/failing if
+    the 7-day mean warrants it. See ``compute_average_quality`` in
+    ``collector/routes.py`` for the algorithm.
+    """
+
+    @staticmethod
+    def _make_route(session, *, enabled: bool = True, label: str = "Avg"):
+        # Use uuid-derived public_keys so concurrent tests using _sample_nodes
+        # (which always inserts "a"*64 / "b"*64) can't trip the unique
+        # constraint on Node.public_key during parallel xdist runs against
+        # the shared SQLite file.
+        suffix = uuid4().hex
+        keys = [(suffix[:32]).rjust(64, "0"), (suffix[32:64]).rjust(64, "0")]
+        nodes = [_make_node(session, k) for k in keys]
+        route = Route(from_label=label, to_label="Sink", enabled=enabled)
+        session.add(route)
+        session.flush()
+        for pos, n in enumerate(nodes):
+            session.add(
+                RouteNode(
+                    route_id=route.id,
+                    node_id=n.id,
+                    position=pos,
+                    expected_hash=n.public_key[:2].upper(),
+                )
+            )
+        session.commit()
+        return route
+
+    def test_present_on_list_for_enabled_routes(self, client_no_auth, api_db_session):
+        """Each enabled route in the list response carries a computed tier.
+
+        With no traffic in the test DB every history bucket is no_coverage
+        which collapses to failing (mean 0); the point of the assertion is
+        that the field exists and is a valid tier, not the specific value.
+        """
+        route = self._make_route(api_db_session, enabled=True, label="Enabled")
+        resp = client_no_auth.get("/api/v1/routes")
+        assert resp.status_code == 200
+        items = resp.json()["items"]
+        # Lookup by id — parallel tests in the same worker may leave
+        # other routes in the truncated-but-not-yet-reaped window.
+        matching = [i for i in items if i["id"] == str(route.id)]
+        assert len(matching) == 1
+        avg = matching[0]["quality_avg"]
+        assert avg in {"clear", "marginal", "failing"}
+        # No traffic in the test DB -> all no_coverage -> failing.
+        assert avg == "failing"
+
+    def test_none_for_disabled_routes(self, client_no_auth, api_db_session):
+        """Disabled routes skip the computation; field is null.
+
+        Uses the per-route DETAIL endpoint rather than the list — the
+        list query races with other xdist workers' ``_truncate_all``
+        teardown against the shared SQLite file (the conftest only
+        isolates Postgres backends, not SQLite). The detail endpoint
+        scopes the read to a single row so a parallel truncate either
+        takes the row (404, not a false-pass) or leaves it.
+        """
+        route = self._make_route(api_db_session, enabled=False, label="Disabled")
+        resp = client_no_auth.get(f"/api/v1/routes/{route.id}")
+        assert resp.status_code == 200
+        assert resp.json()["quality_avg"] is None
+
+    def test_present_on_detail(self, client_no_auth, api_db_session):
+        """Detail endpoint also exposes the rolling average."""
+        route = self._make_route(api_db_session, enabled=True, label="Detail")
+        resp = client_no_auth.get(f"/api/v1/routes/{route.id}")
+        assert resp.status_code == 200
+        assert resp.json()["quality_avg"] == "failing"
+
+    def test_none_on_create_response(self, client_no_auth, api_db_session):
+        """Create handler skips the rolling computation.
+
+        A brand-new route has no meaningful 7-day history; the frontend
+        falls back to ``route_result.quality`` via the
+        ``q = route.quality_avg || route.route_result?.quality`` chain.
+        """
+        nodes = _sample_nodes(api_db_session)
+        api_db_session.commit()
+        resp = client_no_auth.post(
+            "/api/v1/routes",
+            json={
+                "from_label": "Fresh",
+                "to_label": "Route",
+                "node_public_keys": [n.public_key for n in nodes],
+            },
+            headers={"X-User-Roles": "admin"},
+        )
+        assert resp.status_code == 201
+        assert resp.json()["quality_avg"] is None
+
+    def test_computed_on_update_response(self, client_no_auth, api_db_session):
+        """Update handler recomputes the average (history pre-exists)."""
+        route = self._make_route(api_db_session, enabled=True, label="UpdateMe")
+        resp = client_no_auth.put(
+            f"/api/v1/routes/{route.id}",
+            json={"description": "now with description"},
+            headers={"X-User-Roles": "admin"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["quality_avg"] == "failing"
 
 
 class TestUpdateRoute:
@@ -686,6 +794,63 @@ class TestRouteHistory:
         data = resp.json()
         # retention=2 → days clamped to 2 → 3 entries (days + today)
         assert len(data["data"]) == 3
+
+    def test_today_segment_matches_route_result_badge(
+        self, client_no_auth, api_db_session
+    ):
+        """The rightmost history segment must match route_result (the badge).
+
+        Regression for the rolling-window/calendar-day mismatch: packets
+        placed yesterday evening are inside the rolling 24h window used by
+        the badge but outside today's UTC calendar bucket. After this fix,
+        the history endpoint's today segment must reflect the same
+        matched_count/quality/state as route_result.
+        """
+        from datetime import timedelta
+
+        from meshcore_hub.collector.routes import (
+            evaluate_route,
+            upsert_route_result,
+        )
+
+        route = _make_route_with_nodes(
+            api_db_session, "A", "B", ["aa" + "0" * 62, "bb" + "0" * 62]
+        )
+        api_db_session.commit()
+
+        # Place 3 matching packets 6h ago — within the 24h rolling window.
+        # If "now" is early in the UTC day, this may land in yesterday's
+        # calendar bucket, which is exactly the scenario we're fixing.
+        now = datetime.now(timezone.utc)
+        for i in range(3):
+            _make_reception(
+                api_db_session,
+                None,
+                f"badge{i}",
+                ["AA", "BB"],
+                received_at=now - timedelta(hours=6, seconds=i),
+            )
+        api_db_session.commit()
+
+        # Populate route_result the same way the background evaluator does.
+        rolling_start = now - timedelta(hours=route.window_hours)
+        state, quality, matched = evaluate_route(api_db_session, route, rolling_start)
+        upsert_route_result(api_db_session, route, state, quality, matched)
+        api_db_session.commit()
+        api_db_session.refresh(route)
+
+        badge = route.route_result
+        assert badge is not None, "fixture: route_result must be populated"
+
+        # Bypass cache to read fresh state.
+        client_no_auth.app.dependency_overrides = {}
+
+        resp = client_no_auth.get(f"/api/v1/routes/{route.id}/history?days=3")
+        assert resp.status_code == 200
+        today_segment = resp.json()["data"][-1]
+        assert today_segment["matched_count"] == badge.matched_count
+        assert today_segment["quality"] == badge.quality
+        assert today_segment["state"] == badge.state
 
 
 # ---------------------------------------------------------------------------

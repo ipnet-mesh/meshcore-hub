@@ -96,17 +96,17 @@ function renderHeroSection({ networkName, logoUrl, logoInvertLight, networkCity,
                     label: t('entities.advertisements'),
                     colorVar: '--color-adverts',
                 }) : nothing}
-                ${features.channels !== false ? renderNavCard({
-                    href: '/channels',
-                    icon: iconChannel('w-full h-full'),
-                    label: t('entities.channels'),
-                    colorVar: '--color-channels',
-                }) : nothing}
                 ${features.routes !== false ? renderNavCard({
                     href: '/routes',
                     icon: iconPath('w-full h-full'),
                     label: t('entities.routes'),
                     colorVar: '--color-routes',
+                }) : nothing}
+                ${features.channels !== false ? renderNavCard({
+                    href: '/channels',
+                    icon: iconChannel('w-full h-full'),
+                    label: t('entities.channels'),
+                    colorVar: '--color-channels',
                 }) : nothing}
                 ${features.messages !== false ? renderNavCard({
                     href: '/messages',

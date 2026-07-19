@@ -8,6 +8,7 @@ from sqlalchemy import select
 from meshcore_hub.collector.routes import (
     _has_any_hops_per_day,
     _route_expected_hashes,
+    compute_average_quality,
     derive_expected_hash,
     derive_quality,
     detect_observed_widths,
@@ -998,6 +999,177 @@ class TestEvaluateRouteHistory:
         marginal_date = (now - timedelta(days=2)).date()
         assert by_date[clear_date][0] == RouteQuality.CLEAR.value
         assert by_date[marginal_date][0] == RouteQuality.MARGINAL.value
+
+    def test_today_segment_uses_rolling_window(self, db_session):
+        """include_today segment matches evaluate_route(now - window_hours),
+        not the calendar-day [00:00 UTC, now] bucket.
+
+        Packets placed yesterday evening fall outside today's UTC calendar
+        bucket but inside the rolling 24h window — they must surface in the
+        appended today segment so the chart matches the badge.
+        """
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        route = _make_route(
+            db_session,
+            "R1",
+            [node_a, node_b],
+            threshold=3,
+            clear_bar=3,
+            window_hours=24,
+        )
+
+        # Pick "now" early in the UTC day so yesterday evening is inside the
+        # 24h rolling window but outside today's calendar bucket.
+        now = datetime(2026, 7, 15, 3, 0, 0, tzinfo=timezone.utc)
+        # 3 packets at 21:00 yesterday UTC — within rolling window,
+        # before today_midnight (2026-07-15 00:00 UTC).
+        for i in range(3):
+            _make_reception(
+                db_session,
+                None,
+                f"rolling{i}",
+                ["AA", "BB"],
+                received_at=now - timedelta(hours=6, seconds=i),
+            )
+        db_session.commit()
+
+        results = evaluate_route_history(
+            db_session, route, days=3, include_today=True, now=now
+        )
+
+        assert len(results) == 4
+        today_entry = results[-1]
+        assert today_entry[0] == now.date()
+        # Badge-aligned: 3 matches in the rolling window → HEALTHY/CLEAR
+        assert today_entry[1] == RouteQuality.CLEAR.value
+        assert today_entry[2] == RouteState.HEALTHY.value
+        assert today_entry[3] == 3
+
+        # Cross-check: the today segment must agree with evaluate_route
+        # over the same rolling window.
+        rolling_start = now - timedelta(hours=route.window_hours)
+        state, quality, matched = evaluate_route(db_session, route, rolling_start)
+        assert (today_entry[1], today_entry[2], today_entry[3]) == (
+            quality,
+            state,
+            matched,
+        )
+
+    def test_today_segment_excludes_packets_outside_window(self, db_session):
+        """Packets older than window_hours must not count in today's segment."""
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        # window_hours=6 — only packets in the last 6h count.
+        route = _make_route(
+            db_session, "R1", [node_a, node_b], threshold=1, window_hours=6
+        )
+
+        now = datetime(2026, 7, 15, 3, 0, 0, tzinfo=timezone.utc)
+        # 1 packet at 18:00 yesterday UTC — older than the 6h window.
+        _make_reception(
+            db_session,
+            None,
+            "ancient",
+            ["AA", "BB"],
+            received_at=now - timedelta(hours=9),
+        )
+        db_session.commit()
+
+        results = evaluate_route_history(
+            db_session, route, days=3, include_today=True, now=now
+        )
+
+        today_entry = results[-1]
+        assert today_entry[0] == now.date()
+        assert today_entry[3] == 0
+        assert today_entry[1] == RouteQuality.UNKNOWN.value
+
+
+class TestComputeAverageQuality:
+    """Rolling-average tier over a history window (server-side badge source).
+
+    Mirrors the ``averageRouteTier`` JS helper in
+    ``web/static/js/charts.js`` so the route card badge matches the chart
+    line color when both render the same window.
+    """
+
+    @staticmethod
+    def _day(day_offset: int, quality: str, matched: int = 0):
+        return (
+            datetime(2024, 1, 1, tzinfo=timezone.utc).date()
+            + timedelta(days=day_offset),
+            quality,
+            "healthy" if quality != "unknown" else "no_coverage",
+            matched,
+        )
+
+    def test_all_clear(self):
+        history = [self._day(i, RouteQuality.CLEAR.value) for i in range(7)]
+        assert compute_average_quality(history) == RouteQuality.CLEAR.value
+
+    def test_all_marginal(self):
+        history = [self._day(i, RouteQuality.MARGINAL.value) for i in range(7)]
+        assert compute_average_quality(history) == RouteQuality.MARGINAL.value
+
+    def test_all_failing(self):
+        history = [self._day(i, RouteQuality.FAILING.value) for i in range(7)]
+        assert compute_average_quality(history) == RouteQuality.FAILING.value
+
+    def test_mixed_clear_marginal_yields_clear(self):
+        # mean = (2+1+2+1+2+1+2)/7 ≈ 1.57 → clear
+        history = [
+            self._day(0, RouteQuality.CLEAR.value),
+            self._day(1, RouteQuality.MARGINAL.value),
+            self._day(2, RouteQuality.CLEAR.value),
+            self._day(3, RouteQuality.MARGINAL.value),
+            self._day(4, RouteQuality.CLEAR.value),
+            self._day(5, RouteQuality.MARGINAL.value),
+            self._day(6, RouteQuality.CLEAR.value),
+        ]
+        assert compute_average_quality(history) == RouteQuality.CLEAR.value
+
+    def test_half_clear_half_failing_yields_marginal(self):
+        # mean = (2+0+2+0+2+0+2)/7 ≈ 1.14 → marginal
+        history = [
+            self._day(
+                i,
+                RouteQuality.CLEAR.value if i % 2 == 0 else RouteQuality.FAILING.value,
+            )
+            for i in range(7)
+        ]
+        assert compute_average_quality(history) == RouteQuality.MARGINAL.value
+
+    def test_quarter_clear_three_quarters_failing_yields_failing(self):
+        # mean = (2+0+0+0+2+0+0)/7 ≈ 0.57 → failing
+        qualities = [
+            RouteQuality.CLEAR.value,
+            RouteQuality.FAILING.value,
+            RouteQuality.FAILING.value,
+            RouteQuality.FAILING.value,
+            RouteQuality.CLEAR.value,
+            RouteQuality.FAILING.value,
+            RouteQuality.FAILING.value,
+        ]
+        history = [self._day(i, q) for i, q in enumerate(qualities)]
+        assert compute_average_quality(history) == RouteQuality.FAILING.value
+
+    def test_unknown_collapses_to_failing(self):
+        # unknown is in the failing tier (0) — a route with no coverage
+        # for the whole window averages to failing, not "unknown"
+        history = [self._day(i, RouteQuality.UNKNOWN.value) for i in range(7)]
+        assert compute_average_quality(history) == RouteQuality.FAILING.value
+
+    def test_empty_history_uses_fallback(self):
+        # Brand-new routes (no history yet) should not flash a misleading
+        # failing badge — fall back to the current snapshot.
+        assert (
+            compute_average_quality([], fallback=RouteQuality.MARGINAL.value)
+            == RouteQuality.MARGINAL.value
+        )
+
+    def test_empty_history_defaults_to_failing(self):
+        assert compute_average_quality([]) == RouteQuality.FAILING.value
 
 
 # ---------------------------------------------------------------------------

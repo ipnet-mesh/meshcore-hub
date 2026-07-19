@@ -231,11 +231,11 @@ function renderMobileNav(config) {
     if (features.advertisements !== false) {
         items.push(html`<li><a href="/advertisements" data-nav-link>${iconAdvertisements('h-5 w-5 nav-icon-adverts')} ${t('entities.advertisements')}</a></li>`);
     }
-    if (features.channels !== false) {
-        items.push(html`<li><a href="/channels" data-nav-link>${iconChannel('h-5 w-5')} ${t('entities.channels')}</a></li>`);
-    }
     if (features.routes !== false) {
-        items.push(html`<li><a href="/routes" data-nav-link>${iconPath('h-5 w-5')} ${t('entities.routes')}</a></li>`);
+        items.push(html`<li><a href="/routes" data-nav-link>${iconPath('h-5 w-5 nav-icon-routes')} ${t('entities.routes')}</a></li>`);
+    }
+    if (features.channels !== false) {
+        items.push(html`<li><a href="/channels" data-nav-link>${iconChannel('h-5 w-5 nav-icon-channels')} ${t('entities.channels')}</a></li>`);
     }
     if (features.messages !== false) {
         items.push(html`<li><a href="/messages" data-nav-link>${iconMessages('h-5 w-5 nav-icon-messages')} ${t('entities.messages')}</a></li>`);

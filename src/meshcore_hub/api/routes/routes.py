@@ -1,6 +1,7 @@
 """Route health monitoring API routes."""
 
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
@@ -15,6 +16,7 @@ from meshcore_hub.api.channel_visibility import (
 )
 from meshcore_hub.api.dependencies import DbSession
 from meshcore_hub.collector.routes import (
+    compute_average_quality,
     derive_expected_hash,
     evaluate_route,
     evaluate_route_history,
@@ -84,7 +86,7 @@ def _result_to_summary(result: RouteResult | None) -> RouteResultSummary | None:
     )
 
 
-def _route_to_read(route: Route) -> RouteRead:
+def _route_to_read(route: Route, *, quality_avg: Optional[str] = None) -> RouteRead:
     return RouteRead(
         id=route.id,
         from_label=route.from_label,
@@ -101,9 +103,24 @@ def _route_to_read(route: Route) -> RouteRead:
         route_nodes=[_route_node_to_read(rn) for rn in route.route_nodes],
         route_observers=[_route_observer_to_read(ro) for ro in route.route_observers],
         route_result=_result_to_summary(route.route_result),
+        quality_avg=quality_avg,
         created_at=route.created_at,
         updated_at=route.updated_at,
     )
+
+
+def _compute_quality_avg(session: DbSession, route: Route) -> Optional[str]:
+    """Rolling 7-day average quality for the route badge.
+
+    Returns ``None`` for disabled routes. Empty history falls back to the
+    latest ``route_result.quality`` so brand-new routes don't flash a
+    misleading failing badge before their first evaluation cycle.
+    """
+    if not route.enabled:
+        return None
+    history = evaluate_route_history(session, route, 7, include_today=True)
+    fallback = route.route_result.quality if route.route_result else None
+    return compute_average_quality(history, fallback=fallback)
 
 
 def _resolve_nodes_by_pubkey(session: DbSession, public_keys: list[str]) -> list[Node]:
@@ -180,7 +197,7 @@ def list_routes(
 
     routes = session.execute(select(Route).order_by(Route.from_label)).scalars().all()
     filtered = [
-        _route_to_read(r)
+        _route_to_read(r, quality_avg=_compute_quality_avg(session, r))
         for r in routes
         if VISIBILITY_LEVELS.get(r.visibility, 0) <= max_level
     ]
@@ -244,7 +261,7 @@ def create_route(
 @router.get("/{route_id}", response_model=RouteDetail)
 @cached(
     "routes/{id}",
-    ttl_setting="redis_cache_ttl_route_detail",
+    ttl_setting="redis_cache_ttl_dashboard",
     key_builder=_routes_key_builder,
 )
 def get_route(
@@ -294,7 +311,7 @@ def get_route(
         for oid, cnt in contributing.items()
     ]
 
-    read = _route_to_read(route)
+    read = _route_to_read(route, quality_avg=_compute_quality_avg(session, route))
     return RouteDetail(
         **read.model_dump(),
         contributing_observers=contributors,
@@ -410,7 +427,7 @@ def update_route(
     session.refresh(route)
     _reevaluate_route(session, route)
     invalidate_routes(request)
-    return _route_to_read(route)
+    return _route_to_read(route, quality_avg=_compute_quality_avg(session, route))
 
 
 @router.delete("/{route_id}", status_code=204)

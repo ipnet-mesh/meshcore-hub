@@ -52,7 +52,10 @@ function renderSummaryStrip(routes) {
     const counts = { clear: 0, marginal: 0, failing: 0, no_coverage: 0, disabled: 0 };
     for (const r of routes) {
         if (!r.enabled) { counts.disabled++; continue; }
-        const q = r.route_result?.quality || 'unknown';
+        // Prefer the 7-day rolling average so the strip matches the card
+        // badges (which also display ``quality_avg``). Falls back to the
+        // latest snapshot for brand-new routes that have no history yet.
+        const q = r.quality_avg || r.route_result?.quality || 'unknown';
         if (q === 'clear') counts.clear++;
         else if (q === 'marginal') counts.marginal++;
         else if (q === 'failing') counts.failing++;
@@ -116,12 +119,15 @@ function renderStatsRow(route) {
 }
 
 function renderRouteCard(route, { isAdmin, onDelete, onEdit, detail, navigate, packetsEnabled, history }) {
-    const q = route.route_result?.quality || 'unknown';
+    // Badge reflects the 7-day rolling average (``quality_avg``) rather
+    // than the latest snapshot, so a flapping route that's currently up
+    // still shows as marginal/failing if it's been mostly down. Falls
+    // back to the snapshot for brand-new routes with no history.
+    const q = route.quality_avg || route.route_result?.quality || 'unknown';
     const badgeCls = qualityBadgeClass(q, route.enabled);
     const label = qualityLabel(q, route.enabled);
     const dot = qualityDot(q, route.enabled);
     const tip = diagnosisText(route);
-    const arrow = route.reversible !== false ? '\u2194' : '\u2192';
     const badge = tip
         ? html`<span class="badge ${badgeCls} badge-sm tooltip tooltip-left" data-tip=${tip}>${dot} ${label}</span>`
         : html`<span class="badge ${badgeCls} badge-sm">${dot} ${label}</span>`;
@@ -158,7 +164,6 @@ function renderRouteCard(route, { isAdmin, onDelete, onEdit, detail, navigate, p
                     ${route.description ? html`<p class="text-sm opacity-70 mt-1">${route.description}</p>` : nothing}
                 </div>
                 <div class="flex items-center gap-2 flex-shrink-0">
-                    <span class="badge badge-ghost badge-sm opacity-60 font-mono text-xl leading-none px-2 inline-flex items-center" title=${route.reversible !== false ? t('routes.reversible_label') : ''}>${arrow}</span>
                     ${badge}
                 </div>
             </div>
@@ -181,7 +186,7 @@ function renderDetailContent(route, detail, { navigate, packetsEnabled, history 
                 <canvas id="routeStripChart-${route.id}"></canvas>
             </div>
             ${history.data && history.data.length > 0 ? html`<div class="flex text-xs opacity-50 mt-0.5">
-                ${history.data.map(d => html`<span class="flex-1 text-center">${new Date(d.date + 'T00:00:00').toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' })}</span>`)}
+                ${history.data.map((d, i) => html`<span class="flex-1 text-center">${i === history.data.length - 1 ? t('routes.last_n_hours', { n: route.window_hours }) : new Date(d.date + 'T00:00:00').toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' })}</span>`)}
             </div>` : nothing}
         </div>`
         : nothing;

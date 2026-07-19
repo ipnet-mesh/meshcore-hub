@@ -128,7 +128,8 @@
     "last_7_days": "Laatste 7 dagen",
     "per_day_last_7_days": "Per dag (laatste 7 dagen)",
     "over_time_last_7_days": "In de tijd (laatste 7 dagen)",
-    "activity_per_day_last_7_days": "Activiteit per dag (laatste 7 dagen)"
+    "activity_per_day_last_7_days": "Activiteit per dag (laatste 7 dagen)",
+    "routes_over_last_n_days": "Overeenkomende pakketten per route (laatste {{n}} dagen)"
   },
   "node_types": {
     "chat": "Chat",
@@ -150,7 +151,11 @@
   "dashboard": {
     "all_discovered_nodes": "Alle ontdekte knooppunten",
     "recent_channel_messages": "Recente kanaalberichten",
-    "channel": "Kanaal {{number}}"
+    "channel": "Kanaal {{number}}",
+    "routes_trend": "Route-trends",
+    "route_health": "Route-status",
+    "routes_more": "+{{count}} routes meer",
+    "routes_empty": "Nog geen routes geconfigureerd."
   },
   "nodes": {
     "scan_to_add": "Scan om als contact toe te voegen"
@@ -268,7 +273,9 @@
     "quality_no_coverage": "Geen dekking",
     "quality_unknown": "Onbekend",
     "recent_packets": "Recente packets",
-    "min_nodes_error": "Minimaal 2 padknooppunten zijn vereist."
+    "last_n_hours": "Laatste {{n}}u",
+    "min_nodes_error": "Minimaal 2 padknooppunten zijn vereist.",
+    "other_routes": "Overige routes"
   },
   "not_found": {
     "description": "De pagina die u zoekt bestaat niet of is verplaatst."
