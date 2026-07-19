@@ -1,6 +1,7 @@
 """Dashboard API routes."""
 
 from datetime import date, datetime, timedelta, timezone
+from typing import Sequence
 
 from fastapi import APIRouter, Request
 from sqlalchemy import and_, case, func, or_, select
@@ -19,7 +20,6 @@ from meshcore_hub.api.observer_utils import (
     fetch_observers_for_events,
     resolve_sender_names,
 )
-from meshcore_hub.collector.routes import evaluate_route_history
 from meshcore_hub.common.config import get_collector_settings
 from meshcore_hub.common.models import (
     Advertisement,
@@ -30,6 +30,7 @@ from meshcore_hub.common.models import (
     Route,
     UserProfile,
 )
+from meshcore_hub.common.models.route_result_history import RouteResultHistory
 from meshcore_hub.common.schemas.messages import (
     BreakdownBucket,
     ChannelMessage,
@@ -731,6 +732,11 @@ def get_routes_overview(
     Role-visibility filtered the same way as ``GET /routes`` so members
     don't see admin-only routes. ``days`` is clamped to the configured
     raw-packet retention window so history queries can't scan purged data.
+
+    History is read in a single bulk query against ``route_result_history``
+    for every visible route — no per-route scans of ``packet_path_hops``
+    on the hot path. Missing historical days pad with ``unknown`` /
+    ``no_coverage`` / ``0`` (matching the disabled-route semantics).
     """
     days = min(days, 90)
     retention = get_collector_settings().effective_raw_packet_retention_days
@@ -742,15 +748,19 @@ def get_routes_overview(
     routes = session.execute(select(Route).order_by(Route.from_label)).scalars().all()
     visible = [r for r in routes if VISIBILITY_LEVELS.get(r.visibility, 0) <= max_level]
 
+    # Bulk-load precomputed history for every visible route in one indexed
+    # query. ``read_route_history_from_db`` pads missing days and appends
+    # the today rolling-window segment sourced from each route's
+    # ``route_result`` (so the rightmost chart point matches the badge).
+    history_by_route = _bulk_read_history(session, visible, days)
+
     # State buckets — ``disabled`` for switched-off routes, otherwise the
     # evaluator's last persisted state (falling back to ``no_coverage``
     # when no result exists yet, e.g. a freshly created route).
     state_counts: dict[str, int] = {}
     entries: list[RouteOverviewEntry] = []
     for route in visible:
-        history_tuples = evaluate_route_history(
-            session, route, days, include_today=True
-        )
+        history_tuples = history_by_route.get(route.id, [])
         history = [
             RouteDayQuality(date=d, quality=q, state=s, matched_count=c)
             for d, q, s, c in history_tuples
@@ -803,3 +813,77 @@ def get_routes_overview(
         by_state.append(BreakdownBucket(label=label, count=count))
 
     return RoutesOverview(days=days, by_state=by_state, routes=entries)
+
+
+def _bulk_read_history(
+    session: DbSession,
+    routes: list[Route],
+    days: int,
+) -> dict[str, list[tuple[date, str, str, int]]]:
+    """Bulk-load precomputed history for ``routes`` over the last ``days`` days.
+
+    Returns ``{route_id: [(date, quality, state, matched_count), ...]}``
+    keyed by route id. Each route's list has ``days + 1`` entries (the
+    historical UTC calendar days plus a synthetic today segment sourced
+    from ``route_result``, matching ``read_route_history_from_db``'s
+    ``include_today=True`` semantics). Disabled routes get all-unknown
+    padding without hitting the DB.
+    """
+    if not routes:
+        return {}
+
+    now = datetime.now(timezone.utc)
+    today_midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today = today_midnight.date()
+    oldest = (today_midnight - timedelta(days=days)).date()
+
+    enabled_ids = [r.id for r in routes if r.enabled]
+    history_rows: Sequence[tuple[str, date, str, str, int]] = []
+    if enabled_ids:
+        history_rows = (
+            session.execute(
+                select(
+                    RouteResultHistory.route_id,
+                    RouteResultHistory.date,
+                    RouteResultHistory.quality,
+                    RouteResultHistory.state,
+                    RouteResultHistory.matched_count,
+                )
+                .where(RouteResultHistory.route_id.in_(enabled_ids))
+                .where(RouteResultHistory.date >= oldest)
+                .where(RouteResultHistory.date < today)
+                .order_by(RouteResultHistory.route_id, RouteResultHistory.date)
+            )
+            .tuples()
+            .all()
+        )
+
+    by_route: dict[str, dict[date, tuple[str, str, int]]] = {}
+    for route_id, day, quality, state, matched_count in history_rows:
+        by_route.setdefault(route_id, {})[day] = (quality, state, matched_count)
+
+    day_dates = [(oldest + timedelta(days=i)) for i in range(days)]
+    history_by_route: dict[str, list[tuple[date, str, str, int]]] = {}
+    for route in routes:
+        if not route.enabled:
+            results = [(d, "unknown", "no_coverage", 0) for d in day_dates]
+            results.append((today, "unknown", "no_coverage", 0))
+            history_by_route[route.id] = results
+            continue
+
+        rows_by_date = by_route.get(route.id, {})
+        results = [
+            (
+                d,
+                *rows_by_date.get(d, ("unknown", "no_coverage", 0)),
+            )
+            for d in day_dates
+        ]
+        rr = route.route_result
+        if rr is not None:
+            results.append((today, rr.quality, rr.state, rr.matched_count))
+        else:
+            results.append((today, "unknown", "no_coverage", 0))
+        history_by_route[route.id] = results
+
+    return history_by_route

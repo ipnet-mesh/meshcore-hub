@@ -114,8 +114,10 @@ class Subscriber(LetsMeshNormalizer):
         self._channel_refresh_thread: Optional[threading.Thread] = None
         # Background spam re-scoring sweep
         self._spam_rescore_thread: Optional[threading.Thread] = None
-        # Background route health evaluator
+        # Background route health evaluator (short tick: rolling snapshot)
         self._route_evaluator_thread: Optional[threading.Thread] = None
+        # Background route history backfill (long tick: completed days)
+        self._route_history_backfill_thread: Optional[threading.Thread] = None
         # Load initial channel keys from database
         self._include_test_channel = self._load_channel_keys_from_db()
         self._letsmesh_decoder = LetsMeshPacketDecoder(
@@ -690,6 +692,60 @@ class Subscriber(LetsMeshNormalizer):
             if self._route_evaluator_thread.is_alive():
                 logger.warning("Route evaluator thread did not stop cleanly")
 
+    def _start_route_history_backfill_scheduler(self) -> None:
+        """Start background thread that recomputes route history buckets.
+
+        Disabled when the interval is 0. Slower than the rolling-snapshot
+        evaluator: writes one row per completed UTC day per route so the
+        per-route history endpoint and dashboard routes-overview can read
+        precomputed data instead of rescanning ``packet_path_hops``.
+        """
+        from meshcore_hub.common.config import CollectorSettings
+
+        interval = CollectorSettings().route_history_backfill_interval_seconds
+        if interval <= 0:
+            logger.info("Route history backfill disabled (interval=%ds)", interval)
+            return
+
+        logger.info("Starting route history backfill (interval=%ds)", interval)
+
+        def run_backfill_loop() -> None:
+            """Periodically recompute the retention window of history rows."""
+            from meshcore_hub.collector.route_evaluator import run_history_backfill
+
+            while self._running:
+                for _ in range(interval):
+                    if not self._running:
+                        break
+                    time.sleep(1)
+                if self._running:
+                    try:
+                        updated = run_history_backfill(self.db)
+                        if updated:
+                            logger.info(
+                                "Route history backfill refreshed %d routes",
+                                updated,
+                            )
+                    except Exception as e:
+                        logger.error(
+                            "Route history backfill error: %s", e, exc_info=True
+                        )
+
+        self._route_history_backfill_thread = threading.Thread(
+            target=run_backfill_loop, daemon=True, name="route-history-backfill"
+        )
+        self._route_history_backfill_thread.start()
+
+    def _stop_route_history_backfill_scheduler(self) -> None:
+        """Stop the route history backfill thread."""
+        if (
+            self._route_history_backfill_thread
+            and self._route_history_backfill_thread.is_alive()
+        ):
+            self._route_history_backfill_thread.join(timeout=5.0)
+            if self._route_history_backfill_thread.is_alive():
+                logger.warning("Route history backfill thread did not stop cleanly")
+
     def start(self) -> None:
         """Start the subscriber."""
         logger.info("Starting collector subscriber")
@@ -763,6 +819,9 @@ class Subscriber(LetsMeshNormalizer):
         # Start route health evaluator (no-op when disabled)
         self._start_route_evaluator_scheduler()
 
+        # Start route history backfill (no-op when disabled)
+        self._start_route_history_backfill_scheduler()
+
         # Start health reporter for Docker health checks
         self._health_reporter = HealthReporter(
             component="collector",
@@ -806,6 +865,9 @@ class Subscriber(LetsMeshNormalizer):
 
         # Stop route evaluator
         self._stop_route_evaluator_scheduler()
+
+        # Stop route history backfill
+        self._stop_route_history_backfill_scheduler()
 
         # Stop webhook processor
         self._stop_webhook_processor()

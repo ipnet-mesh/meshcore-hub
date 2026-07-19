@@ -17,11 +17,16 @@ from meshcore_hub.common.models.packet_path_hop import PacketPathHop
 from meshcore_hub.common.models.route import Route, RouteVisibility
 from meshcore_hub.common.models.route_node import RouteNode
 from meshcore_hub.common.models.route_observer import RouteObserver
+from meshcore_hub.common.models.route_recent_match import (
+    ROUTE_RECENT_MATCHES_LIMIT,
+    RouteRecentMatch,
+)
 from meshcore_hub.common.models.route_result import (
     RouteResult,
     RouteQuality,
     RouteState,
 )
+from meshcore_hub.common.models.route_result_history import RouteResultHistory
 
 __all__ = [
     "Base",
@@ -45,7 +50,10 @@ __all__ = [
     "RouteVisibility",
     "RouteNode",
     "RouteObserver",
+    "RouteRecentMatch",
+    "ROUTE_RECENT_MATCHES_LIMIT",
     "RouteResult",
+    "RouteResultHistory",
     "RouteQuality",
     "RouteState",
 ]

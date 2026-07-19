@@ -1640,3 +1640,65 @@ class TestRoutesOverview:
         assert len(keys_seen) == 2
         assert any("anonymous" in k for k in keys_seen)
         assert any("admin" in k for k in keys_seen)
+
+    def test_history_served_from_precomputed_table(
+        self, client_no_auth, api_db_session
+    ):
+        """``routes-overview`` history reads from ``route_result_history``.
+
+        Pre-precomputation, each request recomputed per-day buckets by
+        scanning ``packet_path_hops`` for every visible route — the
+        workload that motivated this refactor. Now the bulk-load path
+        issues one indexed SELECT and pads missing days with
+        ``unknown`` / ``no_coverage``.
+        """
+        from meshcore_hub.common.models.route_result_history import (
+            RouteResultHistory,
+        )
+
+        route = _make_route_with_nodes(
+            api_db_session, "Precomputed", "EP", ["a" * 64, "b" * 64]
+        )
+        # Seed two completed days of clear history.
+        today = datetime.now(timezone.utc).date()
+        api_db_session.add_all(
+            [
+                RouteResultHistory(
+                    route_id=route.id,
+                    date=today - timedelta(days=2),
+                    quality="clear",
+                    state="healthy",
+                    matched_count=5,
+                ),
+                RouteResultHistory(
+                    route_id=route.id,
+                    date=today - timedelta(days=1),
+                    quality="clear",
+                    state="healthy",
+                    matched_count=4,
+                ),
+            ]
+        )
+        api_db_session.commit()
+
+        data = client_no_auth.get("/api/v1/dashboard/routes-overview?days=3").json()
+        entry = next(r for r in data["routes"] if r["from_label"] == "Precomputed")
+        history = entry["history"]
+
+        # days=3 ⇒ 3 historical buckets + 1 today segment = 4 entries.
+        assert len(history) == 4
+
+        # The two seeded days carry their persisted quality/matched_count.
+        seeded = {h["date"]: h for h in history}
+        two_days_ago = (today - timedelta(days=2)).isoformat()
+        one_day_ago = (today - timedelta(days=1)).isoformat()
+        assert seeded[two_days_ago]["quality"] == "clear"
+        assert seeded[two_days_ago]["matched_count"] == 5
+        assert seeded[one_day_ago]["quality"] == "clear"
+        assert seeded[one_day_ago]["matched_count"] == 4
+
+        # Unseeded historical day pads with unknown/no_coverage.
+        three_days_ago = (today - timedelta(days=3)).isoformat()
+        assert seeded[three_days_ago]["quality"] == "unknown"
+        assert seeded[three_days_ago]["state"] == "no_coverage"
+        assert seeded[three_days_ago]["matched_count"] == 0

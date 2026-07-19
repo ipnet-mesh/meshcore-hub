@@ -1,6 +1,6 @@
 """Tests for route API endpoints."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from meshcore_hub.collector.routes import derive_expected_hash
@@ -335,6 +335,13 @@ class TestRouteQualityAvg:
     flapping route that's currently up still shows as marginal/failing if
     the 7-day mean warrants it. See ``compute_average_quality`` in
     ``collector/routes.py`` for the algorithm.
+
+    With precomputed history, ``quality_avg`` is sourced from
+    ``route_result.quality_avg`` (written by the background evaluator).
+    A fresh route has no history rows yet, so the field stays ``None``
+    until the first evaluator tick — the frontend's
+    ``quality_avg || route_result?.quality || 'unknown'`` fallback chain
+    covers that gap.
     """
 
     @staticmethod
@@ -361,14 +368,46 @@ class TestRouteQualityAvg:
         session.commit()
         return route
 
-    def test_present_on_list_for_enabled_routes(self, client_no_auth, api_db_session):
-        """Each enabled route in the list response carries a computed tier.
+    @staticmethod
+    def _seed_quality_avg(session, route: Route, value: str) -> None:
+        """Write a ``route_result`` row with a precomputed ``quality_avg``.
 
-        With no traffic in the test DB every history bucket is no_coverage
-        which collapses to failing (mean 0); the point of the assertion is
-        that the field exists and is a valid tier, not the specific value.
+        Mirrors what the background evaluator would produce once it has
+        rolled over at least one day's worth of history.
+        """
+        from meshcore_hub.common.models.route_result import RouteResult
+
+        existing = (
+            session.query(RouteResult)
+            .filter(RouteResult.route_id == route.id)
+            .one_or_none()
+        )
+        if existing is None:
+            session.add(
+                RouteResult(
+                    route_id=route.id,
+                    state="healthy",
+                    quality="clear",
+                    matched_count=1,
+                    threshold=route.packet_count_threshold,
+                    effective_clear=route.packet_count_threshold * 2,
+                    quality_avg=value,
+                )
+            )
+        else:
+            existing.quality_avg = value
+        session.commit()
+
+    def test_present_on_list_for_enabled_routes(self, client_no_auth, api_db_session):
+        """Each enabled route in the list response carries the persisted tier.
+
+        With precomputed storage, ``quality_avg`` reflects whatever the
+        background evaluator last wrote on ``route_result``. A fresh route
+        with no evaluator tick yet has ``None``; the point of this
+        assertion is that the field surfaces verbatim from the DB.
         """
         route = self._make_route(api_db_session, enabled=True, label="Enabled")
+        self._seed_quality_avg(api_db_session, route, "failing")
         resp = client_no_auth.get("/api/v1/routes")
         assert resp.status_code == 200
         items = resp.json()["items"]
@@ -378,36 +417,31 @@ class TestRouteQualityAvg:
         assert len(matching) == 1
         avg = matching[0]["quality_avg"]
         assert avg in {"clear", "marginal", "failing"}
-        # No traffic in the test DB -> all no_coverage -> failing.
+        # Seeded value passes through verbatim.
         assert avg == "failing"
 
     def test_none_for_disabled_routes(self, client_no_auth, api_db_session):
-        """Disabled routes skip the computation; field is null.
-
-        Uses the per-route DETAIL endpoint rather than the list — the
-        list query races with other xdist workers' ``_truncate_all``
-        teardown against the shared SQLite file (the conftest only
-        isolates Postgres backends, not SQLite). The detail endpoint
-        scopes the read to a single row so a parallel truncate either
-        takes the row (404, not a false-pass) or leaves it.
-        """
+        """Disabled routes never carry a quality_avg (None regardless of
+        what the evaluator wrote)."""
         route = self._make_route(api_db_session, enabled=False, label="Disabled")
         resp = client_no_auth.get(f"/api/v1/routes/{route.id}")
         assert resp.status_code == 200
         assert resp.json()["quality_avg"] is None
 
     def test_present_on_detail(self, client_no_auth, api_db_session):
-        """Detail endpoint also exposes the rolling average."""
+        """Detail endpoint surfaces the persisted rolling average."""
         route = self._make_route(api_db_session, enabled=True, label="Detail")
+        self._seed_quality_avg(api_db_session, route, "marginal")
         resp = client_no_auth.get(f"/api/v1/routes/{route.id}")
         assert resp.status_code == 200
-        assert resp.json()["quality_avg"] == "failing"
+        assert resp.json()["quality_avg"] == "marginal"
 
     def test_none_on_create_response(self, client_no_auth, api_db_session):
         """Create handler skips the rolling computation.
 
-        A brand-new route has no meaningful 7-day history; the frontend
-        falls back to ``route_result.quality`` via the
+        A brand-new route has no meaningful 7-day history; the create
+        response always returns ``None`` and the frontend falls back to
+        ``route_result.quality`` via the
         ``q = route.quality_avg || route.route_result?.quality`` chain.
         """
         nodes = _sample_nodes(api_db_session)
@@ -425,8 +459,33 @@ class TestRouteQualityAvg:
         assert resp.json()["quality_avg"] is None
 
     def test_computed_on_update_response(self, client_no_auth, api_db_session):
-        """Update handler recomputes the average (history pre-exists)."""
+        """Update handler recomputes the average inline.
+
+        ``_reevaluate_route`` runs ``compute_persisted_quality_avg`` which
+        reads ``route_result_history`` and returns ``None`` when no rows
+        exist yet (a fresh route with no hourly backfill under its belt).
+        Seeding history before the PUT exercises the populated path.
+        """
+        from meshcore_hub.common.models.route_result_history import (
+            RouteResultHistory,
+        )
+        from datetime import date
+
         route = self._make_route(api_db_session, enabled=True, label="UpdateMe")
+        # Seed 7 days of failing history so the average resolves to failing.
+        today = date.today()
+        for i in range(1, 8):
+            api_db_session.add(
+                RouteResultHistory(
+                    route_id=route.id,
+                    date=today - timedelta(days=i),
+                    quality="failing",
+                    state="unhealthy",
+                    matched_count=0,
+                )
+            )
+        api_db_session.commit()
+
         resp = client_no_auth.put(
             f"/api/v1/routes/{route.id}",
             json={"description": "now with description"},
@@ -1076,3 +1135,127 @@ class TestPreviewGuards:
             },
         )
         assert resp.status_code == 200
+
+
+class TestPrecomputedRecentMatches:
+    """``route_recent_matches`` table → detail-page read path.
+
+    The 60s evaluator sweep persists top-3 matches as normalized rows
+    (``route_id``, ``raw_packet_id``, ``first_position``, ``last_position``).
+    The detail endpoint JOINs through ``raw_packets`` and slices the
+    packet's hops on read, so the JSON shape stays identical to the
+    legacy on-demand compute — but the data is sourced from its
+    canonical home in ``packet_path_hops``.
+    """
+
+    def _seed_route_with_match(self, session) -> tuple[Route, str]:
+        node_a = _make_node(session, "aa" + "0" * 62)
+        node_b = _make_node(session, "bb" + "0" * 62)
+        route = Route(
+            from_label="Rm",
+            to_label="Detail",
+            packet_count_threshold=1,
+            clear_threshold=2,
+        )
+        session.add(route)
+        session.flush()
+        for pos, n in enumerate([node_a, node_b]):
+            session.add(
+                RouteNode(
+                    route_id=route.id,
+                    node_id=n.id,
+                    position=pos,
+                    expected_hash=derive_expected_hash(n.public_key, 1),
+                )
+            )
+        rp_id = _make_reception(
+            session,
+            observer_node_id=None,
+            packet_hash="pkt-rm",
+            path_hashes=["XX", "AA", "BB", "ZZ"],
+        )
+        session.commit()
+        return route, rp_id
+
+    def test_detail_reads_from_normalized_table(self, client_no_auth, api_db_session):
+        """When the table is populated, the detail endpoint JOINs through
+        ``raw_packets`` / ``packet_path_hops`` instead of computing live."""
+        from meshcore_hub.common.models import RouteRecentMatch
+
+        route, rp_id = self._seed_route_with_match(api_db_session)
+        # Seed a normalized match row with the matched subpath positions
+        # (indices 1..2 → ["AA", "BB"]).
+        api_db_session.add(
+            RouteRecentMatch(
+                route_id=route.id,
+                raw_packet_id=rp_id,
+                first_position=1,
+                last_position=2,
+            )
+        )
+        api_db_session.commit()
+
+        resp = client_no_auth.get(f"/api/v1/routes/{route.id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["recent_matches"]) == 1
+        match = data["recent_matches"][0]
+        assert match["packet_hash"] == "pkt-rm"
+        # Sliced subpath excludes the noise before/after the matched nodes.
+        assert [h["node_hash"] for h in match["hops"]] == ["AA", "BB"]
+
+    def test_detail_falls_back_to_live_when_table_empty(
+        self, client_no_auth, api_db_session
+    ):
+        """When the table has no rows for the route (fresh, evaluator hasn't
+        run yet), the detail endpoint computes matches live so the page
+        still renders."""
+        route, _rp_id = self._seed_route_with_match(api_db_session)
+        # No RouteRecentMatch row — exercise the live fallback.
+
+        resp = client_no_auth.get(f"/api/v1/routes/{route.id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["recent_matches"]) == 1
+        match = data["recent_matches"][0]
+        assert match["packet_hash"] == "pkt-rm"
+        # Live path also slices the matched subpath.
+        assert [h["node_hash"] for h in match["hops"]] == ["AA", "BB"]
+
+    def test_put_persists_normalized_matches(self, client_no_auth, api_db_session):
+        """PUT triggers ``_reevaluate_route`` which writes through the
+        normalized table — the subsequent GET reads from there."""
+        from sqlalchemy import select
+
+        from meshcore_hub.common.models import RouteRecentMatch
+
+        route, _rp_id = self._seed_route_with_match(api_db_session)
+        # No rows yet.
+        existing = (
+            api_db_session.execute(
+                select(RouteRecentMatch).where(RouteRecentMatch.route_id == route.id)
+            )
+            .scalars()
+            .all()
+        )
+        assert existing == []
+
+        resp = client_no_auth.put(
+            f"/api/v1/routes/{route.id}",
+            json={"description": "trigger reeval"},
+            headers={"X-User-Roles": "admin"},
+        )
+        assert resp.status_code == 200
+
+        # The synchronous re-evaluation on PUT should have written a
+        # match row through ``upsert_route_recent_matches``.
+        rows = (
+            api_db_session.execute(
+                select(RouteRecentMatch).where(RouteRecentMatch.route_id == route.id)
+            )
+            .scalars()
+            .all()
+        )
+        assert len(rows) == 1
+        assert rows[0].first_position == 1
+        assert rows[0].last_position == 2

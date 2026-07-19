@@ -1,7 +1,7 @@
 """Route health monitoring API routes."""
 
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
@@ -16,19 +16,23 @@ from meshcore_hub.api.channel_visibility import (
 )
 from meshcore_hub.api.dependencies import DbSession
 from meshcore_hub.collector.routes import (
-    compute_average_quality,
+    compute_persisted_quality_avg,
     derive_expected_hash,
     evaluate_route,
-    evaluate_route_history,
     preview_route,
+    read_route_history_from_db,
     recent_matches,
+    upsert_route_recent_matches,
     upsert_route_result,
 )
 from meshcore_hub.common.config import get_collector_settings
 from meshcore_hub.common.models.node import Node
+from meshcore_hub.common.models.packet_path_hop import PacketPathHop
+from meshcore_hub.common.models.raw_packet import RawPacket
 from meshcore_hub.common.models.route import Route
 from meshcore_hub.common.models.route_node import RouteNode
 from meshcore_hub.common.models.route_observer import RouteObserver
+from meshcore_hub.common.models.route_recent_match import RouteRecentMatch
 from meshcore_hub.common.models.route_result import RouteResult
 from meshcore_hub.common.schemas.routes import (
     ContributingObserver,
@@ -48,6 +52,11 @@ from meshcore_hub.common.schemas.routes import (
 )
 
 router = APIRouter()
+
+# Sentinel distinguishing "use the precomputed value" from "explicitly None"
+# (the latter is what create_route passes to preserve the "brand-new route
+# has no meaningful average yet" semantics on the POST response).
+_UNSET = object()
 
 
 def _routes_key_builder(request: Request) -> str:
@@ -86,7 +95,16 @@ def _result_to_summary(result: RouteResult | None) -> RouteResultSummary | None:
     )
 
 
-def _route_to_read(route: Route, *, quality_avg: Optional[str] = None) -> RouteRead:
+def _route_to_read(route: Route, *, quality_avg: Any = _UNSET) -> RouteRead:
+    """Serialize a Route to its list-level read schema.
+
+    ``quality_avg`` defaults to the precomputed value persisted on
+    ``route.route_result.quality_avg`` (written by the background
+    evaluator). Callers may pass an explicit value (e.g. ``None`` on
+    create responses) to override.
+    """
+    if quality_avg is _UNSET:
+        quality_avg = route.route_result.quality_avg if route.route_result else None
     return RouteRead(
         id=route.id,
         from_label=route.from_label,
@@ -107,20 +125,6 @@ def _route_to_read(route: Route, *, quality_avg: Optional[str] = None) -> RouteR
         created_at=route.created_at,
         updated_at=route.updated_at,
     )
-
-
-def _compute_quality_avg(session: DbSession, route: Route) -> Optional[str]:
-    """Rolling 7-day average quality for the route badge.
-
-    Returns ``None`` for disabled routes. Empty history falls back to the
-    latest ``route_result.quality`` so brand-new routes don't flash a
-    misleading failing badge before their first evaluation cycle.
-    """
-    if not route.enabled:
-        return None
-    history = evaluate_route_history(session, route, 7, include_today=True)
-    fallback = route.route_result.quality if route.route_result else None
-    return compute_average_quality(history, fallback=fallback)
 
 
 def _resolve_nodes_by_pubkey(session: DbSession, public_keys: list[str]) -> list[Node]:
@@ -163,7 +167,7 @@ def _sync_observers(
 
 
 def _reevaluate_route(session: DbSession, route: Route) -> None:
-    """Synchronously evaluate *route* and persist the fresh ``RouteResult``.
+    """Synchronously evaluate *route* and persist every derived field.
 
     The background evaluator (collector.route_evaluator) writes
     ``RouteResult`` on a schedule (default 60s). Without this synchronous
@@ -174,12 +178,33 @@ def _reevaluate_route(session: DbSession, route: Route) -> None:
     until the next evaluator cycle. Running the eval inline on every
     create/update keeps the post-mutation GET consistent with the new
     config at the cost of one bounded DB scan per write.
+
+    Refreshes the current snapshot, the persisted top-3 recent matches
+    (so the detail page is fresh), and the rolling ``quality_avg`` (so
+    the list/detail badge updates immediately when the snapshot tier
+    changes).
     """
     if not route.enabled:
         return
-    since = datetime.now(timezone.utc) - timedelta(hours=route.window_hours)
+    now = datetime.now(timezone.utc)
+    since = now - timedelta(hours=route.window_hours)
     state, quality, matched_count = evaluate_route(session, route, since)
-    upsert_route_result(session, route, state, quality, matched_count)
+
+    matches = recent_matches(session, route, limit=3, now=now)
+    upsert_route_recent_matches(session, route.id, matches, limit=3)
+
+    quality_avg = compute_persisted_quality_avg(
+        session, route, today_quality=quality, now=now
+    )
+
+    upsert_route_result(
+        session,
+        route,
+        state,
+        quality,
+        matched_count,
+        quality_avg=quality_avg,
+    )
     session.commit()
     session.refresh(route)
 
@@ -197,7 +222,7 @@ def list_routes(
 
     routes = session.execute(select(Route).order_by(Route.from_label)).scalars().all()
     filtered = [
-        _route_to_read(r, quality_avg=_compute_quality_avg(session, r))
+        _route_to_read(r)
         for r in routes
         if VISIBILITY_LEVELS.get(r.visibility, 0) <= max_level
     ]
@@ -255,7 +280,7 @@ def create_route(
     session.refresh(route)
     _reevaluate_route(session, route)
     invalidate_routes(request)
-    return _route_to_read(route)
+    return _route_to_read(route, quality_avg=None)
 
 
 @router.get("/{route_id}", response_model=RouteDetail)
@@ -282,7 +307,7 @@ def get_route(
     if VISIBILITY_LEVELS.get(route.visibility, 0) > max_level:
         raise HTTPException(status_code=404, detail="Route not found")
 
-    matches = recent_matches(session, route, limit=3)
+    matches = _load_recent_matches(session, route)
 
     contributing: dict[str, int] = {}
     for m in matches:
@@ -311,12 +336,154 @@ def get_route(
         for oid, cnt in contributing.items()
     ]
 
-    read = _route_to_read(route, quality_avg=_compute_quality_avg(session, route))
+    read = _route_to_read(route)
     return RouteDetail(
         **read.model_dump(),
         contributing_observers=contributors,
         recent_matches=[RecentMatchPath(**m) for m in matches],
     )
+
+
+def _load_recent_matches(
+    session: DbSession,
+    route: Route,
+) -> list[dict[str, Any]]:
+    """Return the route's top-3 recent matches in the ``RecentMatchPath`` shape.
+
+    Reads the normalized ``route_recent_matches`` table (populated by the
+    background evaluator on every 60s tick), JOINs through ``raw_packets``
+    for the packet-level metadata, then fetches the matched hop slice from
+    ``packet_path_hops`` in a second indexed query and slices
+    ``[first_position .. last_position]`` per match in Python. Falls back
+    to a live ``recent_matches`` compute when the table is empty for the
+    route (fresh route, evaluator hasn't run yet, or older row from before
+    this table existed).
+    """
+    matches = _read_recent_matches_from_table(session, route.id)
+    if matches:
+        return matches
+    if not route.enabled:
+        return []
+    # Live fallback for fresh routes — produce the same dict shape with
+    # an empty hops list (the table will be populated on the next sweep).
+    live = recent_matches(session, route, limit=3)
+    return [
+        {
+            "packet_hash": m.get("packet_hash"),
+            "event_hash": m.get("event_hash"),
+            "received_at": m.get("received_at"),
+            "observer_node_id": m.get("observer_node_id"),
+            "hops": _slice_hops_for_match(
+                session, m["raw_packet_id"], m["first_position"], m["last_position"]
+            ),
+        }
+        for m in live
+    ]
+
+
+def _read_recent_matches_from_table(
+    session: DbSession,
+    route_id: str,
+    *,
+    limit: int = 3,
+) -> list[dict[str, Any]]:
+    """Read recent matches from ``route_recent_matches`` + ``raw_packets``.
+
+    Returns ``[]`` when the route has no persisted matches yet.
+    """
+    rows = session.execute(
+        select(
+            RouteRecentMatch.raw_packet_id,
+            RouteRecentMatch.first_position,
+            RouteRecentMatch.last_position,
+            RawPacket.packet_hash,
+            RawPacket.event_hash,
+            RawPacket.received_at,
+            RawPacket.observer_node_id,
+        )
+        .join(RawPacket, RawPacket.id == RouteRecentMatch.raw_packet_id)
+        .where(RouteRecentMatch.route_id == route_id)
+        .order_by(RawPacket.received_at.desc())
+        .limit(limit)
+    ).all()
+    if not rows:
+        return []
+
+    # One IN-query for all the hops we need.
+    packet_ids = [r.raw_packet_id for r in rows]
+    hop_rows = session.execute(
+        select(
+            PacketPathHop.raw_packet_id,
+            PacketPathHop.position,
+            PacketPathHop.node_hash,
+            PacketPathHop.packet_hash,
+            PacketPathHop.event_hash,
+            PacketPathHop.received_at,
+            PacketPathHop.observer_node_id,
+        )
+        .where(PacketPathHop.raw_packet_id.in_(packet_ids))
+        .order_by(PacketPathHop.raw_packet_id, PacketPathHop.position)
+    ).all()
+    hops_by_packet: dict[str, list[dict[str, Any]]] = {}
+    for h in hop_rows:
+        hops_by_packet.setdefault(h.raw_packet_id, []).append(
+            {
+                "position": h.position,
+                "node_hash": h.node_hash,
+                "packet_hash": h.packet_hash,
+                "event_hash": h.event_hash,
+                "received_at": h.received_at,
+                "observer_node_id": h.observer_node_id,
+            }
+        )
+
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        all_hops = hops_by_packet.get(r.raw_packet_id, [])
+        sliced = all_hops[r.first_position : r.last_position + 1]
+        out.append(
+            {
+                "packet_hash": r.packet_hash,
+                "event_hash": r.event_hash,
+                "received_at": r.received_at,
+                "observer_node_id": r.observer_node_id,
+                "hops": sliced,
+            }
+        )
+    return out
+
+
+def _slice_hops_for_match(
+    session: DbSession,
+    raw_packet_id: str,
+    first_position: int,
+    last_position: int,
+) -> list[dict[str, Any]]:
+    """Fetch and slice the hops for one match (live-fallback path only)."""
+    rows = session.execute(
+        select(
+            PacketPathHop.position,
+            PacketPathHop.node_hash,
+            PacketPathHop.packet_hash,
+            PacketPathHop.event_hash,
+            PacketPathHop.received_at,
+            PacketPathHop.observer_node_id,
+        )
+        .where(PacketPathHop.raw_packet_id == raw_packet_id)
+        .order_by(PacketPathHop.position)
+    ).all()
+    all_hops = [
+        {
+            "position": r.position,
+            "node_hash": r.node_hash,
+            "packet_hash": r.packet_hash,
+            "event_hash": r.event_hash,
+            "received_at": r.received_at,
+            "observer_node_id": r.observer_node_id,
+        }
+        for r in rows
+    ]
+    return all_hops[first_position : last_position + 1]
 
 
 @router.get("/{route_id}/history", response_model=RouteHistory)
@@ -347,7 +514,7 @@ def get_route_history(
     retention = get_collector_settings().effective_raw_packet_retention_days
     days = min(days, retention)
 
-    history = evaluate_route_history(session, route, days, include_today=True)
+    history = read_route_history_from_db(session, route, days, include_today=True)
 
     return RouteHistory(
         route_id=route.id,
@@ -427,7 +594,7 @@ def update_route(
     session.refresh(route)
     _reevaluate_route(session, route)
     invalidate_routes(request)
-    return _route_to_read(route, quality_avg=_compute_quality_avg(session, route))
+    return _route_to_read(route)
 
 
 @router.delete("/{route_id}", status_code=204)

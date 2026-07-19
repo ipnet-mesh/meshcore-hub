@@ -11,7 +11,9 @@ from meshcore_hub.common.models.base import Base, TimestampMixin, UUIDMixin
 if TYPE_CHECKING:
     from meshcore_hub.common.models.route_node import RouteNode
     from meshcore_hub.common.models.route_observer import RouteObserver
+    from meshcore_hub.common.models.route_recent_match import RouteRecentMatch
     from meshcore_hub.common.models.route_result import RouteResult
+    from meshcore_hub.common.models.route_result_history import RouteResultHistory
 
 
 class RouteVisibility(str, Enum):
@@ -114,6 +116,19 @@ class Route(Base, UUIDMixin, TimestampMixin):
         cascade="all, delete-orphan",
         uselist=False,
         lazy="selectin",
+    )
+    route_result_history: Mapped[list["RouteResultHistory"]] = relationship(
+        "RouteResultHistory",
+        back_populates="route",
+        cascade="all, delete-orphan",
+        order_by="RouteResultHistory.date",
+        passive_deletes=True,
+    )
+    route_recent_matches: Mapped[list["RouteRecentMatch"]] = relationship(
+        "RouteRecentMatch",
+        back_populates="route",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
     def __repr__(self) -> str:

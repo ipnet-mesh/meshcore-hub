@@ -965,22 +965,38 @@ class TestCacheControlMiddleware:
         assert response.status_code == 200
         assert response.headers["cache-control"] == "no-store"
 
-    def test_kill_switch_suppresses_cache_control(self, client_no_auth):
+    def test_kill_switch_suppresses_cache_control(self, client_no_auth, monkeypatch):
         """When api_cache_control_enabled is False, no Cache-Control is added."""
-        client_no_auth.app.state.api_cache_control_enabled = False
-        if hasattr(client_no_auth.app.state, "redis_cache"):
-            del client_no_auth.app.state.redis_cache
+        monkeypatch.setattr(
+            client_no_auth.app.state, "api_cache_control_enabled", False
+        )
+        # Remove any pre-existing cache backend for the duration of the test;
+        # ``monkeypatch.delattr`` with raising=False is a no-op when the
+        # attribute is absent.
+        monkeypatch.delattr(client_no_auth.app.state, "redis_cache", raising=False)
         response = client_no_auth.get("/api/v1/nodes")
         assert "cache-control" not in response.headers
 
-    def test_kill_switch_preserves_x_cache_header(self, client_no_auth):
+    def test_kill_switch_preserves_x_cache_header(self, client_no_auth, monkeypatch):
         """X-Cache is observability, not a client-caching directive, so the
         kill switch should not suppress it."""
         mock_cache = MagicMock()
         mock_cache.get.return_value = None
-        client_no_auth.app.state.redis_cache = mock_cache
-        client_no_auth.app.state.redis_cache_ttl = 30
-        client_no_auth.app.state.api_cache_control_enabled = False
+        # Force-set the cache + ttl + kill switch on app.state. Using
+        # ``setattr(..., raising=False)`` lets us create the attribute
+        # even when a prior test removed it, and ``monkeypatch`` restores
+        # the original (or removes what it added) on teardown — fixing
+        # the cross-test leak that previously left ``api_cache_control_enabled``
+        # flipped off for every subsequent test in this module.
+        monkeypatch.setattr(
+            client_no_auth.app.state, "redis_cache", mock_cache, raising=False
+        )
+        monkeypatch.setattr(
+            client_no_auth.app.state, "redis_cache_ttl", 30, raising=False
+        )
+        monkeypatch.setattr(
+            client_no_auth.app.state, "api_cache_control_enabled", False
+        )
         response = client_no_auth.get("/api/v1/nodes")
         assert response.headers.get("x-cache") == "MISS"
         assert "cache-control" not in response.headers
