@@ -256,8 +256,9 @@ services:
       - SPAM_WEIGHT_PATH=${SPAM_WEIGHT_PATH:-0.75}
       - SPAM_WEIGHT_NAME=${SPAM_WEIGHT_NAME:-0.25}
       - SPAM_RESCORE_INTERVAL_SECONDS=${SPAM_RESCORE_INTERVAL_SECONDS:-120}
-      # Route health monitoring (background evaluator cadence; 0 disables).
+      # Route health monitoring (evaluator + history backfill cadence; 0 disables each).
       - ROUTE_EVALUATOR_INTERVAL_SECONDS=${ROUTE_EVALUATOR_INTERVAL_SECONDS:-60}
+      - ROUTE_HISTORY_BACKFILL_INTERVAL_SECONDS=${ROUTE_HISTORY_BACKFILL_INTERVAL_SECONDS:-3600}
     command: ["collector"]
     healthcheck:
       test: ["CMD", "meshcore-hub", "health", "collector"]

@@ -559,22 +559,31 @@ class TestRecentMatches:
 
     def test_returns_sliced_subpath(self, db_session):
         """Recent matches return only the hops between From and To, not the
-        full packet path."""
+        full packet path.
+
+        ``recent_matches`` returns ``first_position`` / ``last_position``
+        indices into the packet's full path; callers slice on read. The
+        indices must bracket exactly the matched subpath (noise before
+        From and after To is excluded).
+        """
         node_a = _make_node(db_session, "aa" + "0" * 62)
         node_b = _make_node(db_session, "bb" + "0" * 62)
         route = _make_route(db_session, "R1", [node_a, node_b])
 
-        # Packet path has noise before AA and after BB; only AA..BB should be kept.
+        # Packet path has noise before AA and after BB; only AA..BB should
+        # be bracketed by the returned indices.
         _make_reception(db_session, None, "pkt0", ["XX", "AA", "YY", "BB", "ZZ"])
         db_session.commit()
 
         matches = recent_matches(db_session, route, limit=3, now=_NOW)
         assert len(matches) == 1
-        hops = matches[0]["hops"]
-        assert [h["node_hash"] for h in hops] == ["AA", "YY", "BB"]
+        first_pos = matches[0]["first_position"]
+        last_pos = matches[0]["last_position"]
+        assert (first_pos, last_pos) == (1, 3)
 
     def test_returns_sliced_subpath_reverse(self, db_session):
-        """A reverse-direction packet is sliced in traversal order (To..From)."""
+        """A reverse-direction packet's indices bracket the slice in
+        traversal order (To..From)."""
         node_a = _make_node(db_session, "aa" + "0" * 62)
         node_b = _make_node(db_session, "bb" + "0" * 62)
         route = _make_route(db_session, "R1", [node_a, node_b], reversible=True)
@@ -584,8 +593,9 @@ class TestRecentMatches:
 
         matches = recent_matches(db_session, route, limit=3, now=_NOW)
         assert len(matches) == 1
-        hops = matches[0]["hops"]
-        assert [h["node_hash"] for h in hops] == ["BB", "YY", "AA"]
+        first_pos = matches[0]["first_position"]
+        last_pos = matches[0]["last_position"]
+        assert (first_pos, last_pos) == (1, 3)
 
     def test_dedup_by_event_hash_keeps_newest(self, db_session):
         """Multiple retransmissions of one event return one row, newest first.

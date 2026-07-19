@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -37,6 +37,17 @@ class RouteResult(Base, UUIDMixin, TimestampMixin):
     and ``effective_clear`` are snapshotted at evaluation time so the display
     stays self-consistent if thresholds are later changed.
 
+    ``quality_avg`` holds the rolling 7-day average tier computed from the
+    last 7 ``RouteResultHistory`` rows plus today's snapshot. It backs the
+    route card badge and the dashboard strip summary so a flapping route
+    that's currently up still shows as marginal/failing if the week's mean
+    warrants it.
+
+    The top-N recent matches for the detail page live in the separate
+    ``route_recent_matches`` table (normalized link to ``raw_packets``)
+    rather than on this row, so they stay consistent with raw-packet
+    retention and ``event_hash`` backfills without manual resync.
+
     Attributes:
         id: UUID primary key
         route_id: FK to routes (unique, cascades on delete)
@@ -46,6 +57,7 @@ class RouteResult(Base, UUIDMixin, TimestampMixin):
         threshold: Snapshot of route.packet_count_threshold at eval time
         effective_clear: Snapshot of effective_clear_threshold at eval time
         evaluated_at: When this evaluation ran
+        quality_avg: Rolling 7-day average quality tier (clear/marginal/failing)
     """
 
     __tablename__ = "route_results"
@@ -80,6 +92,10 @@ class RouteResult(Base, UUIDMixin, TimestampMixin):
         DateTime(timezone=True),
         default=utc_now,
         nullable=False,
+    )
+    quality_avg: Mapped[Optional[str]] = mapped_column(
+        String(20),
+        nullable=True,
     )
 
     route: Mapped["Route"] = relationship(

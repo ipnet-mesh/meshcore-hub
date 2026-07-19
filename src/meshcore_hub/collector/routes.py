@@ -7,7 +7,7 @@ per reception.  Scales with (candidates) only, not (candidates × depth).
 
 import logging
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 from uuid import uuid4
 
 from sqlalchemy import and_, func, or_, select
@@ -16,11 +16,13 @@ from sqlalchemy.orm import Session
 from meshcore_hub.common.models.node import Node
 from meshcore_hub.common.models.packet_path_hop import PacketPathHop
 from meshcore_hub.common.models.route import Route
+from meshcore_hub.common.models.route_recent_match import RouteRecentMatch
 from meshcore_hub.common.models.route_result import (
     RouteQuality,
     RouteResult,
     RouteState,
 )
+from meshcore_hub.common.models.route_result_history import RouteResultHistory
 
 logger = logging.getLogger(__name__)
 
@@ -166,14 +168,35 @@ def _matched_subpath(
     when no match is found.  The returned slice is in packet-traversal order
     (never reversed), so a reverse-direction packet shows as To -> ... -> From.
     """
+    subpath, _first, _last = _matched_subpath_with_indices(
+        hops, expected, max_hop_span, reversible
+    )
+    return subpath
+
+
+def _matched_subpath_with_indices(
+    hops: list[dict[str, Any]],
+    expected: list[str],
+    max_hop_span: Optional[int] = None,
+    reversible: bool = True,
+) -> tuple[Optional[list[dict[str, Any]]], Optional[int], Optional[int]]:
+    """Variant of :func:`_matched_subpath` that also returns match indices.
+
+    Returns ``(subpath, first_index, last_index)`` where ``first_index`` and
+    ``last_index`` are the inclusive positions into *hops* of the matched
+    slice. On no match, returns ``(None, None, None)``. The indices power
+    the persisted ``first_position`` / ``last_position`` columns in
+    ``route_recent_matches`` so the detail page can slice the live hop
+    list without re-running the matcher.
+    """
     idx = _subsequence_indices(hops, expected, max_hop_span)
     if idx is not None:
-        return hops[idx[0] : idx[1] + 1]
+        return hops[idx[0] : idx[1] + 1], idx[0], idx[1]
     if reversible and len(expected) > 1:
         idx = _subsequence_indices(hops, list(reversed(expected)), max_hop_span)
         if idx is not None:
-            return hops[idx[0] : idx[1] + 1]
-    return None
+            return hops[idx[0] : idx[1] + 1], idx[0], idx[1]
+    return None, None, None
 
 
 def _match_hops(
@@ -813,8 +836,20 @@ def upsert_route_result(
     state: str,
     quality: str,
     matched_count: int,
+    *,
+    quality_avg: Optional[str] = None,
 ) -> RouteResult:
-    """Upsert a route evaluation result (ORM check-then-update/insert)."""
+    """Upsert a route evaluation result (ORM check-then-update/insert).
+
+    ``quality_avg`` is only written when explicitly provided (non-``None``).
+    Callers that don't compute it leave the previous persisted value
+    intact, which keeps the background snapshot path cheap while letting
+    the API layer's synchronous re-evaluation on mutations refresh every
+    field at once.
+
+    The top-N recent matches are persisted separately in
+    ``route_recent_matches`` via :func:`upsert_route_recent_matches`.
+    """
     now = datetime.now(timezone.utc)
     eff_clear = effective_clear_threshold(route)
 
@@ -829,6 +864,8 @@ def upsert_route_result(
         existing.threshold = route.packet_count_threshold
         existing.effective_clear = eff_clear
         existing.evaluated_at = now
+        if quality_avg is not None:
+            existing.quality_avg = quality_avg
         return existing
 
     result = RouteResult(
@@ -840,9 +877,208 @@ def upsert_route_result(
         threshold=route.packet_count_threshold,
         effective_clear=eff_clear,
         evaluated_at=now,
+        quality_avg=quality_avg,
     )
     session.add(result)
     return result
+
+
+def upsert_route_history_row(
+    session: Session,
+    route_id: str,
+    day: date,
+    quality: str,
+    state: str,
+    matched_count: int,
+    *,
+    evaluated_at: Optional[datetime] = None,
+) -> RouteResultHistory:
+    """Upsert one calendar-day bucket into ``route_result_history``.
+
+    Idempotent via the ``UNIQUE (route_id, date)`` constraint — a
+    re-evaluation of the same day overwrites the prior row in place.
+    """
+    now = evaluated_at or datetime.now(timezone.utc)
+
+    existing = session.execute(
+        select(RouteResultHistory)
+        .where(RouteResultHistory.route_id == route_id)
+        .where(RouteResultHistory.date == day)
+    ).scalar_one_or_none()
+
+    if existing:
+        existing.quality = quality
+        existing.state = state
+        existing.matched_count = matched_count
+        existing.evaluated_at = now
+        return existing
+
+    row = RouteResultHistory(
+        id=str(uuid4()),
+        route_id=route_id,
+        date=day,
+        quality=quality,
+        state=state,
+        matched_count=matched_count,
+        evaluated_at=now,
+    )
+    session.add(row)
+    return row
+
+
+def compute_persisted_quality_avg(
+    session: Session,
+    route: Route,
+    *,
+    today_quality: str,
+    now: Optional[datetime] = None,
+    days: int = 7,
+) -> Optional[str]:
+    """Rolling ``days``-day average tier from persisted history + today's snapshot.
+
+    Reads the last ``days`` history rows for completed UTC calendar days
+    (strictly before today), appends today's rolling-window ``quality``
+    (the same value the badge uses, sourced from the latest
+    ``evaluate_route`` call), and feeds both to ``compute_average_quality``.
+    Returns ``None`` when no history exists and no today quality is
+    available, so brand-new routes don't flash a misleading failing badge
+    before the first evaluator cycle.
+    """
+    current = now or datetime.now(timezone.utc)
+    today = current.date()
+
+    if not today_quality:
+        return None
+
+    rows = session.execute(
+        select(
+            RouteResultHistory.date,
+            RouteResultHistory.quality,
+            RouteResultHistory.state,
+            RouteResultHistory.matched_count,
+        )
+        .where(RouteResultHistory.route_id == route.id)
+        .where(RouteResultHistory.date < today)
+        .order_by(RouteResultHistory.date.desc())
+        .limit(days)
+    ).all()
+
+    history_tuples: list[tuple[date, str, str, int]] = [
+        (row.date, row.quality, row.state, row.matched_count) for row in reversed(rows)
+    ]
+    history_tuples.append((today, today_quality, "", 0))
+
+    if not history_tuples:
+        return None
+    if not rows:
+        # Brand-new route: no historical buckets yet. Return None so the
+        # frontend's ``quality_avg || route_result?.quality`` fallback
+        # kicks in (matches the historical "fresh route" semantics).
+        return None
+    return compute_average_quality(history_tuples, fallback=today_quality)
+
+
+def read_route_history_from_db(
+    session: Session,
+    route: Route,
+    days: int,
+    *,
+    include_today: bool = True,
+    now: Optional[datetime] = None,
+) -> list[tuple[date, str, str, int]]:
+    """Read precomputed history for a route from ``route_result_history``.
+
+    Replaces the on-demand ``evaluate_route_history`` call on the API hot
+    path with a single indexed ``SELECT``. Pads missing days with
+    ``unknown`` / ``no_coverage`` / ``0`` (matching the disabled-route
+    semantics the chart already relies on). When *include_today* is True,
+    appends a synthetic today segment sourced from ``route.route_result``
+    (the rolling-window snapshot the badge uses) so the rightmost chart
+    point stays consistent with the card badge.
+
+    For a disabled route, every entry returns ``unknown`` /
+    ``no_coverage`` / ``0`` without hitting the DB.
+    """
+    current = now or datetime.now(timezone.utc)
+    today_midnight = current.replace(hour=0, minute=0, second=0, microsecond=0)
+    today = current.date()
+    oldest = today_midnight - timedelta(days=days)
+    day_dates = [(oldest + timedelta(days=i)).date() for i in range(days)]
+
+    if not route.enabled:
+        results: list[tuple[date, str, str, int]] = [
+            (d, RouteQuality.UNKNOWN.value, RouteState.NO_COVERAGE.value, 0)
+            for d in day_dates
+        ]
+        if include_today:
+            results.append(
+                (today, RouteQuality.UNKNOWN.value, RouteState.NO_COVERAGE.value, 0)
+            )
+        return results
+
+    rows = session.execute(
+        select(
+            RouteResultHistory.date,
+            RouteResultHistory.quality,
+            RouteResultHistory.state,
+            RouteResultHistory.matched_count,
+        )
+        .where(RouteResultHistory.route_id == route.id)
+        .where(RouteResultHistory.date >= oldest.date())
+        .where(RouteResultHistory.date < today)
+        .order_by(RouteResultHistory.date)
+    ).all()
+    rows_by_date: dict[date, tuple[str, str, int]] = {
+        row.date: (row.quality, row.state, row.matched_count) for row in rows
+    }
+
+    results = [
+        (
+            d,
+            *rows_by_date.get(
+                d, (RouteQuality.UNKNOWN.value, RouteState.NO_COVERAGE.value, 0)
+            ),
+        )
+        for d in day_dates
+    ]
+
+    if include_today:
+        rr = route.route_result
+        if rr is not None:
+            results.append((today, rr.quality, rr.state, rr.matched_count))
+        else:
+            results.append(
+                (today, RouteQuality.UNKNOWN.value, RouteState.NO_COVERAGE.value, 0)
+            )
+
+    return results
+
+
+def _legacy_recent_matches_payload(
+    matches: Iterable[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Adapter from the new ``recent_matches`` dict shape to the legacy
+    ``RecentMatchPath(**m)`` schema expected by the detail-page response.
+
+    The new ``recent_matches`` carries ``raw_packet_id`` / ``first_position``
+    / ``last_position`` (for the normalized table) instead of a pre-sliced
+    ``hops`` list. The detail-page read path JOINs through
+    ``route_recent_matches`` to load hops live, so this shim only exists
+    for the rare path where the evaluator hasn't populated the table yet
+    and we fall back to a live compute.
+    """
+    out: list[dict[str, Any]] = []
+    for m in matches:
+        out.append(
+            {
+                "packet_hash": m.get("packet_hash"),
+                "event_hash": m.get("event_hash"),
+                "received_at": m.get("received_at"),
+                "observer_node_id": m.get("observer_node_id"),
+                "hops": [],  # populated by the caller via packet_path_hops
+            }
+        )
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -856,7 +1092,17 @@ def recent_matches(
     limit: int = 3,
     now: Optional[datetime] = None,
 ) -> list[dict[str, Any]]:
-    """Return the latest *limit* matching paths for a route.
+    """Return metadata for the latest *limit* matching receptions for a route.
+
+    Each dict carries the keys the evaluator needs to persist a
+    ``RouteRecentMatch`` row and the API needs to render the detail-page
+    match card: ``raw_packet_id``, ``packet_hash``, ``event_hash``,
+    ``received_at``, ``observer_node_id``, ``first_position``,
+    ``last_position``. The matched hop slice is NOT included — callers
+    that need the hops (i.e. the API detail endpoint) JOIN through
+    ``raw_packet_id`` → ``packet_path_hops`` and slice on
+    ``[first_position .. last_position]`` so the data is sourced from
+    its canonical home instead of being denormalized at sweep time.
 
     Deduplicates by event identity (preferring ``event_hash``, falling back
     to wire ``packet_hash``) so the UI shows one row per underlying event
@@ -881,25 +1127,29 @@ def recent_matches(
     # Keep the newest match per identity so the UI lists distinct underlying
     # events rather than every retransmission of the same event.
     matches_by_identity: dict[str, dict[str, Any]] = {}
-    for hops in paths.values():
-        subpath = _matched_subpath(hops, expected, route.max_hop_span, reversible)
-        if not subpath:
+    for rp_id, hops in paths.items():
+        subpath, first_idx, last_idx = _matched_subpath_with_indices(
+            hops, expected, route.max_hop_span, reversible
+        )
+        if not subpath or first_idx is None or last_idx is None:
             continue
         identity = _match_identity(subpath)
         if identity is None:
             # Fall back to a synthetic unique key so unmatched-identity
             # receptions still surface (one row each).
             identity = f"__rawid_{id(subpath)}"
-        first = subpath[0] if subpath else {}
+        first = subpath[0]
         received_at = first.get("received_at") or datetime.min.replace(
             tzinfo=timezone.utc
         )
         candidate = {
+            "raw_packet_id": rp_id,
             "packet_hash": first.get("packet_hash"),
             "event_hash": first.get("event_hash"),
-            "hops": subpath,
             "received_at": first.get("received_at"),
             "observer_node_id": first.get("observer_node_id"),
+            "first_position": first_idx,
+            "last_position": last_idx,
         }
         existing = matches_by_identity.get(identity)
         if existing is None or received_at > (
@@ -913,6 +1163,65 @@ def recent_matches(
         reverse=True,
     )
     return matches[:limit]
+
+
+def upsert_route_recent_matches(
+    session: Session,
+    route_id: str,
+    matches: Iterable[dict[str, Any]],
+    *,
+    limit: int = 3,
+) -> list[RouteRecentMatch]:
+    """Replace the route's recent-match set with *matches* (capped at *limit*).
+
+    ``matches`` is the output of :func:`recent_matches`. Rows whose
+    ``raw_packet_id`` is no longer in the new set are deleted; new and
+    changed rows are upserted in place. Returns the resulting ORM rows
+    (sorted newest-first by ``raw_packet_id`` for caller convenience;
+    order is not persisted — the detail page orders by
+    ``raw_packets.received_at`` at read time).
+
+    Cap is enforced at write time as a safety net — :func:`recent_matches`
+    already LIMITs.
+    """
+    new_matches = list(matches)[:limit]
+    new_packet_ids = {m["raw_packet_id"] for m in new_matches}
+
+    existing_rows = (
+        session.execute(
+            select(RouteRecentMatch).where(RouteRecentMatch.route_id == route_id)
+        )
+        .scalars()
+        .all()
+    )
+    existing_by_packet = {r.raw_packet_id: r for r in existing_rows}
+
+    # Delete rows whose raw_packet_id is no longer in the new set
+    for row in existing_rows:
+        if row.raw_packet_id not in new_packet_ids:
+            session.delete(row)
+
+    # Upsert new / changed
+    kept: list[RouteRecentMatch] = []
+    for m in new_matches:
+        rpid = m["raw_packet_id"]
+        existing: Optional[RouteRecentMatch] = existing_by_packet.get(rpid)
+        first_pos = m["first_position"]
+        last_pos = m["last_position"]
+        if existing is None:
+            existing = RouteRecentMatch(
+                id=str(uuid4()),
+                route_id=route_id,
+                raw_packet_id=rpid,
+                first_position=first_pos,
+                last_position=last_pos,
+            )
+            session.add(existing)
+        else:
+            existing.first_position = first_pos
+            existing.last_position = last_pos
+        kept.append(existing)
+    return kept
 
 
 def preview_route(

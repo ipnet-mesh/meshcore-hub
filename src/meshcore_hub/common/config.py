@@ -327,7 +327,23 @@ class CollectorSettings(CommonSettings):
     )
     route_evaluator_interval_seconds: int = Field(
         default=60,
-        description="Route evaluator interval in seconds (0 disables, default 60)",
+        description=(
+            "Route evaluator interval in seconds. Each tick writes the current "
+            "snapshot to route_results, upserts today's per-day bucket into "
+            "route_result_history, refreshes the rolling quality_avg column, "
+            "and rewrites recent_matches_json. 0 disables the evaluator."
+        ),
+        ge=0,
+    )
+    route_history_backfill_interval_seconds: int = Field(
+        default=3600,
+        description=(
+            "Cadence in seconds for the slower route-history backfill sweep "
+            "that recomputes the full raw_packet_retention_days window into "
+            "route_result_history so late-arriving packets and route-config "
+            "changes propagate into historical buckets. 0 disables the "
+            "backfill (today's bucket is still updated by the regular sweep)."
+        ),
         ge=0,
     )
 
@@ -418,13 +434,15 @@ class APISettings(CommonSettings):
         description="Default cache TTL in seconds",
     )
     redis_cache_ttl_dashboard: int = Field(
-        default=3600,
+        default=300,
         description=(
             "Cache TTL in seconds for dashboard endpoints, /routes/{id} detail "
-            "and per-route health history (trend/aggregation data tolerates "
-            "longer staleness than the default TTL). The Recent Adverts / "
-            "Recent Channel Messages widgets live on a separate "
-            "/dashboard/recent-activity endpoint cached at redis_cache_ttl."
+            "and per-route health history. With route health now precomputed "
+            "by the background evaluator, misses are cheap and the TTL can be "
+            "kept short (5 min) so the UI reflects the latest sweep. The "
+            "Recent Adverts / Recent Channel Messages widgets live on a "
+            "separate /dashboard/recent-activity endpoint cached at "
+            "redis_cache_ttl."
         ),
     )
 

@@ -92,6 +92,7 @@ The collector subscribes to MQTT events and persists them to the database. For p
 | --- | --- | --- |
 | `CHANNEL_REFRESH_INTERVAL_SECONDS` | `300` | Seconds between channel-key refresh from the database (minimum `10`) |
 | `ROUTE_EVALUATOR_INTERVAL_SECONDS` | `60` | Seconds between route health evaluations. `0` disables the background evaluator (route cards then stay `unknown`). See [routes.md](routes.md) |
+| `ROUTE_HISTORY_BACKFILL_INTERVAL_SECONDS` | `3600` | Seconds between route-health history backfill sweeps (recomputes completed-day buckets for the retention window). `0` disables the backfill; the dashboard strip and `/routes/{id}/history` then only reflect the live 60 s evaluator sweeps. See [routes.md](routes.md) |
 
 ### Observer Ingestion Filters
 

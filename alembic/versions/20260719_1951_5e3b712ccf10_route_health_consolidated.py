@@ -1,36 +1,21 @@
-"""add route health monitoring (consolidated)
+"""route health monitoring (consolidated)
 
-Revision ID: ec40c67c8c83
+Revision ID: 5e3b712ccf10
 Revises: 57bb65130b97
-Create Date: 2026-07-16 20:43:00.000000+00:00
+Create Date: 2026-07-19 19:51:00.000000+00:00
 
-Consolidation of four formerly-separate migrations into one clean
-migration that builds the final schema directly:
+Single-step build of the route-health schema on top of the production
+head ``57bb65130b97``.  Creates seven tables (``routes``, ``route_nodes``,
+``route_observers``, ``route_results``, ``packet_path_hops``,
+``route_result_history``, ``route_recent_matches``), adds an nullable
+``event_hash`` column to the pre-existing ``raw_packets`` table, and runs
+three idempotent backfills: ``packet_path_hops`` from
+``raw_packets.decoded``, ``nodes`` deduplication by ``public_key``, and
+``route_result_history`` + ``route_results.quality_avg`` for any enabled
+routes.
 
-* ``8f2a3c4d5e6f`` — create five route health tables + backfill
-  ``packet_path_hops`` from ``raw_packets.decoded``.
-* ``76513f4c57e9`` — standalone ``ix_packet_path_hops_received_at`` index.
-* ``71f6e01e4bf6`` — rename ``degraded_threshold`` -> ``clear_threshold``
-  on ``routes`` and ``effective_degraded`` -> ``effective_clear`` on
-  ``route_results``.  These columns are born with their final names here,
-  so no rename runs.
-* ``c0d1e2f3a4b5`` — deduplicate ``nodes`` by ``public_key`` and re-assert
-  the UNIQUE index.  Idempotent (no-op on a clean DB) but retained so a
-  restored backup with duplicate keys is repaired before route tables
-  reference them.
-
-Creates five tables for route health monitoring:
-``routes``, ``route_nodes``, ``route_observers``, ``route_results`` and
-``packet_path_hops``.  Routes are identified by endpoint labels
-(``from_label`` / ``to_label``) with a composite unique index, and each
-route carries a ``reversible`` flag so the matching engine can also accept
-reverse-ordered paths.
-
-The hop table is backfilled from ``raw_packets.decoded`` using a frozen
-copy of the dual-path extraction logic (``_normalize_hash_list`` +
-``decoded.path`` / ``payload.decoded.pathHashes`` fallback), mirroring
-migration ``57bb65130b97``.
-
+Supersedes (and replaces) the formerly separate revisions
+``ec40c67c8c83``, ``6b3430fd84f4`` and ``cf8dd7eaba9b``.
 """
 
 from datetime import datetime, timezone
@@ -41,7 +26,7 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "ec40c67c8c83"
+revision: str = "5e3b712ccf10"
 down_revision: Union[str, None] = "57bb65130b97"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -212,7 +197,7 @@ def upgrade() -> None:
     op.create_index("ix_route_observers_route_id", "route_observers", ["route_id"])
     op.create_index("ix_route_observers_node_id", "route_observers", ["node_id"])
 
-    # --- route_results ---
+    # --- route_results (quality_avg baked in from cf8dd7eaba9b) ---
     op.create_table(
         "route_results",
         sa.Column("id", sa.String(36), primary_key=True),
@@ -235,6 +220,7 @@ def upgrade() -> None:
         sa.Column("threshold", sa.Integer, nullable=False),
         sa.Column("effective_clear", sa.Integer, nullable=False),
         sa.Column("evaluated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("quality_avg", sa.String(20), nullable=True),
         sa.ForeignKeyConstraint(["route_id"], ["routes.id"], ondelete="CASCADE"),
     )
     op.create_index(
@@ -244,7 +230,7 @@ def upgrade() -> None:
         unique=True,
     )
 
-    # --- packet_path_hops ---
+    # --- packet_path_hops (event_hash baked in from 6b3430fd84f4) ---
     op.create_table(
         "packet_path_hops",
         sa.Column("id", sa.String(36), primary_key=True),
@@ -264,6 +250,7 @@ def upgrade() -> None:
         sa.Column("position", sa.Integer, nullable=False),
         sa.Column("node_hash", sa.String(6), nullable=False),
         sa.Column("packet_hash", sa.String(32), nullable=True),
+        sa.Column("event_hash", sa.String(32), nullable=True),
         sa.Column("received_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("observer_node_id", sa.String(36), nullable=True),
         sa.ForeignKeyConstraint(
@@ -288,6 +275,95 @@ def upgrade() -> None:
         "packet_path_hops",
         ["received_at"],
     )
+    op.create_index(
+        "ix_packet_path_hops_event_hash_received_at",
+        "packet_path_hops",
+        ["event_hash", "received_at"],
+    )
+
+    # --- route_result_history (from cf8dd7eaba9b) ---
+    op.create_table(
+        "route_result_history",
+        sa.Column("id", sa.String(36), primary_key=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column("route_id", sa.String(36), nullable=False),
+        sa.Column("date", sa.Date, nullable=False),
+        sa.Column("quality", sa.String(20), nullable=False),
+        sa.Column("state", sa.String(20), nullable=False),
+        sa.Column("matched_count", sa.Integer, nullable=False),
+        sa.Column(
+            "evaluated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(["route_id"], ["routes.id"], ondelete="CASCADE"),
+        sa.UniqueConstraint(
+            "route_id", "date", name="uq_route_result_history_route_date"
+        ),
+    )
+    op.create_index(
+        "ix_route_result_history_route_id",
+        "route_result_history",
+        ["route_id"],
+    )
+    op.create_index(
+        "ix_route_result_history_route_id_date",
+        "route_result_history",
+        ["route_id", "date"],
+    )
+
+    # --- route_recent_matches (from cf8dd7eaba9b) ---
+    op.create_table(
+        "route_recent_matches",
+        sa.Column("id", sa.String(36), primary_key=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column("route_id", sa.String(36), nullable=False),
+        sa.Column("raw_packet_id", sa.String(36), nullable=False),
+        sa.Column("first_position", sa.Integer, nullable=False),
+        sa.Column("last_position", sa.Integer, nullable=False),
+        sa.ForeignKeyConstraint(["route_id"], ["routes.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["raw_packet_id"], ["raw_packets.id"], ondelete="CASCADE"
+        ),
+        sa.UniqueConstraint(
+            "route_id", "raw_packet_id", name="uq_route_recent_matches_route_packet"
+        ),
+    )
+    op.create_index(
+        "ix_route_recent_matches_route_id",
+        "route_recent_matches",
+        ["route_id"],
+    )
+
+    # --- raw_packets.event_hash (table pre-exists at 57bb65130b97) ---
+    with op.batch_alter_table("raw_packets", schema=None) as batch_op:
+        batch_op.add_column(
+            sa.Column("event_hash", sa.String(length=32), nullable=True)
+        )
+        batch_op.create_index("ix_raw_packets_event_hash", ["event_hash"], unique=False)
 
     # --- Backfill packet_path_hops from raw_packets.decoded ---
     conn = op.get_bind()
@@ -448,11 +524,174 @@ def upgrade() -> None:
     conn.execute(text("DROP INDEX IF EXISTS ix_nodes_public_key"))
     conn.execute(text("CREATE UNIQUE INDEX ix_nodes_public_key ON nodes (public_key)"))
 
+    # --- Backfill route_result_history + quality_avg for enabled routes ---
+    # Defensive: a backfill failure on any single route (or globally) must
+    # never block the schema change. The periodic sweep repairs missing
+    # rows on its next tick. On a freshly-restored production snapshot
+    # there are zero routes, so this is effectively a no-op; the loop is
+    # retained so a restore from a dev backup that DOES have routes
+    # backfills correctly.
+    try:
+        _backfill_history()
+    except Exception as e:  # noqa: BLE001 — never abort the migration
+        print(f"[route health precompute] backfill skipped: {e}")
+
 
 def downgrade() -> None:
     # The nodes dedup is irreversible (duplicate rows were deleted).
+    with op.batch_alter_table("raw_packets", schema=None) as batch_op:
+        batch_op.drop_index("ix_raw_packets_event_hash")
+        batch_op.drop_column("event_hash")
+
+    op.drop_index(
+        "ix_route_recent_matches_route_id",
+        table_name="route_recent_matches",
+    )
+    op.drop_table("route_recent_matches")
+
+    op.drop_index(
+        "ix_route_result_history_route_id_date",
+        table_name="route_result_history",
+    )
+    op.drop_index(
+        "ix_route_result_history_route_id",
+        table_name="route_result_history",
+    )
+    op.drop_table("route_result_history")
+
+    op.drop_index(
+        "ix_packet_path_hops_event_hash_received_at",
+        table_name="packet_path_hops",
+    )
+    op.drop_index(
+        "ix_packet_path_hops_received_at",
+        table_name="packet_path_hops",
+    )
+    op.drop_index(
+        "ix_packet_path_hops_raw_packet_id_position",
+        table_name="packet_path_hops",
+    )
+    op.drop_index(
+        "ix_packet_path_hops_node_hash_received_at",
+        table_name="packet_path_hops",
+    )
     op.drop_table("packet_path_hops")
+
+    op.drop_index("ix_route_results_route_id", table_name="route_results")
     op.drop_table("route_results")
+
+    op.drop_index("ix_route_observers_node_id", table_name="route_observers")
+    op.drop_index("ix_route_observers_route_id", table_name="route_observers")
     op.drop_table("route_observers")
+
+    op.drop_index("ix_route_nodes_node_id", table_name="route_nodes")
+    op.drop_index("ix_route_nodes_route_id", table_name="route_nodes")
     op.drop_table("route_nodes")
+
+    op.drop_index("ix_routes_from_to", table_name="routes")
     op.drop_table("routes")
+
+
+def _backfill_history() -> None:
+    """Populate history rows and ``quality_avg`` for existing enabled routes.
+
+    Imports the live route-evaluation helpers from the application code
+    rather than freezing copies — the new code is in place when this
+    migration runs, and the helpers cover edge cases (reversible match,
+    dedup by event_hash, per-day existence checks) that would be unsafe
+    to duplicate.
+    """
+    import logging
+    from datetime import datetime, timezone
+    from uuid import uuid4
+
+    from sqlalchemy.orm import Session
+
+    from meshcore_hub.collector.routes import (
+        compute_average_quality,
+        evaluate_route_history,
+    )
+    from meshcore_hub.common.config import get_collector_settings
+    from meshcore_hub.common.models.route import Route
+    from meshcore_hub.common.models.route_result import RouteResult
+    from meshcore_hub.common.models.route_result_history import RouteResultHistory
+
+    logger = logging.getLogger("alembic.route_health_consolidated")
+
+    conn = op.get_bind()
+    settings = get_collector_settings()
+    retention_days = settings.effective_raw_packet_retention_days
+
+    now = datetime.now(timezone.utc)
+    today = now.date()
+
+    with Session(bind=conn) as session:
+        routes = (
+            session.execute(sa.select(Route).where(Route.enabled.is_(True)))
+            .scalars()
+            .all()
+        )
+
+        if not routes:
+            return
+
+        for route in routes:
+            try:
+                # Evaluate the retention window EXCLUDING today — the
+                # today bucket is the evaluator's job and would be stale
+                # the moment a new packet arrives. Leaving it for the
+                # first sweep keeps the migration fast.
+                history_tuples = evaluate_route_history(
+                    session, route, retention_days, include_today=False
+                )
+
+                # Bulk-insert (skip today if the engine already produced it
+                # because window_hours happens to land on today's UTC day).
+                rows_to_insert = []
+                for day, quality, state, matched_count in history_tuples:
+                    if day >= today:
+                        continue
+                    rows_to_insert.append(
+                        {
+                            "id": str(uuid4()),
+                            "route_id": route.id,
+                            "date": day,
+                            "quality": quality,
+                            "state": state,
+                            "matched_count": matched_count,
+                            "evaluated_at": now,
+                            "created_at": now,
+                            "updated_at": now,
+                        }
+                    )
+
+                if rows_to_insert:
+                    conn.execute(
+                        sa.insert(RouteResultHistory.__table__), rows_to_insert
+                    )
+
+                # Compute quality_avg from the last 7 history rows
+                # (today is excluded — falls back to route_result.quality
+                # at read time when missing, matching existing semantics).
+                last_seven = history_tuples[-7:] if history_tuples else []
+                avg = compute_average_quality(
+                    last_seven,
+                    fallback=None,
+                )
+
+                # Only stamp quality_avg when we actually have history;
+                # otherwise let the first evaluator tick fill it.
+                if last_seven:
+                    conn.execute(
+                        sa.update(RouteResult.__table__)
+                        .where(RouteResult.__table__.c.route_id == route.id)
+                        .values(quality_avg=avg)
+                    )
+
+            except Exception as route_err:
+                logger.warning(
+                    "Backfill failed for route %s -> %s: %s",
+                    getattr(route, "from_label", "?"),
+                    getattr(route, "to_label", "?"),
+                    route_err,
+                )
