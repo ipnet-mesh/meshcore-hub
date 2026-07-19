@@ -10,7 +10,6 @@ from sqlalchemy.sql.elements import ColumnElement
 from meshcore_hub.api.auth import RequireRead
 from meshcore_hub.api.cache import cached, sorted_query_string
 from meshcore_hub.api.channel_visibility import (
-    VISIBILITY_LEVELS,
     get_max_visibility_level,
     get_visible_channel_indices,
     resolve_user_role,
@@ -28,6 +27,7 @@ from meshcore_hub.common.models import (
     NodeTag,
     RawPacket,
     Route,
+    RouteVisibility,
     UserProfile,
 )
 from meshcore_hub.common.models.route_result_history import RouteResultHistory
@@ -76,15 +76,13 @@ def _dashboard_recent_activity_key_builder(request: Request) -> str:
 
 
 def _dashboard_routes_overview_key_builder(request: Request) -> str:
-    """Role-scoped key for ``GET /dashboard/routes-overview``.
+    """Role-agnostic key for ``GET /dashboard/routes-overview``.
 
-    The endpoint filters admin/operator-only routes by visibility, so the
-    cache key must vary by role — otherwise an anonymous GET could fill the
-    cache with a response that hides admin routes, and a subsequent admin
-    GET would receive that same redacted response.
+    The endpoint surfaces only ``community``-visibility routes regardless
+    of the caller's role, so the response is identical for anonymous,
+    member, operator, and admin callers — no role dimension in the key.
     """
-    role = resolve_user_role(request) or "anonymous"
-    return f"dashboard/routes-overview:role={role}:{sorted_query_string(request)}"
+    return f"dashboard/routes-overview:{sorted_query_string(request)}"
 
 
 def _flood_only_filter(
@@ -729,9 +727,12 @@ def get_routes_overview(
       ``days``-long history (includes today) for the trend chart and
       per-route strip grid.
 
-    Role-visibility filtered the same way as ``GET /routes`` so members
-    don't see admin-only routes. ``days`` is clamped to the configured
-    raw-packet retention window so history queries can't scan purged data.
+    The dashboard widget only surfaces ``community``-visibility routes,
+    regardless of the caller's role — operators and admins still see
+    member/operator/admin-tier routes on the dedicated ``/routes`` page,
+    but the dashboard is intentionally limited to the community fleet.
+    ``days`` is clamped to the configured raw-packet retention window so
+    history queries can't scan purged data.
 
     History is read in a single bulk query against ``route_result_history``
     for every visible route — no per-route scans of ``packet_path_hops``
@@ -742,11 +743,16 @@ def get_routes_overview(
     retention = get_collector_settings().effective_raw_packet_retention_days
     days = min(days, retention)
 
-    role = resolve_user_role(request)
-    max_level = get_max_visibility_level(role)
-
-    routes = session.execute(select(Route).order_by(Route.from_label)).scalars().all()
-    visible = [r for r in routes if VISIBILITY_LEVELS.get(r.visibility, 0) <= max_level]
+    routes = (
+        session.execute(
+            select(Route)
+            .where(Route.visibility == RouteVisibility.COMMUNITY.value)
+            .order_by(Route.from_label)
+        )
+        .scalars()
+        .all()
+    )
+    visible = list(routes)
 
     # Bulk-load precomputed history for every visible route in one indexed
     # query. ``read_route_history_from_db`` pads missing days and appends
