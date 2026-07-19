@@ -400,7 +400,7 @@ function renderRouteModal({ modalState, onSave, onCancel, saving }) {
                         <div>
                             <label class="text-sm opacity-70">${t('routes.window_label')}</label>
                             <input type="number" id="route-modal-window" class="input input-sm w-full"
-                                .value=${route.window_hours || 24} min="1" max="720" />
+                                .value=${route.window_hours || 48} min="1" max="720" />
                         </div>
                         <div>
                             <label class="text-sm opacity-70">${t('routes.threshold_label')}</label>
@@ -633,7 +633,7 @@ export async function render(container, params, router) {
         }
 
         function handleAdd() {
-            modalState = _newModalState('add', { visibility: 'community', enabled: true, match_width: 1 });
+            modalState = _newModalState('add', { visibility: 'community', enabled: true, match_width: 1, window_hours: 48, max_hop_span: 8 });
             renderPage(routes);
         }
 
@@ -803,7 +803,7 @@ export async function render(container, params, router) {
                 description: descEl.value.trim() || null,
                 visibility: visEl.value,
                 match_width: parseInt(widthEl.value, 10) || 1,
-                window_hours: parseInt(windowEl.value, 10) || 24,
+                window_hours: parseInt(windowEl.value, 10) || 48,
                 packet_count_threshold: parseInt(thresholdEl.value, 10) || 3,
                 max_hop_span: spanEl.value ? parseInt(spanEl.value, 10) : null,
                 enabled: enabledEl.checked,
