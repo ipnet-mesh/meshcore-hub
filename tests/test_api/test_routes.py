@@ -995,6 +995,42 @@ class TestUpdateRouteFields:
         assert len(data["route_observers"]) == 1
         assert data["route_observers"][0]["public_key"] == obs.public_key
 
+    def test_update_clear_observers_with_empty_list(
+        self, client_no_auth, api_db_session
+    ):
+        """Sending ``observer_public_keys: []`` must clear existing observers.
+
+        Regression guard for a frontend bug where the edit modal sent
+        ``null`` instead of ``[]`` when the user removed all observers,
+        causing the backend's ``is not None`` guard to skip the sync.
+        """
+        route = self._make_route(api_db_session)
+        obs = _make_node(api_db_session, "c" * 64, "Observer")
+        api_db_session.commit()
+
+        # Seed one observer.
+        client_no_auth.put(
+            f"/api/v1/routes/{route.id}",
+            json={"observer_public_keys": [obs.public_key]},
+            headers={"X-User-Roles": "admin"},
+        )
+
+        # Clear with an explicit empty list.
+        resp = client_no_auth.put(
+            f"/api/v1/routes/{route.id}",
+            json={"observer_public_keys": []},
+            headers={"X-User-Roles": "admin"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["route_observers"] == []
+
+        # Confirm persistence via a fresh GET.
+        detail = client_no_auth.get(
+            f"/api/v1/routes/{route.id}",
+            headers={"X-User-Roles": "admin"},
+        ).json()
+        assert detail["route_observers"] == []
+
     def test_update_unresolved_path_nodes_400(self, client_no_auth, api_db_session):
         route = self._make_route(api_db_session)
         api_db_session.commit()
