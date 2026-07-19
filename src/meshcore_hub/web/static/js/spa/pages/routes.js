@@ -809,7 +809,7 @@ export async function render(container, params, router) {
                 enabled: enabledEl.checked,
                 reversible: reversibleEl.checked,
                 node_public_keys: nodePublicKeys,
-                observer_public_keys: observerPublicKeys.length > 0 ? observerPublicKeys : null,
+                observer_public_keys: observerPublicKeys,
             };
 
             const clearVal = clearEl.value.trim();
