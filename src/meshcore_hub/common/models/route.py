@@ -69,7 +69,7 @@ class Route(Base, UUIDMixin, TimestampMixin):
     )
     window_hours: Mapped[int] = mapped_column(
         Integer,
-        default=24,
+        default=48,
         nullable=False,
     )
     packet_count_threshold: Mapped[int] = mapped_column(
@@ -83,6 +83,7 @@ class Route(Base, UUIDMixin, TimestampMixin):
     )
     max_hop_span: Mapped[Optional[int]] = mapped_column(
         Integer,
+        default=8,
         nullable=True,
     )
     enabled: Mapped[bool] = mapped_column(

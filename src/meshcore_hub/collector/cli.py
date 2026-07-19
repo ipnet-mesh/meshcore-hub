@@ -804,12 +804,12 @@ def _import_routes(
                     route.description = value.get("description")
                     route.visibility = visibility
                     route.match_width = match_width
-                    route.window_hours = value.get("window_hours", 24)
+                    route.window_hours = value.get("window_hours", 48)
                     route.packet_count_threshold = value.get(
                         "packet_count_threshold", 3
                     )
                     route.clear_threshold = value.get("clear_threshold")
-                    route.max_hop_span = value.get("max_hop_span")
+                    route.max_hop_span = value.get("max_hop_span", 8)
                     route.enabled = value.get("enabled", True)
                     route.reversible = value.get("reversible", True)
                     # Replace path nodes wholesale
@@ -826,10 +826,10 @@ def _import_routes(
                         description=value.get("description"),
                         visibility=visibility,
                         match_width=match_width,
-                        window_hours=value.get("window_hours", 24),
+                        window_hours=value.get("window_hours", 48),
                         packet_count_threshold=value.get("packet_count_threshold", 3),
                         clear_threshold=value.get("clear_threshold"),
-                        max_hop_span=value.get("max_hop_span"),
+                        max_hop_span=value.get("max_hop_span", 8),
                         enabled=value.get("enabled", True),
                         reversible=value.get("reversible", True),
                     )
