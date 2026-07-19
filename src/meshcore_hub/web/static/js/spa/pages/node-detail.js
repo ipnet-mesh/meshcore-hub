@@ -62,7 +62,7 @@ function renderEditTagModal() {
             </div>
             <div class="modal-action">
                 <button type="button" class="btn" id="tagEditCancel">${t('common.cancel')}</button>
-                <button type="submit" class="btn btn-primary">${t('common.save_changes')}</button>
+                <button type="submit" class="btn btn-primary" id="tagEditSubmit">${t('common.save_changes')}</button>
             </div>
         </form>
     </div>
@@ -496,6 +496,12 @@ ${canEditTags ? renderEditTagModal() : nothing}`, container);
                     }
                     if (errorLabel) { errorLabel.textContent = ''; errorLabel.classList.add('hidden'); }
 
+                    const submitBtn = container.querySelector('#tagEditSubmit');
+                    const cancelBtn = container.querySelector('#tagEditCancel');
+                    const orig = submitBtn.innerHTML;
+                    submitBtn.disabled = true;
+                    cancelBtn.disabled = true;
+                    submitBtn.innerHTML = `<span class="loading loading-spinner loading-sm"></span> ${orig}`;
                     try {
                         await apiPut('/api/v1/nodes/' + node.public_key + '/tags/' + encodeURIComponent(key), { value, value_type: valueType });
                         container.querySelector('#tagEditModal').close();
@@ -503,6 +509,10 @@ ${canEditTags ? renderEditTagModal() : nothing}`, container);
                         router.navigate('/nodes/' + node.public_key, true);
                     } catch (err) {
                         if (errorLabel) { errorLabel.textContent = err.message; errorLabel.classList.remove('hidden'); }
+                    } finally {
+                        submitBtn.disabled = false;
+                        cancelBtn.disabled = false;
+                        submitBtn.innerHTML = orig;
                     }
                 }, { signal });
             }
@@ -532,6 +542,11 @@ ${canEditTags ? renderEditTagModal() : nothing}`, container);
                 deleteConfirm.addEventListener('click', async () => {
                     const modal = container.querySelector('#tagDeleteModal');
                     const key = modal._tagKey;
+                    const cancelBtn = container.querySelector('#tagDeleteCancel');
+                    const orig = deleteConfirm.innerHTML;
+                    deleteConfirm.disabled = true;
+                    cancelBtn.disabled = true;
+                    deleteConfirm.innerHTML = `<span class="loading loading-spinner loading-sm"></span> ${orig}`;
                     try {
                         await apiDelete('/api/v1/nodes/' + node.public_key + '/tags/' + encodeURIComponent(key));
                         modal.close();
@@ -540,6 +555,10 @@ ${canEditTags ? renderEditTagModal() : nothing}`, container);
                     } catch (err) {
                         modal.close();
                         showFlash('error', err.message);
+                    } finally {
+                        deleteConfirm.disabled = false;
+                        cancelBtn.disabled = false;
+                        deleteConfirm.innerHTML = orig;
                     }
                 }, { signal });
             }
