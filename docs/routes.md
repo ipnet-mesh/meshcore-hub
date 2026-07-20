@@ -21,6 +21,7 @@ Each route carries these knobs:
 | `packet_count_threshold` | `5` | Distinct matching packets at/above which the route is `healthy`. "Distinct" is per underlying event, not per transmission — see [How health is evaluated](#how-health-is-evaluated) above. |
 | `clear_threshold` | _(3× threshold)_ | Comfort bar for the `clear`/`marginal` split. Omit/null to use three times the threshold. |
 | `max_hop_span` | `8` | Caps the position gap between the first and last matched node, to reject matches that wander too far. |
+| `max_path_length` | _(unlimited)_ | Caps the total number of hops in a candidate packet's full path; receptions whose path exceeds this are dropped from matching entirely (never counted toward `packet_count_threshold`). Useful to ignore wandering packets that happen to include the configured endpoints but traversed a long detour. |
 | `reversible` | `true` | Also match the path in reverse direction. |
 | `enabled` | `true` | When `false`, the route is skipped by the evaluator and reports `unknown`/`no_coverage`. |
 

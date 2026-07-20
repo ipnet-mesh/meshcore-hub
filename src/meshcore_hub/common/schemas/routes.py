@@ -75,6 +75,11 @@ class RouteCreate(BaseModel):
     max_hop_span: Optional[int] = Field(
         default=8, description="Max hop distance between first and last node"
     )
+    max_path_length: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Max hops in a candidate packet's full path; null = unlimited",
+    )
     enabled: bool = Field(default=True, description="Whether this route is evaluated")
     reversible: bool = Field(
         default=True, description="Whether to match the path in both directions"
@@ -113,6 +118,7 @@ class RouteUpdate(BaseModel):
     packet_count_threshold: Optional[int] = Field(default=None, ge=1, le=10000)
     clear_threshold: Optional[int] = None
     max_hop_span: Optional[int] = None
+    max_path_length: Optional[int] = Field(default=None, ge=1)
     enabled: Optional[bool] = None
     reversible: Optional[bool] = None
     node_public_keys: Optional[list[str]] = None
@@ -149,6 +155,7 @@ class RouteRead(BaseModel):
     packet_count_threshold: int
     clear_threshold: Optional[int] = None
     max_hop_span: Optional[int] = None
+    max_path_length: Optional[int] = None
     enabled: bool
     reversible: bool
     route_nodes: list[RouteNodeRead] = []
@@ -205,6 +212,7 @@ class RouteDetail(BaseModel):
     packet_count_threshold: int
     clear_threshold: Optional[int] = None
     max_hop_span: Optional[int] = None
+    max_path_length: Optional[int] = None
     enabled: bool
     reversible: bool
     route_nodes: list[RouteNodeRead] = []
@@ -236,6 +244,7 @@ class RoutePreviewRequest(BaseModel):
     packet_count_threshold: int = Field(default=5, ge=1, le=10000)
     clear_threshold: Optional[int] = None
     max_hop_span: Optional[int] = Field(default=8)
+    max_path_length: Optional[int] = Field(default=None, ge=1)
     observer_public_keys: Optional[list[str]] = None
     reversible: bool = Field(default=True)
 

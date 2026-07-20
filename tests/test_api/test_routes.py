@@ -950,6 +950,7 @@ class TestUpdateRouteFields:
                 "packet_count_threshold": 5,
                 "clear_threshold": 8,
                 "max_hop_span": 4,
+                "max_path_length": 6,
                 "enabled": False,
                 "reversible": False,
             },
@@ -964,6 +965,7 @@ class TestUpdateRouteFields:
         assert data["packet_count_threshold"] == 5
         assert data["clear_threshold"] == 8
         assert data["max_hop_span"] == 4
+        assert data["max_path_length"] == 6
         assert data["enabled"] is False
         assert data["reversible"] is False
 

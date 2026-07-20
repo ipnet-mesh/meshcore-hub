@@ -116,6 +116,7 @@ def _route_to_read(route: Route, *, quality_avg: Any = _UNSET) -> RouteRead:
         packet_count_threshold=route.packet_count_threshold,
         clear_threshold=route.clear_threshold,
         max_hop_span=route.max_hop_span,
+        max_path_length=route.max_path_length,
         enabled=route.enabled,
         reversible=route.reversible,
         route_nodes=[_route_node_to_read(rn) for rn in route.route_nodes],
@@ -269,6 +270,7 @@ def create_route(
         packet_count_threshold=body.packet_count_threshold,
         clear_threshold=body.clear_threshold,
         max_hop_span=body.max_hop_span,
+        max_path_length=body.max_path_length,
         enabled=body.enabled,
         reversible=body.reversible,
     )
@@ -573,6 +575,8 @@ def update_route(
         route.clear_threshold = body.clear_threshold
     if body.max_hop_span is not None:
         route.max_hop_span = body.max_hop_span
+    if body.max_path_length is not None:
+        route.max_path_length = body.max_path_length
     if body.enabled is not None:
         route.enabled = body.enabled
     if body.reversible is not None:
@@ -646,6 +650,7 @@ def preview(
         "match_width": body.match_width,
         "observer_ids": [n.id for n in observer_nodes] if observer_nodes else None,
         "max_hop_span": body.max_hop_span,
+        "max_path_length": body.max_path_length,
         "packet_count_threshold": body.packet_count_threshold,
         "clear_threshold": body.clear_threshold,
         "reversible": body.reversible,

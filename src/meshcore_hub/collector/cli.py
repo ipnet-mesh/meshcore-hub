@@ -810,6 +810,7 @@ def _import_routes(
                     )
                     route.clear_threshold = value.get("clear_threshold")
                     route.max_hop_span = value.get("max_hop_span", 8)
+                    route.max_path_length = value.get("max_path_length")
                     route.enabled = value.get("enabled", True)
                     route.reversible = value.get("reversible", True)
                     # Replace path nodes wholesale
@@ -830,6 +831,7 @@ def _import_routes(
                         packet_count_threshold=value.get("packet_count_threshold", 5),
                         clear_threshold=value.get("clear_threshold"),
                         max_hop_span=value.get("max_hop_span", 8),
+                        max_path_length=value.get("max_path_length"),
                         enabled=value.get("enabled", True),
                         reversible=value.get("reversible", True),
                     )
