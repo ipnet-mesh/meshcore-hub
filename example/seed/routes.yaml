@@ -21,6 +21,7 @@ routes:
     packet_count_threshold: 3
     # clear_threshold: 10        # optional; omit/null = 2x threshold
     # max_hop_span: 8             # optional; omit/null = unlimited
+    # max_path_length: 16         # optional; omit/null = unlimited (drops over-long packet paths)
     enabled: true
     reversible: true                # match both directions (A->B and B->A)
     path:

@@ -43,6 +43,7 @@ class Route(Base, UUIDMixin, TimestampMixin):
         packet_count_threshold: Minimum distinct packets for healthy
         clear_threshold: Comfort bar for the clear/marginal split (null = 3x threshold)
         max_hop_span: Max hops between first and last configured node (null = unlimited)
+        max_path_length: Max number of hops in a candidate packet's full path (null = unlimited)
         enabled: Whether this route is actively evaluated
     """
 
@@ -84,6 +85,11 @@ class Route(Base, UUIDMixin, TimestampMixin):
     max_hop_span: Mapped[Optional[int]] = mapped_column(
         Integer,
         default=8,
+        nullable=True,
+    )
+    max_path_length: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        default=None,
         nullable=True,
     )
     enabled: Mapped[bool] = mapped_column(

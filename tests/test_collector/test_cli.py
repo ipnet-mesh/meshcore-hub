@@ -499,6 +499,7 @@ class TestImportRoutes:
                 "    packet_count_threshold: 5\n"
                 "    clear_threshold: 8\n"
                 "    max_hop_span: 3\n"
+                "    max_path_length: 12\n"
                 "    enabled: true\n"
                 "    reversible: false\n"
                 f"    observers:\n      - '{_PK_C}'\n"
@@ -519,6 +520,7 @@ class TestImportRoutes:
             assert route.packet_count_threshold == 5
             assert route.clear_threshold == 8
             assert route.max_hop_span == 3
+            assert route.max_path_length == 12
             assert route.enabled is True
             assert route.reversible is False
             assert route.description == "a route"

@@ -97,6 +97,7 @@ def _subsequence_indices(
     path: list[dict[str, Any]],
     expected: list[str],
     max_hop_span: Optional[int] = None,
+    max_path_length: Optional[int] = None,
 ) -> Optional[tuple[int, int]]:
     """Two-pointer subsequence prefix match with gaps allowed.
 
@@ -104,10 +105,15 @@ def _subsequence_indices(
     *expected* is the ordered list of uppercase hash prefixes to find.
     A hop matches when ``node_hash.startswith(expected_hash)``.
     ``max_hop_span`` constrains ``position(last) - position(first)`` when set.
+    ``max_path_length`` caps the total number of hops in *path*; when set
+    and ``len(path)`` exceeds it, the packet is rejected up front (returns
+    ``None``) without running the match.
 
     Returns the ``(first_i, last_i)`` indices into *path* of the matched
     endpoints, or ``None`` when no match is found.
     """
+    if max_path_length is not None and len(path) > max_path_length:
+        return None
     if not expected:
         return None
     pi = 0
@@ -144,6 +150,7 @@ def is_subsequence(
     path: list[dict[str, Any]],
     expected: list[str],
     max_hop_span: Optional[int] = None,
+    max_path_length: Optional[int] = None,
 ) -> bool:
     """Pure two-pointer subsequence prefix match with gaps allowed.
 
@@ -151,14 +158,18 @@ def is_subsequence(
     *expected* is the ordered list of uppercase hash prefixes to find.
     A hop matches when ``node_hash.startswith(expected_hash)``.
     ``max_hop_span`` constrains ``position(last) - position(first)`` when set.
+    ``max_path_length`` caps the total number of hops in *path* when set.
     """
-    return _subsequence_indices(path, expected, max_hop_span) is not None
+    return (
+        _subsequence_indices(path, expected, max_hop_span, max_path_length) is not None
+    )
 
 
 def _matched_subpath(
     hops: list[dict[str, Any]],
     expected: list[str],
     max_hop_span: Optional[int] = None,
+    max_path_length: Optional[int] = None,
     reversible: bool = True,
 ) -> Optional[list[dict[str, Any]]]:
     """Return the slice of *hops* between the first and last matched node.
@@ -169,7 +180,7 @@ def _matched_subpath(
     (never reversed), so a reverse-direction packet shows as To -> ... -> From.
     """
     subpath, _first, _last = _matched_subpath_with_indices(
-        hops, expected, max_hop_span, reversible
+        hops, expected, max_hop_span, max_path_length, reversible
     )
     return subpath
 
@@ -178,6 +189,7 @@ def _matched_subpath_with_indices(
     hops: list[dict[str, Any]],
     expected: list[str],
     max_hop_span: Optional[int] = None,
+    max_path_length: Optional[int] = None,
     reversible: bool = True,
 ) -> tuple[Optional[list[dict[str, Any]]], Optional[int], Optional[int]]:
     """Variant of :func:`_matched_subpath` that also returns match indices.
@@ -189,11 +201,13 @@ def _matched_subpath_with_indices(
     ``route_recent_matches`` so the detail page can slice the live hop
     list without re-running the matcher.
     """
-    idx = _subsequence_indices(hops, expected, max_hop_span)
+    idx = _subsequence_indices(hops, expected, max_hop_span, max_path_length)
     if idx is not None:
         return hops[idx[0] : idx[1] + 1], idx[0], idx[1]
     if reversible and len(expected) > 1:
-        idx = _subsequence_indices(hops, list(reversed(expected)), max_hop_span)
+        idx = _subsequence_indices(
+            hops, list(reversed(expected)), max_hop_span, max_path_length
+        )
         if idx is not None:
             return hops[idx[0] : idx[1] + 1], idx[0], idx[1]
     return None, None, None
@@ -203,10 +217,14 @@ def _match_hops(
     hops: list[dict[str, Any]],
     expected: list[str],
     max_hop_span: Optional[int] = None,
+    max_path_length: Optional[int] = None,
     reversible: bool = True,
 ) -> bool:
     """Check whether *hops* match *expected* forward (and optionally reverse)."""
-    return _matched_subpath(hops, expected, max_hop_span, reversible) is not None
+    return (
+        _matched_subpath(hops, expected, max_hop_span, max_path_length, reversible)
+        is not None
+    )
 
 
 def _fetch_candidate_paths_maybe_bidirectional(
@@ -518,7 +536,9 @@ def evaluate_route(
 
     matched_packets: set[str] = set()
     for hops in paths.values():
-        if _match_hops(hops, expected, route.max_hop_span, reversible):
+        if _match_hops(
+            hops, expected, route.max_hop_span, route.max_path_length, reversible
+        ):
             identity = _match_identity(hops)
             if identity:
                 matched_packets.add(identity)
@@ -571,7 +591,9 @@ def evaluate_route_day(
 
     matched_packets: set[str] = set()
     for hops in paths.values():
-        if _match_hops(hops, expected, route.max_hop_span, reversible):
+        if _match_hops(
+            hops, expected, route.max_hop_span, route.max_path_length, reversible
+        ):
             identity = _match_identity(hops)
             if identity:
                 matched_packets.add(identity)
@@ -732,7 +754,9 @@ def evaluate_route_history(
     for i in range(historical_days):
         matched_packets: set[str] = set()
         for hops in day_paths[i].values():
-            if _match_hops(hops, expected, route.max_hop_span, reversible):
+            if _match_hops(
+                hops, expected, route.max_hop_span, route.max_path_length, reversible
+            ):
                 identity = _match_identity(hops)
                 if identity:
                     matched_packets.add(identity)
@@ -1129,7 +1153,11 @@ def recent_matches(
     matches_by_identity: dict[str, dict[str, Any]] = {}
     for rp_id, hops in paths.items():
         subpath, first_idx, last_idx = _matched_subpath_with_indices(
-            hops, expected, route.max_hop_span, reversible
+            hops,
+            expected,
+            route.max_hop_span,
+            route.max_path_length,
+            reversible,
         )
         if not subpath or first_idx is None or last_idx is None:
             continue
@@ -1232,13 +1260,14 @@ def preview_route(
     """Preview matching for an unsaved route config.
 
     *config* keys: ``node_ids``, ``match_width``, ``observer_ids``,
-    ``max_hop_span``, ``packet_count_threshold``, ``clear_threshold``,
-    ``reversible``.
+    ``max_hop_span``, ``max_path_length``, ``packet_count_threshold``,
+    ``clear_threshold``, ``reversible``.
     """
     node_ids: list[str] = config.get("node_ids") or []
     match_width: int = config.get("match_width") or 1
     observer_ids: Optional[list[str]] = config.get("observer_ids") or None
     max_hop_span: Optional[int] = config.get("max_hop_span")
+    max_path_length: Optional[int] = config.get("max_path_length")
     threshold: int = config.get("packet_count_threshold") or 5
     clear_bar: Optional[int] = config.get("clear_threshold")
     reversible: bool = config.get("reversible", True)
@@ -1298,7 +1327,7 @@ def preview_route(
     contributing: dict[str, int] = {}
 
     for hops in paths.values():
-        if _match_hops(hops, expected, max_hop_span, reversible):
+        if _match_hops(hops, expected, max_hop_span, max_path_length, reversible):
             identity = _match_identity(hops)
             if identity:
                 matched_packets.add(identity)

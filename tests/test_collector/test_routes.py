@@ -172,6 +172,31 @@ class TestIsSubsequence:
         ]
         assert is_subsequence(path, ["A1", "B2"], max_hop_span=2) is False
 
+    def test_path_length_cap_within(self):
+        path = [
+            {"position": 0, "node_hash": "A1"},
+            {"position": 1, "node_hash": "X"},
+            {"position": 2, "node_hash": "B2"},
+        ]
+        assert is_subsequence(path, ["A1", "B2"], max_path_length=3) is True
+
+    def test_path_length_cap_exceeds(self):
+        path = [
+            {"position": 0, "node_hash": "A1"},
+            {"position": 1, "node_hash": "X"},
+            {"position": 2, "node_hash": "X"},
+            {"position": 3, "node_hash": "X"},
+            {"position": 4, "node_hash": "B2"},
+        ]
+        assert is_subsequence(path, ["A1", "B2"], max_path_length=3) is False
+
+    def test_path_length_cap_zero_ignored(self):
+        """max_path_length=None means unlimited (default)."""
+        path = [{"position": i, "node_hash": "X"} for i in range(20)]
+        path[0] = {"position": 0, "node_hash": "A1"}
+        path[-1] = {"position": 19, "node_hash": "B2"}
+        assert is_subsequence(path, ["A1", "B2"]) is True
+
     def test_empty_expected(self):
         assert is_subsequence([{"position": 0, "node_hash": "A1"}], []) is False
 

@@ -1,6 +1,6 @@
 import { apiGet, apiPost, apiPut, apiDelete, isAbortError } from '../api.js';
 import { html, litRender, nothing, t, errorAlert, getConfig, hasRole } from '../components.js';
-import { iconPath, iconPlus, iconEdit, iconTrash, iconPackets, iconClock, iconRuler, iconNodes, iconSatelliteDish, iconRouteFrom, iconRouteTo } from '../icons.js';
+import { iconPath, iconPlus, iconEdit, iconTrash, iconPackets, iconClock, iconRuler, iconNodes, iconSatelliteDish, iconRouteFrom, iconRouteTo, iconHopSpan, iconPathLength } from '../icons.js';
 
 const VISIBILITY_ORDER = ['community', 'member', 'operator', 'admin'];
 
@@ -91,27 +91,31 @@ function renderStatsRow(route) {
     const obsCount = (route.route_observers || []).length;
 
     return html`<div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs opacity-60 mt-1">
-        <span class="inline-flex items-center gap-1">
+        <span class="inline-flex items-center gap-1 tooltip tooltip-top" data-tip=${t('routes.stats_matched_tip')}>
             ${iconPackets('h-3.5 w-3.5')}
             <span>${matched}/${threshold}\u2192${degraded}</span>
         </span>
-        <span class="inline-flex items-center gap-1">
+        <span class="inline-flex items-center gap-1 tooltip tooltip-top" data-tip=${t('routes.stats_window_tip')}>
             ${iconClock('h-3.5 w-3.5')}
             <span>${route.window_hours}h</span>
         </span>
-        <span class="inline-flex items-center gap-1">
+        <span class="inline-flex items-center gap-1 tooltip tooltip-top" data-tip=${t('routes.stats_width_tip')}>
             ${iconRuler('h-3.5 w-3.5')}
             <span>${route.match_width}B</span>
         </span>
-        <span class="inline-flex items-center gap-1">
+        <span class="inline-flex items-center gap-1 tooltip tooltip-top" data-tip=${t('routes.stats_nodes_tip')}>
             ${iconNodes('h-3.5 w-3.5')}
             <span>${nodeCount}</span>
         </span>
-        ${route.max_hop_span ? html`<span class="inline-flex items-center gap-1">
-            ${iconPath('h-3.5 w-3.5')}
-            <span>${route.max_hop_span}</span>
-        </span>` : nothing}
-        <span class="inline-flex items-center gap-1">
+        <span class="inline-flex items-center gap-1 tooltip tooltip-top" data-tip=${t('routes.stats_span_tip')}>
+            ${iconHopSpan('h-3.5 w-3.5')}
+            <span>${route.max_hop_span || '\u221E'}</span>
+        </span>
+        <span class="inline-flex items-center gap-1 tooltip tooltip-top" data-tip=${t('routes.stats_length_tip')}>
+            ${iconPathLength('h-3.5 w-3.5')}
+            <span>${route.max_path_length || '\u221E'}</span>
+        </span>
+        <span class="inline-flex items-center gap-1 tooltip tooltip-top" data-tip=${t('routes.stats_observers_tip')}>
             ${iconSatelliteDish('h-3.5 w-3.5')}
             <span>${obsCount || '\u221E'}</span>
         </span>
@@ -417,6 +421,12 @@ function renderRouteModal({ modalState, onSave, onCancel, saving }) {
                             <label class="text-sm opacity-70">${t('routes.span_label')}</label>
                             <input type="number" id="route-modal-span" class="input input-sm w-full"
                                 .value=${route.max_hop_span || ''}
+                                placeholder="\u221E" min="1" />
+                        </div>
+                        <div>
+                            <label class="text-sm opacity-70">${t('routes.path_length_label')}</label>
+                            <input type="number" id="route-modal-path-length" class="input input-sm w-full"
+                                .value=${route.max_path_length || ''}
                                 placeholder="\u221E" min="1" />
                         </div>
                     </div>
@@ -785,6 +795,7 @@ export async function render(container, params, router) {
             const thresholdEl = document.getElementById('route-modal-threshold');
             const clearEl = document.getElementById('route-modal-clear');
             const spanEl = document.getElementById('route-modal-span');
+            const pathLengthEl = document.getElementById('route-modal-path-length');
             const enabledEl = document.getElementById('route-modal-enabled');
             const reversibleEl = document.getElementById('route-modal-reversible');
 
@@ -806,6 +817,7 @@ export async function render(container, params, router) {
                 window_hours: parseInt(windowEl.value, 10) || 48,
                 packet_count_threshold: parseInt(thresholdEl.value, 10) || 5,
                 max_hop_span: spanEl.value ? parseInt(spanEl.value, 10) : null,
+                max_path_length: pathLengthEl.value ? parseInt(pathLengthEl.value, 10) : null,
                 enabled: enabledEl.checked,
                 reversible: reversibleEl.checked,
                 node_public_keys: nodePublicKeys,

@@ -189,3 +189,11 @@ export function iconRouteFrom(cls = 'h-5 w-5') {
 export function iconRouteTo(cls = 'h-5 w-5') {
     return html`<svg xmlns="http://www.w3.org/2000/svg" class=${cls} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12h13.5m0 0l-4-4m4 4l-4 4" /><circle cx="19" cy="12" r="2.5" stroke-width="2" /></svg>`;
 }
+
+export function iconHopSpan(cls = 'h-5 w-5') {
+    return html`<svg xmlns="http://www.w3.org/2000/svg" class=${cls} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 12h6M14 12h6M4 12l3-3M4 12l3 3M20 12l-3-3M20 12l-3 3" /><circle cx="12" cy="12" r="2" stroke-width="2" /></svg>`;
+}
+
+export function iconPathLength(cls = 'h-5 w-5') {
+    return html`<svg xmlns="http://www.w3.org/2000/svg" class=${cls} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5v14M19 5v14M9 12h6M9 12l3-3M9 12l3 3M15 12l-3-3M15 12l-3 3" /></svg>`;
+}
