@@ -28,12 +28,10 @@ class TestMessagesPage:
         response = client.get("/messages")
         assert "window.__APP_CONFIG__" in response.text
 
-    def test_messages_contains_spa_script(self, client: TestClient) -> None:
-        """Test that messages page includes SPA application script."""
+    def test_messages_contains_spa_mount(self, client: TestClient) -> None:
+        """Test that messages page renders the React SPA mount point."""
         response = client.get("/messages")
-        has_bundled = "/static/dist/" in response.text
-        has_fallback = "/static/js/spa/app.js" in response.text
-        assert has_bundled or has_fallback
+        assert 'id="app"' in response.text
 
 
 class TestMessagesPageFilters:

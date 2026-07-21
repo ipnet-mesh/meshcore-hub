@@ -9,7 +9,7 @@ Migration from lit-html (functional templates) to React 19 + TypeScript + Vite.
 | 1 | Infrastructure (Vite, React shell, router, LitBridge, build pipeline, shared components) | **Complete** |
 | 2 | Convert pages one-by-one from LitBridge to native React | **Complete** |
 | 3 | Chart & map components (react-chartjs-2, react-leaflet) | **Complete** |
-| 4 | Cleanup (remove lit-html, old spa/, build.js esbuild remnants) | Not started |
+| 4 | Cleanup (remove lit-html, old spa/, LitBridge, @legacy alias) | **Complete** |
 | 5 | Optional enhancements (tests, react-query, Storybook) | Not started |
 
 > **Phase 3 status:** All `window.Chart` / `window.L` / `window.QRCode` globals and the
@@ -30,29 +30,29 @@ Migration from lit-html (functional templates) to React 19 + TypeScript + Vite.
 
 ## Architecture Decisions
 
-- **TypeScript** strict mode, `@/` alias → `spa-react/`, `@legacy/` alias → `spa/`
+- **TypeScript** strict mode, `@/` alias → `spa-react/` (the `@legacy/` alias was removed in Phase 4)
 - **Vite 6** replaces esbuild; outputs to `static/dist/` with content-hashed filenames
 - **Jinja2 shell preserved** — server renders navbar, SEO meta, config JSON; React owns `<main id="app">`
-- **LitBridge** wraps unconverted pages: dynamic import → `render(container, params, router)` → cleanup
-- **react-i18next** loads same locale JSONs from `/static/locales/`; exposes `window.t` for legacy scripts
+- **All pages native React** — LitBridge (the temporary wrapper for unconverted lit-html pages) was removed in Phase 4
+- **react-i18next** loads same locale JSONs from `/static/locales/`; still exposes `window.t`
 - **Vendor scripts removed** (Phase 3): chart.js, leaflet (+ CSS), and react-qr-code are bundled by Vite; only fonts remain vendored
-- **DaisyUI + Tailwind v4** unchanged; `@source "../js/"` in input.css scans both spa/ and spa-react/
+- **DaisyUI + Tailwind v4** unchanged; `@source "../js/"` in input.css scans the spa-react/ source
 
 ## File Structure
 
 ```
 vite.config.ts                          # Vite config (root=project, input=spa-react/index.html)
-tsconfig.json                           # Strict TS, path aliases
-build.js                                # Tailwind → vendor copy → vite build → assets.json
-package.json                            # React 19, react-router 7, react-i18next, vite, typescript
+tsconfig.json                           # Strict TS, path alias @/ → spa-react/
+build.js                                # Tailwind → vendor fonts copy → vite build → assets.json
+package.json                            # React 19, react-router 7, react-i18next, react-chartjs-2,
+                                        # react-leaflet, react-qr-code, chart.js, leaflet, vite, typescript
 
 src/meshcore_hub/web/static/js/spa-react/
 ├── index.html                          # Vite HTML entry (not served; Jinja2 is the real shell)
 ├── main.tsx                            # Bootstrap: initI18n → render App, AuthSection, MobileNav
-├── App.tsx                             # BrowserRouter, all routes, feature flags, LitBridge wiring
+├── App.tsx                             # BrowserRouter, all routes, feature flags (native React pages)
 ├── vite-env.d.ts
-├── legacy.d.ts                         # TS declarations for @legacy/*.js modules
-├── types/config.ts                     # AppConfig interface, window.__APP_CONFIG__ declaration
+├── types/config.ts                     # AppConfig interface, window.__APP_CONFIG__ + window.t declarations
 ├── context/AppConfigContext.tsx         # useAppConfig(), useFeatures(), hasRole(), channel labels
 ├── i18n/index.ts                       # initI18n() with i18next + language detector
 ├── hooks/
@@ -61,14 +61,15 @@ src/meshcore_hub/web/static/js/spa-react/
 ├── utils/
 │   ├── api.ts                          # Typed apiGet<T>, apiPost, apiPut, apiDelete, apiPostForm
 │   ├── format.ts                       # parseAppDate, formatDateTime, formatRelativeTime, emojis
+│   ├── charts.ts                       # Chart.js config builders, ChartColors, averageRouteTier (imports chart.js/auto)
 │   └── clipboard.ts                    # copyToClipboard with fallback
 ├── components/
 │   ├── icons/index.tsx                 # 30+ SVG icon components (IconDashboard, IconNodes, etc.)
+│   ├── charts/Charts.tsx              # react-chartjs-2 wrappers (ActivityChart, TrendLineChart, StackedBarChart, RoutesTrendChart, RouteDetailStrip)
 │   ├── Alerts.tsx                      # Loading, ErrorAlert, InfoAlert, SuccessAlert, WarningBadge
 │   ├── AuthSection.tsx                 # Navbar auth dropdown (login button or user menu)
 │   ├── MobileNav.tsx                   # Mobile hamburger nav items
 │   ├── ErrorBoundary.tsx              # React error boundary with fallback UI
-│   ├── LitBridge.tsx                  # Wraps old lit-html page modules in React lifecycle
 │   ├── Pagination.tsx                 # URL-driven pagination (page param)
 │   ├── StatCard.tsx                   # Dashboard stat card with icon/color
 │   ├── NodeDisplay.tsx                # Node emoji + name + description
@@ -78,22 +79,15 @@ src/meshcore_hub/web/static/js/spa-react/
 │   ├── ObserverBadges.tsx            # Observer filter badges + localStorage helpers
 │   ├── RouteTypeBadge.tsx            # Flood/Relay/Zero-hop badge
 │   └── JsonTree.tsx                  # Expandable JSON viewer
-└── pages/
-    ├── NotFound.tsx                   # ✅ Converted (native React)
-    └── Maintenance.tsx                # ✅ Converted (native React)
-
-src/meshcore_hub/web/static/js/spa/    # OLD lit-html pages (still used via LitBridge)
-├── app.js                             # Old entry (NO LONGER LOADED — replaced by spa-react/main.tsx)
-├── router.js                          # Old router (replaced by react-router)
-├── api.js                             # Old API client (replaced by utils/api.ts)
-├── components.js                      # Old shared components (replaced by React components)
-├── i18n.js                            # Old i18n (replaced by react-i18next)
-├── icons.js                           # Old icons (replaced by components/icons/)
-├── auto-refresh.js                    # Old auto-refresh (replaced by hooks/useAutoRefresh.ts)
-├── json-tree.js                       # Old JSON tree (replaced by components/JsonTree.tsx)
-└── pages/                             # Old page modules (loaded via LitBridge until converted)
-    ├── home.js, dashboard.js, nodes.js, node-detail.js, ...
+└── pages/                             # All native React pages
+    ├── Home.tsx, Dashboard.tsx, Nodes.tsx, NodeDetail.tsx, Advertisements.tsx,
+    ├── Messages.tsx, Routes.tsx, Packets.tsx, PacketDetail.tsx, PacketGroupDetail.tsx,
+    ├── Channels.tsx, MapPage.tsx, Members.tsx, Profile.tsx, CustomPage.tsx,
+    └── NotFound.tsx, Maintenance.tsx
 ```
+
+> The old `src/meshcore_hub/web/static/js/spa/` lit-html tree, `LitBridge.tsx`, and
+> `legacy.d.ts` were deleted in Phase 4. There is no fallback bundle — the Vite build is required.
 
 ## Build Pipeline
 
@@ -191,16 +185,19 @@ Python (`app.py`) loads this manifest at startup and passes `asset_app_js` / `as
 - Updated `tests/test_web/test_caching.py` (charts.js-specific tests removed; generic JS-cache
   tests point at `spa/app.js`).
 
-## Phase 4: Cleanup
+## Phase 4: Cleanup — Complete
 
-- Remove `lit-html` from package.json
-- Delete `LitBridge.tsx`
-- Delete entire `src/meshcore_hub/web/static/js/spa/` directory
-- Remove `@legacy` alias from vite.config.ts and tsconfig.json
-- Delete `legacy.d.ts`
-- Remove vendor script tags from `spa.html` (leaflet, chart.js, qrcodejs, charts.js)
-- Remove `build.js` vendor copy for leaflet/chart.js/qrcodejs (now bundled by Vite)
-- Update `AGENTS.md` with new frontend conventions
+- Removed `lit-html` **and** `qrcodejs` from package.json (both unused after Phases 2–3).
+- Deleted `LitBridge.tsx`, `legacy.d.ts`, and the entire `src/meshcore_hub/web/static/js/spa/` tree.
+- Removed the `@legacy` alias from `vite.config.ts` and `tsconfig.json`.
+- Removed the lit-html fallback `{% else %}` branch from `spa.html` — the Vite build is now
+  required (no fallback bundle).
+- Updated the web tests that referenced the fallback: `test_home/advertisements/nodes/messages.py`
+  now assert the React mount point (`id="app"`); `test_caching.py` JS-cache tests are header-only
+  (static JS is bundled into `dist/`, absent in test env) and the dist-bundle test drops the
+  fallback branch.
+- (Vendor script tags / `charts.js` / `build.js` vendor copy were already removed in Phase 3.)
+- Updated `AGENTS.md` with the React frontend conventions.
 
 ## Phase 5: Optional Enhancements
 

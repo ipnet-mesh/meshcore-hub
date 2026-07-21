@@ -6,10 +6,6 @@ const SPA_REACT = resolve(
   __dirname,
   "src/meshcore_hub/web/static/js/spa-react",
 );
-const SPA_LEGACY = resolve(
-  __dirname,
-  "src/meshcore_hub/web/static/js/spa",
-);
 const DIST = resolve(__dirname, "src/meshcore_hub/web/static/dist");
 
 export default defineConfig({
@@ -18,7 +14,6 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": SPA_REACT,
-      "@legacy": SPA_LEGACY,
     },
   },
   build: {

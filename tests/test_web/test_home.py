@@ -83,9 +83,7 @@ class TestHomePage:
         assert 'href="/nodes"' in response.text
         assert 'href="/messages"' in response.text
 
-    def test_home_contains_spa_app_script(self, client: TestClient) -> None:
-        """Test that home page includes the SPA application script."""
+    def test_home_contains_spa_mount(self, client: TestClient) -> None:
+        """Test that home page renders the React SPA mount point."""
         response = client.get("/")
-        has_bundled = "/static/dist/" in response.text
-        has_fallback = "/static/js/spa/app.js" in response.text
-        assert has_bundled or has_fallback
+        assert 'id="app"' in response.text

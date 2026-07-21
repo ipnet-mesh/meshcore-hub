@@ -207,11 +207,9 @@
         })();
     </script>
 
-    <!-- SPA Application (ES Module) -->
+    <!-- SPA Application (ES Module, built by Vite) -->
     {% if asset_app_js %}
     <script type="module" src="/static/dist/{{ asset_app_js }}"></script>
-    {% else %}
-    <script type="module" src="/static/js/spa/app.js?v={{ version }}"></script>
     {% endif %}
 </body>
 </html>

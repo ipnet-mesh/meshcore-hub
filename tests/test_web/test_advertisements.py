@@ -28,12 +28,10 @@ class TestAdvertisementsPage:
         response = client.get("/advertisements")
         assert "window.__APP_CONFIG__" in response.text
 
-    def test_advertisements_contains_spa_script(self, client: TestClient) -> None:
-        """Test that advertisements page includes SPA application script."""
+    def test_advertisements_contains_spa_mount(self, client: TestClient) -> None:
+        """Test that advertisements page renders the React SPA mount point."""
         response = client.get("/advertisements")
-        has_bundled = "/static/dist/" in response.text
-        has_fallback = "/static/js/spa/app.js" in response.text
-        assert has_bundled or has_fallback
+        assert 'id="app"' in response.text
 
 
 class TestAdvertisementsPageFilters:

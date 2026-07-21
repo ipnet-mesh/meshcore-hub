@@ -9,7 +9,7 @@
   ```
   `--no-cov` skips coverage for speed; the pipe surfaces only the pass/fail summary.
 - Use Python (version in `.python-version`); activate a venv in `.venv` before running pytest, pre-commit, or alembic locally.
-- **All other operations run inside the compose stack** — never invoke `meshcore-hub` or `npm` directly on the host; build/run/exec via `docker compose` (see Development).
+- **Application operations run inside the compose stack** — never invoke `meshcore-hub` directly on the host; build/run/exec via `docker compose` (see Development). The frontend `npm`/`vite`/`tsc` toolchain is the exception — it runs on the host (see Frontend).
 - **Never `git push` without explicit confirmation** — staging and committing discrete changes is fine.
 - **Never build the Docker images or run `make build` / `make up`** — the user builds manually to test. Stop after code changes + tests + pre-commit pass.
 - **Always generate random Alembic revision IDs** — use `python -c "import secrets; print(secrets.token_hex(6))"` or let `alembic revision` auto-generate. Never hand-pick sequential or guessable IDs like `a1b2c3d4e5f6` — they collide with existing migrations and cause cycle errors at upgrade time.
@@ -39,6 +39,33 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile core ex
 
 # Shorthands (Makefile, mqtt+core profiles): make build | make up | make down | make logs
 ```
+
+## Frontend (React)
+
+The web UI is a **React 19 + TypeScript + Vite** SPA in
+`src/meshcore_hub/web/static/js/spa-react/` (alias `@/` → that dir). The Jinja2 shell
+(`web/templates/spa.html`) renders the navbar/SEO/`window.__APP_CONFIG__`; React mounts into
+`<main id="app">`. **Frontend tooling runs on the host** (not in Docker): `npm install`,
+`npm run build` (Tailwind → vendor fonts → `vite build` → `static/dist/` + `assets.json`), and
+`npx tsc --noEmit` (the TS gate — there is no JS linter in pre-commit). The Vite build is
+required to serve the UI; there is no fallback bundle.
+
+```bash
+npm install            # host: install frontend deps
+npm run build          # host: produce static/dist/ + assets.json
+npx tsc --noEmit       # host: typecheck (must be clean)
+```
+
+- Charts: **react-chartjs-2** — typed config builders in `utils/charts.ts`, wrappers in
+  `components/charts/Charts.tsx` (imports `chart.js/auto`).
+- Maps: **react-leaflet** (`MapPage.tsx`, `NodeDetail.tsx`); both `import "leaflet/dist/leaflet.css"`.
+  That CSS ships in the Vite bundle, which `spa.html` loads in `<head>` **before** `app.css` so
+  the dark-mode map overrides win — don't reorder those `<link>`s.
+- QR codes: **react-qr-code**.
+- Page conventions: `useSearchParams()` for filters/pagination/sort, typed `apiGet<T>()` with an
+  `AbortController` in `useEffect`, `usePageTitle('entities.x')`, shared components
+  (`Pagination`, `FilterForm`, `StatCard`, `NodeDisplay`, etc.).
+- Only **fonts** are vendored (`build.js` copies them); chart/map/QR libs are bundled by Vite.
 
 ## Tests & Quality
 
