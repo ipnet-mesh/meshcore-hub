@@ -1313,12 +1313,13 @@ class TestKeyBuilders:
         ):
             scope = {
                 "type": "http",
+                "path": "/api/v1/channels",
                 "query_string": b"",
                 "headers": [],
             }
             request = Request(scope)
             key = _channels_key_builder(request)
-            assert key == "channels:role=operator:"
+            assert key == "/api/v1/channels:role=operator:"
 
     def test_channels_key_builder_anonymous(self):
         from meshcore_hub.api.routes.channels import _channels_key_builder
@@ -1329,6 +1330,7 @@ class TestKeyBuilders:
         ):
             scope = {
                 "type": "http",
+                "path": "/api/v1/channels",
                 "query_string": b"",
                 "headers": [],
             }
@@ -1345,13 +1347,53 @@ class TestKeyBuilders:
         ):
             scope = {
                 "type": "http",
+                "path": "/api/v1/messages",
                 "query_string": b"limit=10&offset=0",
                 "headers": [],
             }
             request = Request(scope)
             key = _messages_key_builder(request)
-            assert "role=admin" in key
+            assert key.startswith("/api/v1/messages:role=admin:")
             assert "limit=10" in key
+
+    def test_role_aware_keys_match_invalidation_prefixes(self):
+        """The GET cache key must live under the prefix the matching
+        invalidation helper drops, otherwise a mutation never clears the
+        stale cached list (the store path and delete path must agree).
+        """
+        from meshcore_hub.api.routes.channels import _channels_key_builder
+        from meshcore_hub.api.routes.messages import _messages_key_builder
+
+        with (
+            patch(
+                "meshcore_hub.api.routes.channels.resolve_user_role",
+                return_value="admin",
+            ),
+            patch(
+                "meshcore_hub.api.routes.messages.resolve_user_role",
+                return_value="admin",
+            ),
+        ):
+            channels_req = Request(
+                {
+                    "type": "http",
+                    "path": "/api/v1/channels",
+                    "query_string": b"",
+                    "headers": [],
+                }
+            )
+            messages_req = Request(
+                {
+                    "type": "http",
+                    "path": "/api/v1/messages",
+                    "query_string": b"",
+                    "headers": [],
+                }
+            )
+            # invalidate_channels drops "/api/v1/channels",
+            # invalidate_messages drops "/api/v1/messages".
+            assert _channels_key_builder(channels_req).startswith("/api/v1/channels")
+            assert _messages_key_builder(messages_req).startswith("/api/v1/messages")
 
 
 def _make_request_with_cache(cache):

@@ -1,18 +1,24 @@
 import {
   Fragment,
-  useCallback,
   useEffect,
   useRef,
   useState,
   type SVGProps,
 } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 
 import { useAppConfig, hasRole } from "@/context/AppConfigContext";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
+import { qk, invalidate } from "@/utils/queryKeys";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { Loading, ErrorAlert } from "@/components/Alerts";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { EmptyState } from "@/components/EmptyState";
+import { Modal } from "@/components/Modal";
+import { PageHeader } from "@/components/PageHeader";
+import { SectionGroup } from "@/components/SectionGroup";
 import { RouteDetailStrip } from "@/components/charts/Charts";
 import {
   IconClock,
@@ -514,8 +520,6 @@ function DetailContent({
 
 function RouteCard({
   route,
-  detail,
-  history,
   isAdmin,
   packetsEnabled,
   onEdit,
@@ -523,8 +527,6 @@ function RouteCard({
   onNavigate,
 }: {
   route: RouteItem;
-  detail: RouteDetail | undefined;
-  history: RouteHistory | undefined;
   isAdmin: boolean;
   packetsEnabled: boolean;
   onEdit: () => void;
@@ -532,6 +534,20 @@ function RouteCard({
   onNavigate: (url: string) => void;
 }) {
   const { t } = useTranslation();
+  const { data: detail } = useQuery({
+    queryKey: qk.routes.detail(route.id),
+    queryFn: ({ signal }) =>
+      apiGet<RouteDetail>(`/api/v1/routes/${route.id}`, {}, { signal }),
+  });
+  const { data: history } = useQuery({
+    queryKey: qk.routes.history(route.id, 6),
+    queryFn: ({ signal }) =>
+      apiGet<RouteHistory>(
+        `/api/v1/routes/${route.id}/history`,
+        { days: 6 },
+        { signal },
+      ),
+  });
   const q = qualityOf(route);
   const badgeCls = qualityBadgeClass(q, route.enabled);
   const label = qualityLabel(q, route.enabled, t);
@@ -765,11 +781,11 @@ function RouteModal({
   };
 
   return (
-    <dialog open className="modal modal-open">
-      <div className="modal-box modal-box-lg">
-        <h3 className="font-bold text-lg mb-4">
-          {isEdit ? t("routes.edit_route") : t("routes.add_route")}
-        </h3>
+    <Modal
+      size="lg"
+      title={isEdit ? t("routes.edit_route") : t("routes.add_route")}
+      onClose={onCancel}
+    >
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 gap-3 mb-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1093,11 +1109,7 @@ function RouteModal({
             </button>
           </div>
         </form>
-      </div>
-      <form method="dialog" className="modal-backdrop">
-        <button onClick={onCancel}></button>
-      </form>
-    </dialog>
+    </Modal>
   );
 }
 
@@ -1117,30 +1129,15 @@ function DeleteRouteModal({
   const label = `${route.from_label} ${arrow} ${route.to_label}`;
 
   return (
-    <dialog open className="modal modal-open">
-      <div className="modal-box">
-        <h3 className="font-bold text-lg mb-4">{t("routes.delete_route")}</h3>
-        <p>{t("routes.delete_confirm", { label })}</p>
-        <div className="modal-action">
-          <button
-            className="btn btn-ghost"
-            onClick={onCancel}
-            disabled={saving}
-          >
-            {t("common.cancel")}
-          </button>
-          <button className="btn btn-error" onClick={onConfirm} disabled={saving}>
-            {saving && (
-              <span className="loading loading-spinner loading-sm"></span>
-            )}
-            {t("common.delete")}
-          </button>
-        </div>
-      </div>
-      <form method="dialog" className="modal-backdrop">
-        <button onClick={onCancel}></button>
-      </form>
-    </dialog>
+    <ConfirmDialog
+      title={t("routes.delete_route")}
+      message={<p>{t("routes.delete_confirm", { label })}</p>}
+      confirmLabel={t("common.delete")}
+      cancelLabel={t("common.cancel")}
+      saving={saving}
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    />
   );
 }
 
@@ -1152,90 +1149,53 @@ export function RoutesPage() {
   const isAdmin = hasRole("admin");
   usePageTitle("routes.title");
 
-  const [routes, setRoutes] = useState<RouteItem[]>([]);
-  const [detailCache, setDetailCache] = useState<Record<string, RouteDetail>>(
-    {},
-  );
-  const [historyCache, setHistoryCache] = useState<
-    Record<string, RouteHistory>
-  >({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  const {
+    data: routesData,
+    isLoading: loading,
+    error: queryError,
+  } = useQuery({
+    queryKey: qk.routes.list(),
+    queryFn: async ({ signal }) => {
+      const data = await apiGet<RouteListResponse>(
+        "/api/v1/routes",
+        {},
+        { signal },
+      );
+      return data.items || [];
+    },
+  });
+  const routes = routesData ?? [];
+  const error = queryError ? queryError.message : null;
   const [modal, setModal] = useState<ModalState | null>(null);
 
-  const detailCacheRef = useRef<Record<string, RouteDetail>>({});
-  const historyCacheRef = useRef<Record<string, RouteHistory>>({});
   const pathTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const obsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pathSearchIdRef = useRef(0);
   const obsSearchIdRef = useRef(0);
 
-  const loadAllDetails = useCallback(async (routesList: RouteItem[]) => {
-    const newDetails: Record<string, RouteDetail> = {};
-    const newHistories: Record<string, RouteHistory> = {};
-    const promises: Promise<void>[] = [];
-    for (const r of routesList) {
-      if (!detailCacheRef.current[r.id]) {
-        promises.push(
-          apiGet<RouteDetail>(`/api/v1/routes/${r.id}`)
-            .then((d) => {
-              newDetails[r.id] = d;
-            })
-            .catch(() => undefined),
-        );
+  const saveMutation = useMutation({
+    mutationFn: async ({
+      id,
+      body,
+    }: {
+      id?: string;
+      body: Record<string, unknown>;
+    }) => {
+      if (id) {
+        await apiPut(`/api/v1/routes/${id}`, body);
+      } else {
+        await apiPost("/api/v1/routes", body);
       }
-      if (!historyCacheRef.current[r.id]) {
-        promises.push(
-          apiGet<RouteHistory>(`/api/v1/routes/${r.id}/history`, { days: 6 })
-            .then((h) => {
-              newHistories[r.id] = h;
-            })
-            .catch(() => undefined),
-        );
-      }
-    }
-    if (promises.length === 0) return;
-    await Promise.allSettled(promises);
-    if (Object.keys(newDetails).length > 0) {
-      detailCacheRef.current = { ...detailCacheRef.current, ...newDetails };
-      setDetailCache(detailCacheRef.current);
-    }
-    if (Object.keys(newHistories).length > 0) {
-      historyCacheRef.current = { ...historyCacheRef.current, ...newHistories };
-      setHistoryCache(historyCacheRef.current);
-    }
-  }, []);
+    },
+    onSuccess: () => invalidate.routes(queryClient),
+  });
 
-  const fetchRoutes = useCallback(async (): Promise<RouteItem[]> => {
-    try {
-      const data = await apiGet<RouteListResponse>("/api/v1/routes");
-      const items = data.items || [];
-      setRoutes(items);
-      setError(null);
-      return items;
-    } catch (e) {
-      setError((e as Error).message || t("common.failed_to_load_page"));
-      return [];
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
-
-  const refresh = useCallback(async () => {
-    const items = await fetchRoutes();
-    await loadAllDetails(items);
-  }, [fetchRoutes, loadAllDetails]);
-
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      const items = await fetchRoutes();
-      if (active) await loadAllDetails(items);
-    })();
-    return () => {
-      active = false;
-    };
-  }, [fetchRoutes, loadAllDetails]);
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiDelete(`/api/v1/routes/${id}`),
+    onSuccess: () => invalidate.routes(queryClient),
+  });
 
   useEffect(() => {
     return () => {
@@ -1461,22 +1421,11 @@ export function RoutesPage() {
     }
     setModal((m) => (m ? { ...m, saving: true } : m));
     try {
-      if (isEdit && modal.route) {
-        const id = modal.route.id;
-        await apiPut(`/api/v1/routes/${id}`, body);
-        const nextDetails = { ...detailCacheRef.current };
-        delete nextDetails[id];
-        detailCacheRef.current = nextDetails;
-        setDetailCache(nextDetails);
-        const nextHistories = { ...historyCacheRef.current };
-        delete nextHistories[id];
-        historyCacheRef.current = nextHistories;
-        setHistoryCache(nextHistories);
-      } else {
-        await apiPost("/api/v1/routes", body);
-      }
+      await saveMutation.mutateAsync({
+        id: isEdit && modal.route ? modal.route.id : undefined,
+        body,
+      });
       setModal(null);
-      await refresh();
     } catch (e) {
       setModal((m) => (m ? { ...m, saving: false } : m));
       alert((e as Error).message || "Failed to save route");
@@ -1487,9 +1436,8 @@ export function RoutesPage() {
     if (!modal || modal.type !== "delete" || !modal.route) return;
     setModal((m) => (m ? { ...m, saving: true } : m));
     try {
-      await apiDelete(`/api/v1/routes/${modal.route.id}`);
+      await deleteMutation.mutateAsync(modal.route.id);
       setModal(null);
-      await refresh();
     } catch (e) {
       setModal((m) => (m ? { ...m, saving: false } : m));
       alert((e as Error).message || "Failed to delete route");
@@ -1508,12 +1456,14 @@ export function RoutesPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <IconPath className="h-8 w-8" />
-          {t("routes.title")}
-        </h1>
-      </div>
+      <PageHeader
+        title={
+          <span className="flex items-center gap-2">
+            <IconPath className="h-8 w-8" />
+            {t("routes.title")}
+          </span>
+        }
+      />
 
       <SummaryStrip routes={routes} />
 
@@ -1531,11 +1481,11 @@ export function RoutesPage() {
       )}
 
       {routes.length === 0 && (
-        <div className="text-center py-8 opacity-70">
+        <EmptyState>
           {t("common.no_entity_found", {
             entity: t("entities.routes").toLowerCase(),
           })}
-        </div>
+        </EmptyState>
       )}
 
       {VISIBILITY_ORDER.map((vis) => {
@@ -1548,16 +1498,11 @@ export function RoutesPage() {
         if (group.length === 0) return null;
         return (
           <div key={vis}>
-            <h2 className="text-lg font-semibold mt-6 mb-3 opacity-70">
-              {t(`routes.visibility_${vis}`)}
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <SectionGroup title={t(`routes.visibility_${vis}`)}>
               {group.map((r) => (
                 <RouteCard
                   key={r.id}
                   route={r}
-                  detail={detailCache[r.id]}
-                  history={historyCache[r.id]}
                   isAdmin={isAdmin}
                   packetsEnabled={packetsEnabled}
                   onEdit={() => openEditModal(r)}
@@ -1565,7 +1510,7 @@ export function RoutesPage() {
                   onNavigate={navigate}
                 />
               ))}
-            </div>
+            </SectionGroup>
           </div>
         );
       })}

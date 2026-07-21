@@ -105,6 +105,21 @@ export function truncateKey(key: string | null, length = 12): string {
   return key.slice(0, length) + "...";
 }
 
+export function resolveNodeName(
+  node: {
+    name?: string | null;
+    public_key?: string | null;
+    tags?: { key: string; value: string | null }[];
+  } | null | undefined,
+  fallbackLength = 12,
+): string {
+  if (!node) return "-";
+  const tagName = node.tags?.find((tag) => tag.key === "name")?.value;
+  return (
+    tagName || node.name || truncateKey(node.public_key ?? null, fallbackLength)
+  );
+}
+
 function inferNodeType(value: string | null): string | null {
   const normalized = (value ?? "").toLowerCase();
   if (!normalized) return null;

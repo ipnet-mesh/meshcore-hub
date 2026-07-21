@@ -1,11 +1,5 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ComponentType,
-  type SVGProps,
-} from "react";
+import { type ComponentType, type SVGProps } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 
@@ -38,7 +32,8 @@ import { useAppConfig, useFeatures } from "@/context/AppConfigContext";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import type { RadioConfigDisplay } from "@/types/config";
-import { apiGet, isAbortError } from "@/utils/api";
+import { apiGet } from "@/utils/api";
+import { qk } from "@/utils/queryKeys";
 import { getPageColor } from "@/utils/format";
 
 interface DashboardStats {
@@ -141,17 +136,6 @@ export function HomePage() {
   const features = useFeatures();
   usePageTitle();
 
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [advertActivity, setAdvertActivity] = useState<ActivitySeries | null>(
-    null,
-  );
-  const [messageActivity, setMessageActivity] = useState<ActivitySeries | null>(
-    null,
-  );
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const hasDataRef = useRef(false);
-
   const networkName = config.network_name || "MeshCore Network";
   const logoUrl = config.logo_url || "/static/img/logo.svg";
   const logoInvertLight = config.logo_invert_light !== false;
@@ -168,50 +152,46 @@ export function HomePage() {
   const showMembersPanel = features.members !== false;
   const showRadioPanel = features.radio_config !== false;
 
-  const load = useCallback(
-    async (signal?: AbortSignal) => {
-      try {
-        const [statsData, advertData, messageData] = await Promise.all([
-          apiGet<DashboardStats>("/api/v1/dashboard/stats", {}, { signal }),
-          apiGet<ActivitySeries>(
-            "/api/v1/dashboard/activity",
-            { days: 7 },
-            { signal },
-          ),
-          apiGet<ActivitySeries>(
-            "/api/v1/dashboard/message-activity",
-            { days: 7 },
-            { signal },
-          ),
-        ]);
-        setStats(statsData);
-        setAdvertActivity(advertData);
-        setMessageActivity(messageData);
-        hasDataRef.current = true;
-        setError(null);
-      } catch (e) {
-        if (isAbortError(e)) return;
-        if (!hasDataRef.current) {
-          setError(
-            e instanceof Error && e.message
-              ? e.message
-              : t("common.failed_to_load_page"),
-          );
-        }
-      } finally {
-        setLoading(false);
-      }
-    },
-    [t],
-  );
+  const { refetchInterval } = useAutoRefresh();
 
-  useEffect(() => {
-    const controller = new AbortController();
-    void load(controller.signal);
-    return () => controller.abort();
-  }, [load]);
+  const statsQuery = useQuery({
+    queryKey: qk.dashboard.stats(),
+    queryFn: ({ signal }) =>
+      apiGet<DashboardStats>("/api/v1/dashboard/stats", {}, { signal }),
+    refetchInterval,
+  });
+  const advertQuery = useQuery({
+    queryKey: qk.dashboard.series("activity", { days: 7 }),
+    queryFn: ({ signal }) =>
+      apiGet<ActivitySeries>(
+        "/api/v1/dashboard/activity",
+        { days: 7 },
+        { signal },
+      ),
+    refetchInterval,
+  });
+  const messageQuery = useQuery({
+    queryKey: qk.dashboard.series("message-activity", { days: 7 }),
+    queryFn: ({ signal }) =>
+      apiGet<ActivitySeries>(
+        "/api/v1/dashboard/message-activity",
+        { days: 7 },
+        { signal },
+      ),
+    refetchInterval,
+  });
 
-  useAutoRefresh({ onRefresh: load });
+  const stats = statsQuery.data ?? null;
+  const advertActivity = advertQuery.data ?? null;
+  const messageActivity = messageQuery.data ?? null;
+  const loading =
+    statsQuery.isLoading || advertQuery.isLoading || messageQuery.isLoading;
+  const firstError =
+    statsQuery.error ?? advertQuery.error ?? messageQuery.error;
+  const error =
+    !stats && firstError
+      ? firstError.message || t("common.failed_to_load_page")
+      : null;
 
   if (loading) return <Loading />;
   if (error) return <ErrorAlert message={error} />;

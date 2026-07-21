@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router";
 import { getNodeEmoji } from "@/utils/format";
 
 interface NodeDisplayProps {
@@ -43,5 +44,20 @@ export function NodeDisplay({
         )}
       </div>
     </div>
+  );
+}
+
+interface NodeLinkProps extends NodeDisplayProps {
+  className?: string;
+}
+
+export function NodeLink({ className, ...display }: NodeLinkProps) {
+  return (
+    <Link
+      to={`/nodes/${display.publicKey}`}
+      className={className ?? "link link-hover"}
+    >
+      <NodeDisplay {...display} />
+    </Link>
   );
 }

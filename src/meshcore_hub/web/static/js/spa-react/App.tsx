@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { QueryClientProvider } from "@tanstack/react-query";
 import {
   BrowserRouter,
   Routes,
@@ -7,6 +8,7 @@ import {
   useLocation,
   useParams,
 } from "react-router";
+import { createQueryClient } from "@/utils/queryClient";
 import { useAppConfig } from "@/context/AppConfigContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Navbar } from "@/components/Navbar";
@@ -266,9 +268,12 @@ function Shell() {
 }
 
 export function App() {
+  const [queryClient] = useState(createQueryClient);
   return (
-    <BrowserRouter>
-      <Shell />
-    </BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <Shell />
+      </BrowserRouter>
+    </QueryClientProvider>
   );
 }

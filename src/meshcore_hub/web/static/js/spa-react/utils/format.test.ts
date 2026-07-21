@@ -6,6 +6,7 @@ import {
   formatRelativeTime,
   getNodeEmoji,
   parseAppDate,
+  resolveNodeName,
   truncateKey,
   typeEmoji,
 } from "@/utils/format";
@@ -69,6 +70,38 @@ describe("truncateKey", () => {
     const key = "abcdefghijklmnopqrst";
     expect(truncateKey(key)).toBe("abcdefghijkl...");
     expect(truncateKey(key, 4)).toBe("abcd...");
+  });
+});
+
+describe("resolveNodeName", () => {
+  const key = "0123456789abcdef0123456789abcdef";
+
+  it("returns '-' for null/undefined nodes", () => {
+    expect(resolveNodeName(null)).toBe("-");
+    expect(resolveNodeName(undefined)).toBe("-");
+  });
+
+  it("prefers a 'name' tag value", () => {
+    expect(
+      resolveNodeName({
+        name: "Real Name",
+        public_key: key,
+        tags: [{ key: "name", value: "Tag Name" }],
+      }),
+    ).toBe("Tag Name");
+  });
+
+  it("falls back to the node name when there is no name tag", () => {
+    expect(resolveNodeName({ name: "Real Name", public_key: key })).toBe(
+      "Real Name",
+    );
+  });
+
+  it("falls back to a truncated public key when there is no name", () => {
+    expect(resolveNodeName({ name: null, public_key: key })).toBe(
+      "0123456789ab...",
+    );
+    expect(resolveNodeName({ public_key: key })).toBe("0123456789ab...");
   });
 });
 

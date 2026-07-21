@@ -1,22 +1,32 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router";
 
 import { useAppConfig } from "@/context/AppConfigContext";
 import { apiGet } from "@/utils/api";
-import { useFormatDateTime, formatNumber } from "@/utils/format";
-import { copyToClipboard } from "@/utils/clipboard";
+import { qk } from "@/utils/queryKeys";
+import { useFormatDateTime } from "@/utils/format";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { Pagination } from "@/components/Pagination";
-import { FilterForm, FilterToggle } from "@/components/FilterForm";
+import {
+  FilterForm,
+  FilterField,
+  FilterSelect,
+  OperatorSelect,
+  autoSubmit,
+} from "@/components/FilterForm";
 import {
   SortableTableHeader,
   MobileSortSelect,
 } from "@/components/SortableTable";
-import { NodeDisplay } from "@/components/NodeDisplay";
-import { Loading, WarningBadge } from "@/components/Alerts";
-import { IconRefresh } from "@/components/icons";
+import { NodeDisplay, NodeLink } from "@/components/NodeDisplay";
+import { CopyableValue } from "@/components/CopyableValue";
+import { Loading } from "@/components/Alerts";
+import { ListToolbar } from "@/components/ListToolbar";
+import { PageHeader } from "@/components/PageHeader";
+import { EmptyState, EmptyRow } from "@/components/EmptyState";
 
 interface NodeTag {
   key: string;
@@ -72,7 +82,6 @@ export function Nodes() {
   const sort = searchParams.get("sort") || "last_seen";
   const order = searchParams.get("order") || "desc";
 
-  const tz = config.timezone || "";
   const hasActiveFilters =
     search !== "" ||
     advType !== "" ||
@@ -80,17 +89,32 @@ export function Nodes() {
     (config.oidc_enabled && adoptedBy !== "");
 
   const [filterOpen, setFilterOpen] = useState(hasActiveFilters);
-  const [nodes, setNodes] = useState<NodeItem[]>([]);
-  const [total, setTotal] = useState<number | null>(null);
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   const oidcEnabled = config.oidc_enabled;
   const operatorRole = config.role_names?.operator || "operator";
 
-  const fetchData = useCallback(async () => {
-    try {
+  const { paused, toggle, intervalSeconds, refetchInterval } =
+    useAutoRefresh();
+
+  const {
+    data,
+    isLoading: loading,
+    error: queryError,
+  } = useQuery({
+    queryKey: qk.nodes.list({
+      limit,
+      offset,
+      search,
+      advType,
+      sort,
+      order,
+      adoptedBy,
+      pubkeyPrefix,
+      oidcEnabled,
+      operatorRole,
+    }),
+    refetchInterval,
+    queryFn: async ({ signal }) => {
       const apiParams: Record<string, unknown> = {
         limit,
         offset,
@@ -103,50 +127,37 @@ export function Nodes() {
       if (pubkeyPrefix) apiParams.pubkey_prefix = pubkeyPrefix;
 
       const fetches: Promise<unknown>[] = [
-        apiGet<NodeListResponse>("/api/v1/nodes", apiParams),
+        apiGet<NodeListResponse>("/api/v1/nodes", apiParams, { signal }),
       ];
       if (oidcEnabled) {
         fetches.push(
-          apiGet<ProfileListResponse>("/api/v1/user/profiles", { limit: 500 }),
+          apiGet<ProfileListResponse>(
+            "/api/v1/user/profiles",
+            { limit: 500 },
+            { signal },
+          ),
         );
       }
       const results = await Promise.all(fetches);
-      const data = results[0] as NodeListResponse;
+      const nodeData = results[0] as NodeListResponse;
       const profs = oidcEnabled
         ? ((results[1] as ProfileListResponse)?.items || []).filter(
             (p) => p.roles && p.roles.includes(operatorRole),
           )
         : [];
 
-      setNodes(data.items || []);
-      setTotal(data.total || 0);
-      setProfiles(profs);
-      setError(null);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [
-    limit,
-    offset,
-    search,
-    advType,
-    sort,
-    order,
-    adoptedBy,
-    pubkeyPrefix,
-    oidcEnabled,
-    operatorRole,
-  ]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  const { paused, toggle, intervalSeconds } = useAutoRefresh({
-    onRefresh: fetchData,
+      return {
+        nodes: nodeData.items || [],
+        total: nodeData.total || 0,
+        profiles: profs,
+      };
+    },
   });
+  const error = queryError ? queryError.message : null;
+
+  const nodes = data?.nodes ?? [];
+  const total = data?.total ?? null;
+  const profiles = data?.profiles ?? [];
 
   const sortedProfiles = useMemo(
     () =>
@@ -167,17 +178,13 @@ export function Nodes() {
     limit: String(limit),
   };
 
-  const autoSubmit = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    e.currentTarget.form?.requestSubmit();
-  };
-
   const noEntity = t("common.no_entity_found", {
     entity: t("entities.nodes").toLowerCase(),
   });
 
   const mobileCards =
     nodes.length === 0 ? (
-      <div className="text-center py-8 opacity-70">{noEntity}</div>
+      <EmptyState>{noEntity}</EmptyState>
     ) : (
       nodes.map((node) => {
         const displayName = tagValue(node.tags, "name") || node.name;
@@ -212,11 +219,7 @@ export function Nodes() {
 
   const tableRows =
     nodes.length === 0 ? (
-      <tr>
-        <td colSpan={3} className="text-center py-8 opacity-70">
-          {noEntity}
-        </td>
-      </tr>
+      <EmptyRow colSpan={3}>{noEntity}</EmptyRow>
     ) : (
       nodes.map((node) => {
         const displayName = tagValue(node.tags, "name") || node.name;
@@ -225,27 +228,16 @@ export function Nodes() {
         return (
           <tr key={node.public_key} className="hover">
             <td>
-              <Link
-                to={`/nodes/${node.public_key}`}
-                className="link link-hover"
-              >
-                <NodeDisplay
-                  name={displayName}
-                  description={tagDescription}
-                  publicKey={node.public_key}
-                  advType={node.adv_type}
-                  size="base"
-                />
-              </Link>
+              <NodeLink
+                name={displayName}
+                description={tagDescription}
+                publicKey={node.public_key}
+                advType={node.adv_type}
+                size="base"
+              />
             </td>
             <td>
-              <code
-                className="font-mono text-xs cursor-pointer hover:bg-base-200 px-1 py-0.5 rounded select-all"
-                onClick={(e) => copyToClipboard(e, node.public_key)}
-                title="Click to copy"
-              >
-                {node.public_key}
-              </code>
+              <CopyableValue value={node.public_key} />
             </td>
             <td className="text-sm whitespace-nowrap">{lastSeen}</td>
           </tr>
@@ -257,48 +249,17 @@ export function Nodes() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">{t("entities.nodes")}</h1>
-        {tz && tz !== "UTC" && (
-          <span className="text-sm opacity-60">{tz}</span>
-        )}
-      </div>
+      <PageHeader title={t("entities.nodes")} />
 
-      <div className="flex items-center gap-2 mb-4">
-        {total !== null && (
-          <span className="badge badge-lg">
-            {t("common.total", { count: formatNumber(total) })}
-          </span>
-        )}
-        {error && <WarningBadge message={error} />}
-        <div className="ml-auto flex items-center gap-3">
-          {intervalSeconds > 0 && (
-            <label
-              className="label cursor-pointer gap-2"
-              title={
-                paused ? t("auto_refresh.resume") : t("auto_refresh.pause")
-              }
-            >
-              <span className="text-sm opacity-80 flex items-center gap-1">
-                <IconRefresh className="w-4 h-4" />
-                <span className="text-xs">{intervalSeconds}s</span>
-              </span>
-              <input
-                type="checkbox"
-                className="toggle toggle-sm toggle-primary"
-                checked={!paused}
-                onChange={toggle}
-              />
-            </label>
-          )}
-        </div>
-        <div className="ml-4">
-          <FilterToggle
-            open={filterOpen}
-            onChange={() => setFilterOpen((open) => !open)}
-          />
-        </div>
-      </div>
+      <ListToolbar
+        total={total}
+        error={error}
+        autoRefresh={{ paused, onToggle: toggle, intervalSeconds }}
+        filterToggle={{
+          open: filterOpen,
+          onChange: () => setFilterOpen((open) => !open),
+        }}
+      />
 
       {filterOpen && (
         <div className="mb-4">
@@ -306,10 +267,7 @@ export function Nodes() {
             key={`filters-${search}-${advType}-${adoptedBy}-${pubkeyPrefix}`}
             basePath="/nodes"
           >
-            <div className="flex flex-col gap-1">
-              <label className="flex items-center py-1">
-                <span className="opacity-80 text-sm">{t("common.search")}</span>
-              </label>
+            <FilterField label={t("common.search")}>
               <input
                 type="text"
                 name="search"
@@ -317,47 +275,33 @@ export function Nodes() {
                 placeholder={t("common.search_placeholder")}
                 className="input input-sm w-80"
               />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="flex items-center py-1">
-                <span className="opacity-80 text-sm">{t("common.type")}</span>
-              </label>
-              <select
+            </FilterField>
+            <FilterField label={t("common.type")}>
+              <FilterSelect
                 name="adv_type"
-                className="select select-sm"
                 defaultValue={advType}
                 onChange={autoSubmit}
-              >
-                <option value="">{t("common.all_types")}</option>
-                <option value="chat">{t("node_types.chat")}</option>
-                <option value="repeater">{t("node_types.repeater")}</option>
-                <option value="companion">{t("node_types.companion")}</option>
-                <option value="room">{t("node_types.room")}</option>
-              </select>
-            </div>
+                options={[
+                  { value: "", label: t("common.all_types") },
+                  { value: "chat", label: t("node_types.chat") },
+                  { value: "repeater", label: t("node_types.repeater") },
+                  { value: "companion", label: t("node_types.companion") },
+                  { value: "room", label: t("node_types.room") },
+                ]}
+              />
+            </FilterField>
             {oidcEnabled && sortedProfiles.length > 0 && (
-              <div className="flex flex-col gap-1 max-w-56">
-                <label className="flex items-center py-1">
-                  <span className="opacity-80 text-sm">
-                    {t("common.filter_operator_label")}
-                  </span>
-                </label>
-                <select
+              <FilterField
+                label={t("common.filter_operator_label")}
+                className="max-w-56"
+              >
+                <OperatorSelect
                   name="adopted_by"
-                  className="select select-sm"
                   defaultValue={adoptedBy}
                   onChange={autoSubmit}
-                >
-                  <option value="">{t("common.all_operators")}</option>
-                  {sortedProfiles.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.callsign
-                        ? `${p.name} (${p.callsign})`
-                        : p.name || p.callsign || p.user_id || p.id}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  profiles={sortedProfiles}
+                />
+              </FilterField>
             )}
           </FilterForm>
         </div>

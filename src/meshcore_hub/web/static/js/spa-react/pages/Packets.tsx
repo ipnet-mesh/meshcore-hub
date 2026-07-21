@@ -1,24 +1,24 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useAppConfig } from "@/context/AppConfigContext";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
-import { apiGet, isAbortError } from "@/utils/api";
+import { apiGet } from "@/utils/api";
+import { qk } from "@/utils/queryKeys";
 import { formatNumber, useFormatDateTime } from "@/utils/format";
 import { Pagination } from "@/components/Pagination";
-import { FilterForm, FilterToggle } from "@/components/FilterForm";
+import { FilterForm, FilterField } from "@/components/FilterForm";
 import {
   MobileSortSelect,
   SortableTableHeader,
 } from "@/components/SortableTable";
-import { Loading, WarningBadge } from "@/components/Alerts";
-import {
-  IconPath,
-  IconRefresh,
-  IconRuler,
-  IconSatelliteDish,
-} from "@/components/icons";
+import { Loading } from "@/components/Alerts";
+import { ListToolbar } from "@/components/ListToolbar";
+import { PageHeader } from "@/components/PageHeader";
+import { EmptyState, EmptyRow } from "@/components/EmptyState";
+import { IconPath, IconRuler, IconSatelliteDish } from "@/components/icons";
 
 const EVENT_TYPES = [
   "advertisement",
@@ -174,10 +174,6 @@ export function Packets() {
   const order = searchParams.get("order") ?? "desc";
   const offset = (page - 1) * limit;
 
-  const [packets, setPackets] = useState<PacketGroupItem[] | null>(null);
-  const [total, setTotal] = useState(0);
-  const [channels, setChannels] = useState<ChannelEntry[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const hasActiveFilters =
     search !== "" ||
     eventType !== "" ||
@@ -185,55 +181,58 @@ export function Packets() {
     pathHashBytes !== "";
   const [filterOpen, setFilterOpen] = useState(hasActiveFilters);
 
+  const autoRefresh = useAutoRefresh();
+
+  const { data, error: queryError } = useQuery({
+    queryKey: qk.packets.groups({
+      search,
+      eventType,
+      channelIdx,
+      pathHashBytes,
+      limit,
+      offset,
+      sort,
+      order,
+    }),
+    refetchInterval: autoRefresh.refetchInterval,
+    queryFn: async ({ signal }) => {
+      const apiParams: Record<string, unknown> = {
+        limit,
+        offset,
+        search,
+        sort,
+        order,
+      };
+      if (eventType) apiParams.event_type = eventType;
+      if (channelIdx !== "") apiParams.channel_idx = channelIdx;
+      if (pathHashBytes !== "") apiParams.path_hash_bytes = pathHashBytes;
+
+      const [groupsData, channelsData] = await Promise.all([
+        apiGet<PacketGroupsResponse>("/api/v1/packet-groups", apiParams, {
+          signal,
+        }),
+        apiGet<ChannelsResponse>("/api/v1/channels", { limit: 200 }, {
+          signal,
+        }).catch(() => ({ items: [] as ChannelItem[] })),
+      ]);
+
+      return {
+        packets: groupsData.items || [],
+        total: groupsData.total || 0,
+        channels: buildChannelList(channelsData.items || []),
+      };
+    },
+  });
+  const error = queryError ? queryError.message : null;
+
+  const packets = data?.packets ?? null;
+  const total = data?.total ?? 0;
+  const channels = data?.channels ?? [];
+
   const channelNames = useMemo(
     () => new Map(channels.map((c) => [c.idx, c.name])),
     [channels],
   );
-
-  const fetchData = useCallback(
-    async (signal?: AbortSignal) => {
-      try {
-        const apiParams: Record<string, unknown> = {
-          limit,
-          offset,
-          search,
-          sort,
-          order,
-        };
-        if (eventType) apiParams.event_type = eventType;
-        if (channelIdx !== "") apiParams.channel_idx = channelIdx;
-        if (pathHashBytes !== "") apiParams.path_hash_bytes = pathHashBytes;
-
-        const [data, channelsData] = await Promise.all([
-          apiGet<PacketGroupsResponse>("/api/v1/packet-groups", apiParams, {
-            signal,
-          }),
-          apiGet<ChannelsResponse>("/api/v1/channels", { limit: 200 }, {
-            signal,
-          }).catch(() => ({ items: [] as ChannelItem[] })),
-        ]);
-
-        setPackets(data.items || []);
-        setTotal(data.total || 0);
-        setChannels(buildChannelList(channelsData.items || []));
-        setError(null);
-      } catch (e) {
-        if (isAbortError(e)) return;
-        setError(e instanceof Error ? e.message : String(e));
-      }
-    },
-    [search, eventType, channelIdx, pathHashBytes, limit, offset, sort, order],
-  );
-
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchData(controller.signal);
-    return () => controller.abort();
-  }, [fetchData]);
-
-  const autoRefresh = useAutoRefresh({
-    onRefresh: () => fetchData(),
-  });
 
   const applyFilters = (overrides: Record<string, string>) => {
     const next = {
@@ -251,7 +250,6 @@ export function Packets() {
     navigate(qs ? `/packets?${qs}` : "/packets");
   };
 
-  const tz = config.timezone || "";
   const totalPages = Math.ceil(total / limit);
   const filterParams: Record<string, string> = {
     search,
@@ -266,56 +264,23 @@ export function Packets() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">{t("entities.packets")}</h1>
-        {tz && tz !== "UTC" && <span className="text-sm opacity-60">{tz}</span>}
-      </div>
+      <PageHeader title={t("entities.packets")} />
 
-      <div className="flex items-center gap-2 mb-4">
-        {packets !== null && (
-          <span className="badge badge-lg">
-            {t("common.total", { count: formatNumber(total) })}
-          </span>
-        )}
-        {error && <WarningBadge message={error} />}
-        <div className="ml-auto flex items-center gap-3">
-          {autoRefresh.intervalSeconds > 0 && (
-            <label
-              className="label cursor-pointer gap-2"
-              title={
-                autoRefresh.paused
-                  ? t("auto_refresh.resume")
-                  : t("auto_refresh.pause")
-              }
-            >
-              <span className="text-sm opacity-80 flex items-center gap-1">
-                <IconRefresh className="w-4 h-4" />
-                <span className="text-xs">{autoRefresh.intervalSeconds}s</span>
-              </span>
-              <input
-                type="checkbox"
-                className="toggle toggle-sm toggle-primary"
-                checked={!autoRefresh.paused}
-                onChange={autoRefresh.toggle}
-              />
-            </label>
-          )}
-        </div>
-        <div className="ml-4">
-          <FilterToggle
-            open={filterOpen}
-            onChange={() => setFilterOpen((o) => !o)}
-          />
-        </div>
-      </div>
+      <ListToolbar
+        total={packets !== null ? total : null}
+        error={error}
+        autoRefresh={{
+          paused: autoRefresh.paused,
+          onToggle: autoRefresh.toggle,
+          intervalSeconds: autoRefresh.intervalSeconds,
+        }}
+        filterToggle={{ open: filterOpen, onChange: () => setFilterOpen((o) => !o) }}
+      />
 
       {filterOpen && (
         <div className="mb-4">
           <FilterForm basePath="/packets">
-            <div className="flex flex-col gap-1">
-              <label className="flex items-center py-1">
-                <span className="opacity-80 text-sm">{t("common.search")}</span>
-              </label>
+            <FilterField label={t("common.search")}>
               <input
                 type="text"
                 name="search"
@@ -323,13 +288,11 @@ export function Packets() {
                 placeholder={t("common.search_placeholder")}
                 className="input input-sm w-80"
               />
-            </div>
-            <div className="flex flex-col gap-1 max-w-48">
-              <label className="flex items-center py-1">
-                <span className="opacity-80 text-sm">
-                  {t("packets.filter_event_type")}
-                </span>
-              </label>
+            </FilterField>
+            <FilterField
+              label={t("packets.filter_event_type")}
+              className="max-w-48"
+            >
               <select
                 name="event_type"
                 className="select select-sm"
@@ -343,13 +306,8 @@ export function Packets() {
                   </option>
                 ))}
               </select>
-            </div>
-            <div className="flex flex-col gap-1 max-w-48">
-              <label className="flex items-center py-1">
-                <span className="opacity-80 text-sm">
-                  {t("entities.channel")}
-                </span>
-              </label>
+            </FilterField>
+            <FilterField label={t("entities.channel")} className="max-w-48">
               <select
                 name="channel_idx"
                 className="select select-sm"
@@ -363,13 +321,11 @@ export function Packets() {
                   </option>
                 ))}
               </select>
-            </div>
-            <div className="flex flex-col gap-1 max-w-48">
-              <label className="flex items-center py-1">
-                <span className="opacity-80 text-sm">
-                  {t("packets.filter_path_width")}
-                </span>
-              </label>
+            </FilterField>
+            <FilterField
+              label={t("packets.filter_path_width")}
+              className="max-w-48"
+            >
               <select
                 name="path_hash_bytes"
                 className="select select-sm"
@@ -385,7 +341,7 @@ export function Packets() {
                   </option>
                 ))}
               </select>
-            </div>
+            </FilterField>
           </FilterForm>
         </div>
       )}
@@ -412,7 +368,7 @@ export function Packets() {
 
           <div className="lg:hidden space-y-3">
             {packets.length === 0 ? (
-              <div className="text-center py-8 opacity-70">{noneFound}</div>
+              <EmptyState>{noneFound}</EmptyState>
             ) : (
               packets.map((p, i) => (
                 <Link
@@ -474,11 +430,7 @@ export function Packets() {
               </thead>
               <tbody>
                 {packets.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="text-center py-8 opacity-70">
-                      {noneFound}
-                    </td>
-                  </tr>
+                  <EmptyRow colSpan={5}>{noneFound}</EmptyRow>
                 ) : (
                   packets.map((p, i) => (
                     <tr

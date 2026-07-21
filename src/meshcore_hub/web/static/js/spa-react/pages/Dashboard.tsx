@@ -1,10 +1,5 @@
-import {
-  useEffect,
-  useMemo,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from "react";
+import { useMemo, type CSSProperties, type ReactNode } from "react";
+import { useQueries } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 
@@ -15,6 +10,7 @@ import {
   TrendLineChart,
 } from "@/components/charts/Charts";
 import { ObserverIcons } from "@/components/ObserverBadges";
+import { PageHeader } from "@/components/PageHeader";
 import { RouteTypeBadge } from "@/components/RouteTypeBadge";
 import {
   IconAdvertisements,
@@ -29,7 +25,8 @@ import {
   useAppConfig,
 } from "@/context/AppConfigContext";
 import { usePageTitle } from "@/hooks/usePageTitle";
-import { apiGet, isAbortError } from "@/utils/api";
+import { apiGet } from "@/utils/api";
+import { qk } from "@/utils/queryKeys";
 import {
   averageRouteTier,
   ChartColors,
@@ -254,91 +251,122 @@ export function DashboardPage() {
   const showPackets = features.packets !== false;
   const showRoutes = features.routes !== false;
 
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const { signal } = controller;
-    (async () => {
-      try {
-        const [
-          stats,
-          recentActivity,
-          advertActivity,
-          messageActivity,
-          nodeCount,
-          packetActivity,
-          packetBreakdown,
-          routesOverview,
-          channelsData,
-        ] = await Promise.all([
+  const queries = useQueries({
+    queries: [
+      {
+        queryKey: qk.dashboard.stats(),
+        queryFn: ({ signal }: { signal: AbortSignal }) =>
           apiGet<DashboardStats>("/api/v1/dashboard/stats", {}, { signal }),
+      },
+      {
+        queryKey: qk.dashboard.recent({}),
+        queryFn: ({ signal }: { signal: AbortSignal }) =>
           apiGet<RecentActivity>(
             "/api/v1/dashboard/recent-activity",
             {},
             { signal },
           ),
+      },
+      {
+        queryKey: qk.dashboard.series("activity", { days: 7 }),
+        queryFn: ({ signal }: { signal: AbortSignal }) =>
           apiGet<ActivitySeries>(
             "/api/v1/dashboard/activity",
             { days: 7 },
             { signal },
           ),
+      },
+      {
+        queryKey: qk.dashboard.series("message-activity", { days: 7 }),
+        queryFn: ({ signal }: { signal: AbortSignal }) =>
           apiGet<ActivitySeries>(
             "/api/v1/dashboard/message-activity",
             { days: 7 },
             { signal },
           ),
+      },
+      {
+        queryKey: qk.dashboard.series("node-count", { days: 7 }),
+        queryFn: ({ signal }: { signal: AbortSignal }) =>
           apiGet<ActivitySeries>(
             "/api/v1/dashboard/node-count",
             { days: 7 },
             { signal },
           ),
+      },
+      {
+        queryKey: qk.dashboard.series("packet-activity", { days: 7 }),
+        queryFn: ({ signal }: { signal: AbortSignal }) =>
           apiGet<ActivitySeries>(
             "/api/v1/dashboard/packet-activity",
             { days: 7 },
             { signal },
           ),
+      },
+      {
+        queryKey: qk.dashboard.series("packet-breakdown", { days: 7 }),
+        queryFn: ({ signal }: { signal: AbortSignal }) =>
           apiGet<PacketBreakdown>(
             "/api/v1/dashboard/packet-breakdown",
             { days: 7 },
             { signal },
           ),
-          showRoutes
-            ? apiGet<RoutesOverview>(
-                "/api/v1/dashboard/routes-overview",
-                { days: 7 },
-                { signal },
-              )
-            : Promise.resolve(null),
+      },
+      {
+        queryKey: qk.dashboard.routesOverview(),
+        queryFn: ({ signal }: { signal: AbortSignal }) =>
+          apiGet<RoutesOverview>(
+            "/api/v1/dashboard/routes-overview",
+            { days: 7 },
+            { signal },
+          ),
+        enabled: showRoutes,
+      },
+      {
+        queryKey: qk.channels.list({}),
+        queryFn: ({ signal }: { signal: AbortSignal }) =>
           apiGet<ChannelsResponse>("/api/v1/channels", {}, { signal }),
-        ]);
-        setData({
-          stats,
-          recentActivity,
-          advertActivity,
-          messageActivity,
-          nodeCount,
-          packetActivity,
-          packetBreakdown,
-          routesOverview,
-          channelsData,
-        });
-        setError(null);
-      } catch (e) {
-        if (isAbortError(e)) return;
-        setError(
-          e instanceof Error && e.message
-            ? e.message
-            : t("common.failed_to_load_page"),
-        );
-      } finally {
-        setLoading(false);
-      }
-    })();
-    return () => controller.abort();
-  }, [showRoutes, t]);
+      },
+    ],
+  });
+
+  const [
+    statsQ,
+    recentQ,
+    advertQ,
+    messageQ,
+    nodeCountQ,
+    packetActivityQ,
+    packetBreakdownQ,
+    routesOverviewQ,
+    channelsQ,
+  ] = queries;
+
+  const loading = queries.some((q) => q.isLoading);
+  const firstError = queries.find((q) => q.error)?.error ?? null;
+  const error = firstError
+    ? firstError instanceof Error && firstError.message
+      ? firstError.message
+      : t("common.failed_to_load_page")
+    : null;
+
+  const data: DashboardData | null =
+    !loading && !error
+      ? {
+          stats: statsQ.data as DashboardStats,
+          recentActivity: recentQ.data as RecentActivity,
+          advertActivity: (advertQ.data as ActivitySeries | undefined) ?? null,
+          messageActivity:
+            (messageQ.data as ActivitySeries | undefined) ?? null,
+          nodeCount: (nodeCountQ.data as ActivitySeries | undefined) ?? null,
+          packetActivity:
+            (packetActivityQ.data as ActivitySeries | undefined) ?? null,
+          packetBreakdown: packetBreakdownQ.data as PacketBreakdown,
+          routesOverview:
+            (routesOverviewQ.data as RoutesOverview | undefined) ?? null,
+          channelsData: channelsQ.data as ChannelsResponse,
+        }
+      : null;
 
   const channelLabels = useMemo(() => {
     if (!data) return new Map<number, string>();
@@ -400,9 +428,7 @@ export function DashboardPage() {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">{t("entities.dashboard")}</h1>
-      </div>
+      <PageHeader title={t("entities.dashboard")} />
 
       {visibleChartCount > 0 && (
         <>

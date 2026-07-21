@@ -1,16 +1,19 @@
 import {
-  useEffect,
-  useState,
   type KeyboardEvent,
   type MouseEvent,
   type ReactNode,
 } from "react";
 import { Link, useNavigate } from "react-router";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useAppConfig } from "@/context/AppConfigContext";
-import { apiGet, isAbortError } from "@/utils/api";
-import { formatNumber } from "@/utils/format";
+import { apiGet } from "@/utils/api";
+import { qk } from "@/utils/queryKeys";
+import { formatNumber, resolveNodeName } from "@/utils/format";
 import { Loading, ErrorAlert } from "@/components/Alerts";
+import { CallsignBadge, RoleBadge } from "@/components/Badges";
+import { EmptyState } from "@/components/EmptyState";
+import { PageHeader } from "@/components/PageHeader";
 import { IconAntenna, IconUsers } from "@/components/icons";
 import { usePageTitle } from "@/hooks/usePageTitle";
 
@@ -58,18 +61,12 @@ function ProfileTile({ profile }: { profile: MemberProfile }) {
       <div className="card-body">
         <h2 className="card-title">
           {profile.name || t("common.unnamed")}
-          {profile.callsign && (
-            <span className="badge badge-neutral badge-sm">
-              {profile.callsign}
-            </span>
-          )}
+          {profile.callsign && <CallsignBadge callsign={profile.callsign} />}
         </h2>
         {profile.roles && profile.roles.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1">
             {profile.roles.map((role) => (
-              <span key={role} className="badge badge-primary badge-sm">
-                {role}
-              </span>
+              <RoleBadge key={role} role={role} />
             ))}
           </div>
         )}
@@ -101,7 +98,7 @@ function ProfileTile({ profile }: { profile: MemberProfile }) {
         {profile.adopted_nodes && profile.adopted_nodes.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-2">
             {profile.adopted_nodes.map((node) => {
-              const label = node.name || node.public_key.slice(0, 12) + "...";
+              const label = resolveNodeName(node);
               return (
                 <span
                   key={node.public_key}
@@ -155,24 +152,20 @@ export function Members() {
   const { t } = useTranslation();
   const config = useAppConfig();
   usePageTitle("entities.members");
-  const [profiles, setProfiles] = useState<MemberProfile[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    apiGet<ProfilesResponse>(
-      "/api/v1/user/profiles",
-      { limit: 500 },
-      { signal: controller.signal },
-    )
-      .then((resp) => setProfiles(resp.items || []))
-      .catch((e) => {
-        if (!isAbortError(e)) {
-          setError((e as Error).message || t("common.failed_to_load_page"));
-        }
-      });
-    return () => controller.abort();
-  }, [t]);
+  const { data, error: queryError } = useQuery({
+    queryKey: qk.profiles.list({ limit: 500 }),
+    queryFn: async ({ signal }) => {
+      const resp = await apiGet<ProfilesResponse>(
+        "/api/v1/user/profiles",
+        { limit: 500 },
+        { signal },
+      );
+      return resp.items || [];
+    },
+  });
+  const profiles = data ?? null;
+  const error = queryError ? queryError.message : null;
 
   if (error) return <ErrorAlert message={error} />;
   if (profiles === null) return <Loading />;
@@ -187,13 +180,11 @@ export function Members() {
   if (visible.length === 0) {
     return (
       <>
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold">{t("entities.members")}</h1>
-        </div>
-        <div className="text-center py-8 opacity-70">
+        <PageHeader title={t("entities.members")} />
+        <EmptyState>
           <p className="text-lg">{t("members_page.empty_state")}</p>
           <p className="text-sm mt-2">{t("members_page.empty_description")}</p>
-        </div>
+        </EmptyState>
       </>
     );
   }
@@ -212,15 +203,14 @@ export function Members() {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">{t("entities.members")}</h1>
+      <PageHeader title={t("entities.members")}>
         <span className="badge badge-lg">
           {t("common.count_entity", {
             count: formatNumber(operators.length + members.length),
             entity: t("entities.members").toLowerCase(),
           })}
         </span>
-      </div>
+      </PageHeader>
 
       <ProfileGroup
         title={t("members_page.operators")}

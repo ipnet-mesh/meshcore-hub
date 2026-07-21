@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
@@ -12,10 +13,12 @@ import "leaflet/dist/leaflet.css";
 
 import { useAppConfig } from "@/context/AppConfigContext";
 import { usePageTitle } from "@/hooks/usePageTitle";
-import { apiGet, isAbortError } from "@/utils/api";
+import { apiGet } from "@/utils/api";
+import { qk } from "@/utils/queryKeys";
 import { formatNumber, formatRelativeTime, typeEmoji } from "@/utils/format";
-import { FilterToggle } from "@/components/FilterForm";
+import { FilterToggle, OperatorSelect } from "@/components/FilterForm";
 import { ErrorAlert, Loading } from "@/components/Alerts";
+import { PageHeader } from "@/components/PageHeader";
 
 const MAX_BOUNDS_RADIUS_KM = 20;
 
@@ -326,17 +329,27 @@ export function MapPage() {
   usePageTitle("entities.map");
 
   const oidcEnabled = config.oidc_enabled;
-  const tz = config.timezone || "";
   const operatorRole = config.role_names?.operator || "operator";
 
-  const [mapData, setMapData] = useState<MapData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [category, setCategory] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [operatorFilter, setOperatorFilter] = useState("");
   const [showLabels, setShowLabels] = useState(false);
+
+  const mapQuery = useQuery({
+    queryKey: qk.map.data({ adopted_by: operatorFilter || undefined }),
+    queryFn: ({ signal }) => {
+      const params: Record<string, unknown> = {};
+      if (operatorFilter) params.adopted_by = operatorFilter;
+      return apiGet<MapData>("/map/data", params, { signal });
+    },
+  });
+  const mapData = mapQuery.data ?? null;
+  const loading = mapQuery.isLoading;
+  const error = mapQuery.error
+    ? mapQuery.error.message || t("common.failed_to_load_page")
+    : null;
 
   const operatorProfiles = useMemo(
     () =>
@@ -349,23 +362,6 @@ export function MapPage() {
         }),
     [mapData, operatorRole],
   );
-
-  useEffect(() => {
-    const ac = new AbortController();
-    const params: Record<string, unknown> = {};
-    if (operatorFilter) params.adopted_by = operatorFilter;
-    apiGet<MapData>("/map/data", params, { signal: ac.signal })
-      .then((data) => {
-        setMapData(data);
-        setError(null);
-      })
-      .catch((e) => {
-        if (isAbortError(e)) return;
-        setError((e as Error).message || t("common.failed_to_load_page"));
-      })
-      .finally(() => setLoading(false));
-    return () => ac.abort();
-  }, [operatorFilter, t]);
 
   const allNodes = useMemo(() => mapData?.nodes ?? [], [mapData]);
 
@@ -431,24 +427,18 @@ export function MapPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">{t("entities.map")}</h1>
-        <div className="flex items-center gap-2">
-          {tz && tz !== "UTC" && (
-            <span className="text-sm opacity-60">{tz}</span>
-          )}
-          <span className="badge badge-lg">{countBadgeText}</span>
-          {showFilteredBadge && (
-            <span className="badge badge-lg badge-ghost">
-              {t("common.shown", { count: formatNumber(filteredCount) })}
-            </span>
-          )}
-          <FilterToggle
-            open={filterOpen}
-            onChange={() => setFilterOpen((open) => !open)}
-          />
-        </div>
-      </div>
+      <PageHeader title={t("entities.map")}>
+        <span className="badge badge-lg">{countBadgeText}</span>
+        {showFilteredBadge && (
+          <span className="badge badge-lg badge-ghost">
+            {t("common.shown", { count: formatNumber(filteredCount) })}
+          </span>
+        )}
+        <FilterToggle
+          open={filterOpen}
+          onChange={() => setFilterOpen((open) => !open)}
+        />
+      </PageHeader>
 
       {filterOpen && (
         <div className="flex gap-4 flex-wrap items-end mb-6">
@@ -485,20 +475,11 @@ export function MapPage() {
               <label className="fieldset-label">
                 {t("common.filter_operator_label")}
               </label>
-              <select
-                className="select select-sm"
+              <OperatorSelect
                 value={operatorFilter}
                 onChange={(e) => setOperatorFilter(e.currentTarget.value)}
-              >
-                <option value="">{t("common.all_operators")}</option>
-                {operatorProfiles.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.callsign
-                      ? `${p.name} (${p.callsign})`
-                      : p.name || p.callsign || p.id}
-                  </option>
-                ))}
-              </select>
+                profiles={operatorProfiles}
+              />
             </div>
           )}
           <div className="fieldset">

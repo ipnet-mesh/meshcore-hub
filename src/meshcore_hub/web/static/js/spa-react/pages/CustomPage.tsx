@@ -3,6 +3,7 @@ import { useParams } from "react-router";
 import { useTranslation } from "react-i18next";
 
 import { ErrorAlert, Loading } from "@/components/Alerts";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { useAppConfig } from "@/context/AppConfigContext";
 import { apiGet, isAbortError } from "@/utils/api";
 
@@ -59,6 +60,9 @@ export function CustomPagePage() {
 
   return (
     <div className="max-w-4xl mx-auto">
+      <Breadcrumbs
+        items={[{ label: t("entities.home"), to: "/" }, { label: page.title }]}
+      />
       <div className="card bg-base-100 shadow-xl">
         <div
           className="card-body prose prose-lg max-w-none overflow-x-auto"

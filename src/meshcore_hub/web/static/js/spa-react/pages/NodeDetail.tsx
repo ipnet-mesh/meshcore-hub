@@ -1,23 +1,28 @@
 import {
-  useCallback,
   useEffect,
   useMemo,
   useState,
   type FormEvent,
   type ReactNode,
 } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
 import { divIcon, point as leafletPoint } from "leaflet";
 import "leaflet/dist/leaflet.css";
-import QRCode from "react-qr-code";
 import { ErrorAlert, Loading, SuccessAlert } from "@/components/Alerts";
-import { IconEdit, IconError, IconPlus, IconTrash } from "@/components/icons";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { CopyableValue } from "@/components/CopyableValue";
+import { IconEdit, IconPlus, IconTrash } from "@/components/icons";
+import { MeshQrCode } from "@/components/MeshQrCode";
+import { Modal } from "@/components/Modal";
+import { NotFoundState } from "@/components/NotFoundState";
 import { hasRole, useAppConfig } from "@/context/AppConfigContext";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { apiDelete, apiGet, apiPost, apiPut, isAbortError } from "@/utils/api";
-import { copyToClipboard } from "@/utils/clipboard";
+import { qk, invalidate } from "@/utils/queryKeys";
 import { typeEmoji, truncateKey, useFormatDateTime } from "@/utils/format";
 
 interface NodeTag {
@@ -82,20 +87,6 @@ function OffsetCenter({ lat, lon }: { lat: number; lon: number }) {
   return null;
 }
 
-function NodeQrCode({ url, className }: { url: string; className: string }) {
-  return (
-    <div className={className}>
-      <QRCode
-        value={url}
-        size={140}
-        level="L"
-        fgColor="#000000"
-        bgColor="#ffffff"
-      />
-    </div>
-  );
-}
-
 export function NodeDetailPage() {
   const { t } = useTranslation();
   const config = useAppConfig();
@@ -106,18 +97,14 @@ export function NodeDetailPage() {
   usePageTitle("entities.node_detail");
 
   const publicKey = publicKeyParam ?? "";
-  const searchKey = searchParams.toString();
+  const isFullKey = publicKey.length === 64;
   const flashMessage = searchParams.get("message") || "";
   const flashError = searchParams.get("error") || "";
 
-  const [node, setNode] = useState<NodeDetailData | null>(null);
-  const [advertisements, setAdvertisements] = useState<AdvertisementItem[]>(
-    [],
-  );
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [notFound, setNotFound] = useState(false);
+  const queryClient = useQueryClient();
   const [flash, setFlash] = useState<FlashState | null>(null);
+  const [prefixNotFound, setPrefixNotFound] = useState(false);
+  const [prefixError, setPrefixError] = useState<string | null>(null);
 
   const [addKey, setAddKey] = useState("");
   const [addValue, setAddValue] = useState("");
@@ -132,9 +119,10 @@ export function NodeDetailPage() {
 
   const [deleteKey, setDeleteKey] = useState<string | null>(null);
   const [deleteSaving, setDeleteSaving] = useState(false);
+  const [confirmRelease, setConfirmRelease] = useState(false);
 
   useEffect(() => {
-    if (!publicKey || publicKey.length === 64) return;
+    if (!publicKey || isFullKey) return;
     const ac = new AbortController();
     (async () => {
       try {
@@ -147,64 +135,57 @@ export function NodeDetailPage() {
       } catch (e) {
         if (isAbortError(e)) return;
         if (errorMessage(e).includes("404")) {
-          setNotFound(true);
+          setPrefixNotFound(true);
         } else {
-          setError(errorMessage(e));
+          setPrefixError(errorMessage(e));
         }
-        setLoading(false);
       }
     })();
     return () => ac.abort();
-  }, [publicKey, navigate]);
+  }, [publicKey, isFullKey, navigate]);
 
-  const loadData = useCallback(
-    async (signal: AbortSignal) => {
-      try {
-        const [nodeData, adsData] = await Promise.all([
-          apiGet<NodeDetailData | null>(
-            `/api/v1/nodes/${publicKey}`,
-            {},
-            { signal },
-          ),
-          apiGet<AdvertisementListResponse>(
-            "/api/v1/advertisements",
-            { public_key: publicKey, limit: 10 },
-            { signal },
-          ),
-          apiGet<unknown>(
-            "/api/v1/telemetry",
-            { node_public_key: publicKey, limit: 10 },
-            { signal },
-          ),
-        ]);
-        if (!nodeData) {
-          setNotFound(true);
-          return;
-        }
-        setNode(nodeData);
-        setAdvertisements(adsData.items || []);
-        setNotFound(false);
-        setError(null);
-      } catch (e) {
-        if (isAbortError(e)) return;
-        if (errorMessage(e).includes("404")) {
-          setNotFound(true);
-        } else {
-          setError(errorMessage(e));
-        }
-      } finally {
-        if (!signal.aborted) setLoading(false);
-      }
-    },
-    [publicKey],
-  );
+  const nodeQuery = useQuery({
+    queryKey: qk.nodes.detail(publicKey),
+    queryFn: ({ signal }) =>
+      apiGet<NodeDetailData | null>(
+        `/api/v1/nodes/${publicKey}`,
+        {},
+        { signal },
+      ),
+    enabled: isFullKey,
+  });
+  const advertisementsQuery = useQuery({
+    queryKey: qk.advertisements.list({ public_key: publicKey, limit: 10 }),
+    queryFn: ({ signal }) =>
+      apiGet<AdvertisementListResponse>(
+        "/api/v1/advertisements",
+        { public_key: publicKey, limit: 10 },
+        { signal },
+      ),
+    enabled: isFullKey,
+  });
 
-  useEffect(() => {
-    if (!publicKey || publicKey.length !== 64) return;
-    const ac = new AbortController();
-    loadData(ac.signal);
-    return () => ac.abort();
-  }, [loadData, searchKey]);
+  const node = nodeQuery.data ?? null;
+  const advertisements = advertisementsQuery.data?.items ?? [];
+  const nodeErrorMsg = nodeQuery.error ? errorMessage(nodeQuery.error) : null;
+  const notFound =
+    prefixNotFound ||
+    (nodeErrorMsg?.includes("404") ?? false) ||
+    (isFullKey && !nodeQuery.isPending && nodeQuery.data === null);
+  const error =
+    prefixError ||
+    (nodeErrorMsg && !nodeErrorMsg.includes("404") ? nodeErrorMsg : null);
+  const loading = isFullKey ? nodeQuery.isLoading : !prefixNotFound && !prefixError;
+
+  const adoptMutation = useMutation({
+    mutationFn: (key: string) =>
+      apiPost("/api/v1/adoptions", { public_key: key }),
+    onSuccess: () => invalidate.adoptions(queryClient),
+  });
+  const releaseMutation = useMutation({
+    mutationFn: (key: string) => apiDelete(`/api/v1/adoptions/${key}`),
+    onSuccess: () => invalidate.adoptions(queryClient),
+  });
 
   let lat: number | null = node?.lat ?? null;
   let lon: number | null = node?.lon ?? null;
@@ -271,8 +252,8 @@ export function NodeDetailPage() {
     setFlash({ type, message });
   };
 
-  const reloadNode = () => {
-    navigate(`/nodes/${publicKey}?refresh=${Date.now()}`, { replace: true });
+  const invalidateNodeData = () => {
+    invalidate.nodeTags(queryClient);
   };
 
   const validateTagValue = (value: string, type: string): string | null => {
@@ -292,7 +273,7 @@ export function NodeDetailPage() {
   const handleAdopt = async () => {
     if (!node) return;
     try {
-      await apiPost("/api/v1/adoptions", { public_key: node.public_key });
+      await adoptMutation.mutateAsync(node.public_key);
       navigate(
         `/nodes/${node.public_key}?message=${encodeURIComponent(t("nodes.adopt_success"))}`,
         { replace: true },
@@ -307,9 +288,9 @@ export function NodeDetailPage() {
 
   const handleRelease = async () => {
     if (!node) return;
-    if (!confirm(t("nodes.release_confirm"))) return;
+    setConfirmRelease(false);
     try {
-      await apiDelete(`/api/v1/adoptions/${node.public_key}`);
+      await releaseMutation.mutateAsync(node.public_key);
       navigate(
         `/nodes/${node.public_key}?message=${encodeURIComponent(t("nodes.release_success"))}`,
         { replace: true },
@@ -344,7 +325,7 @@ export function NodeDetailPage() {
         "success",
         t("common.entity_added_success", { entity: t("entities.tag") }),
       );
-      reloadNode();
+      invalidateNodeData();
     } catch (e) {
       showFlash("error", errorMessage(e));
     }
@@ -377,7 +358,7 @@ export function NodeDetailPage() {
         "success",
         t("common.entity_updated_success", { entity: t("entities.tag") }),
       );
-      reloadNode();
+      invalidateNodeData();
     } catch (e) {
       setEditError(errorMessage(e));
     } finally {
@@ -397,7 +378,7 @@ export function NodeDetailPage() {
         "success",
         t("common.entity_deleted_success", { entity: t("entities.tag") }),
       );
-      reloadNode();
+      invalidateNodeData();
     } catch (e) {
       setDeleteKey(null);
       showFlash("error", errorMessage(e));
@@ -410,26 +391,19 @@ export function NodeDetailPage() {
     if (notFound) {
       return (
         <>
-          <div className="breadcrumbs text-sm mb-4">
-            <ul>
-              <li>
-                <Link to="/">{t("entities.home")}</Link>
-              </li>
-              <li>
-                <Link to="/nodes">{t("entities.nodes")}</Link>
-              </li>
-              <li>{t("common.page_not_found")}</li>
-            </ul>
-          </div>
-          <div className="alert alert-error">
-            <IconError className="stroke-current shrink-0 h-6 w-6" />
-            <span>
-              {t("common.entity_not_found_details", {
-                entity: t("entities.node"),
-                details: publicKey,
-              })}
-            </span>
-          </div>
+          <Breadcrumbs
+            items={[
+              { label: t("entities.home"), to: "/" },
+              { label: t("entities.nodes"), to: "/nodes" },
+              { label: t("common.page_not_found") },
+            ]}
+          />
+          <NotFoundState
+            message={t("common.entity_not_found_details", {
+              entity: t("entities.node"),
+              details: publicKey,
+            })}
+          />
           <Link to="/nodes" className="btn btn-primary mt-4">
             {t("common.view_entity", { entity: t("entities.nodes") })}
           </Link>
@@ -476,7 +450,7 @@ export function NodeDetailPage() {
               {canRelease && (
                 <button
                   className="btn btn-sm btn-outline btn-error"
-                  onClick={handleRelease}
+                  onClick={() => setConfirmRelease(true)}
                 >
                   {t("nodes.release")}
                 </button>
@@ -509,13 +483,7 @@ export function NodeDetailPage() {
           <h3 className="font-semibold opacity-70 mb-2">
             {t("common.public_key")}
           </h3>
-          <code
-            className="text-sm bg-base-200 p-2 rounded block break-all cursor-pointer hover:bg-base-300 select-all"
-            onClick={(e) => copyToClipboard(e, node.public_key)}
-            title="Click to copy"
-          >
-            {node.public_key}
-          </code>
+          <CopyableValue value={node.public_key} variant="block" />
         </div>
         <div className="flex flex-wrap gap-x-8 gap-y-2 mt-4 text-sm">
           <div>
@@ -622,17 +590,13 @@ export function NodeDetailPage() {
 
   return (
     <>
-      <div className="breadcrumbs text-sm mb-4">
-        <ul>
-          <li>
-            <Link to="/">{t("entities.home")}</Link>
-          </li>
-          <li>
-            <Link to="/nodes">{t("entities.nodes")}</Link>
-          </li>
-          <li>{tagName || node.name || truncateKey(node.public_key)}</li>
-        </ul>
-      </div>
+      <Breadcrumbs
+        items={[
+          { label: t("entities.home"), to: "/" },
+          { label: t("entities.nodes"), to: "/nodes" },
+          { label: tagName || node.name || truncateKey(node.public_key) },
+        ]}
+      />
 
       <div className="flex items-start gap-4 mb-6">
         <span
@@ -686,8 +650,8 @@ export function NodeDetailPage() {
             </MapContainer>
           </div>
           <div className="relative z-20 h-full p-3 flex items-center justify-end">
-            <NodeQrCode
-              url={qrUrl}
+            <MeshQrCode
+              value={qrUrl}
               className="bg-white p-2 rounded-box shadow-lg"
             />
           </div>
@@ -695,7 +659,7 @@ export function NodeDetailPage() {
       ) : (
         <div className="card bg-base-100 shadow-xl mb-6">
           <div className="card-body flex-row items-center gap-4">
-            <NodeQrCode url={qrUrl} className="bg-white p-2 rounded-box" />
+            <MeshQrCode value={qrUrl} />
             <p className="text-sm opacity-70">{t("nodes.scan_to_add")}</p>
           </div>
         </div>
@@ -843,15 +807,20 @@ export function NodeDetailPage() {
       </div>
 
       {canEditTags && editTag && (
-        <div className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold text-lg">
+        <Modal
+          title={
+            <>
               {t("common.edit_entity", { entity: t("entities.tag") })}:{" "}
               <span className="font-mono text-base font-normal">
                 {editTag.key}
               </span>
-            </h3>
-            <form className="py-4" onSubmit={handleEditTag}>
+            </>
+          }
+          onClose={() => {
+            if (!editSaving) setEditTag(null);
+          }}
+        >
+          <form className="py-4" onSubmit={handleEditTag}>
               <div className="fieldset mb-4">
                 <label className="fieldset-label">{t("common.value")}</label>
                 <input
@@ -897,59 +866,47 @@ export function NodeDetailPage() {
                 </button>
               </div>
             </form>
-          </div>
-          <div
-            className="modal-backdrop"
-            onClick={() => !editSaving && setEditTag(null)}
-          />
-        </div>
+        </Modal>
       )}
 
       {canEditTags && deleteKey !== null && (
-        <div className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold text-lg">
-              {t("common.delete_entity", { entity: t("entities.tag") })}
-            </h3>
-            <p
-              className="py-4"
-              dangerouslySetInnerHTML={{
-                __html: t("common.delete_entity_confirm", {
-                  entity: t("entities.tag"),
-                  name: deleteKey,
-                }),
-              }}
-            />
-            <div className="alert alert-error mb-4">
-              <span>{t("common.cannot_be_undone")}</span>
-            </div>
-            <div className="modal-action">
-              <button
-                type="button"
-                className="btn"
-                onClick={() => setDeleteKey(null)}
-                disabled={deleteSaving}
-              >
-                {t("common.cancel")}
-              </button>
-              <button
-                type="button"
-                className="btn btn-error"
-                onClick={handleDeleteTag}
-                disabled={deleteSaving}
-              >
-                {deleteSaving && (
-                  <span className="loading loading-spinner loading-sm" />
-                )}
-                {t("common.delete")}
-              </button>
-            </div>
-          </div>
-          <div
-            className="modal-backdrop"
-            onClick={() => !deleteSaving && setDeleteKey(null)}
-          />
-        </div>
+        <ConfirmDialog
+          title={t("common.delete_entity", { entity: t("entities.tag") })}
+          message={
+            <>
+              <p
+                className="py-4"
+                dangerouslySetInnerHTML={{
+                  __html: t("common.delete_entity_confirm", {
+                    entity: t("entities.tag"),
+                    name: deleteKey,
+                  }),
+                }}
+              />
+              <div className="alert alert-error mb-4">
+                <span>{t("common.cannot_be_undone")}</span>
+              </div>
+            </>
+          }
+          confirmLabel={t("common.delete")}
+          cancelLabel={t("common.cancel")}
+          saving={deleteSaving}
+          onConfirm={handleDeleteTag}
+          onCancel={() => {
+            if (!deleteSaving) setDeleteKey(null);
+          }}
+        />
+      )}
+
+      {confirmRelease && (
+        <ConfirmDialog
+          title={t("nodes.release")}
+          message={t("nodes.release_confirm")}
+          confirmLabel={t("nodes.release")}
+          cancelLabel={t("common.cancel")}
+          onConfirm={handleRelease}
+          onCancel={() => setConfirmRelease(false)}
+        />
       )}
     </>
   );

@@ -6,21 +6,36 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router";
-import { useAppConfig } from "@/context/AppConfigContext";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { apiGet, isAbortError } from "@/utils/api";
+import { qk } from "@/utils/queryKeys";
 import {
   formatNumber,
-  formatRelativeTime,
+  resolveNodeName,
   truncateKey,
   useFormatDateTime,
 } from "@/utils/format";
-import { copyToClipboard } from "@/utils/clipboard";
 import { Loading, WarningBadge } from "@/components/Alerts";
-import { JsonTree } from "@/components/JsonTree";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { IconSatelliteDish } from "@/components/icons";
+import { NotFoundState } from "@/components/NotFoundState";
+import { TimeAgo } from "@/components/TimeAgo";
+import { DefinitionGrid } from "@/components/Definition";
+import {
+  buildChannelNames,
+  isNotFoundError,
+  type ChannelItem,
+} from "@/utils/packets";
+import {
+  Field,
+  RedactedNotice,
+  RawHexBlock,
+  DecodedJsonBlock,
+  channelNameDisplay,
+} from "@/components/PacketParts";
 
 const PATH_MAX_BADGES = 16;
 const PATH_HEAD = 7;
@@ -55,11 +70,6 @@ interface PacketGroupData {
   receptions: Reception[];
 }
 
-interface ChannelItem {
-  name: string;
-  channel_hash: string;
-}
-
 interface ChannelsResponse {
   items: ChannelItem[];
 }
@@ -82,19 +92,6 @@ interface PopoverAnchor {
   top: number;
 }
 
-function buildChannelNames(items: ChannelItem[]): Map<number, string> {
-  const names = new Map<number, string>();
-  for (const c of items) {
-    const idx = parseInt(c.channel_hash, 16);
-    if (!Number.isNaN(idx)) names.set(idx, c.name);
-  }
-  return names;
-}
-
-function isNotFoundError(e: unknown): boolean {
-  return e instanceof Error && e.message.includes("404");
-}
-
 function groupByObserver(receptions: Reception[]): Map<string, Reception[]> {
   const groups = new Map<string, Reception[]>();
   for (const r of receptions) {
@@ -107,20 +104,6 @@ function groupByObserver(receptions: Reception[]): Map<string, Reception[]> {
     }
   }
   return groups;
-}
-
-function nodeDisplayName(n: NodeItem): string {
-  const tagName = n.tags?.find((tag) => tag.key === "name")?.value;
-  return tagName || n.name || truncateKey(n.public_key, 12);
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-0.5 py-2 border-b border-base-200">
-      <span className="text-xs uppercase opacity-60">{label}</span>
-      <span className="text-sm">{children}</span>
-    </div>
-  );
 }
 
 function Stat({ label, value }: { label: string; value: ReactNode }) {
@@ -238,15 +221,7 @@ export function PacketGroupDetail() {
   const { t } = useTranslation();
   usePageTitle("packets.detail_title");
   const { hash } = useParams();
-  const config = useAppConfig();
   const { formatDateTime } = useFormatDateTime();
-
-  const [group, setGroup] = useState<PacketGroupData | null>(null);
-  const [channelNames, setChannelNames] = useState<Map<number, string>>(
-    new Map(),
-  );
-  const [notFound, setNotFound] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const [popover, setPopover] = useState<PopoverAnchor | null>(null);
   const [popoverPos, setPopoverPos] = useState<{
@@ -258,33 +233,31 @@ export function PacketGroupDetail() {
   const [popoverError, setPopoverError] = useState<string | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    setGroup(null);
-    setNotFound(false);
-    setError(null);
-    Promise.all([
-      apiGet<PacketGroupData>(`/api/v1/packet-groups/${hash}`, {}, {
-        signal: controller.signal,
-      }),
+  const groupQuery = useQuery({
+    queryKey: qk.packets.group(hash ?? ""),
+    queryFn: ({ signal }) =>
+      apiGet<PacketGroupData>(`/api/v1/packet-groups/${hash}`, {}, { signal }),
+    enabled: !!hash,
+  });
+  const channelsQuery = useQuery({
+    queryKey: qk.channels.list({ limit: 200 }),
+    queryFn: ({ signal }) =>
       apiGet<ChannelsResponse>("/api/v1/channels", { limit: 200 }, {
-        signal: controller.signal,
+        signal,
       }).catch(() => ({ items: [] as ChannelItem[] })),
-    ])
-      .then(([g, channelsData]) => {
-        setGroup(g);
-        setChannelNames(buildChannelNames(channelsData.items || []));
-      })
-      .catch((e) => {
-        if (isAbortError(e)) return;
-        if (isNotFoundError(e)) {
-          setNotFound(true);
-        } else {
-          setError(e instanceof Error ? e.message : String(e));
-        }
-      });
-    return () => controller.abort();
-  }, [hash]);
+  });
+
+  const group = groupQuery.data ?? null;
+  const channelNames = buildChannelNames(channelsQuery.data?.items || []);
+  const notFound = groupQuery.error
+    ? isNotFoundError(groupQuery.error)
+    : false;
+  const error =
+    groupQuery.error && !isNotFoundError(groupQuery.error)
+      ? groupQuery.error instanceof Error
+        ? groupQuery.error.message
+        : String(groupQuery.error)
+      : null;
 
   useEffect(() => {
     const onDocClick = (ev: MouseEvent) => {
@@ -323,7 +296,7 @@ export function PacketGroupDetail() {
         const items = (data.items || [])
           .slice()
           .sort((a, b) =>
-            nodeDisplayName(a).localeCompare(nodeDisplayName(b)),
+            resolveNodeName(a).localeCompare(resolveNodeName(b)),
           );
         setPopoverNodes(items);
         setPopoverTotal(data.total || 0);
@@ -371,64 +344,41 @@ export function PacketGroupDetail() {
     });
   };
 
-  const tz = config.timezone || "";
   const leaf = group?.packet_hash || group?.event_type || "";
   const receptions = group?.receptions ?? [];
   const sourcePrefix = group?.source_pubkey_prefix ?? null;
   const observerGroups = groupByObserver(receptions);
   const moreCount = popoverTotal - (popoverNodes?.length ?? 0);
 
-  let channelDisplay: ReactNode = <span className="opacity-50">—</span>;
-  if (group && group.channel_idx != null) {
-    const name = channelNames.get(group.channel_idx);
-    channelDisplay = name
-      ? `${name} (${group.channel_idx})`
-      : `${group.channel_idx}`;
-  }
-
-  const receptionTime = (r: Reception) => (
-    <span title={formatDateTime(r.received_at)}>
-      {formatRelativeTime(r.received_at)}
-    </span>
+  const channelDisplay = channelNameDisplay(
+    channelNames,
+    group?.channel_idx ?? null,
   );
+
+  const receptionTime = (r: Reception) => <TimeAgo iso={r.received_at} />;
 
   return (
     <div>
-      <div className="breadcrumbs text-sm mb-4">
-        <ul>
-          <li>
-            <Link to="/">{t("entities.home")}</Link>
-          </li>
-          <li>
-            <Link to="/packets">{t("entities.packets")}</Link>
-          </li>
-          <li>{leaf || t("packets.detail_title")}</li>
-        </ul>
-      </div>
-
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">{t("packets.detail_title")}</h1>
-        {tz && tz !== "UTC" && <span className="text-sm opacity-60">{tz}</span>}
-      </div>
+      <Breadcrumbs
+        items={[
+          { label: t("entities.home"), to: "/" },
+          { label: t("entities.packets"), to: "/packets" },
+          { label: leaf || t("packets.detail_title") },
+        ]}
+      />
 
       {notFound && (
-        <div role="alert" className="alert alert-warning">
-          {t("packets.not_found_retention")}
-        </div>
+        <NotFoundState tone="warning" message={t("packets.not_found_retention")} />
       )}
       {error && <WarningBadge message={error} />}
       {!group && !notFound && !error && <Loading />}
 
       {group && (
         <>
-          {group.redacted && (
-            <div className="alert alert-warning mb-4">
-              {"\u{1F512}"} {t("packets.redacted_notice")}
-            </div>
-          )}
+          {group.redacted && <RedactedNotice />}
           <div className="card bg-base-100 shadow-sm">
             <div className="card-body">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
+              <DefinitionGrid>
                 <Field label={t("common.time")}>
                   {formatDateTime(group.first_seen)}
                 </Field>
@@ -471,7 +421,7 @@ export function PacketGroupDetail() {
                   · {formatNumber(group.observer_count)}{" "}
                   {t("common.observers").toLowerCase()}
                 </Field>
-              </div>
+              </DefinitionGrid>
 
               {receptions.length > 0 && (
                 <div className="mt-6">
@@ -600,33 +550,11 @@ export function PacketGroupDetail() {
               )}
 
               {!group.redacted && group.raw_hex && (
-                <div className="mt-4">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs uppercase opacity-60">
-                      {t("packets.col_raw")}
-                    </span>
-                    <button
-                      className="btn btn-xs btn-ghost"
-                      onClick={(e) => copyToClipboard(e, group.raw_hex!)}
-                    >
-                      {t("packets.copy_raw")}
-                    </button>
-                  </div>
-                  <pre className="bg-base-200 rounded p-3 text-xs overflow-x-auto whitespace-pre-wrap break-all">
-                    {group.raw_hex}
-                  </pre>
-                </div>
+                <RawHexBlock hex={group.raw_hex} />
               )}
 
               {!group.redacted && group.decoded != null && (
-                <div className="mt-4">
-                  <span className="text-xs uppercase opacity-60">
-                    {t("packets.decoded")}
-                  </span>
-                  <div className="bg-base-200 rounded p-3">
-                    <JsonTree value={group.decoded} openDepth={1} />
-                  </div>
-                </div>
+                <DecodedJsonBlock value={group.decoded} />
               )}
             </div>
           </div>
@@ -677,7 +605,7 @@ export function PacketGroupDetail() {
                         onClick={() => setPopover(null)}
                         className="flex flex-col items-start gap-0"
                       >
-                        <span className="text-sm">{nodeDisplayName(n)}</span>
+                        <span className="text-sm">{resolveNodeName(n)}</span>
                         <span className="font-mono text-xs opacity-50">
                           {truncateKey(n.public_key, 16)}
                         </span>

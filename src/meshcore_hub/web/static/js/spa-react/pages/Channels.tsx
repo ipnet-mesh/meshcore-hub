@@ -1,12 +1,19 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
-import QRCode from "react-qr-code";
 
 import { useAppConfig, hasRole } from "@/context/AppConfigContext";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
+import { qk, invalidate } from "@/utils/queryKeys";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { Loading, ErrorAlert } from "@/components/Alerts";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { EmptyState } from "@/components/EmptyState";
+import { MeshQrCode } from "@/components/MeshQrCode";
+import { Modal } from "@/components/Modal";
+import { PageHeader } from "@/components/PageHeader";
+import { SectionGroup } from "@/components/SectionGroup";
 import { IconChannel, IconPlus, IconEdit, IconTrash } from "@/components/icons";
 
 interface Channel {
@@ -36,11 +43,7 @@ type ModalState =
 function ChannelQrCode({ channel }: { channel: Channel }) {
   if (!channel.key_hex) return null;
   const qrUrl = `meshcore://channel/add?name=${encodeURIComponent(channel.name)}&secret=${channel.key_hex.toLowerCase()}`;
-  return (
-    <div className="qr-container">
-      <QRCode value={qrUrl} size={128} level="M" />
-    </div>
-  );
+  return <MeshQrCode value={qrUrl} size={128} level="M" />;
 }
 
 interface ChannelCardProps {
@@ -167,9 +170,7 @@ function ChannelModal({
     : t("channels.add_channel");
 
   return (
-    <dialog open className="modal modal-open">
-      <div className="modal-box">
-        <h3 className="font-bold text-lg mb-4">{title}</h3>
+    <Modal title={title} onClose={onCancel}>
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 items-center mb-4">
             <label className="text-sm opacity-70 text-right">
@@ -244,11 +245,7 @@ function ChannelModal({
             </button>
           </div>
         </form>
-      </div>
-      <form method="dialog" className="modal-backdrop">
-        <button onClick={onCancel}></button>
-      </form>
-    </dialog>
+    </Modal>
   );
 }
 
@@ -268,32 +265,15 @@ function DeleteChannelModal({
   const { t } = useTranslation();
 
   return (
-    <dialog open className="modal modal-open">
-      <div className="modal-box">
-        <h3 className="font-bold text-lg mb-4">
-          {t("channels.delete_channel")}
-        </h3>
-        <p>{t("channels.delete_confirm", { name: channel.name })}</p>
-        <div className="modal-action">
-          <button
-            className="btn btn-ghost"
-            onClick={onCancel}
-            disabled={saving}
-          >
-            {t("common.cancel")}
-          </button>
-          <button className="btn btn-error" onClick={onConfirm} disabled={saving}>
-            {saving && (
-              <span className="loading loading-spinner loading-sm"></span>
-            )}
-            {t("common.delete")}
-          </button>
-        </div>
-      </div>
-      <form method="dialog" className="modal-backdrop">
-        <button onClick={onCancel}></button>
-      </form>
-    </dialog>
+    <ConfirmDialog
+      title={t("channels.delete_channel")}
+      message={<p>{t("channels.delete_confirm", { name: channel.name })}</p>}
+      confirmLabel={t("common.delete")}
+      cancelLabel={t("common.cancel")}
+      saving={saving}
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    />
   );
 }
 
@@ -305,56 +285,70 @@ export function Channels() {
   const isAdmin = hasRole("admin");
   usePageTitle("channels.title");
 
-  const [channels, setChannels] = useState<Channel[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  const {
+    data,
+    isLoading: loading,
+    error: queryError,
+  } = useQuery({
+    queryKey: qk.channels.list({}),
+    queryFn: async ({ signal }) => {
+      const resp = await apiGet<ChannelListResponse>(
+        "/api/v1/channels",
+        {},
+        { signal },
+      );
+      return resp.items || [];
+    },
+  });
+  const channels = data ?? [];
+  const error = queryError ? queryError.message : null;
   const [modal, setModal] = useState<ModalState | null>(null);
-  const [saving, setSaving] = useState(false);
 
-  const fetchChannels = useCallback(async () => {
-    try {
-      const data = await apiGet<ChannelListResponse>("/api/v1/channels");
-      setChannels(data.items || []);
-      setError(null);
-    } catch (e) {
-      setError((e as Error).message || t("common.failed_to_load_page"));
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
-
-  useEffect(() => {
-    fetchChannels();
-  }, [fetchChannels]);
-
-  const handleSave = async (body: Record<string, unknown>) => {
-    setSaving(true);
-    try {
-      if (modal?.type === "edit") {
-        await apiPut(`/api/v1/channels/${modal.channel.id}`, body);
+  const saveMutation = useMutation({
+    mutationFn: async ({
+      id,
+      body,
+    }: {
+      id?: string;
+      body: Record<string, unknown>;
+    }) => {
+      if (id) {
+        await apiPut(`/api/v1/channels/${id}`, body);
       } else {
         await apiPost("/api/v1/channels", body);
       }
+    },
+    onSuccess: () => invalidate.channels(queryClient),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiDelete(`/api/v1/channels/${id}`),
+    onSuccess: () => invalidate.channels(queryClient),
+  });
+
+  const saving = saveMutation.isPending || deleteMutation.isPending;
+
+  const handleSave = async (body: Record<string, unknown>) => {
+    try {
+      await saveMutation.mutateAsync({
+        id: modal?.type === "edit" ? modal.channel.id : undefined,
+        body,
+      });
       setModal(null);
-      await fetchChannels();
     } catch (e) {
       alert((e as Error).message || "Failed to save channel");
-    } finally {
-      setSaving(false);
     }
   };
 
   const handleDeleteConfirm = async () => {
     if (modal?.type !== "delete") return;
-    setSaving(true);
     try {
-      await apiDelete(`/api/v1/channels/${modal.channel.id}`);
+      await deleteMutation.mutateAsync(modal.channel.id);
       setModal(null);
-      await fetchChannels();
     } catch (e) {
       alert((e as Error).message || "Failed to delete channel");
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -376,12 +370,14 @@ export function Channels() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <IconChannel className="h-8 w-8" />
-          {t("channels.title")}
-        </h1>
-      </div>
+      <PageHeader
+        title={
+          <span className="flex items-center gap-2">
+            <IconChannel className="h-8 w-8" />
+            {t("channels.title")}
+          </span>
+        }
+      />
 
       {error && <ErrorAlert message={error} />}
 
@@ -397,11 +393,11 @@ export function Channels() {
       )}
 
       {channels.length === 0 && (
-        <div className="text-center py-8 opacity-70">
+        <EmptyState>
           {t("common.no_entity_found", {
             entity: t("entities.channels").toLowerCase(),
           })}
-        </div>
+        </EmptyState>
       )}
 
       {VISIBILITY_ORDER.map((vis) => {
@@ -409,10 +405,7 @@ export function Channels() {
         if (!group || group.length === 0) return null;
         return (
           <div key={vis}>
-            <h2 className="text-lg font-semibold mt-6 mb-3 opacity-70">
-              {t(`channels.visibility_${vis}`)}
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <SectionGroup title={t(`channels.visibility_${vis}`)}>
               {group.map((ch) => (
                 <ChannelCard
                   key={ch.id}
@@ -424,7 +417,7 @@ export function Channels() {
                   onNavigate={handleNavigate}
                 />
               ))}
-            </div>
+            </SectionGroup>
           </div>
         );
       })}

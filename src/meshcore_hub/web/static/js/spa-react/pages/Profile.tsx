@@ -1,11 +1,17 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { type FormEvent } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useAppConfig } from "@/context/AppConfigContext";
 import type { AppConfig } from "@/types/config";
-import { apiGet, apiPut, isAbortError } from "@/utils/api";
-import { formatRelativeTime, useFormatDateTime } from "@/utils/format";
+import { apiGet, apiPut } from "@/utils/api";
+import { qk, invalidate } from "@/utils/queryKeys";
+import { resolveNodeName, useFormatDateTime } from "@/utils/format";
 import { Loading, ErrorAlert, SuccessAlert } from "@/components/Alerts";
+import { CallsignBadge, RoleBadge } from "@/components/Badges";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { PageHeader } from "@/components/PageHeader";
+import { TimeAgo } from "@/components/TimeAgo";
 import { usePageTitle } from "@/hooks/usePageTitle";
 
 interface ProfileNode {
@@ -41,9 +47,7 @@ function RoleBadges({ roles }: { roles?: string[] | null }) {
   return (
     <div className="flex gap-2 mt-2">
       {roles.map((role) => (
-        <span key={role} className="badge badge-primary badge-sm">
-          {role}
-        </span>
+        <RoleBadge key={role} role={role} />
       ))}
     </div>
   );
@@ -67,10 +71,7 @@ function MemberSince({ createdAt }: { createdAt?: string | null }) {
 }
 
 function AdoptedNodeLink({ node }: { node: ProfileNode }) {
-  const { formatDateTime } = useFormatDateTime();
-  const displayName = node.name || node.public_key.slice(0, 12) + "...";
-  const relTime = node.last_seen ? formatRelativeTime(node.last_seen) : "-";
-  const fullTime = node.last_seen ? formatDateTime(node.last_seen) : "-";
+  const displayName = resolveNodeName(node);
 
   return (
     <Link
@@ -83,13 +84,16 @@ function AdoptedNodeLink({ node }: { node: ProfileNode }) {
           {node.public_key}
         </div>
       </div>
-      <time
-        className="text-xs opacity-60 whitespace-nowrap shrink-0"
-        dateTime={node.last_seen ?? undefined}
-        title={fullTime}
-      >
-        {relTime}
-      </time>
+      {node.last_seen ? (
+        <TimeAgo
+          iso={node.last_seen}
+          className="text-xs opacity-60 whitespace-nowrap shrink-0"
+        />
+      ) : (
+        <span className="text-xs opacity-60 whitespace-nowrap shrink-0">
+          -
+        </span>
+      )}
     </Link>
   );
 }
@@ -125,26 +129,12 @@ function AdoptedNodesCard({
 function PublicProfileView({ id }: { id: string }) {
   const { t } = useTranslation();
   const config = useAppConfig();
-  const [profile, setProfile] = useState<UserProfileData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    setProfile(null);
-    setError(null);
-    apiGet<UserProfileData>(
-      `/api/v1/user/profile/${id}`,
-      {},
-      { signal: controller.signal },
-    )
-      .then(setProfile)
-      .catch((e) => {
-        if (!isAbortError(e)) {
-          setError((e as Error).message || t("common.failed_to_load_page"));
-        }
-      });
-    return () => controller.abort();
-  }, [id, t]);
+  const { data: profile, error: queryError } = useQuery({
+    queryKey: qk.profiles.detail(id),
+    queryFn: ({ signal }) =>
+      apiGet<UserProfileData>(`/api/v1/user/profile/${id}`, {}, { signal }),
+  });
+  const error = queryError ? queryError.message : null;
 
   if (error) return <ErrorAlert message={error} />;
   if (!profile) return <Loading />;
@@ -154,24 +144,26 @@ function PublicProfileView({ id }: { id: string }) {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">{t("user_profile.title")}</h1>
+      <Breadcrumbs
+        items={[
+          { label: t("entities.home"), to: "/" },
+          { label: t("entities.members"), to: "/members" },
+          { label: profile.name || t("common.unnamed") },
+        ]}
+      />
+      <PageHeader title={t("user_profile.title")}>
         {isOwner && (
           <Link to="/profile" className="btn btn-primary btn-sm">
             {t("user_profile.edit_profile")}
           </Link>
         )}
-      </div>
+      </PageHeader>
 
       <div className="card bg-base-100 shadow-xl">
         <div className="card-body">
           <h2 className="card-title">
             {profile.name || t("common.unnamed")}
-            {profile.callsign && (
-              <span className="badge badge-neutral badge-sm">
-                {profile.callsign}
-              </span>
-            )}
+            {profile.callsign && <CallsignBadge callsign={profile.callsign} />}
           </h2>
           <RoleBadges roles={profile.roles} />
           {profile.description && (
@@ -202,26 +194,24 @@ function OwnProfileView() {
   const config = useAppConfig();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [profile, setProfile] = useState<UserProfileData | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const { data: profile, error: queryError } = useQuery({
+    queryKey: qk.profiles.me(),
+    queryFn: ({ signal }) =>
+      apiGet<UserProfileData>("/api/v1/user/profile/me", {}, { signal }),
+  });
+  const error = queryError ? queryError.message : null;
 
-  useEffect(() => {
-    const controller = new AbortController();
-    setProfile(null);
-    setError(null);
-    apiGet<UserProfileData>(
-      "/api/v1/user/profile/me",
-      {},
-      { signal: controller.signal },
-    )
-      .then(setProfile)
-      .catch((e) => {
-        if (!isAbortError(e)) {
-          setError((e as Error).message || t("common.failed_to_load_page"));
-        }
-      });
-    return () => controller.abort();
-  }, [searchParams, t]);
+  const updateMutation = useMutation({
+    mutationFn: ({
+      id,
+      body,
+    }: {
+      id: string;
+      body: Record<string, unknown>;
+    }) => apiPut(`/api/v1/user/profile/${id}`, body),
+    onSuccess: () => invalidate.profiles(queryClient),
+  });
 
   if (!config.oidc_enabled || !config.user) {
     return (
@@ -251,7 +241,7 @@ function OwnProfileView() {
       url: String(data.get("url") ?? "").trim() || null,
     };
     try {
-      await apiPut(`/api/v1/user/profile/${profile.id}`, body);
+      await updateMutation.mutateAsync({ id: profile.id, body });
       navigate(
         "/profile?message=" + encodeURIComponent(t("user_profile.profile_updated")),
         { replace: true },
@@ -266,9 +256,13 @@ function OwnProfileView() {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">{t("user_profile.title")}</h1>
-      </div>
+      <Breadcrumbs
+        items={[
+          { label: t("entities.home"), to: "/" },
+          { label: t("user_profile.title") },
+        ]}
+      />
+      <PageHeader title={t("user_profile.title")} />
 
       {flashMessage ? (
         <SuccessAlert message={flashMessage} />

@@ -30,7 +30,7 @@ VALID_MSG_SORT_COLUMNS = {"time", "type", "from", "message"}
 
 def _messages_key_builder(request: Request) -> str:
     role = resolve_user_role(request) or "anonymous"
-    return f"messages:role={role}:{sorted_query_string(request)}"
+    return f"{request.url.path}:role={role}:{sorted_query_string(request)}"
 
 
 def _get_tag_name(node: Optional[Node]) -> Optional[str]:

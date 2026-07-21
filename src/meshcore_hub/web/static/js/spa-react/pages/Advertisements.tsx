@@ -1,16 +1,25 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useAppConfig } from "@/context/AppConfigContext";
-import { apiGet, isAbortError } from "@/utils/api";
-import { formatNumber, useFormatDateTime } from "@/utils/format";
-import { copyToClipboard } from "@/utils/clipboard";
+import { apiGet } from "@/utils/api";
+import { qk } from "@/utils/queryKeys";
+import { useFormatDateTime } from "@/utils/format";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { Pagination } from "@/components/Pagination";
-import { FilterForm, FilterToggle } from "@/components/FilterForm";
+import {
+  FilterForm,
+  FilterField,
+  FilterSelect,
+  OperatorSelect,
+  autoSubmit,
+  submitOnEnter,
+} from "@/components/FilterForm";
 import { MobileSortSelect, SortableTableHeader } from "@/components/SortableTable";
 import { NodeDisplay } from "@/components/NodeDisplay";
+import { CopyableValue } from "@/components/CopyableValue";
 import {
   ObserverFilterBadges,
   ObserverIcons,
@@ -18,8 +27,10 @@ import {
   toggleObserverArea,
 } from "@/components/ObserverBadges";
 import { RouteTypeBadge } from "@/components/RouteTypeBadge";
-import { Loading, WarningBadge } from "@/components/Alerts";
-import { IconRefresh } from "@/components/icons";
+import { Loading } from "@/components/Alerts";
+import { ListToolbar } from "@/components/ListToolbar";
+import { PageHeader } from "@/components/PageHeader";
+import { EmptyState, EmptyRow } from "@/components/EmptyState";
 
 interface ObserverInfo {
   node_id?: string;
@@ -62,14 +73,6 @@ interface ListResponse<T> {
   total?: number;
 }
 
-function submitOnEnter(e: React.KeyboardEvent<HTMLInputElement>) {
-  if (e.key === "Enter") e.currentTarget.form?.requestSubmit();
-}
-
-function autoSubmit(e: React.ChangeEvent<HTMLSelectElement>) {
-  e.currentTarget.form?.requestSubmit();
-}
-
 export function Advertisements() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -89,13 +92,7 @@ export function Advertisements() {
 
   const features = config.features ?? {};
   const packetsEnabled = features.packets !== false;
-  const tz = config.timezone || "";
 
-  const [items, setItems] = useState<Advertisement[] | null>(null);
-  const [total, setTotal] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [sortedAreas, setSortedAreas] = useState<string[]>([]);
-  const [operators, setOperators] = useState<OperatorProfile[]>([]);
   const [disabledAreas, setDisabledAreas] = useState<Set<string>>(() =>
     getDisabledObserverAreas(),
   );
@@ -105,16 +102,24 @@ export function Advertisements() {
       routeType !== "flood,transport_flood",
   );
 
-  const disabledAreasRef = useRef(disabledAreas);
-  disabledAreasRef.current = disabledAreas;
-  const abortRef = useRef<AbortController | null>(null);
+  const { paused, toggle, intervalSeconds, refetchInterval } =
+    useAutoRefresh();
 
-  const fetchData = useCallback(async () => {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const { signal } = controller;
-    try {
+  const { data, error: queryError } = useQuery({
+    queryKey: qk.advertisements.list({
+      limit,
+      offset,
+      search,
+      sort,
+      order,
+      routeType,
+      adoptedBy,
+      oidcEnabled: config.oidc_enabled,
+      operatorRole: config.role_names?.operator || "operator",
+      disabledAreas: [...disabledAreas].sort(),
+    }),
+    refetchInterval,
+    queryFn: async ({ signal }) => {
       const nodesPromise = apiGet<ListResponse<NodeItem>>(
         "/api/v1/nodes",
         { limit: 500, observer: true },
@@ -133,14 +138,13 @@ export function Advertisements() {
       ]);
 
       const operatorRole = config.role_names?.operator || "operator";
-      const profiles = (profilesData?.items ?? [])
+      const operators = (profilesData?.items ?? [])
         .filter((p) => p.roles?.includes(operatorRole))
         .sort((a, b) =>
           (a.name || a.callsign || "").localeCompare(
             b.name || b.callsign || "",
           ),
         );
-      setOperators(profiles);
 
       const areaMap = new Map<string, string[]>();
       for (const n of nodesData.items ?? []) {
@@ -150,13 +154,13 @@ export function Advertisements() {
         if (!areaMap.has(key)) areaMap.set(key, []);
         areaMap.get(key)!.push(n.public_key);
       }
-      const areas = [...areaMap.keys()].sort((a, b) =>
+      const sortedAreas = [...areaMap.keys()].sort((a, b) =>
         a.toLowerCase().localeCompare(b.toLowerCase()),
       );
-      setSortedAreas(areas);
 
-      const disabled = disabledAreasRef.current;
-      const observerFilterActive = areas.some((a) => disabled.has(a));
+      const observerFilterActive = sortedAreas.some((a) =>
+        disabledAreas.has(a),
+      );
       const apiParams: Record<string, unknown> = {
         limit,
         offset,
@@ -166,34 +170,31 @@ export function Advertisements() {
         route_type: routeType,
       };
       if (observerFilterActive) {
-        apiParams.observed_by = areas
-          .filter((a) => !disabled.has(a))
+        apiParams.observed_by = sortedAreas
+          .filter((a) => !disabledAreas.has(a))
           .flatMap((a) => areaMap.get(a) ?? []);
       }
       if (adoptedBy) apiParams.adopted_by = adoptedBy;
 
-      const data = await apiGet<ListResponse<Advertisement>>(
+      const adData = await apiGet<ListResponse<Advertisement>>(
         "/api/v1/advertisements",
         apiParams,
         { signal },
       );
-      setItems(data.items ?? []);
-      setTotal(data.total ?? 0);
-      setError(null);
-    } catch (e) {
-      if (isAbortError(e)) return;
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }, [limit, offset, search, sort, order, routeType, adoptedBy, config]);
-
-  useEffect(() => {
-    fetchData();
-    return () => abortRef.current?.abort();
-  }, [fetchData, disabledAreas]);
-
-  const { paused, toggle, intervalSeconds } = useAutoRefresh({
-    onRefresh: fetchData,
+      return {
+        items: adData.items ?? [],
+        total: adData.total ?? 0,
+        operators,
+        sortedAreas,
+      };
+    },
   });
+  const error = queryError ? queryError.message : null;
+
+  const items = data?.items ?? null;
+  const total = data?.total ?? null;
+  const operators = data?.operators ?? [];
+  const sortedAreas = data?.sortedAreas ?? [];
 
   const handleObserverToggle = (area: string) => {
     const updated = toggleObserverArea(area, sortedAreas.length);
@@ -234,62 +235,19 @@ export function Advertisements() {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">
-          {t("entities.advertisements")}
-        </h1>
-        {tz && tz !== "UTC" && (
-          <span className="text-sm opacity-60">{tz}</span>
-        )}
-      </div>
+      <PageHeader title={t("entities.advertisements")} />
 
-      <div className="flex items-center gap-2 mb-4">
-        {total !== null && (
-          <span className="badge badge-lg">
-            {t("common.total", { count: formatNumber(total) })}
-          </span>
-        )}
-        {error && <WarningBadge message={error} />}
-        <div className="ml-auto flex items-center gap-3">
-          {intervalSeconds > 0 && (
-            <label
-              className="label cursor-pointer gap-2"
-              title={
-                paused
-                  ? t("auto_refresh.resume")
-                  : t("auto_refresh.pause")
-              }
-            >
-              <span className="text-sm opacity-80 flex items-center gap-1">
-                <IconRefresh className="w-4 h-4" />
-                <span className="text-xs">{intervalSeconds}s</span>
-              </span>
-              <input
-                type="checkbox"
-                className="toggle toggle-sm toggle-primary"
-                checked={!paused}
-                onChange={toggle}
-              />
-            </label>
-          )}
-        </div>
-        <div className="ml-4">
-          <FilterToggle
-            open={filterOpen}
-            onChange={() => setFilterOpen((o) => !o)}
-          />
-        </div>
-      </div>
+      <ListToolbar
+        total={total}
+        error={error}
+        autoRefresh={{ paused, onToggle: toggle, intervalSeconds }}
+        filterToggle={{ open: filterOpen, onChange: () => setFilterOpen((o) => !o) }}
+      />
 
       {filterOpen && (
         <div className="mb-4">
           <FilterForm basePath="/advertisements">
-            <div className="flex flex-col gap-1">
-              <label className="flex items-center py-1">
-                <span className="opacity-80 text-sm">
-                  {t("common.search")}
-                </span>
-              </label>
+            <FilterField label={t("common.search")}>
               <input
                 type="text"
                 name="search"
@@ -299,55 +257,42 @@ export function Advertisements() {
                 className="input input-sm w-80"
                 onKeyDown={submitOnEnter}
               />
-            </div>
-            <div className="flex flex-col gap-1 max-w-48">
-              <label className="flex items-center py-1">
-                <span className="opacity-80 text-sm">
-                  {t("advertisements.filter_route_type_label")}
-                </span>
-              </label>
-              <select
+            </FilterField>
+            <FilterField
+              label={t("advertisements.filter_route_type_label")}
+              className="max-w-48"
+            >
+              <FilterSelect
                 name="route_type"
                 key={`route_type-${routeType}`}
                 defaultValue={routeType}
-                className="select select-sm"
                 onChange={autoSubmit}
-              >
-                <option value="flood,transport_flood">
-                  {t("advertisements.route_type_flood")}
-                </option>
-                <option value="all">
-                  {t("advertisements.route_type_all")}
-                </option>
-                <option value="direct">
-                  {t("advertisements.route_type_direct")}
-                </option>
-              </select>
-            </div>
+                options={[
+                  {
+                    value: "flood,transport_flood",
+                    label: t("advertisements.route_type_flood"),
+                  },
+                  { value: "all", label: t("advertisements.route_type_all") },
+                  {
+                    value: "direct",
+                    label: t("advertisements.route_type_direct"),
+                  },
+                ]}
+              />
+            </FilterField>
             {config.oidc_enabled && operators.length > 0 && (
-              <div className="flex flex-col gap-1 max-w-56">
-                <label className="flex items-center py-1">
-                  <span className="opacity-80 text-sm">
-                    {t("common.filter_operator_label")}
-                  </span>
-                </label>
-                <select
+              <FilterField
+                label={t("common.filter_operator_label")}
+                className="max-w-56"
+              >
+                <OperatorSelect
                   name="adopted_by"
                   key={`adopted_by-${adoptedBy}`}
                   defaultValue={adoptedBy}
-                  className="select select-sm"
                   onChange={autoSubmit}
-                >
-                  <option value="">{t("common.all_operators")}</option>
-                  {operators.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.callsign
-                        ? `${p.name} (${p.callsign})`
-                        : p.name || p.callsign || p.user_id || p.id}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  profiles={operators}
+                />
+              </FilterField>
             )}
           </FilterForm>
         </div>
@@ -400,9 +345,7 @@ export function Advertisements() {
 
           <div className="lg:hidden space-y-3">
             {items.length === 0 ? (
-              <div className="text-center py-8 opacity-70">
-                {emptyMessage}
-              </div>
+              <EmptyState>{emptyMessage}</EmptyState>
             ) : (
               items.map((ad, idx) => {
                 const adName =
@@ -487,14 +430,7 @@ export function Advertisements() {
               </thead>
               <tbody>
                 {items.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={5}
-                      className="text-center py-8 opacity-70"
-                    >
-                      {emptyMessage}
-                    </td>
-                  </tr>
+                  <EmptyRow colSpan={5}>{emptyMessage}</EmptyRow>
                 ) : (
                   items.map((ad, idx) => {
                     const adName =
@@ -527,15 +463,7 @@ export function Advertisements() {
                           </Link>
                         </td>
                         <td>
-                          <code
-                            className="font-mono text-xs cursor-pointer hover:bg-base-200 px-1 py-0.5 rounded select-all"
-                            onClick={(e) =>
-                              copyToClipboard(e, ad.public_key)
-                            }
-                            title="Click to copy"
-                          >
-                            {ad.public_key}
-                          </code>
+                          <CopyableValue value={ad.public_key} />
                         </td>
                         <td>
                           <RouteTypeBadge routeType={ad.route_type ?? null} />

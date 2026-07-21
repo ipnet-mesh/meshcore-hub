@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import {
@@ -6,12 +7,18 @@ import {
   resolveChannelLabel,
   useAppConfig,
 } from "@/context/AppConfigContext";
-import { apiGet, isAbortError } from "@/utils/api";
-import { formatNumber, useFormatDateTime } from "@/utils/format";
+import { apiGet } from "@/utils/api";
+import { qk } from "@/utils/queryKeys";
+import { useFormatDateTime } from "@/utils/format";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { Pagination } from "@/components/Pagination";
-import { FilterForm, FilterToggle } from "@/components/FilterForm";
+import {
+  FilterForm,
+  FilterField,
+  FilterSelect,
+  autoSubmit,
+} from "@/components/FilterForm";
 import { MobileSortSelect, SortableTableHeader } from "@/components/SortableTable";
 import {
   ObserverFilterBadges,
@@ -19,8 +26,10 @@ import {
   getDisabledObserverAreas,
   toggleObserverArea,
 } from "@/components/ObserverBadges";
-import { Loading, WarningBadge } from "@/components/Alerts";
-import { IconRefresh } from "@/components/icons";
+import { Loading } from "@/components/Alerts";
+import { ListToolbar } from "@/components/ListToolbar";
+import { PageHeader } from "@/components/PageHeader";
+import { EmptyState, EmptyRow } from "@/components/EmptyState";
 
 interface ObserverInfo {
   node_id?: string;
@@ -62,10 +71,6 @@ interface ChannelItem {
 interface ListResponse<T> {
   items?: T[];
   total?: number;
-}
-
-function autoSubmit(e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) {
-  e.currentTarget.form?.requestSubmit();
 }
 
 function parseSenderFromText(text: string | null): {
@@ -243,21 +248,7 @@ export function Messages() {
     typeof config.spam_score_threshold === "number"
       ? config.spam_score_threshold
       : 0.65;
-  const tz = config.timezone || "";
 
-  const [items, setItems] = useState<Message[] | null>(null);
-  const [total, setTotal] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [sortedAreas, setSortedAreas] = useState<string[]>([]);
-  const [builtinLabels, setBuiltinLabels] = useState<Map<number, string>>(
-    () => new Map(),
-  );
-  const [customLabels, setCustomLabels] = useState<Map<number, string>>(
-    () => new Map(),
-  );
-  const [channelLabels, setChannelLabels] = useState<Map<number, string>>(
-    () => new Map(),
-  );
   const [disabledAreas, setDisabledAreas] = useState<Set<string>>(() =>
     getDisabledObserverAreas(),
   );
@@ -265,16 +256,23 @@ export function Messages() {
     messageType !== "" || channelIdx !== "" || includeSpam,
   );
 
-  const disabledAreasRef = useRef(disabledAreas);
-  disabledAreasRef.current = disabledAreas;
-  const abortRef = useRef<AbortController | null>(null);
+  const { paused, toggle, intervalSeconds, refetchInterval } =
+    useAutoRefresh();
 
-  const fetchData = useCallback(async () => {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const { signal } = controller;
-    try {
+  const { data, error: queryError } = useQuery({
+    queryKey: qk.messages.list({
+      limit,
+      offset,
+      messageType,
+      channelIdx,
+      includeSpam,
+      sort,
+      order,
+      channelLabels: config.channel_labels,
+      disabledAreas: [...disabledAreas].sort(),
+    }),
+    refetchInterval,
+    queryFn: async ({ signal }) => {
       const [nodesData, channelsData] = await Promise.all([
         apiGet<ListResponse<NodeItem>>(
           "/api/v1/nodes",
@@ -293,9 +291,7 @@ export function Messages() {
           ])
           .filter(([idx]) => Number.isInteger(idx)),
       );
-      setBuiltinLabels(builtin);
-      setCustomLabels(custom);
-      setChannelLabels(new Map([...builtin, ...custom]));
+      const channelLabels = new Map([...builtin, ...custom]);
 
       const areaMap = new Map<string, string[]>();
       for (const n of nodesData.items ?? []) {
@@ -305,13 +301,13 @@ export function Messages() {
         if (!areaMap.has(key)) areaMap.set(key, []);
         areaMap.get(key)!.push(n.public_key);
       }
-      const areas = [...areaMap.keys()].sort((a, b) =>
+      const sortedAreas = [...areaMap.keys()].sort((a, b) =>
         a.toLowerCase().localeCompare(b.toLowerCase()),
       );
-      setSortedAreas(areas);
 
-      const disabled = disabledAreasRef.current;
-      const observerFilterActive = areas.some((a) => disabled.has(a));
+      const observerFilterActive = sortedAreas.some((a) =>
+        disabledAreas.has(a),
+      );
       const apiParams: Record<string, unknown> = {
         limit,
         offset,
@@ -321,34 +317,35 @@ export function Messages() {
         order,
       };
       if (observerFilterActive) {
-        apiParams.observed_by = areas
-          .filter((a) => !disabled.has(a))
+        apiParams.observed_by = sortedAreas
+          .filter((a) => !disabledAreas.has(a))
           .flatMap((a) => areaMap.get(a) ?? []);
       }
       if (includeSpam) apiParams.include_spam = true;
 
-      const data = await apiGet<ListResponse<Message>>(
+      const messagesData = await apiGet<ListResponse<Message>>(
         "/api/v1/messages",
         apiParams,
         { signal },
       );
-      setItems(dedupeBySignature(data.items ?? []));
-      setTotal(data.total ?? 0);
-      setError(null);
-    } catch (e) {
-      if (isAbortError(e)) return;
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }, [limit, offset, messageType, channelIdx, includeSpam, sort, order, config]);
-
-  useEffect(() => {
-    fetchData();
-    return () => abortRef.current?.abort();
-  }, [fetchData, disabledAreas]);
-
-  const { paused, toggle, intervalSeconds } = useAutoRefresh({
-    onRefresh: fetchData,
+      return {
+        items: dedupeBySignature(messagesData.items ?? []),
+        total: messagesData.total ?? 0,
+        sortedAreas,
+        builtinLabels: builtin,
+        customLabels: custom,
+        channelLabels,
+      };
+    },
   });
+  const error = queryError ? queryError.message : null;
+
+  const items = data?.items ?? null;
+  const total = data?.total ?? null;
+  const sortedAreas = data?.sortedAreas ?? [];
+  const builtinLabels = data?.builtinLabels ?? new Map<number, string>();
+  const customLabels = data?.customLabels ?? new Map<number, string>();
+  const channelLabels = data?.channelLabels ?? new Map<number, string>();
 
   const handleObserverToggle = (area: string) => {
     const updated = toggleObserverArea(area, sortedAreas.length);
@@ -425,76 +422,32 @@ export function Messages() {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">{t("entities.messages")}</h1>
-        {tz && tz !== "UTC" && (
-          <span className="text-sm opacity-60">{tz}</span>
-        )}
-      </div>
+      <PageHeader title={t("entities.messages")} />
 
-      <div className="flex items-center gap-2 mb-4">
-        {total !== null && (
-          <span className="badge badge-lg">
-            {t("common.total", { count: formatNumber(total) })}
-          </span>
-        )}
-        {error && <WarningBadge message={error} />}
-        <div className="ml-auto flex items-center gap-3">
-          {intervalSeconds > 0 && (
-            <label
-              className="label cursor-pointer gap-2"
-              title={
-                paused
-                  ? t("auto_refresh.resume")
-                  : t("auto_refresh.pause")
-              }
-            >
-              <span className="text-sm opacity-80 flex items-center gap-1">
-                <IconRefresh className="w-4 h-4" />
-                <span className="text-xs">{intervalSeconds}s</span>
-              </span>
-              <input
-                type="checkbox"
-                className="toggle toggle-sm toggle-primary"
-                checked={!paused}
-                onChange={toggle}
-              />
-            </label>
-          )}
-        </div>
-        <div className="ml-4">
-          <FilterToggle
-            open={filterOpen}
-            onChange={() => setFilterOpen((o) => !o)}
-          />
-        </div>
-      </div>
+      <ListToolbar
+        total={total}
+        error={error}
+        autoRefresh={{ paused, onToggle: toggle, intervalSeconds }}
+        filterToggle={{ open: filterOpen, onChange: () => setFilterOpen((o) => !o) }}
+      />
 
       {filterOpen && (
         <div className="mb-4">
           <FilterForm basePath="/messages">
-            <div className="flex flex-col gap-1">
-              <label className="flex items-center py-1">
-                <span className="opacity-80 text-sm">{t("common.type")}</span>
-              </label>
-              <select
+            <FilterField label={t("common.type")}>
+              <FilterSelect
                 name="message_type"
                 key={`message_type-${messageType}`}
                 defaultValue={messageType}
-                className="select select-sm"
                 onChange={autoSubmit}
-              >
-                <option value="">{t("common.all_types")}</option>
-                <option value="contact">{t("messages.type_direct")}</option>
-                <option value="channel">{t("messages.type_channel")}</option>
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="flex items-center py-1">
-                <span className="opacity-80 text-sm">
-                  {t("entities.channel")}
-                </span>
-              </label>
+                options={[
+                  { value: "", label: t("common.all_types") },
+                  { value: "contact", label: t("messages.type_direct") },
+                  { value: "channel", label: t("messages.type_channel") },
+                ]}
+              />
+            </FilterField>
+            <FilterField label={t("entities.channel")}>
               <select
                 name="channel_idx"
                 key={`channel_idx-${channelIdx}`}
@@ -522,14 +475,9 @@ export function Messages() {
                   </optgroup>
                 )}
               </select>
-            </div>
+            </FilterField>
             {spamEnabled && (
-              <div className="flex flex-col gap-1">
-                <label className="flex items-center py-1">
-                  <span className="opacity-80 text-sm">
-                    {t("messages.spam.filter_label")}
-                  </span>
-                </label>
+              <FilterField label={t("messages.spam.filter_label")}>
                 <label className="label cursor-pointer justify-start gap-2 py-1">
                   <input
                     type="checkbox"
@@ -541,7 +489,7 @@ export function Messages() {
                   />
                   <span className="text-sm">{t("messages.spam.show")}</span>
                 </label>
-              </div>
+              </FilterField>
             )}
           </FilterForm>
         </div>
@@ -587,9 +535,7 @@ export function Messages() {
 
           <div className="lg:hidden space-y-3">
             {items.length === 0 ? (
-              <div className="text-center py-8 opacity-70">
-                {emptyMessage}
-              </div>
+              <EmptyState>{emptyMessage}</EmptyState>
             ) : (
               items.map((msg, idx) => {
                 const isChannel = msg.message_type === "channel";
@@ -699,14 +645,7 @@ export function Messages() {
               </thead>
               <tbody>
                 {items.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={5}
-                      className="text-center py-8 opacity-70"
-                    >
-                      {emptyMessage}
-                    </td>
-                  </tr>
+                  <EmptyRow colSpan={5}>{emptyMessage}</EmptyRow>
                 ) : (
                   items.map((msg, idx) => {
                     const isChannel = msg.message_type === "channel";
