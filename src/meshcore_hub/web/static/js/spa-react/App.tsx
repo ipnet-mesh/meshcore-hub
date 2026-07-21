@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+import { useEffect } from "react";
 import {
   BrowserRouter,
   Routes,
@@ -7,10 +7,23 @@ import {
   useLocation,
   useParams,
 } from "react-router";
-import { useTranslation } from "react-i18next";
 import { useAppConfig } from "@/context/AppConfigContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { LitBridge } from "@/components/LitBridge";
+import { HomePage } from "@/pages/Home";
+import { DashboardPage } from "@/pages/Dashboard";
+import { Nodes } from "@/pages/Nodes";
+import { NodeDetailPage } from "@/pages/NodeDetail";
+import { Channels } from "@/pages/Channels";
+import { RoutesPage } from "@/pages/Routes";
+import { Messages } from "@/pages/Messages";
+import { Advertisements } from "@/pages/Advertisements";
+import { Packets } from "@/pages/Packets";
+import { PacketDetail } from "@/pages/PacketDetail";
+import { PacketGroupDetail } from "@/pages/PacketGroupDetail";
+import { MapPage } from "@/pages/MapPage";
+import { Members } from "@/pages/Members";
+import { CustomPagePage } from "@/pages/CustomPage";
+import { Profile } from "@/pages/Profile";
 import { NotFound } from "@/pages/NotFound";
 import { Maintenance } from "@/pages/Maintenance";
 
@@ -74,24 +87,6 @@ function ShortLinkRedirect() {
   return <Navigate to={`/nodes/${prefix}`} replace />;
 }
 
-function LitPage({
-  loader,
-}: {
-  loader: () => Promise<{
-    render: (
-      container: HTMLElement,
-      params: Record<string, unknown>,
-      router: { navigate: (url: string, replace?: boolean) => void },
-    ) => Promise<(() => void) | void>;
-  }>;
-}) {
-  return (
-    <ErrorBoundary>
-      <LitBridge loader={loader} />
-    </ErrorBoundary>
-  );
-}
-
 function AppRoutes() {
   const config = useAppConfig();
   const features = config.features ?? {};
@@ -112,16 +107,18 @@ function AppRoutes() {
       <Route
         path="/"
         element={
-          <LitPage loader={() => import("@legacy/pages/home.js")} />
+          <ErrorBoundary>
+            <HomePage />
+          </ErrorBoundary>
         }
       />
       {features.dashboard !== false && (
         <Route
           path="/dashboard"
           element={
-            <LitPage
-              loader={() => import("@legacy/pages/dashboard.js")}
-            />
+            <ErrorBoundary>
+              <DashboardPage />
+            </ErrorBoundary>
           }
         />
       )}
@@ -130,15 +127,17 @@ function AppRoutes() {
           <Route
             path="/nodes"
             element={
-              <LitPage loader={() => import("@legacy/pages/nodes.js")} />
+              <ErrorBoundary>
+                <Nodes />
+              </ErrorBoundary>
             }
           />
           <Route
             path="/nodes/:publicKey"
             element={
-              <LitPage
-                loader={() => import("@legacy/pages/node-detail.js")}
-              />
+              <ErrorBoundary>
+                <NodeDetailPage />
+              </ErrorBoundary>
             }
           />
           <Route path="/n/:prefix" element={<ShortLinkRedirect />} />
@@ -148,9 +147,9 @@ function AppRoutes() {
         <Route
           path="/channels"
           element={
-            <LitPage
-              loader={() => import("@legacy/pages/channels.js")}
-            />
+            <ErrorBoundary>
+              <Channels />
+            </ErrorBoundary>
           }
         />
       )}
@@ -158,7 +157,9 @@ function AppRoutes() {
         <Route
           path="/routes"
           element={
-            <LitPage loader={() => import("@legacy/pages/routes.js")} />
+            <ErrorBoundary>
+              <RoutesPage />
+            </ErrorBoundary>
           }
         />
       )}
@@ -166,9 +167,9 @@ function AppRoutes() {
         <Route
           path="/messages"
           element={
-            <LitPage
-              loader={() => import("@legacy/pages/messages.js")}
-            />
+            <ErrorBoundary>
+              <Messages />
+            </ErrorBoundary>
           }
         />
       )}
@@ -176,9 +177,9 @@ function AppRoutes() {
         <Route
           path="/advertisements"
           element={
-            <LitPage
-              loader={() => import("@legacy/pages/advertisements.js")}
-            />
+            <ErrorBoundary>
+              <Advertisements />
+            </ErrorBoundary>
           }
         />
       )}
@@ -187,29 +188,25 @@ function AppRoutes() {
           <Route
             path="/packets"
             element={
-              <LitPage
-                loader={() => import("@legacy/pages/packets.js")}
-              />
+              <ErrorBoundary>
+                <Packets />
+              </ErrorBoundary>
             }
           />
           <Route
             path="/packets/hash/:hash"
             element={
-              <LitPage
-                loader={() =>
-                  import("@legacy/pages/packet-group-detail.js")
-                }
-              />
+              <ErrorBoundary>
+                <PacketGroupDetail />
+              </ErrorBoundary>
             }
           />
           <Route
             path="/packets/:id"
             element={
-              <LitPage
-                loader={() =>
-                  import("@legacy/pages/packet-detail.js")
-                }
-              />
+              <ErrorBoundary>
+                <PacketDetail />
+              </ErrorBoundary>
             }
           />
         </>
@@ -218,7 +215,9 @@ function AppRoutes() {
         <Route
           path="/map"
           element={
-            <LitPage loader={() => import("@legacy/pages/map.js")} />
+            <ErrorBoundary>
+              <MapPage />
+            </ErrorBoundary>
           }
         />
       )}
@@ -226,9 +225,9 @@ function AppRoutes() {
         <Route
           path="/members"
           element={
-            <LitPage
-              loader={() => import("@legacy/pages/members.js")}
-            />
+            <ErrorBoundary>
+              <Members />
+            </ErrorBoundary>
           }
         />
       )}
@@ -236,9 +235,9 @@ function AppRoutes() {
         <Route
           path="/pages/:slug"
           element={
-            <LitPage
-              loader={() => import("@legacy/pages/custom-page.js")}
-            />
+            <ErrorBoundary>
+              <CustomPagePage />
+            </ErrorBoundary>
           }
         />
       )}
@@ -247,17 +246,17 @@ function AppRoutes() {
           <Route
             path="/profile"
             element={
-              <LitPage
-                loader={() => import("@legacy/pages/profile.js")}
-              />
+              <ErrorBoundary>
+                <Profile />
+              </ErrorBoundary>
             }
           />
           <Route
             path="/profile/:id"
             element={
-              <LitPage
-                loader={() => import("@legacy/pages/profile.js")}
-              />
+              <ErrorBoundary>
+                <Profile />
+              </ErrorBoundary>
             }
           />
         </>

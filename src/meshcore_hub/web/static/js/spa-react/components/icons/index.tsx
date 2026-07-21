@@ -435,6 +435,74 @@ export function IconTxPower(props: IconProps) {
   );
 }
 
+export function IconSatelliteDish(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M4 10a7.31 7.31 0 0 0 10 10Z"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="m9 15 3-3"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M17 13a6 6 0 0 0-6-6"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M21 13A10 10 0 0 0 11 3"
+      />
+    </svg>
+  );
+}
+
+export function IconRuler(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M21.3 8.7 8.7 21.3a1 1 0 0 1-1.4 0L2.7 16.7a1 1 0 0 1 0-1.4L15.3 2.7a1 1 0 0 1 1.4 0l4.6 4.6a1 1 0 0 1 0 1.4Z"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="m7.5 10.5 2 2"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="m10.5 7.5 2 2"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="m13.5 4.5 2 2"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="m4.5 13.5 2 2"
+      />
+    </svg>
+  );
+}
+
 export function IconClock(props: IconProps) {
   return (
     <svg {...base(props)}>

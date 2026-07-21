@@ -7,10 +7,17 @@ Migration from lit-html (functional templates) to React 19 + TypeScript + Vite.
 | Phase | Description | Status |
 |-------|-------------|--------|
 | 1 | Infrastructure (Vite, React shell, router, LitBridge, build pipeline, shared components) | **Complete** |
-| 2 | Convert pages one-by-one from LitBridge to native React | Not started |
+| 2 | Convert pages one-by-one from LitBridge to native React | **Complete** |
 | 3 | Chart & map components (react-chartjs-2, react-leaflet) | Not started |
 | 4 | Cleanup (remove lit-html, old spa/, build.js esbuild remnants) | Not started |
 | 5 | Optional enhancements (tests, react-query, Storybook) | Not started |
+
+> **Phase 2 status:** All 15 pages are converted to native React and wired into `App.tsx`.
+> The old lit-html code in `spa/` is intentionally **kept** as the `spa.html` fallback
+> (rendered only when the Vite bundle/manifest is absent) and is still referenced by
+> 5 web tests. It will be removed in Phase 4, after those tests are updated.
+> Charts/maps still use `window.Chart`, `window.L`, `window.QRCode`, and the `charts.js`
+> globals — these move to `react-chartjs-2` / `react-leaflet` in Phase 3.
 
 ## Architecture Decisions
 
@@ -116,23 +123,23 @@ Python (`app.py`) loads this manifest at startup and passes `asset_app_js` / `as
 
 | # | Page | File | Complexity | Notes |
 |---|------|------|-----------|-------|
-| 1 | NotFound | `not-found.js` | Done | Already native React |
-| 2 | Maintenance | `maintenance.js` | Done | Already native React |
-| 3 | Home | `home.js` | Low | Stats + nav cards + activity chart (uses `window.createActivityChart`) |
-| 4 | CustomPage | `custom-page.js` | Low | Fetches markdown HTML → `dangerouslySetInnerHTML` |
-| 5 | Profile | `profile.js` | Medium | Form + PUT + QR code (uses `window.QRCode`) |
-| 6 | Members | `members.js` | Medium | Table + filters + pagination |
-| 7 | Channels | `channels.js` | Medium | Table + admin CRUD modals |
-| 8 | Advertisements | `advertisements.js` | Medium | Table + filters + auto-refresh + observer badges |
-| 9 | Messages | `messages.js` | Medium | Table + filters + auto-refresh + observer badges |
-| 10 | Routes | `routes.js` | Med-High | Table + filters + history + chart strips |
-| 11 | Nodes | `nodes.js` | Med-High | Table + filters + pagination + auto-refresh + observer filter |
-| 12 | NodeDetail | `node-detail.js` | High | Tabs, charts, tables, QR, adopt/tags CRUD |
-| 13 | Packets | `packets.js` | Medium | Table + filters + auto-refresh |
-| 14 | PacketDetail | `packet-detail.js` | Med-High | JSON tree + raw data |
-| 15 | PacketGroupDetail | `packet-group-detail.js` | Medium | Grouped packet list |
-| 16 | Dashboard | `dashboard.js` | High | Multiple charts, stat cards, auto-refresh |
-| 17 | Map | `map.js` | High | Leaflet map, markers, popups, layers |
+| 1 | NotFound | `not-found.js` | Done | Native React |
+| 2 | Maintenance | `maintenance.js` | Done | Native React |
+| 3 | Home | `home.js` | Done | Stats + nav cards + activity chart (still uses `window.createActivityChart`) |
+| 4 | CustomPage | `custom-page.js` | Done | Fetches markdown HTML → `dangerouslySetInnerHTML` |
+| 5 | Profile | `profile.js` | Done | Form + PUT + adopted nodes |
+| 6 | Members | `members.js` | Done | Profile tiles grouped by role |
+| 7 | Channels | `channels.js` | Done | Cards + admin CRUD modals + QR (`window.QRCode`) |
+| 8 | Advertisements | `advertisements.js` | Done | Table + filters + auto-refresh + observer badges |
+| 9 | Messages | `messages.js` | Done | Table + filters + auto-refresh + observer badges + dedupe |
+| 10 | Routes | `routes.js` | Done | Cards + quality + history strips (`window.createRouteDetailStrip`) + admin CRUD |
+| 11 | Nodes | `nodes.js` | Done | Table + filters + pagination + auto-refresh |
+| 12 | NodeDetail | `node-detail.js` | Done | Map (`window.L`), QR, adopt/tags CRUD |
+| 13 | Packets | `packets.js` | Done | Table + filters + auto-refresh |
+| 14 | PacketDetail | `packet-detail.js` | Done | JSON tree + raw data |
+| 15 | PacketGroupDetail | `packet-group-detail.js` | Done | Grouped receptions + path popover |
+| 16 | Dashboard | `dashboard.js` | Done | Charts (`window.initDashboardCharts`), stat cards, route health |
+| 17 | Map | `map.js` | Done | Leaflet map (`window.L`), markers, popups, filters |
 
 ### Key patterns in old pages → React equivalents
 
