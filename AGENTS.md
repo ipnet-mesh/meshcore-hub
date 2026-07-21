@@ -47,8 +47,9 @@ The web UI is a **React 19 + TypeScript + Vite** SPA in
 (`web/templates/spa.html`) renders only SEO/`window.__APP_CONFIG__`/footer; React renders the
 navbar, banners, and routed pages into `<div id="app">`. **Frontend tooling runs on the host**
 (not in Docker): `npm install`, `npm run build` (Tailwind → vendor fonts → `vite build` →
-`static/dist/` + `assets.json`), `npx tsc --noEmit` (the TS gate — there is no JS linter in
-pre-commit), and `npm run test:frontend` (vitest). The Vite build is required to serve the UI;
+`static/dist/` + `assets.json`), `npx tsc --noEmit` (the TS gate — also run by the
+`frontend-typecheck` pre-commit hook; there is no JS *linter* in pre-commit), and
+`npm run test:frontend` (vitest). The Vite build is required to serve the UI;
 there is no fallback bundle.
 
 ```bash
@@ -84,9 +85,10 @@ Coverage is **opt-in**; add `--cov=meshcore_hub` (or `make test-cov`) when you w
 pytest -nauto --no-cov 2>&1 | grep -iE "passed|failed" | tail -3
 
 # Makefile shorthands
-make test        # pytest -nauto --no-cov (parallel dev loop)
-make test-cov    # full run with coverage report
-make test-unit   # parallel, fast unit suites only (skips e2e)
+make test          # backend (pytest -nauto --no-cov) then frontend vitest
+make test-cov      # full backend run with coverage report
+make test-unit     # parallel, fast unit suites only (skips e2e)
+make test-frontend # frontend vitest only (npm run test:frontend)
 
 # Targeted by component (run only what you changed)
 pytest --no-cov tests/test_web/        # templates, static JS, web routes

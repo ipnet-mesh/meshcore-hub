@@ -5,6 +5,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router";
 import { useAppConfig } from "@/context/AppConfigContext";
@@ -351,7 +352,10 @@ export function PacketGroupDetail() {
     ) {
       top = popover.top - ph - 4;
     }
-    setPopoverPos({ left, top });
+    setPopoverPos({
+      left: left + window.scrollX,
+      top: top + window.scrollY,
+    });
   }, [popover, popoverNodes, popoverError]);
 
   const openPathPopover = (e: React.MouseEvent, pathHash: string) => {
@@ -629,74 +633,76 @@ export function PacketGroupDetail() {
         </>
       )}
 
-      {popover && (
-        <div
-          ref={popoverRef}
-          className="fixed z-[1000] w-64 max-w-[90vw] max-h-[60vh] overflow-y-auto bg-base-100 rounded-box shadow-lg border border-base-300"
-          style={{
-            left: popoverPos?.left ?? -9999,
-            top: popoverPos?.top ?? -9999,
-          }}
-        >
-          <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-base-200 sticky top-0 bg-base-100 rounded-t-box">
-            <span className="text-xs font-semibold uppercase opacity-70">
-              {t("packets.path_nodes_title", { hash: popover.hash })}
-            </span>
-            <button
-              className="btn btn-xs btn-ghost btn-circle"
-              aria-label={t("common.close")}
-              onClick={() => setPopover(null)}
-            >
-              ✕
-            </button>
-          </div>
-          <div>
-            {popoverError ? (
-              <div className="p-3">
-                <WarningBadge message={popoverError} />
-              </div>
-            ) : popoverNodes === null ? (
-              <div className="p-3">
-                <Loading />
-              </div>
-            ) : popoverNodes.length === 0 ? (
-              <div className="px-3 py-4 text-sm opacity-60 text-center">
-                {t("packets.path_no_nodes")}
-              </div>
-            ) : (
-              <ul className="menu menu-sm w-full">
-                {popoverNodes.map((n) => (
-                  <li key={n.public_key}>
-                    <Link
-                      to={`/nodes/${n.public_key}`}
-                      onClick={() => setPopover(null)}
-                      className="flex flex-col items-start gap-0"
-                    >
-                      <span className="text-sm">{nodeDisplayName(n)}</span>
-                      <span className="font-mono text-xs opacity-50">
-                        {truncateKey(n.public_key, 16)}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-                {moreCount > 0 && (
-                  <li>
-                    <Link
-                      to={`/nodes?pubkey_prefix=${popover.hash}`}
-                      onClick={() => setPopover(null)}
-                      className="text-xs opacity-70"
-                    >
-                      {t("packets.path_nodes_more", {
-                        count: formatNumber(moreCount),
-                      })}
-                    </Link>
-                  </li>
-                )}
-              </ul>
-            )}
-          </div>
-        </div>
-      )}
+      {popover &&
+        createPortal(
+          <div
+            ref={popoverRef}
+            className="absolute z-[1000] w-64 max-w-[90vw] max-h-[60vh] overflow-y-auto bg-base-100 rounded-box shadow-lg border border-base-300"
+            style={{
+              left: popoverPos?.left ?? -9999,
+              top: popoverPos?.top ?? -9999,
+            }}
+          >
+            <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-base-200 sticky top-0 bg-base-100 rounded-t-box">
+              <span className="text-xs font-semibold uppercase opacity-70">
+                {t("packets.path_nodes_title", { hash: popover.hash })}
+              </span>
+              <button
+                className="btn btn-xs btn-ghost btn-circle"
+                aria-label={t("common.close")}
+                onClick={() => setPopover(null)}
+              >
+                ✕
+              </button>
+            </div>
+            <div>
+              {popoverError ? (
+                <div className="p-3">
+                  <WarningBadge message={popoverError} />
+                </div>
+              ) : popoverNodes === null ? (
+                <div className="p-3">
+                  <Loading />
+                </div>
+              ) : popoverNodes.length === 0 ? (
+                <div className="px-3 py-4 text-sm opacity-60 text-center">
+                  {t("packets.path_no_nodes")}
+                </div>
+              ) : (
+                <ul className="menu menu-sm w-full">
+                  {popoverNodes.map((n) => (
+                    <li key={n.public_key}>
+                      <Link
+                        to={`/nodes/${n.public_key}`}
+                        onClick={() => setPopover(null)}
+                        className="flex flex-col items-start gap-0"
+                      >
+                        <span className="text-sm">{nodeDisplayName(n)}</span>
+                        <span className="font-mono text-xs opacity-50">
+                          {truncateKey(n.public_key, 16)}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                  {moreCount > 0 && (
+                    <li>
+                      <Link
+                        to={`/nodes?pubkey_prefix=${popover.hash}`}
+                        onClick={() => setPopover(null)}
+                        className="text-xs opacity-70"
+                      >
+                        {t("packets.path_nodes_more", {
+                          count: formatNumber(moreCount),
+                        })}
+                      </Link>
+                    </li>
+                  )}
+                </ul>
+              )}
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

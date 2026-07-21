@@ -41,3 +41,15 @@ repos:
           - alembic>=1.7.0
           - types-paho-mqtt>=1.6.0
           - types-PyYAML>=6.0.0
+
+  # Frontend TypeScript gate. Runs in the host node toolchain (language: system)
+  # so it resolves types from the project's node_modules — requires `npm install`.
+  # `pass_filenames: false`: tsc typechecks the whole project (tsconfig include).
+  - repo: local
+    hooks:
+      - id: frontend-typecheck
+        name: frontend typecheck (tsc --noEmit)
+        entry: npm run typecheck
+        language: system
+        pass_filenames: false
+        files: '(spa-react/.*\.tsx?$|^tsconfig\.json$|^package(-lock)?\.json$)'
