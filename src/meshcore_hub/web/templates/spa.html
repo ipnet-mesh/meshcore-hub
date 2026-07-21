@@ -217,6 +217,9 @@
     </script>
 
     <!-- SPA Application (ES Module) -->
+    {% if asset_app_css %}
+    <link rel="stylesheet" href="/static/dist/{{ asset_app_css }}">
+    {% endif %}
     {% if asset_app_js %}
     <script type="module" src="/static/dist/{{ asset_app_js }}"></script>
     {% else %}

@@ -11,7 +11,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-COPY build.js ./
+COPY build.js vite.config.ts tsconfig.json ./
 COPY src/meshcore_hub/web/static/css/input.css ./src/meshcore_hub/web/static/css/input.css
 COPY src/meshcore_hub/web/templates/ ./src/meshcore_hub/web/templates/
 COPY src/meshcore_hub/web/static/js/ ./src/meshcore_hub/web/static/js/

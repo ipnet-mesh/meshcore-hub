@@ -65,7 +65,9 @@ def _sanitize_header_value(value: str) -> str:
 
 
 def _load_asset_manifest() -> dict[str, Any]:
-    """Load the esbuild asset manifest from dist/assets.json.
+    """Load the asset manifest from dist/assets.json.
+
+    Supports both Vite-generated and legacy esbuild manifest formats.
 
     Returns:
         Manifest dict with entry names, vendor hashes, and locale version.
@@ -706,10 +708,11 @@ def create_app(
     page_loader.load_pages()
     app.state.page_loader = page_loader
 
-    # Load esbuild asset manifest for cache-busted filenames
+    # Load asset manifest for cache-busted filenames (Vite or legacy esbuild)
     manifest = _load_asset_manifest()
     app.state.asset_manifest = manifest
     app.state.asset_app_js = manifest.get("app.js", "")
+    app.state.asset_app_css = manifest.get("app.css", "")
     app.state.vendor_hashes = manifest.get("vendor", {})
     app.state.locale_version = manifest.get("locale_version", "")
 
@@ -1267,6 +1270,7 @@ def create_app(
                 "default_theme": request.app.state.web_theme,
                 "config_json": config_json,
                 "asset_app_js": request.app.state.asset_app_js,
+                "asset_app_css": request.app.state.asset_app_css,
                 "vendor_hashes": request.app.state.vendor_hashes,
             },
         )
