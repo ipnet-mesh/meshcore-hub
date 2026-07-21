@@ -13,6 +13,7 @@ import { useAppConfig, hasRole } from "@/context/AppConfigContext";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { Loading, ErrorAlert } from "@/components/Alerts";
+import { RouteDetailStrip } from "@/components/charts/Charts";
 import {
   IconClock,
   IconEdit,
@@ -108,9 +109,6 @@ interface SelectedNode {
   name?: string | null;
 }
 
-interface ChartInstance {
-  destroy: () => void;
-}
 
 interface ModalState {
   type: "add" | "edit" | "delete";
@@ -477,9 +475,7 @@ function DetailContent({
     <div className="mt-2 space-y-3 text-sm">
       {history && (
         <div className="mb-3">
-          <div style={{ height: "40px" }}>
-            <canvas id={`routeStripChart-${route.id}`}></canvas>
-          </div>
+          <RouteDetailStrip data={history} />
           {historyData.length > 0 && (
             <div className="flex text-xs opacity-50 mt-0.5">
               {historyData.map((d, i) => (
@@ -1169,20 +1165,10 @@ export function RoutesPage() {
 
   const detailCacheRef = useRef<Record<string, RouteDetail>>({});
   const historyCacheRef = useRef<Record<string, RouteHistory>>({});
-  const chartsRef = useRef<ChartInstance[]>([]);
   const pathTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const obsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pathSearchIdRef = useRef(0);
   const obsSearchIdRef = useRef(0);
-
-  const destroyCharts = useCallback(() => {
-    chartsRef.current.forEach((c) => {
-      try {
-        c.destroy();
-      } catch (_) {}
-    });
-    chartsRef.current = [];
-  }, []);
 
   const loadAllDetails = useCallback(async (routesList: RouteItem[]) => {
     const newDetails: Record<string, RouteDetail> = {};
@@ -1252,26 +1238,11 @@ export function RoutesPage() {
   }, [fetchRoutes, loadAllDetails]);
 
   useEffect(() => {
-    destroyCharts();
-    for (const r of routes) {
-      const h = historyCache[r.id];
-      if (detailCache[r.id] && h) {
-        const chart = window.createRouteDetailStrip(
-          `routeStripChart-${r.id}`,
-          h,
-        ) as ChartInstance | null;
-        if (chart) chartsRef.current.push(chart);
-      }
-    }
-  }, [routes, detailCache, historyCache, destroyCharts]);
-
-  useEffect(() => {
     return () => {
-      destroyCharts();
       if (pathTimerRef.current) clearTimeout(pathTimerRef.current);
       if (obsTimerRef.current) clearTimeout(obsTimerRef.current);
     };
-  }, [destroyCharts]);
+  }, []);
 
   const openAddModal = () => {
     setModal({

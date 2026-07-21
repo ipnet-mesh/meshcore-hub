@@ -1,30 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
+import QRCode from "react-qr-code";
 
 import { useAppConfig, hasRole } from "@/context/AppConfigContext";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { Loading, ErrorAlert } from "@/components/Alerts";
 import { IconChannel, IconPlus, IconEdit, IconTrash } from "@/components/icons";
-
-interface QRCodeOptions {
-  text: string;
-  width: number;
-  height: number;
-  correctLevel: number;
-}
-
-interface QRCodeConstructor {
-  new (el: HTMLElement, options: QRCodeOptions): unknown;
-  CorrectLevel: { L: number; M: number; Q: number; H: number };
-}
-
-declare global {
-  interface Window {
-    QRCode: QRCodeConstructor;
-  }
-}
 
 interface Channel {
   id: string;
@@ -51,21 +34,13 @@ type ModalState =
   | { type: "delete"; channel: Channel };
 
 function ChannelQrCode({ channel }: { channel: Channel }) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || !channel.key_hex || el.hasChildNodes()) return;
-    const qrUrl = `meshcore://channel/add?name=${encodeURIComponent(channel.name)}&secret=${channel.key_hex.toLowerCase()}`;
-    new window.QRCode(el, {
-      text: qrUrl,
-      width: 128,
-      height: 128,
-      correctLevel: window.QRCode.CorrectLevel.M,
-    });
-  }, [channel]);
-
-  return <div ref={ref} className="qr-container" />;
+  if (!channel.key_hex) return null;
+  const qrUrl = `meshcore://channel/add?name=${encodeURIComponent(channel.name)}&secret=${channel.key_hex.toLowerCase()}`;
+  return (
+    <div className="qr-container">
+      <QRCode value={qrUrl} size={128} level="M" />
+    </div>
+  );
 }
 
 interface ChannelCardProps {

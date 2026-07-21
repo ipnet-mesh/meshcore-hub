@@ -43,8 +43,11 @@
     <!-- Tailwind CSS with DaisyUI (built from source) -->
     <link rel="stylesheet" href="/static/css/tailwind.css?v={{ version }}" />
 
-    <!-- Leaflet CSS for maps -->
-    <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css?v={{ vendor_hashes['leaflet.css'] }}" />
+    <!-- Vite-bundled CSS (React components + Leaflet). Loaded before app.css
+         so app.css theme overrides (e.g. dark-mode map popups) still win. -->
+    {% if asset_app_css %}
+    <link rel="stylesheet" href="/static/dist/{{ asset_app_css }}">
+    {% endif %}
 
     <!-- Custom application styles -->
     <link rel="stylesheet" href="/static/css/app.css?v={{ version }}">
@@ -183,18 +186,6 @@
         </div>
     </footer>
 
-    <!-- Leaflet JS for maps -->
-    <script src="/static/vendor/leaflet/leaflet.js?v={{ vendor_hashes['leaflet.js'] }}"></script>
-
-    <!-- Chart.js for charts -->
-    <script src="/static/vendor/chart.js/chart.umd.min.js?v={{ vendor_hashes['chart.umd.min.js'] }}"></script>
-
-    <!-- QR Code library -->
-    <script src="/static/vendor/qrcodejs/qrcode.min.js?v={{ vendor_hashes['qrcode.min.js'] }}"></script>
-
-    <!-- Chart helper functions -->
-    <script src="/static/js/charts.js?v={{ version }}"></script>
-
     <!-- Embedded app configuration -->
     <script>
         window.__APP_CONFIG__ = {{ config_json|safe }};
@@ -217,9 +208,6 @@
     </script>
 
     <!-- SPA Application (ES Module) -->
-    {% if asset_app_css %}
-    <link rel="stylesheet" href="/static/dist/{{ asset_app_css }}">
-    {% endif %}
     {% if asset_app_js %}
     <script type="module" src="/static/dist/{{ asset_app_js }}"></script>
     {% else %}

@@ -9,6 +9,11 @@ import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 
 import { ErrorAlert, Loading } from "@/components/Alerts";
+import {
+  RoutesTrendChart,
+  StackedBarChart,
+  TrendLineChart,
+} from "@/components/charts/Charts";
 import { ObserverIcons } from "@/components/ObserverBadges";
 import { RouteTypeBadge } from "@/components/RouteTypeBadge";
 import {
@@ -25,6 +30,12 @@ import {
 } from "@/context/AppConfigContext";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { apiGet, isAbortError } from "@/utils/api";
+import {
+  averageRouteTier,
+  ChartColors,
+  type ActivitySeries,
+  type BreakdownBucket,
+} from "@/utils/charts";
 import { formatNumber, useFormatDateTime } from "@/utils/format";
 
 interface DashboardStats {
@@ -35,8 +46,8 @@ interface DashboardStats {
 }
 
 interface PacketBreakdown {
-  by_event_type: { count: number }[];
-  by_path_width: { count: number }[];
+  by_event_type: BreakdownBucket[];
+  by_path_width: BreakdownBucket[];
 }
 
 interface RouteHealthEntry {
@@ -92,24 +103,14 @@ interface ChannelsResponse {
 interface DashboardData {
   stats: DashboardStats;
   recentActivity: RecentActivity;
-  advertActivity: unknown;
-  messageActivity: unknown;
-  nodeCount: unknown;
-  packetActivity: unknown;
+  advertActivity: ActivitySeries | null;
+  messageActivity: ActivitySeries | null;
+  nodeCount: ActivitySeries | null;
+  packetActivity: ActivitySeries | null;
   packetBreakdown: PacketBreakdown;
   routesOverview: RoutesOverview | null;
   channelsData: ChannelsResponse;
 }
-
-const CHART_IDS = [
-  "nodeChart",
-  "advertChart",
-  "messageChart",
-  "packetChart",
-  "packetEventTypeChart",
-  "packetPathWidthChart",
-  "routesTrendChart",
-];
 
 const QUALITY_COLORS: Record<string, string> = {
   clear: "oklch(0.72 0.17 145)",
@@ -140,7 +141,6 @@ function ChartCard({
   title,
   subtitle,
   value,
-  canvasId,
   children,
 }: {
   colorVar: string;
@@ -148,7 +148,6 @@ function ChartCard({
   title: string;
   subtitle: string;
   value?: number;
-  canvasId?: string;
   children?: ReactNode;
 }) {
   return (
@@ -174,11 +173,6 @@ function ChartCard({
             </div>
           )}
         </div>
-        {canvasId && (
-          <div className="h-32">
-            <canvas id={canvasId}></canvas>
-          </div>
-        )}
         {children}
       </div>
     </div>
@@ -204,10 +198,7 @@ function RoutesHealth({ routes }: { routes: RouteOverviewItem[] }) {
       {visible.map((route, i) => {
         const history = route.history || [];
         const averageTier =
-          history.length > 0
-            ? ((window as any).averageRouteTier?.(history) as string | null) ??
-              null
-            : null;
+          history.length > 0 ? averageRouteTier(history) : null;
         const current =
           averageTier ||
           (route.enabled ? route.quality || "no_coverage" : "disabled");
@@ -289,14 +280,22 @@ export function DashboardPage() {
             {},
             { signal },
           ),
-          apiGet<unknown>("/api/v1/dashboard/activity", { days: 7 }, { signal }),
-          apiGet<unknown>(
+          apiGet<ActivitySeries>(
+            "/api/v1/dashboard/activity",
+            { days: 7 },
+            { signal },
+          ),
+          apiGet<ActivitySeries>(
             "/api/v1/dashboard/message-activity",
             { days: 7 },
             { signal },
           ),
-          apiGet<unknown>("/api/v1/dashboard/node-count", { days: 7 }, { signal }),
-          apiGet<unknown>(
+          apiGet<ActivitySeries>(
+            "/api/v1/dashboard/node-count",
+            { days: 7 },
+            { signal },
+          ),
+          apiGet<ActivitySeries>(
             "/api/v1/dashboard/packet-activity",
             { days: 7 },
             { signal },
@@ -340,27 +339,6 @@ export function DashboardPage() {
     })();
     return () => controller.abort();
   }, [showRoutes, t]);
-
-  useEffect(() => {
-    if (!data) return;
-    window.initDashboardCharts(
-      showNodes ? data.nodeCount : null,
-      showAdverts ? data.advertActivity : null,
-      showMessages ? data.messageActivity : null,
-      showPackets ? data.packetActivity : null,
-      showPackets ? data.packetBreakdown.by_event_type : null,
-      showPackets ? data.packetBreakdown.by_path_width : null,
-      showRoutes && data.routesOverview?.routes
-        ? data.routesOverview.routes
-        : null,
-    );
-    return () => {
-      for (const id of CHART_IDS) {
-        const canvas = document.getElementById(id);
-        if (canvas) (window as any).Chart?.getChart(canvas)?.destroy();
-      }
-    };
-  }, [data, showNodes, showAdverts, showMessages, showPackets, showRoutes]);
 
   const channelLabels = useMemo(() => {
     if (!data) return new Map<number, string>();
@@ -438,8 +416,16 @@ export function DashboardPage() {
                 title={t("entities.nodes")}
                 subtitle={t("time.over_time_last_7_days")}
                 value={stats.total_nodes}
-                canvasId="nodeChart"
-              />
+              >
+                <TrendLineChart
+                  data={data.nodeCount}
+                  label={t("common.total_entity", {
+                    entity: t("entities.nodes"),
+                  })}
+                  borderColor={ChartColors.nodes}
+                  backgroundColor={ChartColors.nodesFill}
+                />
+              </ChartCard>
             )}
             {showAdverts && (
               <ChartCard
@@ -448,8 +434,14 @@ export function DashboardPage() {
                 title={t("entities.advertisements")}
                 subtitle={t("time.per_day_last_7_days")}
                 value={stats.advertisements_7d}
-                canvasId="advertChart"
-              />
+              >
+                <TrendLineChart
+                  data={data.advertActivity}
+                  label={t("entities.advertisements")}
+                  borderColor={ChartColors.adverts}
+                  backgroundColor={ChartColors.advertsFill}
+                />
+              </ChartCard>
             )}
             {showMessages && (
               <ChartCard
@@ -458,8 +450,14 @@ export function DashboardPage() {
                 title={t("entities.messages")}
                 subtitle={t("time.per_day_last_7_days")}
                 value={stats.messages_7d}
-                canvasId="messageChart"
-              />
+              >
+                <TrendLineChart
+                  data={data.messageActivity}
+                  label={t("entities.messages")}
+                  borderColor={ChartColors.messages}
+                  backgroundColor={ChartColors.messagesFill}
+                />
+              </ChartCard>
             )}
             {showPackets && (
               <ChartCard
@@ -468,8 +466,14 @@ export function DashboardPage() {
                 title={t("entities.packets")}
                 subtitle={t("time.per_day_last_7_days")}
                 value={stats.packets_7d}
-                canvasId="packetChart"
-              />
+              >
+                <TrendLineChart
+                  data={data.packetActivity}
+                  label={t("entities.packets")}
+                  borderColor={ChartColors.packets}
+                  backgroundColor={ChartColors.packetsFill}
+                />
+              </ChartCard>
             )}
           </div>
 
@@ -482,8 +486,12 @@ export function DashboardPage() {
                   title={t("entities.packet_event_types")}
                   subtitle={t("time.last_7_days")}
                   value={eventTypeTotal}
-                  canvasId="packetEventTypeChart"
-                />
+                >
+                  <StackedBarChart
+                    buckets={packetBreakdown.by_event_type}
+                    colors={ChartColors.breakdown}
+                  />
+                </ChartCard>
               )}
               {showPackets && (
                 <ChartCard
@@ -492,8 +500,12 @@ export function DashboardPage() {
                   title={t("entities.path_hash_width")}
                   subtitle={t("time.last_7_days")}
                   value={pathWidthTotal}
-                  canvasId="packetPathWidthChart"
-                />
+                >
+                  <StackedBarChart
+                    buckets={packetBreakdown.by_path_width}
+                    colors={ChartColors.breakdown.slice(0, 3)}
+                  />
+                </ChartCard>
               )}
               {showRoutes && hasRoutes && (
                 <ChartCard
@@ -511,8 +523,9 @@ export function DashboardPage() {
                   subtitle={t("time.routes_over_last_n_days", {
                     n: routesOverview!.days,
                   })}
-                  canvasId="routesTrendChart"
-                />
+                >
+                  <RoutesTrendChart routes={routesOverview!.routes} />
+                </ChartCard>
               )}
             </div>
           )}

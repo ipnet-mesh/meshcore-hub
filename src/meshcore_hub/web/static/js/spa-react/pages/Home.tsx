@@ -10,6 +10,7 @@ import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 
 import { ErrorAlert, Loading } from "@/components/Alerts";
+import { ActivityChart } from "@/components/charts/Charts";
 import { StatCard } from "@/components/StatCard";
 import {
   IconAdvertisements,
@@ -51,10 +52,6 @@ interface DashboardStats {
 
 interface ActivitySeries {
   data: { date: string; count: number }[];
-}
-
-interface ChartInstance {
-  destroy: () => void;
 }
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
@@ -153,7 +150,6 @@ export function HomePage() {
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const chartCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const hasDataRef = useRef(false);
 
   const networkName = config.network_name || "MeshCore Network";
@@ -216,24 +212,6 @@ export function HomePage() {
   }, [load]);
 
   useAutoRefresh({ onRefresh: load });
-
-  useEffect(() => {
-    if (!showActivityChart || !chartCanvasRef.current) return;
-    const chart = window.createActivityChart(
-      "activityChart",
-      showAdvertSeries ? advertActivity : null,
-      showMessageSeries ? messageActivity : null,
-    ) as ChartInstance | null;
-    return () => {
-      chart?.destroy();
-    };
-  }, [
-    showActivityChart,
-    showAdvertSeries,
-    showMessageSeries,
-    advertActivity,
-    messageActivity,
-  ]);
 
   if (loading) return <Loading />;
   if (error) return <ErrorAlert message={error} />;
@@ -470,9 +448,10 @@ export function HomePage() {
               <p className="text-sm opacity-70 mb-2">
                 {t("time.activity_per_day_last_7_days")}
               </p>
-              <div className="h-48">
-                <canvas ref={chartCanvasRef} id="activityChart"></canvas>
-              </div>
+              <ActivityChart
+                advertData={showAdvertSeries ? advertActivity : null}
+                messageData={showMessageSeries ? messageActivity : null}
+              />
             </div>
           </div>
         )}

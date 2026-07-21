@@ -35,16 +35,6 @@ execSync(
 
 console.log("Copying vendor files...");
 
-vendor("leaflet", ["dist/leaflet.css", "dist/leaflet.js", "dist/leaflet.js.map"], "leaflet");
-mkdirSync(join(VENDOR, "leaflet", "images"), { recursive: true });
-cpSync(
-  join("node_modules", "leaflet", "dist", "images"),
-  join(VENDOR, "leaflet", "images"),
-  { recursive: true },
-);
-
-vendor("chart.js", ["dist/chart.umd.min.js"], "chart.js");
-vendor("qrcodejs", ["qrcode.min.js"], "qrcodejs");
 vendor(
   "@fontsource-variable/ibm-plex-sans",
   [
@@ -90,12 +80,7 @@ if (existsSync(viteManifestPath)) {
   }
 }
 
-const vendorFiles = {
-  "leaflet.css": join(VENDOR, "leaflet", "leaflet.css"),
-  "leaflet.js": join(VENDOR, "leaflet", "leaflet.js"),
-  "chart.umd.min.js": join(VENDOR, "chart.js", "chart.umd.min.js"),
-  "qrcode.min.js": join(VENDOR, "qrcodejs", "qrcode.min.js"),
-};
+const vendorFiles = {};
 
 const vendorHashes = {};
 for (const [name, path] of Object.entries(vendorFiles)) {

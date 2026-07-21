@@ -19,7 +19,7 @@ class TestCacheControlHeaders:
 
     def test_static_js_with_version(self, client):
         """Static JS with version parameter should have long-term cache."""
-        response = client.get(f"/static/js/charts.js?v={__version__}")
+        response = client.get(f"/static/js/spa/app.js?v={__version__}")
         assert response.status_code == 200
         assert "cache-control" in response.headers
         assert (
@@ -59,7 +59,7 @@ class TestCacheControlHeaders:
 
     def test_static_js_without_version(self, client):
         """Static JS without version should have short fallback cache."""
-        response = client.get("/static/js/charts.js")
+        response = client.get("/static/js/spa/app.js")
         assert response.status_code == 200
         assert "cache-control" in response.headers
         assert response.headers["cache-control"] == "public, max-age=3600"
@@ -151,19 +151,6 @@ class TestVersionParameterInHTML:
 
         assert css_link is not None
         assert f"?v={__version__}" in css_link["href"]
-
-    def test_charts_js_has_version(self, client):
-        """Charts.js script should include version parameter."""
-        response = client.get("/")
-        assert response.status_code == 200
-
-        soup = BeautifulSoup(response.text, "html.parser")
-        charts_script = soup.find(
-            "script", {"src": lambda x: x and "/static/js/charts.js" in x}
-        )
-
-        assert charts_script is not None
-        assert f"?v={__version__}" in charts_script["src"]
 
     def test_app_js_has_version(self, client):
         """SPA app.js script should include version or content hash."""

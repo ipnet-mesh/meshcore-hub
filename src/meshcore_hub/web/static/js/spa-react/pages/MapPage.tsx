@@ -1,6 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
+import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
+import {
+  divIcon,
+  latLngBounds,
+  type DivIcon,
+  type Map as LeafletMap,
+} from "leaflet";
+import "leaflet/dist/leaflet.css";
 
 import { useAppConfig } from "@/context/AppConfigContext";
 import { usePageTitle } from "@/hooks/usePageTitle";
@@ -120,7 +128,7 @@ function getTypeDisplay(node: MapNode, t: TFunction): string {
     : t("node_types.unknown");
 }
 
-function createNodeIcon(L: any, node: MapNode, oidcEnabled: boolean): any {
+function createNodeIcon(node: MapNode, oidcEnabled: boolean): DivIcon {
   const displayName = node.name || "";
   const relativeTime = formatRelativeTime(node.last_seen);
   const timeDisplay = relativeTime ? " (" + relativeTime + ")" : "";
@@ -130,7 +138,7 @@ function createNodeIcon(L: any, node: MapNode, oidcEnabled: boolean): any {
       ? '<div style="width: 12px; height: 12px; background: var(--color-marker-infra); border: 2px solid var(--color-marker-infra-border); border-radius: 50%; box-shadow: 0 0 4px rgba(59,130,246,0.6), 0 1px 2px rgba(0,0,0,0.5);"></div>'
       : '<div style="width: 12px; height: 12px; background: var(--color-marker-public); border: 2px solid var(--color-marker-public-border); border-radius: 50%; box-shadow: 0 0 4px rgba(34,197,94,0.6), 0 1px 2px rgba(0,0,0,0.5);"></div>';
 
-  return L.divIcon({
+  return divIcon({
     className: "custom-div-icon",
     html:
       '<div class="map-marker" style="display: flex; flex-direction: column; align-items: center; gap: 2px;">' +
@@ -145,117 +153,92 @@ function createNodeIcon(L: any, node: MapNode, oidcEnabled: boolean): any {
   });
 }
 
-function createPopupContent(
-  node: MapNode,
-  oidcEnabled: boolean,
-  t: TFunction,
-): string {
+function NodePopup({
+  node,
+  oidcEnabled,
+}: {
+  node: MapNode;
+  oidcEnabled: boolean;
+}) {
+  const { t } = useTranslation();
   const typeDisplay = getTypeDisplay(node, t);
   const nodeTypeEmoji = typeEmoji(node.adv_type);
-
-  let infraIndicatorHtml = "";
-  if (oidcEnabled && typeof node.is_adopted !== "undefined") {
-    const dotColor = node.is_adopted
-      ? "var(--color-marker-infra)"
-      : "var(--color-marker-public)";
-    const borderColor = node.is_adopted
-      ? "var(--color-marker-infra-border)"
-      : "var(--color-marker-public-border)";
-    const title = node.is_adopted ? t("map.infrastructure") : t("map.public");
-    infraIndicatorHtml =
-      ' <span style="display: inline-block; width: 10px; height: 10px; background: ' +
-      dotColor +
-      "; border: 2px solid " +
-      borderColor +
-      '; border-radius: 50%; vertical-align: middle;" title="' +
-      escapeHtml(title) +
-      '"></span>';
-  }
-
-  const typeLabel = t("common.type");
-  const keyLabel = t("common.key");
-  const locationLabel = t("common.location");
-  const lastSeenLabel = t("common.last_seen_label");
   const unknownLabel = t("node_types.unknown");
-  const viewDetailsLabel = t("common.view_details");
-
-  let rows = "";
-  rows +=
-    '<div class="opacity-70">' +
-    typeLabel +
-    "</div><div>" +
-    escapeHtml(typeDisplay) +
-    "</div>";
-
-  if (node.role) {
-    const roleLabel = t("map.role");
-    rows +=
-      '<div class="opacity-70">' +
-      roleLabel +
-      '</div><div><span class="badge badge-xs badge-ghost">' +
-      escapeHtml(node.role) +
-      "</span></div>";
-  }
-
-  if (node.owner) {
-    const ownerLabel = t("map.owner");
-    const ownerDisplay = node.owner.callsign
-      ? escapeHtml(node.owner.name) +
-        " (" +
-        escapeHtml(node.owner.callsign) +
-        ")"
-      : escapeHtml(node.owner.name);
-    rows +=
-      '<div class="opacity-70">' + ownerLabel + "</div><div>" + ownerDisplay + "</div>";
-  }
-
-  rows +=
-    '<div class="opacity-70">' +
-    keyLabel +
-    '</div><div><code class="text-xs">' +
-    escapeHtml(node.public_key.substring(0, 16)) +
-    "...</code></div>";
-  rows +=
-    '<div class="opacity-70">' +
-    locationLabel +
-    "</div><div>" +
-    node.lat.toFixed(4) +
-    ", " +
-    node.lon.toFixed(4) +
-    "</div>";
-
-  if (node.last_seen) {
-    rows +=
-      '<div class="opacity-70">' +
-      lastSeenLabel +
-      "</div><div>" +
-      node.last_seen.substring(0, 19).replace("T", " ") +
-      "</div>";
-  }
+  const showInfra = oidcEnabled && typeof node.is_adopted !== "undefined";
 
   return (
-    '<div class="p-2">' +
-    '<h3 class="font-bold text-lg mb-2">' +
-    nodeTypeEmoji +
-    " " +
-    escapeHtml(node.name || unknownLabel) +
-    infraIndicatorHtml +
-    "</h3>" +
-    '<div class="text-sm grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">' +
-    rows +
-    "</div>" +
-    '<a href="/nodes/' +
-    encodeURIComponent(node.public_key) +
-    '" class="btn btn-outline btn-xs mt-3">' +
-    viewDetailsLabel +
-    "</a>" +
-    "</div>"
+    <div className="p-2">
+      <h3 className="font-bold text-lg mb-2">
+        {nodeTypeEmoji} {node.name || unknownLabel}
+        {showInfra && (
+          <span
+            style={{
+              display: "inline-block",
+              width: "10px",
+              height: "10px",
+              background: node.is_adopted
+                ? "var(--color-marker-infra)"
+                : "var(--color-marker-public)",
+              border: `2px solid ${
+                node.is_adopted
+                  ? "var(--color-marker-infra-border)"
+                  : "var(--color-marker-public-border)"
+              }`,
+              borderRadius: "50%",
+              verticalAlign: "middle",
+            }}
+            title={node.is_adopted ? t("map.infrastructure") : t("map.public")}
+          />
+        )}
+      </h3>
+      <div className="text-sm grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
+        <div className="opacity-70">{t("common.type")}</div>
+        <div>{typeDisplay}</div>
+        {node.role && (
+          <>
+            <div className="opacity-70">{t("map.role")}</div>
+            <div>
+              <span className="badge badge-xs badge-ghost">{node.role}</span>
+            </div>
+          </>
+        )}
+        {node.owner && (
+          <>
+            <div className="opacity-70">{t("map.owner")}</div>
+            <div>
+              {node.owner.callsign
+                ? `${node.owner.name} (${node.owner.callsign})`
+                : node.owner.name}
+            </div>
+          </>
+        )}
+        <div className="opacity-70">{t("common.key")}</div>
+        <div>
+          <code className="text-xs">{node.public_key.substring(0, 16)}...</code>
+        </div>
+        <div className="opacity-70">{t("common.location")}</div>
+        <div>
+          {node.lat.toFixed(4)}, {node.lon.toFixed(4)}
+        </div>
+        {node.last_seen && (
+          <>
+            <div className="opacity-70">{t("common.last_seen_label")}</div>
+            <div>{node.last_seen.substring(0, 19).replace("T", " ")}</div>
+          </>
+        )}
+      </div>
+      <a
+        href={`/nodes/${encodeURIComponent(node.public_key)}`}
+        className="btn btn-outline btn-xs mt-3"
+      >
+        {t("common.view_details")}
+      </a>
+    </div>
   );
 }
 
 function fitInitialBounds(
-  map: any,
-  L: any,
+  map: LeafletMap,
   data: MapData,
   oidcEnabled: boolean,
 ): void {
@@ -265,7 +248,7 @@ function fitInitialBounds(
     const adoptedNodes = allNodes.filter((n) => n.is_adopted);
     if (adoptedNodes.length > 0) {
       map.fitBounds(
-        L.latLngBounds(adoptedNodes.map((n) => [n.lat, n.lon])),
+        latLngBounds(adoptedNodes.map((n) => [n.lat, n.lon])),
         { padding },
       );
       return;
@@ -284,9 +267,57 @@ function fitInitialBounds(
   );
   const nodesToFit = nearbyNodes.length > 0 ? nearbyNodes : allNodes;
   map.fitBounds(
-    L.latLngBounds(nodesToFit.map((n) => [n.lat, n.lon])),
+    latLngBounds(nodesToFit.map((n) => [n.lat, n.lon])),
     { padding },
   );
+}
+
+function MapController({
+  mapData,
+  filteredNodes,
+  category,
+  oidcEnabled,
+}: {
+  mapData: MapData;
+  filteredNodes: MapNode[];
+  category: string;
+  oidcEnabled: boolean;
+}) {
+  const map = useMap();
+  const initialFitRef = useRef(false);
+
+  useEffect(() => {
+    if (!mapData) return;
+    if (!initialFitRef.current) {
+      initialFitRef.current = true;
+      fitInitialBounds(map, mapData, oidcEnabled);
+      return;
+    }
+    if (filteredNodes.length > 0) {
+      let nodesToFit = filteredNodes;
+      if (category !== "infra") {
+        const anchor = getAnchorPoint(filteredNodes, mapData.adopted_center);
+        const nearbyNodes = getNodesWithinRadius(
+          filteredNodes,
+          anchor.lat,
+          anchor.lon,
+          MAX_BOUNDS_RADIUS_KM,
+        );
+        if (nearbyNodes.length > 0) nodesToFit = nearbyNodes;
+      }
+      map.fitBounds(
+        latLngBounds(nodesToFit.map((n) => [n.lat, n.lon])),
+        { padding: getBoundsPadding() },
+      );
+    } else {
+      const center = mapData.center;
+      if (center && (center.lat !== 0 || center.lon !== 0)) {
+        map.setView([center.lat, center.lon], 10);
+      }
+    }
+  }, [map, mapData, filteredNodes, category, oidcEnabled]);
+
+  return null;
 }
 
 export function MapPage() {
@@ -298,11 +329,6 @@ export function MapPage() {
   const tz = config.timezone || "";
   const operatorRole = config.role_names?.operator || "operator";
 
-  const mapContainerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<any>(null);
-  const markersRef = useRef<any[]>([]);
-  const initialFitRef = useRef(false);
-
   const [mapData, setMapData] = useState<MapData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -311,8 +337,6 @@ export function MapPage() {
   const [typeFilter, setTypeFilter] = useState("");
   const [operatorFilter, setOperatorFilter] = useState("");
   const [showLabels, setShowLabels] = useState(false);
-  const [nodeCount, setNodeCount] = useState(0);
-  const [filteredCount, setFilteredCount] = useState<number | null>(null);
 
   const operatorProfiles = useMemo(
     () =>
@@ -343,99 +367,34 @@ export function MapPage() {
     return () => ac.abort();
   }, [operatorFilter, t]);
 
-  useEffect(() => {
-    if (loading || mapRef.current) return;
-    const L = (window as any).L;
-    const el = mapContainerRef.current;
-    if (!L || !el) return;
-    const map = L.map(el).setView([0, 0], 2);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    }).addTo(map);
-    mapRef.current = map;
-    return () => {
-      mapRef.current = null;
-      markersRef.current = [];
-      map.remove();
-    };
-  }, [loading]);
+  const allNodes = useMemo(() => mapData?.nodes ?? [], [mapData]);
 
-  const updateMarkers = useCallback(
-    (map: any, L: any, nodes: MapNode[]) => {
-      markersRef.current.forEach((m) => map.removeLayer(m));
-      markersRef.current = [];
-      nodes.forEach((node) => {
-        const marker = L.marker([node.lat, node.lon], {
-          icon: createNodeIcon(L, node, oidcEnabled),
-        }).addTo(map);
-        marker.bindPopup(createPopupContent(node, oidcEnabled, t));
-        markersRef.current.push(marker);
-      });
-    },
-    [oidcEnabled, t],
+  const filteredNodes = useMemo(
+    () =>
+      allNodes.filter((node) => {
+        if (category === "infra" && !node.is_adopted) return false;
+        if (typeFilter && normalizeType(node.adv_type) !== typeFilter)
+          return false;
+        return true;
+      }),
+    [allNodes, category, typeFilter],
   );
 
-  const applyFilters = useCallback(() => {
-    const map = mapRef.current;
-    const L = (window as any).L;
-    if (!map || !L || !mapData) return;
-    const allNodes = mapData.nodes || [];
-    const filteredNodes = allNodes.filter((node) => {
-      if (category === "infra" && !node.is_adopted) return false;
-      if (typeFilter && normalizeType(node.adv_type) !== typeFilter)
-        return false;
-      return true;
-    });
-
-    updateMarkers(map, L, filteredNodes);
-    setNodeCount(allNodes.length);
-    setFilteredCount(filteredNodes.length);
-
-    if (filteredNodes.length > 0) {
-      let nodesToFit = filteredNodes;
-      if (category !== "infra") {
-        const anchor = getAnchorPoint(filteredNodes, mapData.adopted_center);
-        const nearbyNodes = getNodesWithinRadius(
-          filteredNodes,
-          anchor.lat,
-          anchor.lon,
-          MAX_BOUNDS_RADIUS_KM,
-        );
-        if (nearbyNodes.length > 0) nodesToFit = nearbyNodes;
-      }
-      map.fitBounds(
-        L.latLngBounds(nodesToFit.map((n) => [n.lat, n.lon])),
-        { padding: getBoundsPadding() },
-      );
-    } else {
-      const center = mapData.center;
-      if (center && (center.lat !== 0 || center.lon !== 0)) {
-        map.setView([center.lat, center.lon], 10);
-      }
-    }
-  }, [mapData, category, typeFilter, updateMarkers]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    const L = (window as any).L;
-    if (!map || !L || !mapData || mapData.debug?.error) return;
-    if (!initialFitRef.current) {
-      initialFitRef.current = true;
-      fitInitialBounds(map, L, mapData, oidcEnabled);
-      const allNodes = mapData.nodes || [];
-      updateMarkers(map, L, allNodes);
-      setNodeCount(allNodes.length);
-      setFilteredCount(allNodes.length);
-      return;
-    }
-    applyFilters();
-  }, [mapData, oidcEnabled, applyFilters, updateMarkers]);
-
-  useEffect(() => {
-    const el = mapContainerRef.current;
-    if (el) el.classList.toggle("show-labels", showLabels);
-  }, [showLabels]);
+  const markers = useMemo(
+    () =>
+      filteredNodes.map((node) => (
+        <Marker
+          key={node.public_key}
+          position={[node.lat, node.lon]}
+          icon={createNodeIcon(node, oidcEnabled)}
+        >
+          <Popup>
+            <NodePopup node={node} oidcEnabled={oidcEnabled} />
+          </Popup>
+        </Marker>
+      )),
+    [filteredNodes, oidcEnabled],
+  );
 
   const clearFilters = () => {
     setCategory("");
@@ -445,6 +404,8 @@ export function MapPage() {
   };
 
   const debug = mapData?.debug ?? null;
+  const nodeCount = allNodes.length;
+  const filteredCount = filteredNodes.length;
   let countBadgeText: string;
   if (debug?.error) {
     countBadgeText = "Error: " + debug.error;
@@ -456,14 +417,14 @@ export function MapPage() {
     countBadgeText = t("map.nodes_none_have_coordinates", {
       count: formatNumber(debug.total_nodes),
     });
-  } else if (filteredCount === null || filteredCount === nodeCount) {
+  } else if (filteredCount === nodeCount) {
     countBadgeText = t("map.nodes_on_map", {
       count: formatNumber(nodeCount),
     });
   } else {
     countBadgeText = t("common.total", { count: formatNumber(nodeCount) });
   }
-  const showFilteredBadge = filteredCount !== null && filteredCount !== nodeCount;
+  const showFilteredBadge = filteredCount !== nodeCount;
 
   if (loading) return <Loading />;
   if (error) return <ErrorAlert message={error} />;
@@ -560,9 +521,29 @@ export function MapPage() {
       <div className="card bg-base-100 shadow-xl">
         <div className="card-body p-2">
           <div
-            ref={mapContainerRef}
+            className={showLabels ? "show-labels" : undefined}
             style={{ height: "calc(100vh - 300px)", minHeight: "400px" }}
-          />
+          >
+            <MapContainer
+              center={[0, 0]}
+              zoom={2}
+              style={{ height: "100%", width: "100%" }}
+            >
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              {markers}
+              {mapData && (
+                <MapController
+                  mapData={mapData}
+                  filteredNodes={filteredNodes}
+                  category={category}
+                  oidcEnabled={oidcEnabled}
+                />
+              )}
+            </MapContainer>
+          </div>
         </div>
       </div>
 

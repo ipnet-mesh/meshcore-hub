@@ -57,13 +57,6 @@ declare global {
   interface Window {
     __APP_CONFIG__: AppConfig;
     t: (key: string, params?: Record<string, unknown>) => string;
-    formatNumber: (value: number | string | null | undefined) => string;
-    createActivityChart: (...args: unknown[]) => unknown;
-    createLineChart: (...args: unknown[]) => unknown;
-    createStackedBarChart: (...args: unknown[]) => unknown;
-    createRoutesTrendChart: (...args: unknown[]) => unknown;
-    createRouteDetailStrip: (...args: unknown[]) => unknown;
-    initDashboardCharts: (...args: unknown[]) => unknown;
   }
 }
 

@@ -29,6 +29,7 @@
     "react-dom": "^19",
     "react-i18next": "^15",
     "react-leaflet": "^5",
+    "react-qr-code": "^2.2.0",
     "react-router": "^7",
     "tailwindcss": "^4"
   },

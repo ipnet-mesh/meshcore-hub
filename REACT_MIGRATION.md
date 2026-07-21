@@ -8,16 +8,25 @@ Migration from lit-html (functional templates) to React 19 + TypeScript + Vite.
 |-------|-------------|--------|
 | 1 | Infrastructure (Vite, React shell, router, LitBridge, build pipeline, shared components) | **Complete** |
 | 2 | Convert pages one-by-one from LitBridge to native React | **Complete** |
-| 3 | Chart & map components (react-chartjs-2, react-leaflet) | Not started |
+| 3 | Chart & map components (react-chartjs-2, react-leaflet) | **Complete** |
 | 4 | Cleanup (remove lit-html, old spa/, build.js esbuild remnants) | Not started |
 | 5 | Optional enhancements (tests, react-query, Storybook) | Not started |
 
+> **Phase 3 status:** All `window.Chart` / `window.L` / `window.QRCode` globals and the
+> `charts.js` helper script are gone. Charts now use **react-chartjs-2** (typed builders in
+> `spa-react/utils/charts.ts` + components in `spa-react/components/charts/Charts.tsx`),
+> maps use **react-leaflet** (`MapPage.tsx`, `NodeDetail.tsx`), and QR codes use
+> **react-qr-code** (`Channels.tsx`, `NodeDetail.tsx`). Chart.js, Leaflet (+ its CSS), and
+> react-qr-code are bundled by Vite — the vendor `<script>`/`<link>` tags and the
+> `build.js` vendor copy for leaflet/chart.js/qrcodejs were removed (fonts stay vendored).
+> `spa-react/utils/charts.ts` imports `leaflet/dist/leaflet.css`; that CSS ships in the
+> Vite bundle (`asset_app_css`), which is now loaded in `<head>` **before** `app.css` so the
+> dark-mode map popup overrides in `app.css` still win.
+>
 > **Phase 2 status:** All 15 pages are converted to native React and wired into `App.tsx`.
 > The old lit-html code in `spa/` is intentionally **kept** as the `spa.html` fallback
 > (rendered only when the Vite bundle/manifest is absent) and is still referenced by
 > 5 web tests. It will be removed in Phase 4, after those tests are updated.
-> Charts/maps still use `window.Chart`, `window.L`, `window.QRCode`, and the `charts.js`
-> globals — these move to `react-chartjs-2` / `react-leaflet` in Phase 3.
 
 ## Architecture Decisions
 
@@ -26,7 +35,7 @@ Migration from lit-html (functional templates) to React 19 + TypeScript + Vite.
 - **Jinja2 shell preserved** — server renders navbar, SEO meta, config JSON; React owns `<main id="app">`
 - **LitBridge** wraps unconverted pages: dynamic import → `render(container, params, router)` → cleanup
 - **react-i18next** loads same locale JSONs from `/static/locales/`; exposes `window.t` for legacy scripts
-- **Vendor scripts kept** (leaflet, chart.js, qrcodejs as globals) until Phase 3 converts map/charts
+- **Vendor scripts removed** (Phase 3): chart.js, leaflet (+ CSS), and react-qr-code are bundled by Vite; only fonts remain vendored
 - **DaisyUI + Tailwind v4** unchanged; `@source "../js/"` in input.css scans both spa/ and spa-react/
 
 ## File Structure
@@ -91,18 +100,19 @@ src/meshcore_hub/web/static/js/spa/    # OLD lit-html pages (still used via LitB
 ```bash
 npm run build
 # 1. npx @tailwindcss/cli build (input.css → tailwind.css)
-# 2. Copy vendor files (leaflet, chart.js, qrcodejs, fonts)
-# 3. npx vite build (bundles React + legacy lit-html pages → dist/assets/)
+# 2. Copy vendor fonts (chart/map/QR libs are bundled by Vite, not vendored)
+# 3. npx vite build (bundles React + chart.js + leaflet + react-qr-code → dist/assets/)
 # 4. Remove stale dist/src/ artifact
 # 5. Generate dist/assets.json (compatible format for Jinja2 template)
 ```
 
-The Jinja2 template (`spa.html`) reads `assets.json` for the entry JS filename:
+The Jinja2 template (`spa.html`) reads `assets.json` for the entry JS/CSS filenames:
 ```json
-{ "app.js": "assets/index-XXXX.js", "vendor": {...}, "locale_version": "..." }
+{ "app.js": "assets/index-XXXX.js", "app.css": "assets/index-XXXX.css", "vendor": {}, "locale_version": "..." }
 ```
 
 Python (`app.py`) loads this manifest at startup and passes `asset_app_js` / `asset_app_css` to the template.
+`asset_app_css` (which contains the bundled `leaflet.css`) is loaded in `<head>` before `app.css` so theme overrides win.
 
 ## Phase 2: Page Conversion
 
@@ -158,17 +168,28 @@ Python (`app.py`) loads this manifest at startup and passes `asset_app_js` / `as
 | `renderFilterForm({ fields, basePath, navigate })` | `<FilterForm basePath={...}>...</FilterForm>` |
 | `renderStatCard({ icon, color, title, value })` | `<StatCard icon={...} color={...} title={...} value={...} />` |
 | `return () => { chart.destroy(); }` (cleanup) | `useEffect` return cleanup |
-| `window.createActivityChart(...)` | Keep as-is until Phase 3 (react-chartjs-2) |
-| `window.L.map(...)` (Leaflet) | Keep as-is until Phase 3 (react-leaflet) |
-| `window.QRCode(...)` | Keep as-is or use `react-qr-code` package |
+| `window.createActivityChart(...)` | `<ActivityChart>` / `buildActivityChart` (react-chartjs-2) |
+| `window.L.map(...)` (Leaflet) | `<MapContainer>` + `useMap` controller (react-leaflet) |
+| `window.QRCode(...)` | `<QRCode>` from `react-qr-code` |
 
-## Phase 3: Charts & Maps
+## Phase 3: Charts & Maps — Complete
 
-- Install `react-chartjs-2` (already in package.json) — create typed wrapper components
-- Install `react-leaflet` (already in package.json) — create `<MeshMap>` component
-- Port `charts.js` global functions into React chart components
-- Remove leaflet/chart.js vendor `<script>` tags from `spa.html`
-- Remove `charts.js` global script
+- **react-chartjs-2**: typed config builders in `utils/charts.ts` (`buildLineChart`,
+  `buildActivityChart`, `buildStackedBar`, `buildRoutesTrend`, `buildRouteDetailStrip`,
+  plus `ChartColors`, `averageRouteTier`, `routeQualityToTier`); React wrappers in
+  `components/charts/Charts.tsx` (`ActivityChart`, `TrendLineChart`, `StackedBarChart`,
+  `RoutesTrendChart`, `RouteDetailStrip`). `utils/charts.ts` imports `chart.js/auto` (registers
+  everything) — replaces the old global `charts.js`.
+- **react-leaflet**: `MapPage.tsx` rewritten with `<MapContainer>/<TileLayer>/<Marker>/<Popup>`
+  + a `MapController` (useMap) for fit-bounds and a memoized marker list; `NodeDetail.tsx`
+  static hero map with `divIcon` marker + `OffsetCenter` (useMap). Both `import "leaflet/dist/leaflet.css"`.
+- **react-qr-code**: replaces `window.QRCode` in `Channels.tsx` and `NodeDetail.tsx`.
+- Removed leaflet/chart.js/qrcodejs `@script`/`@link` tags and `charts.js` from `spa.html`;
+  deleted `charts.js`; removed their copy steps from `build.js` (fonts still vendored).
+- Moved the Vite CSS bundle (`asset_app_css`) into `<head>` **before** `app.css` so app.css's
+  dark-mode Leaflet overrides win over the now-bundled leaflet.css.
+- Updated `tests/test_web/test_caching.py` (charts.js-specific tests removed; generic JS-cache
+  tests point at `spa/app.js`).
 
 ## Phase 4: Cleanup
 
@@ -209,9 +230,9 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile core bu
 ## Important Notes
 
 - The old `spa/app.js` is NO LONGER LOADED. The Jinja2 template now loads the Vite-built React bundle.
-- The Jinja2 template still renders the navbar, footer, banners, theme toggle, and vendor scripts.
+- The Jinja2 template still renders the navbar, footer, banners, and theme toggle. Vendor chart/map/QR scripts are gone (bundled by Vite); only fonts remain vendored.
 - `window.__APP_CONFIG__` is still injected by Jinja2 and read by React on bootstrap.
 - The theme toggle in the navbar is still vanilla JS (in spa.html). React doesn't manage it.
-- Old lit-html pages loaded via LitBridge still use `window.Chart`, `window.L`, `window.QRCode` globals.
+- No more `window.Chart` / `window.L` / `window.QRCode` globals — charts, maps, and QR codes are bundled React components (Phase 3).
 - Tailwind scans `static/js/` recursively — both `spa/` and `spa-react/` classes are included.
-- The `dist/assets.json` format is unchanged from the esbuild era — Python code didn't need changes.
+- The `dist/assets.json` format is unchanged from the esbuild era — Python code didn't need changes (its `vendor` map is now empty).

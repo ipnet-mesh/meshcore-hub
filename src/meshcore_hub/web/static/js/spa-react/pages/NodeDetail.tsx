@@ -1,13 +1,17 @@
 import {
   useCallback,
   useEffect,
-  useRef,
+  useMemo,
   useState,
   type FormEvent,
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
+import { divIcon, point as leafletPoint } from "leaflet";
+import "leaflet/dist/leaflet.css";
+import QRCode from "react-qr-code";
 import { ErrorAlert, Loading, SuccessAlert } from "@/components/Alerts";
 import { IconEdit, IconError, IconPlus, IconTrash } from "@/components/icons";
 import { hasRole, useAppConfig } from "@/context/AppConfigContext";
@@ -65,6 +69,33 @@ function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+function OffsetCenter({ lat, lon }: { lat: number; lon: number }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView([lat, lon], 14);
+    const point = map.latLngToContainerPoint([lat, lon]);
+    const size = map.getSize();
+    const newPoint = leafletPoint(point.x + size.x * 0.17, point.y);
+    const newLatLng = map.containerPointToLatLng(newPoint);
+    map.setView(newLatLng, 14, { animate: false });
+  }, [map, lat, lon]);
+  return null;
+}
+
+function NodeQrCode({ url, className }: { url: string; className: string }) {
+  return (
+    <div className={className}>
+      <QRCode
+        value={url}
+        size={140}
+        level="L"
+        fgColor="#000000"
+        bgColor="#ffffff"
+      />
+    </div>
+  );
+}
+
 export function NodeDetailPage() {
   const { t } = useTranslation();
   const config = useAppConfig();
@@ -101,11 +132,6 @@ export function NodeDetailPage() {
 
   const [deleteKey, setDeleteKey] = useState<string | null>(null);
   const [deleteSaving, setDeleteSaving] = useState(false);
-
-  const mapContainerRef = useRef<HTMLDivElement | null>(null);
-  const qrRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<unknown>(null);
-  const qrInitRef = useRef(false);
 
   useEffect(() => {
     if (!publicKey || publicKey.length === 64) return;
@@ -201,48 +227,22 @@ export function NodeDetailPage() {
   const displayName = tagName || node?.name || t("common.unnamed_node");
   const emoji = typeEmoji(node?.adv_type ?? null);
 
-  useEffect(() => {
-    if (!node || !hasCoords || lat == null || lon == null) return;
-    const L = (window as any).L;
-    const mapEl = mapContainerRef.current;
-    if (!L || !mapEl) return;
-    const map = L.map(mapEl, {
-      zoomControl: false,
-      dragging: false,
-      scrollWheelZoom: false,
-      doubleClickZoom: false,
-      boxZoom: false,
-      keyboard: false,
-      attributionControl: false,
-    });
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(
-      map,
-    );
-    map.setView([lat, lon], 14);
-    const point = map.latLngToContainerPoint([lat, lon]);
-    const newPoint = L.point(point.x + map.getSize().x * 0.17, point.y);
-    const newLatLng = map.containerPointToLatLng(newPoint);
-    map.setView(newLatLng, 14, { animate: false });
-    const mapIcon = L.divIcon({
-      html:
-        '<span style="font-size: 32px; text-shadow: 0 0 3px #1a237e, 0 0 6px #1a237e, 0 1px 2px rgba(0,0,0,0.7);">' +
-        emoji +
-        "</span>",
-      className: "",
-      iconSize: [32, 32],
-      iconAnchor: [16, 16],
-    });
-    L.marker([lat, lon], { icon: mapIcon }).addTo(map);
-    mapRef.current = map;
-    return () => {
-      mapRef.current = null;
-      map.remove();
-    };
-  }, [node, hasCoords, lat, lon, emoji]);
+  const nodeMapIcon = useMemo(
+    () =>
+      divIcon({
+        html:
+          '<span style="font-size: 32px; text-shadow: 0 0 3px #1a237e, 0 0 6px #1a237e, 0 1px 2px rgba(0,0,0,0.7);">' +
+          emoji +
+          "</span>",
+        className: "",
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+      }),
+    [emoji],
+  );
 
-  useEffect(() => {
-    if (!node) return;
-    qrInitRef.current = false;
+  const qrUrl = useMemo(() => {
+    if (!node) return "";
     const typeMap: Record<string, number> = {
       chat: 1,
       repeater: 2,
@@ -251,36 +251,15 @@ export function NodeDetailPage() {
       sensor: 4,
     };
     const typeNum = typeMap[(node.adv_type || "").toLowerCase()] || 1;
-    const url =
+    return (
       "meshcore://contact/add?name=" +
       encodeURIComponent(displayName) +
       "&public_key=" +
       node.public_key +
       "&type=" +
-      typeNum;
-    const initQr = (): boolean => {
-      const QRCode = (window as any).QRCode;
-      const el = qrRef.current;
-      if (!QRCode || !el || qrInitRef.current) return false;
-      el.innerHTML = "";
-      new QRCode(el, {
-        text: url,
-        width: 140,
-        height: 140,
-        colorDark: "#000000",
-        colorLight: "#ffffff",
-        correctLevel: QRCode.CorrectLevel.L,
-      });
-      qrInitRef.current = true;
-      return true;
-    };
-    if (initQr()) return;
-    let attempts = 0;
-    const interval = setInterval(() => {
-      if (initQr() || ++attempts >= 20) clearInterval(interval);
-    }, 100);
-    return () => clearInterval(interval);
-  }, [node, displayName, hasCoords]);
+      typeNum
+    );
+  }, [node, displayName]);
 
   useEffect(() => {
     if (!flash) return;
@@ -683,20 +662,40 @@ export function NodeDetailPage() {
           <ErrorAlert message={flash.message} />
         ))}
 
-      {hasCoords ? (
+      {hasCoords && lat != null && lon != null ? (
         <div
           className="relative rounded-box overflow-hidden mb-6 shadow-xl"
           style={{ height: 180 }}
         >
-          <div ref={mapContainerRef} className="absolute inset-0 z-0" />
+          <div className="absolute inset-0 z-0">
+            <MapContainer
+              center={[lat, lon]}
+              zoom={14}
+              zoomControl={false}
+              dragging={false}
+              scrollWheelZoom={false}
+              doubleClickZoom={false}
+              boxZoom={false}
+              keyboard={false}
+              attributionControl={false}
+              style={{ height: "100%", width: "100%" }}
+            >
+              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+              <Marker position={[lat, lon]} icon={nodeMapIcon} />
+              <OffsetCenter lat={lat} lon={lon} />
+            </MapContainer>
+          </div>
           <div className="relative z-20 h-full p-3 flex items-center justify-end">
-            <div ref={qrRef} className="bg-white p-2 rounded-box shadow-lg" />
+            <NodeQrCode
+              url={qrUrl}
+              className="bg-white p-2 rounded-box shadow-lg"
+            />
           </div>
         </div>
       ) : (
         <div className="card bg-base-100 shadow-xl mb-6">
           <div className="card-body flex-row items-center gap-4">
-            <div ref={qrRef} className="bg-white p-2 rounded-box" />
+            <NodeQrCode url={qrUrl} className="bg-white p-2 rounded-box" />
             <p className="text-sm opacity-70">{t("nodes.scan_to_add")}</p>
           </div>
         </div>
