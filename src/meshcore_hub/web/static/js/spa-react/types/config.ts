@@ -51,6 +51,8 @@ export interface AppConfig {
   user: OidcUser | null;
   roles: string[];
   role_names: Record<string, string>;
+  system_announcement?: string | null;
+  network_announcement?: string | null;
 }
 
 declare global {

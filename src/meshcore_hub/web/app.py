@@ -361,6 +361,8 @@ def _build_config_json(app: FastAPI, request: Request) -> str:
         "locale_version": getattr(app.state, "locale_version", ""),
         "system_maintenance": app.state.system_maintenance,
         "spam_score_threshold": app.state.spam_score_threshold,
+        "system_announcement": app.state.system_announcement,
+        "network_announcement": app.state.network_announcement,
     }
 
     role_names = {

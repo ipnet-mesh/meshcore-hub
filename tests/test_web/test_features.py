@@ -1,12 +1,14 @@
 """Tests for feature flags functionality."""
 
-import json
-
 import pytest
 from fastapi.testclient import TestClient
 
 from meshcore_hub.web.app import create_app
-from tests.test_web.conftest import ALL_FEATURES_ENABLED, MockHttpClient
+from tests.test_web.conftest import (
+    ALL_FEATURES_ENABLED,
+    MockHttpClient,
+    get_app_config,
+)
 
 
 class TestFeatureFlagsConfig:
@@ -16,11 +18,7 @@ class TestFeatureFlagsConfig:
         """All non-OIDC features should be enabled by default in config JSON."""
         response = client.get("/")
         assert response.status_code == 200
-        html = response.text
-        # Extract config JSON from script tag
-        start = html.index("window.__APP_CONFIG__ = ") + len("window.__APP_CONFIG__ = ")
-        end = html.index(";", start)
-        config = json.loads(html[start:end])
+        config = get_app_config(response.text)
         features = config["features"]
         non_oidc_features = {k: v for k, v in features.items() if k != "members"}
         assert all(
@@ -30,10 +28,7 @@ class TestFeatureFlagsConfig:
     def test_features_dict_has_all_keys(self, client: TestClient) -> None:
         """Features dict should have all 7 expected keys."""
         response = client.get("/")
-        html = response.text
-        start = html.index("window.__APP_CONFIG__ = ") + len("window.__APP_CONFIG__ = ")
-        end = html.index(";", start)
-        config = json.loads(html[start:end])
+        config = get_app_config(response.text)
         features = config["features"]
         expected_keys = {
             "dashboard",
@@ -49,45 +44,41 @@ class TestFeatureFlagsConfig:
     def test_disabled_features_in_config(self, client_no_features: TestClient) -> None:
         """Disabled features should be false in config JSON."""
         response = client_no_features.get("/")
-        html = response.text
-        start = html.index("window.__APP_CONFIG__ = ") + len("window.__APP_CONFIG__ = ")
-        end = html.index(";", start)
-        config = json.loads(html[start:end])
+        config = get_app_config(response.text)
         features = config["features"]
         assert all(not v for v in features.values()), "All features should be disabled"
 
 
 class TestFeatureFlagsNav:
-    """Test feature flags affect navigation."""
+    """Test feature flags affect navigation (via the SPA config the nav reads)."""
 
     def test_enabled_features_show_nav_links(self, client: TestClient) -> None:
-        """Enabled features should show nav links."""
-        response = client.get("/")
-        html = response.text
-        assert 'href="/dashboard"' in html
-        assert 'href="/nodes"' in html
-        assert 'href="/advertisements"' in html
-        assert 'href="/messages"' in html
-        assert 'href="/map"' in html
+        """Enabled features should be true in config so the React nav shows them."""
+        config = get_app_config(client.get("/").text)
+        features = config["features"]
+        for key in ("dashboard", "nodes", "advertisements", "messages", "map"):
+            assert features[key] is True
 
     def test_disabled_features_hide_nav_links(
         self, client_no_features: TestClient
     ) -> None:
-        """Disabled features should not show nav links."""
-        response = client_no_features.get("/")
-        html = response.text
-        assert 'href="/dashboard"' not in html
-        assert 'href="/nodes"' not in html
-        assert 'href="/advertisements"' not in html
-        assert 'href="/messages"' not in html
-        assert 'href="/map"' not in html
-        assert 'href="/members"' not in html
+        """Disabled features should be false in config so the React nav hides them."""
+        config = get_app_config(client_no_features.get("/").text)
+        features = config["features"]
+        for key in (
+            "dashboard",
+            "nodes",
+            "advertisements",
+            "messages",
+            "map",
+            "members",
+        ):
+            assert features[key] is False
 
     def test_home_link_always_present(self, client_no_features: TestClient) -> None:
-        """Home link should always be present."""
+        """The SPA mount (where the always-present Home nav renders) is in the shell."""
         response = client_no_features.get("/")
-        html = response.text
-        assert 'href="/"' in html
+        assert 'id="app"' in response.text
 
 
 class TestFeatureFlagsEndpoints:
@@ -118,11 +109,7 @@ class TestFeatureFlagsEndpoints:
         self, client_no_features: TestClient
     ) -> None:
         """Custom pages should be empty in config when pages feature is disabled."""
-        response = client_no_features.get("/")
-        html = response.text
-        start = html.index("window.__APP_CONFIG__ = ") + len("window.__APP_CONFIG__ = ")
-        end = html.index(";", start)
-        config = json.loads(html[start:end])
+        config = get_app_config(client_no_features.get("/").text)
         assert config["custom_pages"] == []
 
 
@@ -213,18 +200,18 @@ class TestPacketsFeatureFlag:
     ) -> None:
         """The packets nav link is absent when the feature is off."""
         client = self._make_app(mock_http_client, packets=False)
-        html = client.get("/").text
-        assert 'href="/packets"' not in html
+        config = get_app_config(client.get("/").text)
+        assert config["features"]["packets"] is False
         # Messages still shows (ordering sanity)
-        assert 'href="/messages"' in html
+        assert config["features"]["messages"] is True
 
     def test_packets_nav_shown_when_enabled(
         self, mock_http_client: MockHttpClient
     ) -> None:
         """The packets nav link appears when the feature is on."""
         client = self._make_app(mock_http_client, packets=True)
-        html = client.get("/").text
-        assert 'href="/packets"' in html
+        config = get_app_config(client.get("/").text)
+        assert config["features"]["packets"] is True
 
     def test_packets_enabled_by_default_in_settings(self) -> None:
         """The declared default for feature_packets is True (env-independent)."""
@@ -266,11 +253,10 @@ class TestFeatureFlagsIndividual:
     def test_disable_map_only(self, _make_client) -> None:
         """Disabling only map should hide map but show others."""
         client = _make_client("map")
-        response = client.get("/")
-        html = response.text
-        assert 'href="/map"' not in html
-        assert 'href="/dashboard"' in html
-        assert 'href="/nodes"' in html
+        config = get_app_config(client.get("/").text)
+        assert config["features"]["map"] is False
+        assert config["features"]["dashboard"] is True
+        assert config["features"]["nodes"] is True
 
         # Map data endpoint should 404
         response = client.get("/map/data")
@@ -279,11 +265,10 @@ class TestFeatureFlagsIndividual:
     def test_disable_dashboard_only(self, _make_client) -> None:
         """Disabling only dashboard should hide dashboard but show others."""
         client = _make_client("dashboard")
-        response = client.get("/")
-        html = response.text
-        assert 'href="/dashboard"' not in html
-        assert 'href="/nodes"' in html
-        assert 'href="/map"' in html
+        config = get_app_config(client.get("/").text)
+        assert config["features"]["dashboard"] is False
+        assert config["features"]["nodes"] is True
+        assert config["features"]["map"] is True
 
 
 class TestDashboardAutoDisable:
@@ -310,12 +295,7 @@ class TestDashboardAutoDisable:
         app.state.http_client = mock_http_client
         client = TestClient(app, raise_server_exceptions=True)
 
-        response = client.get("/")
-        html = response.text
-        assert 'href="/dashboard"' not in html
-
-        # Check config JSON also reflects it
-        config = json.loads(html.split("window.__APP_CONFIG__ = ")[1].split(";")[0])
+        config = get_app_config(client.get("/").text)
         assert config["features"]["dashboard"] is False
 
     def test_map_auto_disabled_when_nodes_off(
@@ -339,12 +319,7 @@ class TestDashboardAutoDisable:
         app.state.http_client = mock_http_client
         client = TestClient(app, raise_server_exceptions=True)
 
-        response = client.get("/")
-        html = response.text
-        assert 'href="/map"' not in html
-
-        # Check config JSON also reflects it
-        config = json.loads(html.split("window.__APP_CONFIG__ = ")[1].split(";")[0])
+        config = get_app_config(client.get("/").text)
         assert config["features"]["map"] is False
 
         # Map data endpoint should 404
@@ -372,5 +347,5 @@ class TestDashboardAutoDisable:
         app.state.http_client = mock_http_client
         client = TestClient(app, raise_server_exceptions=True)
 
-        response = client.get("/")
-        assert 'href="/dashboard"' in response.text
+        config = get_app_config(client.get("/").text)
+        assert config["features"]["dashboard"] is True

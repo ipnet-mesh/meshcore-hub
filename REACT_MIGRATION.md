@@ -10,7 +10,7 @@ Migration from lit-html (functional templates) to React 19 + TypeScript + Vite.
 | 2 | Convert pages one-by-one from LitBridge to native React | **Complete** |
 | 3 | Chart & map components (react-chartjs-2, react-leaflet) | **Complete** |
 | 4 | Cleanup (remove lit-html, old spa/, LitBridge, @legacy alias) | **Complete** |
-| 5 | Optional enhancements (tests, react-query, Storybook) | Not started |
+| 5 | Frontend CI + vitest unit/component tests + navbar → React (SPA shell) | **Complete** |
 
 > **Phase 3 status:** All `window.Chart` / `window.L` / `window.QRCode` globals and the
 > `charts.js` helper script are gone. Charts now use **react-chartjs-2** (typed builders in
@@ -199,13 +199,39 @@ Python (`app.py`) loads this manifest at startup and passes `asset_app_js` / `as
 - (Vendor script tags / `charts.js` / `build.js` vendor copy were already removed in Phase 3.)
 - Updated `AGENTS.md` with the React frontend conventions.
 
-## Phase 5: Optional Enhancements
+## Phase 5: Frontend CI, Tests & SPA Shell — Complete
 
-- Add `vitest` + `@testing-library/react` for component tests
-- Add Playwright for E2E browser tests
-- Consider `@tanstack/react-query` for data fetching
-- Consider moving navbar from Jinja2 to React (full SPA shell)
-- Add Storybook for component development
+- **Frontend CI job** (`.github/workflows/ci.yml`): `npm ci` → `tsc --noEmit` →
+  `npm run test:frontend` → `npm run build` on every push/PR. Closes the gap where the
+  ~9k lines of TSX had no CI coverage (pre-commit is Python-only).
+- **vitest** (`vitest.config.ts`, jsdom env, `npm run test:frontend`):
+  - `utils/charts.test.ts` — tier math (`routeQualityToTier`, `averageRouteTier`) and every
+    chart builder (empty → null, dataset counts/labels/colors, stacked %, route-strip segments).
+  - `utils/format.test.ts` — `parseAppDate`, `formatNumber`, `truncateKey`, `typeEmoji`,
+    `extractFirstEmoji`, `getNodeEmoji`, `formatRelativeTime`.
+  - `components/Navbar.test.tsx` — feature-gated nav links, custom pages, OIDC/maintenance
+    auth gating (rendered with `MemoryRouter` + `AppConfigProvider`).
+  - `components/Announcements.test.tsx` — system/network banner rendering, ordering, dismiss
+    + sessionStorage persistence (covers behaviour that moved out of the Python suite).
+- **Navbar → React (full SPA shell)**:
+  - New `components/Navbar.tsx`, `components/ThemeToggle.tsx`, `components/Announcements.tsx`,
+    and `hooks/useNavItems.tsx` (shared feature-gated nav list used by desktop + mobile).
+  - `main.tsx` now renders a single root; `App.tsx` renders `<Navbar/>` + `<Announcements/>`
+    above the routed `<main>`. Nav uses react-router `NavLink` (client-side nav + auto active
+    class) — the imperative `data-nav-link` active-toggle and `#nav-loading` DOM bridge are gone.
+  - `spa.html` slimmed to a thin shell: the Jinja2 navbar, banners, and vanilla theme-toggle
+    script were removed; `<main id="app">` became a plain `<div id="app">` that React fills.
+    SEO `<head>`, footer, and the early theme-init script stay server-rendered.
+  - Backend: `_build_config_json` now exposes `system_announcement` / `network_announcement`
+    (pre-rendered Markdown) for the React banners.
+  - Python tests that asserted the server-rendered navbar/banners were rewritten to assert the
+    embedded `__APP_CONFIG__` (new `get_app_config()` helper in `tests/test_web/conftest.py`);
+    the flag→render path is now covered by the Navbar component test.
+
+**Deliberately not done** (low ROI / high risk for this codebase): `@tanstack/react-query`
+(conflicts with the deliberate `private, no-cache` + server-side Redis invalidation design and
+is a 15-page refactor), Storybook (single-app component set), and Playwright E2E (needs the full
+stack in CI; revisit if real browser coverage is wanted).
 
 ## Running & Testing
 

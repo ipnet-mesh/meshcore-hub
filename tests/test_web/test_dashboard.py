@@ -25,27 +25,19 @@ class TestDashboardPage:
         response = client.get("/dashboard")
         assert "Test Network" in response.text
 
-    def test_dashboard_displays_stats(
+    def test_dashboard_serves_spa_shell(
         self, client: TestClient, mock_http_client: MockHttpClient
     ) -> None:
-        """Test that dashboard page displays statistics."""
-        response = client.get("/dashboard")
-        # Check for stats from mock response
-        assert response.status_code == 200
-        # The mock returns total_nodes: 10, active_nodes: 5, etc.
-        # These should be displayed in the page
-        assert "10" in response.text  # total_nodes
-        assert "5" in response.text  # active_nodes
+        """The dashboard route serves the SPA shell.
 
-    def test_dashboard_displays_message_counts(
-        self, client: TestClient, mock_http_client: MockHttpClient
-    ) -> None:
-        """Test that dashboard page displays message counts."""
+        Dashboard statistics are fetched and rendered client-side by React from
+        the API, so they are not present in the server-rendered shell; we assert
+        the mount point and embedded config instead.
+        """
         response = client.get("/dashboard")
         assert response.status_code == 200
-        # Mock returns total_messages: 100, messages_today: 15
-        assert "100" in response.text
-        assert "15" in response.text
+        assert 'id="app"' in response.text
+        assert "window.__APP_CONFIG__" in response.text
 
 
 class TestDashboardPageAPIErrors:

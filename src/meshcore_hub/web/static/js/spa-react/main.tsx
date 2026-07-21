@@ -3,8 +3,6 @@ import { createRoot } from "react-dom/client";
 import { AppConfigProvider } from "@/context/AppConfigContext";
 import { initI18n } from "@/i18n";
 import { App } from "@/App";
-import { AuthSection } from "@/components/AuthSection";
-import { MobileNav } from "@/components/MobileNav";
 import type { AppConfig } from "@/types/config";
 
 async function bootstrap() {
@@ -21,23 +19,13 @@ async function bootstrap() {
   const appContainer = document.getElementById("app");
   if (!appContainer) return;
 
-  const wrap = (ui: React.ReactNode) => (
+  createRoot(appContainer).render(
     <StrictMode>
-      <AppConfigProvider config={config}>{ui}</AppConfigProvider>
-    </StrictMode>
+      <AppConfigProvider config={config}>
+        <App />
+      </AppConfigProvider>
+    </StrictMode>,
   );
-
-  createRoot(appContainer).render(wrap(<App />));
-
-  const authContainer = document.getElementById("auth-section");
-  if (authContainer) {
-    createRoot(authContainer).render(wrap(<AuthSection />));
-  }
-
-  const mobileNavContainer = document.getElementById("mobile-nav");
-  if (mobileNavContainer) {
-    createRoot(mobileNavContainer).render(wrap(<MobileNav />));
-  }
 }
 
 bootstrap();

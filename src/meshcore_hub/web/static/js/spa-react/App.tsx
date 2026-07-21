@@ -9,6 +9,8 @@ import {
 } from "react-router";
 import { useAppConfig } from "@/context/AppConfigContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { Navbar } from "@/components/Navbar";
+import { Announcements } from "@/components/Announcements";
 import { HomePage } from "@/pages/Home";
 import { DashboardPage } from "@/pages/Dashboard";
 import { Nodes } from "@/pages/Nodes";
@@ -33,21 +35,6 @@ function useNavActiveState() {
 
   useEffect(() => {
     const pathname = location.pathname;
-    document.querySelectorAll("[data-nav-link]").forEach((link) => {
-      const href = link.getAttribute("href");
-      let isActive = false;
-      if (href === "/") {
-        isActive = pathname === "/";
-      } else if (href === "/nodes") {
-        isActive = pathname.startsWith("/nodes");
-      } else if (href) {
-        isActive = pathname === href || pathname.startsWith(href + "/");
-      }
-      link.classList.toggle("active", isActive);
-    });
-
-    const loader = document.getElementById("nav-loading");
-    if (loader) loader.classList.add("hidden");
 
     if (document.activeElement?.closest(".dropdown")) {
       (document.activeElement as HTMLElement).blur();
@@ -266,10 +253,22 @@ function AppRoutes() {
   );
 }
 
+function Shell() {
+  return (
+    <>
+      <Navbar />
+      <Announcements />
+      <main className="container mx-auto px-4 py-6 flex-1">
+        <AppRoutes />
+      </main>
+    </>
+  );
+}
+
 export function App() {
   return (
     <BrowserRouter>
-      <AppRoutes />
+      <Shell />
     </BrowserRouter>
   );
 }

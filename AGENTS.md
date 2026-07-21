@@ -44,16 +44,18 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile core ex
 
 The web UI is a **React 19 + TypeScript + Vite** SPA in
 `src/meshcore_hub/web/static/js/spa-react/` (alias `@/` → that dir). The Jinja2 shell
-(`web/templates/spa.html`) renders the navbar/SEO/`window.__APP_CONFIG__`; React mounts into
-`<main id="app">`. **Frontend tooling runs on the host** (not in Docker): `npm install`,
-`npm run build` (Tailwind → vendor fonts → `vite build` → `static/dist/` + `assets.json`), and
-`npx tsc --noEmit` (the TS gate — there is no JS linter in pre-commit). The Vite build is
-required to serve the UI; there is no fallback bundle.
+(`web/templates/spa.html`) renders only SEO/`window.__APP_CONFIG__`/footer; React renders the
+navbar, banners, and routed pages into `<div id="app">`. **Frontend tooling runs on the host**
+(not in Docker): `npm install`, `npm run build` (Tailwind → vendor fonts → `vite build` →
+`static/dist/` + `assets.json`), `npx tsc --noEmit` (the TS gate — there is no JS linter in
+pre-commit), and `npm run test:frontend` (vitest). The Vite build is required to serve the UI;
+there is no fallback bundle.
 
 ```bash
 npm install            # host: install frontend deps
 npm run build          # host: produce static/dist/ + assets.json
 npx tsc --noEmit       # host: typecheck (must be clean)
+npm run test:frontend  # host: vitest unit + component tests
 ```
 
 - Charts: **react-chartjs-2** — typed config builders in `utils/charts.ts`, wrappers in
@@ -62,9 +64,15 @@ npx tsc --noEmit       # host: typecheck (must be clean)
   That CSS ships in the Vite bundle, which `spa.html` loads in `<head>` **before** `app.css` so
   the dark-mode map overrides win — don't reorder those `<link>`s.
 - QR codes: **react-qr-code**.
+- Navbar/shell: React (`components/Navbar.tsx`, `ThemeToggle.tsx`, `Announcements.tsx`,
+  `hooks/useNavItems.tsx`); nav uses react-router `NavLink` (client-side nav). Feature flags,
+  custom pages, and announcements all come from `window.__APP_CONFIG__`.
 - Page conventions: `useSearchParams()` for filters/pagination/sort, typed `apiGet<T>()` with an
   `AbortController` in `useEffect`, `usePageTitle('entities.x')`, shared components
   (`Pagination`, `FilterForm`, `StatCard`, `NodeDisplay`, etc.).
+- Tests: **vitest** + `@testing-library/react` (`*.test.ts(x)` next to code; setup in
+  `spa-react/test/`). Python web tests assert the embedded `__APP_CONFIG__`
+  (`tests/test_web/conftest.py::get_app_config`), not server-rendered nav HTML.
 - Only **fonts** are vendored (`build.js` copies them); chart/map/QR libs are bundled by Vite.
 
 ## Tests & Quality

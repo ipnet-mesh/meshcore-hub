@@ -1,6 +1,5 @@
 """Tests for custom pages functionality (SPA)."""
 
-import json
 import tempfile
 from collections.abc import Generator
 from pathlib import Path
@@ -10,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from meshcore_hub.web.pages import CustomPage, PageLoader
+from tests.test_web.conftest import get_app_config
 
 
 class TestCustomPage:
@@ -484,32 +484,26 @@ Here are some answers.
         assert "Frequently Asked Questions" in data["content_html"]
 
     def test_pages_in_navigation(self, client_with_pages: TestClient) -> None:
-        """Test that custom pages appear in navigation."""
+        """Test that custom pages are exposed for the React navigation."""
         response = client_with_pages.get("/")
         assert response.status_code == 200
-        # Check for navigation links
-        assert 'href="/pages/about"' in response.text
-        assert 'href="/pages/faq"' in response.text
+        config = get_app_config(response.text)
+        urls = [p["url"] for p in config["custom_pages"]]
+        assert "/pages/about" in urls
+        assert "/pages/faq" in urls
 
     def test_pages_sorted_in_navigation(self, client_with_pages: TestClient) -> None:
-        """Test that pages are sorted by menu_order in navigation."""
+        """Test that pages are sorted by menu_order for the React navigation."""
         response = client_with_pages.get("/")
         assert response.status_code == 200
+        config = get_app_config(response.text)
+        urls = [p["url"] for p in config["custom_pages"]]
         # About (order 10) should appear before FAQ (order 20)
-        about_pos = response.text.find('href="/pages/about"')
-        faq_pos = response.text.find('href="/pages/faq"')
-        assert about_pos < faq_pos
+        assert urls.index("/pages/about") < urls.index("/pages/faq")
 
     def test_pages_in_config(self, client_with_pages: TestClient) -> None:
         """Test that custom pages are included in SPA config."""
-        response = client_with_pages.get("/")
-        text = response.text
-        config_start = text.find("window.__APP_CONFIG__ = ") + len(
-            "window.__APP_CONFIG__ = "
-        )
-        config_end = text.find(";", config_start)
-        config = json.loads(text[config_start:config_end])
-
+        config = get_app_config(client_with_pages.get("/").text)
         custom_pages = config["custom_pages"]
         assert len(custom_pages) == 2
         slugs = [p["slug"] for p in custom_pages]

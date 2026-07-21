@@ -76,13 +76,6 @@ class TestHomePage:
         response = client.get("/")
         assert "discord.gg/test" in response.text
 
-    def test_home_contains_navigation(self, client: TestClient) -> None:
-        """Test that home page contains navigation links."""
-        response = client.get("/")
-        assert 'href="/"' in response.text
-        assert 'href="/nodes"' in response.text
-        assert 'href="/messages"' in response.text
-
     def test_home_contains_spa_mount(self, client: TestClient) -> None:
         """Test that home page renders the React SPA mount point."""
         response = client.get("/")
