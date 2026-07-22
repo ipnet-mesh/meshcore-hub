@@ -1,4 +1,10 @@
-"""Custom markdown pages loader for MeshCore Hub Web Dashboard."""
+"""Custom markdown pages loader for MeshCore Hub Web Dashboard.
+
+Pages are stored as raw markdown and rendered client-side by the React
+``<Markdown>`` component (react-markdown + remark-gfm). The loader only
+parses the YAML frontmatter (slug/title/menu_order); the body is shipped
+verbatim so the SPA is the single source of truth for rendering.
+"""
 
 import logging
 from dataclasses import dataclass
@@ -6,7 +12,6 @@ from pathlib import Path
 from typing import Optional
 
 import frontmatter
-import markdown
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +23,7 @@ class CustomPage:
     slug: str
     title: str
     menu_order: int
-    content_html: str
+    content_markdown: str
     file_path: str
 
     @property
@@ -38,10 +43,6 @@ class PageLoader:
         """
         self.pages_dir = Path(pages_dir)
         self._pages: dict[str, CustomPage] = {}
-        self._md = markdown.Markdown(
-            extensions=["tables", "fenced_code", "toc"],
-            output_format="html",
-        )
 
     def load_pages(self) -> None:
         """Load all markdown pages from the pages directory."""
@@ -67,7 +68,7 @@ class PageLoader:
         logger.info(f"Loaded {len(self._pages)} custom page(s)")
 
     def _load_page(self, file_path: Path) -> Optional[CustomPage]:
-        """Load a single markdown page.
+        """Load a single markdown page (frontmatter + raw body).
 
         Args:
             file_path: Path to the markdown file.
@@ -83,15 +84,11 @@ class PageLoader:
         title = post.get("title", slug.replace("-", " ").replace("_", " ").title())
         menu_order = post.get("menu_order", 100)
 
-        # Convert markdown to HTML
-        self._md.reset()
-        content_html = self._md.convert(post.content)
-
         return CustomPage(
             slug=slug,
             title=title,
             menu_order=menu_order,
-            content_html=content_html,
+            content_markdown=post.content,
             file_path=str(file_path),
         )
 

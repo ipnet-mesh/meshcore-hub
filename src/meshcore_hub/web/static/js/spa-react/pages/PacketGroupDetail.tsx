@@ -18,6 +18,7 @@ import {
   truncateKey,
   useFormatDateTime,
 } from "@/utils/format";
+import { groupByObserver } from "@/utils/packetGroupHelpers";
 import { Loading, WarningBadge } from "@/components/Alerts";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { IconSatelliteDish } from "@/components/icons";
@@ -90,20 +91,6 @@ interface PopoverAnchor {
   left: number;
   bottom: number;
   top: number;
-}
-
-function groupByObserver(receptions: Reception[]): Map<string, Reception[]> {
-  const groups = new Map<string, Reception[]>();
-  for (const r of receptions) {
-    const key = r.observed_by || "__unknown__";
-    const list = groups.get(key);
-    if (list) {
-      list.push(r);
-    } else {
-      groups.set(key, [r]);
-    }
-  }
-  return groups;
 }
 
 function Stat({ label, value }: { label: string; value: ReactNode }) {

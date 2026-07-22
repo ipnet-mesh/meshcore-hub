@@ -13,6 +13,7 @@ import { useAppConfig } from "@/context/AppConfigContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Navbar } from "@/components/Navbar";
 import { Announcements } from "@/components/Announcements";
+import { Footer } from "@/components/Footer";
 import { HomePage } from "@/pages/Home";
 import { DashboardPage } from "@/pages/Dashboard";
 import { Nodes } from "@/pages/Nodes";
@@ -42,7 +43,9 @@ function useNavActiveState() {
       (document.activeElement as HTMLElement).blur();
     }
 
-    window.scrollTo(0, 0);
+    if (!location.hash) {
+      window.scrollTo(0, 0);
+    }
 
     const networkName = config.network_name || "MeshCore Network";
     const features = config.features ?? {};
@@ -68,7 +71,7 @@ function useNavActiveState() {
     } else {
       document.title = networkName;
     }
-  }, [location.pathname, config]);
+  }, [location.pathname, location.hash, config]);
 }
 
 function ShortLinkRedirect() {
@@ -263,6 +266,7 @@ function Shell() {
       <main className="container mx-auto px-4 py-6 flex-1">
         <AppRoutes />
       </main>
+      <Footer />
     </>
   );
 }

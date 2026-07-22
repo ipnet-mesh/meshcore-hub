@@ -9,13 +9,6 @@ import {
   submitOnEnter,
 } from "@/components/FilterForm";
 
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-    i18n: { language: "en" },
-  }),
-}));
-
 const profiles = [
   { id: "1", name: "Alice", callsign: "AL", user_id: "u1" },
   { id: "2", name: "Bob", callsign: null, user_id: "u2" },

@@ -1,18 +1,11 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import {
   Field,
   RedactedNotice,
   channelNameDisplay,
 } from "@/components/PacketParts";
-
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-    i18n: { language: "en" },
-  }),
-}));
 
 describe("Field", () => {
   it("renders a label and its value", () => {

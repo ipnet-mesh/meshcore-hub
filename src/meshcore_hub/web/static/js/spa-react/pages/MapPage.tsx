@@ -16,16 +16,18 @@ import { usePageTitle } from "@/hooks/usePageTitle";
 import { apiGet } from "@/utils/api";
 import { qk } from "@/utils/queryKeys";
 import { formatNumber, formatRelativeTime, typeEmoji } from "@/utils/format";
+import {
+  getDistanceKm,
+  getNodesWithinRadius,
+  getAnchorPoint,
+  normalizeType,
+  type LatLng,
+} from "@/utils/mapMath";
 import { FilterToggle, OperatorSelect } from "@/components/FilterForm";
 import { ErrorAlert, Loading } from "@/components/Alerts";
 import { PageHeader } from "@/components/PageHeader";
 
 const MAX_BOUNDS_RADIUS_KM = 20;
-
-interface LatLng {
-  lat: number;
-  lon: number;
-}
 
 interface MapNodeOwner {
   name: string;
@@ -72,53 +74,10 @@ function escapeHtml(str: string | null | undefined): string {
   return div.innerHTML;
 }
 
-function getDistanceKm(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number,
-): number {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
-function getNodesWithinRadius(
-  nodes: MapNode[],
-  anchorLat: number,
-  anchorLon: number,
-  radiusKm: number,
-): MapNode[] {
-  return nodes.filter(
-    (n) => getDistanceKm(anchorLat, anchorLon, n.lat, n.lon) <= radiusKm,
-  );
-}
-
-function getAnchorPoint(nodes: MapNode[], adoptedCenter: LatLng | null): LatLng {
-  if (adoptedCenter) return adoptedCenter;
-  if (nodes.length === 0) return { lat: 0, lon: 0 };
-  return {
-    lat: nodes.reduce((sum, n) => sum + n.lat, 0) / nodes.length,
-    lon: nodes.reduce((sum, n) => sum + n.lon, 0) / nodes.length,
-  };
-}
-
 function getBoundsPadding(): [number, number] {
   if (window.innerWidth < 480) return [50, 50];
   if (window.innerWidth < 768) return [75, 75];
   return [100, 100];
-}
-
-function normalizeType(type: string | null): string | null {
-  return type ? type.toLowerCase() : null;
 }
 
 function getTypeDisplay(node: MapNode, t: TFunction): string {

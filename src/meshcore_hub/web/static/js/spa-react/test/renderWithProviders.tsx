@@ -1,6 +1,6 @@
 import type { ReactElement, ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter, Route, Routes } from "react-router";
 import { render, type RenderOptions } from "@testing-library/react";
 
 import { AppConfigProvider } from "@/context/AppConfigContext";
@@ -20,6 +20,7 @@ interface ProviderOptions {
   config?: AppConfig;
   client?: QueryClient;
   route?: string;
+  routePath?: string;
   renderOptions?: Omit<RenderOptions, "wrapper">;
 }
 
@@ -31,14 +32,22 @@ export function renderWithProviders(
     config = makeConfig(),
     client = createTestQueryClient(),
     route = "/",
+    routePath,
     renderOptions,
   } = options;
 
   function Wrapper({ children }: { children: ReactNode }) {
+    const content = routePath ? (
+      <Routes>
+        <Route path={routePath} element={children} />
+      </Routes>
+    ) : (
+      children
+    );
     return (
       <QueryClientProvider client={client}>
         <AppConfigProvider config={config}>
-          <MemoryRouter initialEntries={[route]}>{children}</MemoryRouter>
+          <MemoryRouter initialEntries={[route]}>{content}</MemoryRouter>
         </AppConfigProvider>
       </QueryClientProvider>
     );

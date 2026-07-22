@@ -3,13 +3,6 @@ import { describe, expect, it, vi } from "vitest";
 
 import { AutoRefreshToggle } from "@/components/AutoRefreshToggle";
 
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-    i18n: { language: "en" },
-  }),
-}));
-
 describe("AutoRefreshToggle", () => {
   it("renders nothing when the interval is 0", () => {
     const { container } = render(

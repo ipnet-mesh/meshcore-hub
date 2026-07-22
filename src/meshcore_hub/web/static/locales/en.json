@@ -414,7 +414,8 @@
     "empty_description": "Members will appear here once users log in and adopt nodes."
   },
   "footer": {
-    "powered_by": "Powered by"
+    "powered_by": "Powered by",
+    "tagline": "Off-Grid, Open-Source Encrypted Messaging"
   },
   "errors": {
     "go_home": "Go Home",

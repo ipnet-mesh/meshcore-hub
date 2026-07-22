@@ -1,18 +1,11 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { AppConfigProvider } from "@/context/AppConfigContext";
 import { Navbar } from "@/components/Navbar";
 import { makeConfig } from "@/test/makeConfig";
 import type { AppConfig } from "@/types/config";
-
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-    i18n: { language: "en" },
-  }),
-}));
 
 function renderNavbar(config: AppConfig) {
   return render(

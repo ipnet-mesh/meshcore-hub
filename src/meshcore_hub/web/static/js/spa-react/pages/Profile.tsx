@@ -3,10 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useAppConfig } from "@/context/AppConfigContext";
-import type { AppConfig } from "@/types/config";
 import { apiGet, apiPut } from "@/utils/api";
 import { qk, invalidate } from "@/utils/queryKeys";
 import { resolveNodeName, useFormatDateTime } from "@/utils/format";
+import { hasOperatorOrAdmin } from "@/utils/profileHelpers";
 import { Loading, ErrorAlert, SuccessAlert } from "@/components/Alerts";
 import { CallsignBadge, RoleBadge } from "@/components/Badges";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
@@ -30,16 +30,6 @@ interface UserProfileData {
   roles?: string[] | null;
   created_at?: string | null;
   nodes?: ProfileNode[] | null;
-}
-
-function hasOperatorOrAdmin(
-  roles: string[] | null | undefined,
-  config: AppConfig,
-): boolean {
-  const roleNames = config.role_names || {};
-  const operatorRole = roleNames.operator || "operator";
-  const adminRole = roleNames.admin || "admin";
-  return !!roles && (roles.includes(operatorRole) || roles.includes(adminRole));
 }
 
 function RoleBadges({ roles }: { roles?: string[] | null }) {

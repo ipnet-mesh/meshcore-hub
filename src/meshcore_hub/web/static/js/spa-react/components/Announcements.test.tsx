@@ -24,9 +24,9 @@ describe("Announcements", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("renders the system banner content as HTML", () => {
+  it("renders the system banner content rendered from markdown", () => {
     const { container } = renderAnnouncements(
-      makeConfig({ system_announcement: "<strong>Outage</strong> at 22:00" }),
+      makeConfig({ system_announcement: "**Outage** at 22:00" }),
     );
     expect(container.querySelector("#system-banner")).not.toBeNull();
     expect(screen.getByText("Outage").tagName).toBe("STRONG");
@@ -34,10 +34,19 @@ describe("Announcements", () => {
 
   it("renders the network banner with a dismiss button", () => {
     const { container } = renderAnnouncements(
-      makeConfig({ network_announcement: "<p>Notice</p>" }),
+      makeConfig({ network_announcement: "Notice" }),
     );
     expect(container.querySelector("#flash-banner")).not.toBeNull();
     expect(screen.getByLabelText("Dismiss")).toBeInTheDocument();
+  });
+
+  it("renders the network banner content rendered from markdown", () => {
+    const { container } = renderAnnouncements(
+      makeConfig({ network_announcement: "**Maintenance** done" }),
+    );
+    const banner = container.querySelector("#flash-banner");
+    expect(banner).not.toBeNull();
+    expect(screen.getByText("Maintenance").tagName).toBe("STRONG");
   });
 
   it("does not render a dismiss control on the system banner", () => {

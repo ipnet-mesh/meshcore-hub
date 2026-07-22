@@ -53,52 +53,8 @@
     <link rel="stylesheet" href="/static/css/app.css?v={{ version }}">
 </head>
 <body class="min-h-screen bg-base-200 flex flex-col">
-    <!-- React shell: navbar, announcements, and routed page content render here -->
+    <!-- React shell: navbar, announcements, routed page content, and footer render here -->
     <div id="app" class="flex-1 flex flex-col"></div>
-
-    <!-- Footer -->
-    <footer class="footer p-4 bg-base-100 text-base-content mt-auto">
-        <!-- Left: MeshCore branding (stacks on top on mobile) -->
-        <div class="flex flex-col items-center gap-1 order-2 lg:order-1">
-            <a href="https://meshcore.io/" target="_blank" rel="noopener noreferrer" class="hover:opacity-80 transition-opacity flex mb-1">
-                <img src="/static/img/meshcore.svg" alt="MeshCore" class="theme-logo theme-logo--invert-light h-4" />
-            </a>
-            <span class="text-xs opacity-50">Off-Grid, Open-Source Encrypted Messaging</span>
-            <p class="text-sm opacity-70">
-                <a href="https://meshcore.io/" target="_blank" rel="noopener noreferrer" class="link link-hover">{{ t('links.website') }}</a>
-                <span> | </span>
-                <a href="https://github.com/meshcore-dev/MeshCore" target="_blank" rel="noopener noreferrer" class="link link-hover">{{ t('links.github') }}</a>
-            </p>
-        </div>
-
-        <!-- Right: Network info + Hub attribution -->
-        <div class="flex flex-col items-center gap-1 order-1 lg:order-2">
-            <p>
-                {{ network_name }}
-                {% if network_city and network_country %}
-                | {{ network_city }}, {{ network_country }}
-                {% endif %}
-            </p>
-            <p class="text-xs opacity-50">{{ t('footer.powered_by') }} <a href="https://github.com/ipnet-mesh/meshcore-hub" target="_blank" rel="noopener noreferrer" class="link link-hover">MeshCore Hub</a> {{ version }}</p>
-            <p class="text-sm opacity-70">
-                {% if network_contact_email %}
-                <a href="mailto:{{ network_contact_email }}" class="link link-hover">{{ network_contact_email }}</a>
-                {% endif %}
-                {% if network_contact_email and network_contact_discord %} | {% endif %}
-                {% if network_contact_discord %}
-                <a href="{{ network_contact_discord }}" target="_blank" rel="noopener noreferrer" class="link link-hover">{{ t('links.discord') }}</a>
-                {% endif %}
-                {% if (network_contact_email or network_contact_discord) and network_contact_github %} | {% endif %}
-                {% if network_contact_github %}
-                <a href="{{ network_contact_github }}" target="_blank" rel="noopener noreferrer" class="link link-hover">{{ t('links.github') }}</a>
-                {% endif %}
-                {% if (network_contact_email or network_contact_discord or network_contact_github) and network_contact_youtube %} | {% endif %}
-                {% if network_contact_youtube %}
-                <a href="{{ network_contact_youtube }}" target="_blank" rel="noopener noreferrer" class="link link-hover">{{ t('links.youtube') }}</a>
-                {% endif %}
-            </p>
-        </div>
-    </footer>
 
     <!-- Embedded app configuration -->
     <script>

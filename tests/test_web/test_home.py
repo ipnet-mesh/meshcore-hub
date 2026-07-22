@@ -1,8 +1,8 @@
 """Tests for the home page route (SPA)."""
 
-import json
-
 from fastapi.testclient import TestClient
+
+from tests.test_web.conftest import get_app_config
 
 
 class TestHomePage:
@@ -40,41 +40,16 @@ class TestHomePage:
 
     def test_home_config_contains_network_info(self, client: TestClient) -> None:
         """Test that SPA config contains network information."""
-        response = client.get("/")
-        # Extract the config JSON from the HTML
-        text = response.text
-        config_start = text.find("window.__APP_CONFIG__ = ") + len(
-            "window.__APP_CONFIG__ = "
-        )
-        config_end = text.find(";", config_start)
-        config = json.loads(text[config_start:config_end])
-
+        config = get_app_config(client.get("/").text)
         assert config["network_name"] == "Test Network"
         assert config["network_city"] == "Test City"
         assert config["network_country"] == "Test Country"
 
     def test_home_config_contains_contact_info(self, client: TestClient) -> None:
-        """Test that SPA config contains contact information."""
-        response = client.get("/")
-        text = response.text
-        config_start = text.find("window.__APP_CONFIG__ = ") + len(
-            "window.__APP_CONFIG__ = "
-        )
-        config_end = text.find(";", config_start)
-        config = json.loads(text[config_start:config_end])
-
+        """Test that SPA config contains contact information for the React footer."""
+        config = get_app_config(client.get("/").text)
         assert config["network_contact_email"] == "test@example.com"
         assert config["network_contact_discord"] == "https://discord.gg/test"
-
-    def test_home_contains_contact_email(self, client: TestClient) -> None:
-        """Test that home page contains the contact email in footer."""
-        response = client.get("/")
-        assert "test@example.com" in response.text
-
-    def test_home_contains_discord_link(self, client: TestClient) -> None:
-        """Test that home page contains the Discord link in footer."""
-        response = client.get("/")
-        assert "discord.gg/test" in response.text
 
     def test_home_contains_spa_mount(self, client: TestClient) -> None:
         """Test that home page renders the React SPA mount point."""

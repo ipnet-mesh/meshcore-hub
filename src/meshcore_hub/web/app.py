@@ -575,24 +575,18 @@ def create_app(
         if network_announcement is not None
         else settings.network_announcement
     )
-    if raw_announcement:
-        import markdown
-
-        app.state.network_announcement = markdown.markdown(raw_announcement)
-    else:
-        app.state.network_announcement = None
+    app.state.network_announcement = (
+        raw_announcement.strip() if raw_announcement else None
+    )
 
     raw_system_announcement = (
         system_announcement
         if system_announcement is not None
         else settings.system_announcement
     )
-    if raw_system_announcement:
-        import markdown
-
-        app.state.system_announcement = markdown.markdown(raw_system_announcement)
-    else:
-        app.state.system_announcement = None
+    app.state.system_announcement = (
+        raw_system_announcement.strip() if raw_system_announcement else None
+    )
 
     app.state.system_maintenance = (
         system_maintenance
@@ -1001,7 +995,7 @@ def create_app(
             {
                 "slug": page.slug,
                 "title": page.title,
-                "content_html": page.content_html,
+                "content_markdown": page.content_markdown,
             }
         )
 
@@ -1238,14 +1232,14 @@ def create_app(
     # --- SPA Catch-All (MUST be last) ---
     @app.api_route("/{path:path}", methods=["GET"], tags=["SPA"], response_model=None)
     async def spa_catchall(request: Request, path: str = "") -> Response:
-        """Serve the SPA shell for all non-API routes."""
-        templates_inst: Jinja2Templates = request.app.state.templates
-        features = request.app.state.features
-        page_loader = request.app.state.page_loader
-        custom_pages = (
-            page_loader.get_menu_pages() if features.get("pages", True) else []
-        )
+        """Serve the SPA shell for all non-API routes.
 
+        The shell is pure bootstrap: SEO <head>, theme-init, the embedded
+        ``__APP_CONFIG__`` JSON, and the Vite bundle mount point. All visual
+        UI (navbar, banners, pages, footer) is rendered client-side by React
+        from ``__APP_CONFIG__``.
+        """
+        templates_inst: Jinja2Templates = request.app.state.templates
         config_json = _build_config_json(request.app, request)
 
         return templates_inst.TemplateResponse(
@@ -1253,19 +1247,7 @@ def create_app(
             "spa.html",
             {
                 "network_name": request.app.state.network_name,
-                "network_city": request.app.state.network_city,
-                "network_country": request.app.state.network_country,
-                "network_contact_email": request.app.state.network_contact_email,
-                "network_contact_discord": request.app.state.network_contact_discord,
-                "network_contact_github": request.app.state.network_contact_github,
-                "network_contact_youtube": request.app.state.network_contact_youtube,
                 "network_welcome_text": request.app.state.network_welcome_text,
-                "network_announcement": request.app.state.network_announcement,
-                "system_announcement": request.app.state.system_announcement,
-                "system_maintenance": request.app.state.system_maintenance,
-                "oidc_enabled": request.app.state.oidc_enabled,
-                "features": features,
-                "custom_pages": custom_pages,
                 "logo_url": request.app.state.logo_url,
                 "logo_invert_light": request.app.state.logo_invert_light,
                 "version": __version__,
@@ -1273,7 +1255,6 @@ def create_app(
                 "config_json": config_json,
                 "asset_app_js": request.app.state.asset_app_js,
                 "asset_app_css": request.app.state.asset_app_css,
-                "vendor_hashes": request.app.state.vendor_hashes,
             },
         )
 

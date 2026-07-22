@@ -217,6 +217,8 @@ services:
       - WEB_HOST=0.0.0.0
       - WEB_PORT=8080
       - NETWORK_NAME=Test Network
+      - SYSTEM_ANNOUNCEMENT=**Outage** window scheduled
+      - NETWORK_ANNOUNCEMENT=**Maintenance** window tonight
       - WEB_LOCALE=en
       - WEB_THEME=dark
       - WEB_AUTO_REFRESH_SECONDS=2

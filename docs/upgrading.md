@@ -2,6 +2,21 @@
 
 This guide covers upgrading from a previous MeshCore Hub release to the current version. Check the relevant version section below before upgrading.
 
+## v0.17.0
+
+### React Web UI
+
+The web dashboard frontend has been rewritten from lit-html ES modules to **React 19 + TypeScript + Vite**. The entire UI — navbar, footer, banners, theme toggle, and all pages — is now rendered by React. The Jinja2 shell (`spa.html`) is now a thin bootstrap: it renders only SEO `<head>` meta, `window.__APP_CONFIG__`, font preloads, and the early theme-init script.
+
+**No configuration changes, no database migration, no `.env` changes required.** All existing env vars (`FEATURE_*`, `WEB_*`, `SYSTEM_ANNOUNCEMENT`, etc.) work identically. The upgrade is purely a frontend swap — the API, collector, and all backend behaviour are unchanged.
+
+What changed alongside the rewrite:
+
+- The `markdown` Python dependency was removed — announcements and custom pages now ship raw markdown to the client, rendered by `react-markdown`.
+- Vendor JS libraries (Chart.js, Leaflet, react-qr-code) are bundled by Vite into `static/dist/`; only fonts remain vendored in `static/vendor/`.
+- The old `src/meshcore_hub/web/static/js/spa/` directory has been removed. The Vite build (`npm run build`) is required — there is no fallback bundle.
+- Custom CSS overrides and themes are unaffected (Tailwind/DaisyUI unchanged; `app.css` still loaded).
+
 ## v0.16.0
 
 ### Route Health Monitoring

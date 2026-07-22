@@ -247,7 +247,7 @@ meshcore-hub api
 meshcore-hub web
 ```
 
-> **Note:** `npm run build` compiles Tailwind CSS and copies vendor libraries (lit-html, Leaflet, Chart.js, QRCode.js) into `src/meshcore_hub/web/static/vendor/`. This step is required before the web dashboard will render correctly. In Docker, this happens automatically during the build.
+> **Note:** `npm run build` builds the React SPA via Vite (Tailwind CSS, vendor fonts, TypeScript/React bundle) into `src/meshcore_hub/web/static/dist/`. Chart.js, Leaflet, and QR libraries are bundled by Vite; only fonts are vendored. This step is required before the web dashboard will render correctly. In Docker, this happens automatically during the build.
 
 ### Running Tests
 
@@ -318,8 +318,8 @@ meshcore-hub/
 │       ├── templates/      # Jinja2 templates (SPA shell)
 │       └── static/
 │           ├── css/         # Stylesheets (app.css, input.css, built tailwind.css)
-│           ├── vendor/      # Vendored JS/CSS libraries (built by npm run build)
-│           ├── js/spa/      # SPA frontend (ES modules, lit-html)
+│           ├── vendor/      # Vendored fonts (copied by npm run build)
+│           ├── js/spa-react/ # SPA frontend (React 19 + TypeScript + Vite)
 │           └── locales/     # Translation files (en.json)
 ├── tests/                  # Test suite
 ├── alembic/                # Database migrations
@@ -339,8 +339,8 @@ meshcore-hub/
 │       └── images/         # Custom images (logo.svg/png/jpg/jpeg/webp replace default logo)
 ├── data/                   # Runtime data directory (DATA_HOME, created at runtime)
 ├── Dockerfile              # Docker build configuration (multi-stage: Node.js frontend + Python)
-├── package.json            # Frontend build dependencies (Tailwind, DaisyUI, lit-html, etc.)
-├── build.js                # Frontend build script (Tailwind CLI + vendor copy)
+├── package.json            # Frontend build dependencies (React 19, Vite, TypeScript, Tailwind, DaisyUI)
+├── build.js                # Frontend build script (Tailwind CLI + vendor fonts + Vite build + assets.json)
 ├── docker-compose.yml      # Docker Compose base config
 ├── docker-compose.dev.yml  # Development overrides (port mappings)
 ├── docker-compose.prod.yml # Production overrides (proxy network)

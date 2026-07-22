@@ -8,6 +8,11 @@ import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { apiGet } from "@/utils/api";
 import { qk } from "@/utils/queryKeys";
 import { formatNumber, useFormatDateTime } from "@/utils/format";
+import {
+  buildChannelList,
+  packetUrl,
+  type ChannelEntry,
+} from "@/utils/packetHelpers";
 import { Pagination } from "@/components/Pagination";
 import { FilterForm, FilterField } from "@/components/FilterForm";
 import {
@@ -68,24 +73,6 @@ interface ChannelItem {
 
 interface ChannelsResponse {
   items: ChannelItem[];
-}
-
-interface ChannelEntry {
-  idx: number;
-  name: string;
-}
-
-function buildChannelList(items: ChannelItem[]): ChannelEntry[] {
-  return items
-    .map((c) => ({ name: c.name, idx: parseInt(c.channel_hash, 16) }))
-    .filter((c) => !Number.isNaN(c.idx));
-}
-
-function packetUrl(p: PacketGroupItem): string {
-  if (p.packet_hash) return `/packets/hash/${p.packet_hash}`;
-  if (p.receptions && p.receptions.length > 0)
-    return `/packets/${p.receptions[0].packet_id}`;
-  return "/packets";
 }
 
 function ChannelLabel({

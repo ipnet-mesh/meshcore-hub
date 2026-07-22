@@ -11,3 +11,7 @@ This page is **rendered from markdown** served by the Playwright test stack.
 - Deterministic content mounted via `CONTENT_HOME`
 - Sourced from `e2e/content/pages/about.md`
 - Fetched by the SPA from `/spa/pages/about`
+
+## Getting Started
+
+Some introductory detail used as a deep-link target for the heading-anchor tests.

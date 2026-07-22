@@ -4,12 +4,18 @@ import { useNavigate, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import {
   getChannelLabelsMap,
-  resolveChannelLabel,
   useAppConfig,
 } from "@/context/AppConfigContext";
 import { apiGet } from "@/utils/api";
 import { qk } from "@/utils/queryKeys";
 import { useFormatDateTime } from "@/utils/format";
+import {
+  parseSenderFromText,
+  collapseNewlines,
+  channelInfo,
+  messageTextWithSender,
+  dedupeBySignature,
+} from "@/utils/messageHelpers";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { Pagination } from "@/components/Pagination";
@@ -71,156 +77,6 @@ interface ChannelItem {
 interface ListResponse<T> {
   items?: T[];
   total?: number;
-}
-
-function parseSenderFromText(text: string | null): {
-  sender: string | null;
-  text: string;
-} {
-  if (!text || typeof text !== "string") {
-    return { sender: null, text: text || "-" };
-  }
-  const patterns = [
-    /^\s*ack\s+@\[(.+?)\]\s*:\s*([\s\S]+)$/i,
-    /^\s*@\[(.+?)\]\s*:\s*([\s\S]+)$/i,
-    /^\s*ack\s+([^:|\n]{1,80})\s*:\s*([\s\S]+)$/i,
-  ];
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (!match) continue;
-    const sender = (match[1] || "").trim();
-    const remaining = (match[2] || "").trim();
-    if (!sender) continue;
-    return { sender, text: remaining || text };
-  }
-  return { sender: null, text };
-}
-
-function collapseNewlines(text: string | null): string | null {
-  if (!text || typeof text !== "string") return text;
-  return text.replace(/\s*\n\s*/g, " ");
-}
-
-function channelInfo(
-  msg: Message,
-  channelLabels: Map<number, string>,
-  fallbackLabel: string,
-): { label: string | null; text: string } {
-  if (msg.message_type !== "channel") {
-    return { label: null, text: msg.text || "-" };
-  }
-  const rawText = msg.text || "";
-  const match = rawText.match(/^\[([^\]]+)\]\s+([\s\S]*)$/);
-  if (msg.channel_idx !== null && msg.channel_idx !== undefined) {
-    const knownLabel = resolveChannelLabel(msg.channel_idx, channelLabels);
-    if (knownLabel) {
-      return {
-        label: knownLabel,
-        text: match ? match[2] || "-" : rawText || "-",
-      };
-    }
-  }
-  if (msg.channel_name) {
-    return { label: msg.channel_name, text: msg.text || "-" };
-  }
-  if (match) {
-    return { label: match[1], text: match[2] || "-" };
-  }
-  if (msg.channel_idx !== null && msg.channel_idx !== undefined) {
-    const knownLabel = resolveChannelLabel(msg.channel_idx, channelLabels);
-    return { label: knownLabel || `Ch ${msg.channel_idx}`, text: rawText || "-" };
-  }
-  return { label: fallbackLabel, text: rawText || "-" };
-}
-
-function messageTextWithSender(msg: Message, text: string): string {
-  const parsed = parseSenderFromText(text || "-");
-  const explicitSender =
-    msg.sender_tag_name ||
-    msg.sender_name ||
-    (msg.pubkey_prefix || "").slice(0, 12) ||
-    null;
-  const sender = explicitSender || parsed.sender;
-  const body = collapseNewlines((parsed.text || text || "-").trim()) || "-";
-  if (!sender) return body;
-  if (body.toLowerCase().startsWith(`${sender.toLowerCase()}:`)) return body;
-  return `${sender}: ${body}`;
-}
-
-function dedupeBySignature(items: Message[]): Message[] {
-  const deduped: Message[] = [];
-  const bySignature = new Map<string, Message>();
-
-  for (const msg of items) {
-    const signature =
-      typeof msg.signature === "string"
-        ? msg.signature.trim().toUpperCase()
-        : "";
-    const canDedupe = msg.message_type === "channel" && signature.length >= 8;
-    if (!canDedupe) {
-      deduped.push(msg);
-      continue;
-    }
-
-    const existing = bySignature.get(signature);
-    if (!existing) {
-      const clone: Message = {
-        ...msg,
-        observers: [...(msg.observers ?? [])],
-      };
-      bySignature.set(signature, clone);
-      deduped.push(clone);
-      continue;
-    }
-
-    const combined = [...(existing.observers ?? []), ...(msg.observers ?? [])];
-    const seenReceivers = new Set<string>();
-    existing.observers = combined.filter((recv) => {
-      const key =
-        recv?.public_key ||
-        recv?.node_id ||
-        `${recv?.observed_at ?? ""}:${recv?.snr ?? ""}`;
-      if (seenReceivers.has(key)) return false;
-      seenReceivers.add(key);
-      return true;
-    });
-
-    if (!existing.observed_by && msg.observed_by)
-      existing.observed_by = msg.observed_by;
-    if (!existing.observer_name && msg.observer_name)
-      existing.observer_name = msg.observer_name;
-    if (!existing.observer_tag_name && msg.observer_tag_name)
-      existing.observer_tag_name = msg.observer_tag_name;
-    if (!existing.pubkey_prefix && msg.pubkey_prefix)
-      existing.pubkey_prefix = msg.pubkey_prefix;
-    if (!existing.sender_name && msg.sender_name)
-      existing.sender_name = msg.sender_name;
-    if (!existing.sender_tag_name && msg.sender_tag_name)
-      existing.sender_tag_name = msg.sender_tag_name;
-    if (!existing.channel_name && msg.channel_name)
-      existing.channel_name = msg.channel_name;
-    if (
-      existing.channel_name === "Public" &&
-      msg.channel_name &&
-      msg.channel_name !== "Public"
-    ) {
-      existing.channel_name = msg.channel_name;
-    }
-    if (existing.channel_idx === null || existing.channel_idx === undefined) {
-      if (msg.channel_idx !== null && msg.channel_idx !== undefined) {
-        existing.channel_idx = msg.channel_idx;
-      }
-    } else if (
-      existing.channel_idx === 17 &&
-      msg.channel_idx !== null &&
-      msg.channel_idx !== undefined &&
-      msg.channel_idx !== 17
-    ) {
-      existing.channel_idx = msg.channel_idx;
-    }
-  }
-
-  return deduped;
 }
 
 export function Messages() {

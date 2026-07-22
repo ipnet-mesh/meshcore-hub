@@ -21,6 +21,12 @@ import { PageHeader } from "@/components/PageHeader";
 import { SectionGroup } from "@/components/SectionGroup";
 import { RouteDetailStrip } from "@/components/charts/Charts";
 import {
+  qualityOf,
+  qualityBadgeClass,
+  qualityLabel,
+  diagnosisText,
+} from "@/utils/routesHelpers";
+import {
   IconClock,
   IconEdit,
   IconNodes,
@@ -152,38 +158,6 @@ const PATH_MAX = 5;
 const PATH_HEAD = 2;
 const PATH_TAIL = 2;
 
-function qualityOf(route: RouteItem): string {
-  return route.quality_avg || route.route_result?.quality || "unknown";
-}
-
-function qualityBadgeClass(quality: string, enabled: boolean): string {
-  if (!enabled) return "badge-neutral";
-  const map: Record<string, string> = {
-    clear: "badge-success",
-    marginal: "badge-warning",
-    failing: "badge-error",
-    no_coverage: "badge-info",
-    unknown: "badge-ghost",
-  };
-  return map[quality] || "badge-ghost";
-}
-
-function qualityLabel(
-  quality: string,
-  enabled: boolean,
-  t: TranslateFn,
-): string {
-  if (!enabled) return t("routes.disabled");
-  const map: Record<string, string> = {
-    clear: t("routes.quality_clear"),
-    marginal: t("routes.quality_marginal"),
-    failing: t("routes.quality_failing"),
-    no_coverage: t("routes.quality_no_coverage"),
-    unknown: t("routes.quality_unknown"),
-  };
-  return map[quality] || quality || t("routes.quality_unknown");
-}
-
 function qualityDot(quality: string, enabled: boolean): string {
   if (!enabled) return "\u25CC";
   const dots: Record<string, string> = {
@@ -194,15 +168,6 @@ function qualityDot(quality: string, enabled: boolean): string {
     unknown: "\u25D0",
   };
   return dots[quality] || "\u25D0";
-}
-
-function diagnosisText(route: RouteItem, t: TranslateFn): string {
-  const result = route.route_result;
-  if (!result || !route.enabled) return "";
-  if (result.state === "healthy") return t("routes.diagnosis_healthy");
-  if (result.state === "unhealthy") return t("routes.diagnosis_unhealthy");
-  if (result.state === "no_coverage") return t("routes.diagnosis_no_coverage");
-  return "";
 }
 
 function IconRouteFrom(props: SVGProps<SVGSVGElement>) {

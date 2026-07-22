@@ -36,6 +36,23 @@ test.describe("global", () => {
     }
   });
 
+  test("footer renders network name and attribution", async ({ page }) => {
+    await page.goto("/");
+
+    const footer = page.locator("footer");
+    await expect(footer).toBeVisible();
+    // Network name comes from __APP_CONFIG__ (NETWORK_NAME=Test Network).
+    await expect(footer.getByText("Test Network")).toBeVisible();
+    // Hub attribution link.
+    await expect(
+      footer.getByRole("link", { name: "MeshCore Hub" }),
+    ).toBeVisible();
+    // Tagline (i18n key footer.tagline).
+    await expect(
+      footer.getByText("Off-Grid, Open-Source Encrypted Messaging"),
+    ).toBeVisible();
+  });
+
   test("dark/light toggle works and persists", async ({ page }) => {
     await page.goto("/");
     // The checkbox itself is visually hidden by daisyUI's swap; click the label.

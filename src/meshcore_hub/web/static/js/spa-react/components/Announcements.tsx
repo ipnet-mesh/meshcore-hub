@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { Markdown } from "@/components/Markdown";
 import { useAppConfig } from "@/context/AppConfigContext";
 
 export function Announcements() {
@@ -33,10 +34,9 @@ export function Announcements() {
           id="system-banner"
           className="alert alert-error rounded-none py-2 px-4 text-center text-sm"
         >
-          <div
-            className="flash-banner-content"
-            dangerouslySetInnerHTML={{ __html: system }}
-          />
+          <Markdown className="flash-banner-content">
+            {system}
+          </Markdown>
         </div>
       )}
       {network && !dismissed && (
@@ -44,10 +44,9 @@ export function Announcements() {
           id="flash-banner"
           className="alert alert-warning rounded-none py-2 px-4 text-center text-sm"
         >
-          <div
-            className="flash-banner-content"
-            dangerouslySetInnerHTML={{ __html: network }}
-          />
+          <Markdown className="flash-banner-content">
+            {network}
+          </Markdown>
           <button
             aria-label="Dismiss"
             onClick={dismiss}

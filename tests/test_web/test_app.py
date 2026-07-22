@@ -383,10 +383,15 @@ class TestFlashBannerVisibility:
 
 
 class TestFlashBannerMarkdown:
-    """Tests for Markdown rendering in the flash banner."""
+    """Tests that raw markdown is shipped in the SPA config for client-side rendering.
 
-    def test_bold_rendered(self, mock_http_client: MockHttpClient) -> None:
-        """Markdown bold is rendered to <strong> in the config content."""
+    The backend no longer converts markdown to HTML; the React ``<Markdown>``
+    component (react-markdown + remark-gfm) renders it. Raw HTML in the source
+    is preserved here but escaped by the client renderer (no rehype-raw).
+    """
+
+    def test_bold_source_preserved(self, mock_http_client: MockHttpClient) -> None:
+        """Raw markdown bold syntax is shipped verbatim in the config."""
         app = create_app(
             api_url="http://localhost:8000",
             api_key="test-api-key",
@@ -397,10 +402,10 @@ class TestFlashBannerMarkdown:
         client = TestClient(app, raise_server_exceptions=True)
 
         config = get_app_config(client.get("/").text)
-        assert "<strong>important</strong>" in config["network_announcement"]
+        assert "**important**" in config["network_announcement"]
 
-    def test_link_rendered(self, mock_http_client: MockHttpClient) -> None:
-        """Markdown link is rendered to <a> tag in the config content."""
+    def test_link_source_preserved(self, mock_http_client: MockHttpClient) -> None:
+        """Raw markdown link syntax is shipped verbatim in the config."""
         app = create_app(
             api_url="http://localhost:8000",
             api_key="test-api-key",
@@ -411,17 +416,16 @@ class TestFlashBannerMarkdown:
         client = TestClient(app, raise_server_exceptions=True)
 
         config = get_app_config(client.get("/").text)
-        assert (
-            '<a href="https://example.com">click here</a>'
-            in config["network_announcement"]
-        )
+        assert "[click here](https://example.com)" in config["network_announcement"]
 
-    def test_raw_html_passed_through(self, mock_http_client: MockHttpClient) -> None:
-        """Raw HTML in announcement is passed through by the Markdown library.
+    def test_raw_html_preserved_but_escaped_client_side(
+        self, mock_http_client: MockHttpClient
+    ) -> None:
+        """Raw HTML in announcement is shipped as-is; the client escapes it.
 
-        This is safe because the announcement source is an operator-controlled
-        environment variable, not user input — same trust model as custom pages
-        in pages.py. The React banner renders it via dangerouslySetInnerHTML.
+        The backend trusts the operator-controlled source (same trust model as
+        custom pages). Client-side rendering via react-markdown escapes raw HTML
+        by default (no rehype-raw), so it is displayed as text, not rendered.
         """
         app = create_app(
             api_url="http://localhost:8000",
@@ -442,7 +446,7 @@ class TestSystemAnnouncementBanner:
     def test_system_banner_present_when_set(
         self, mock_http_client: MockHttpClient
     ) -> None:
-        """System banner content is exposed and Markdown-rendered in the config."""
+        """System banner raw markdown is exposed in the config for client rendering."""
         app = create_app(
             api_url="http://localhost:8000",
             api_key="test-api-key",
@@ -454,7 +458,7 @@ class TestSystemAnnouncementBanner:
 
         config = get_app_config(client.get("/").text)
         assert config["system_announcement"]
-        assert "<strong>Outage</strong> at 22:00" in config["system_announcement"]
+        assert "**Outage** at 22:00" in config["system_announcement"]
 
     def test_system_banner_absent_when_none(self, client: TestClient) -> None:
         """System banner content is absent from the config when not set."""
@@ -691,3 +695,40 @@ class TestBootstrapHeaderSanitization:
         forwarded = mock_http_client.last_get_headers
         assert forwarded is not None
         assert forwarded["X-User-Name"] == "Matt"
+
+
+class TestSpaShellAndErrorFallback:
+    """Lock the shell-vs-error split.
+
+    The SPA shell (``spa.html``) is pure bootstrap served for every GET route;
+    React renders content (including 404s for unknown routes) client-side.
+    ``error.html`` is the minimal non-React fallback served only when the server
+    itself errors before React can boot.
+    """
+
+    def test_unknown_get_route_serves_spa_shell(self, client: TestClient) -> None:
+        """Unknown GET routes hit the catch-all → SPA shell (React renders 404)."""
+        response = client.get("/this-route-does-not-exist-anywhere")
+        assert response.status_code == 200
+        assert "window.__APP_CONFIG__" in response.text
+        assert 'id="app"' in response.text
+
+    def test_500_serves_error_html_fallback(
+        self, web_app: Any, mock_http_client: MockHttpClient
+    ) -> None:
+        """A server error serves the minimal error.html fallback, not the SPA.
+
+        Triggered by forcing the catch-all's config builder to raise; the generic
+        exception handler then renders ``error.html`` (route-order-independent —
+        a route added after the catch-all would be shadowed by ``/{path:path}``).
+        """
+        web_app.state.http_client = mock_http_client
+        client = TestClient(web_app, raise_server_exceptions=False)
+        with patch(
+            "meshcore_hub.web.app._build_config_json",
+            side_effect=RuntimeError("boom"),
+        ):
+            response = client.get("/")
+        assert response.status_code == 500
+        assert "Internal server error" in response.text
+        assert "Go Home" in response.text
