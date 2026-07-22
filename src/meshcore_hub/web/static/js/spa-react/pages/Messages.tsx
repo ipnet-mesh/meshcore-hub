@@ -676,6 +676,7 @@ export function Messages() {
                     return (
                       <tr
                         key={`${msg.signature ?? ""}-${msg.received_at}-${idx}`}
+                        data-testid="list-row"
                         className={detailUrl ? "hover cursor-pointer" : ""}
                         onClick={
                           detailUrl ? () => navigate(detailUrl) : undefined

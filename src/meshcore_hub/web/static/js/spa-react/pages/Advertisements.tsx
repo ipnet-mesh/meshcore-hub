@@ -442,6 +442,7 @@ export function Advertisements() {
                     return (
                       <tr
                         key={`${ad.public_key}-${ad.received_at}-${idx}`}
+                        data-testid="list-row"
                         className={detailUrl ? "hover cursor-pointer" : ""}
                         onClick={
                           detailUrl ? () => navigate(detailUrl) : undefined

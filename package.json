@@ -8,13 +8,17 @@
     "build": "node build.js",
     "dev": "vite --config vite.config.ts",
     "test:frontend": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test --config=e2e/playwright.config.ts",
+    "typecheck:e2e": "tsc -p e2e/tsconfig.json --noEmit"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
     "@types/leaflet": "^1.9.17",
+    "@types/node": "^24.0.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^4",

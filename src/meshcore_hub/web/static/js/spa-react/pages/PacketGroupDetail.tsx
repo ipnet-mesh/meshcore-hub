@@ -125,6 +125,8 @@ function PathBadge({
   return (
     <span
       className="badge badge-sm badge-primary font-mono text-xs cursor-pointer"
+      data-testid="path-hop"
+      data-hash={hash}
       onClick={(e) => onOpen(e, hash)}
     >
       {hash}
@@ -565,6 +567,7 @@ export function PacketGroupDetail() {
         createPortal(
           <div
             ref={popoverRef}
+            data-testid="path-nodes-popover"
             className="absolute z-[1000] w-64 max-w-[90vw] max-h-[60vh] overflow-y-auto bg-base-100 rounded-box shadow-lg border border-base-300"
             style={{
               left: popoverPos?.left ?? -9999,
@@ -603,6 +606,7 @@ export function PacketGroupDetail() {
                       <Link
                         to={`/nodes/${n.public_key}`}
                         onClick={() => setPopover(null)}
+                        data-testid="path-node-link"
                         className="flex flex-col items-start gap-0"
                       >
                         <span className="text-sm">{resolveNodeName(n)}</span>
@@ -617,6 +621,7 @@ export function PacketGroupDetail() {
                       <Link
                         to={`/nodes?pubkey_prefix=${popover.hash}`}
                         onClick={() => setPopover(null)}
+                        data-testid="path-nodes-view-all"
                         className="text-xs opacity-70"
                       >
                         {t("packets.path_nodes_more", {

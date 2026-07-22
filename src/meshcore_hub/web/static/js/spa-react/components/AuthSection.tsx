@@ -41,6 +41,7 @@ export function AuthSection() {
       <div
         tabIndex={0}
         role="button"
+        data-testid="user-menu"
         className="btn btn-ghost btn-circle btn-sm avatar"
       >
         {user.picture ? (
@@ -70,12 +71,12 @@ export function AuthSection() {
         </li>
         <hr className="my-1 opacity-20" />
         <li>
-          <a href="/profile">
+          <a href="/profile" data-testid="user-menu-profile">
             <IconUser className="h-5 w-5" /> {t("links.profile")}
           </a>
         </li>
         <li>
-          <a href="/auth/logout">
+          <a href="/auth/logout" data-testid="user-menu-logout">
             <IconLogout className="h-5 w-5" /> {t("auth.logout")}
           </a>
         </li>

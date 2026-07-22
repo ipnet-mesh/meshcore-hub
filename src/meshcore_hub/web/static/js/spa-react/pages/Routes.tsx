@@ -555,7 +555,11 @@ function RouteCard({
   const tip = diagnosisText(route, t);
 
   return (
-    <div className="card bg-base-100 shadow-xl h-full">
+    <div
+      className="card bg-base-100 shadow-xl h-full"
+      data-testid="route-card"
+      data-route-label={`${route.from_label} → ${route.to_label}`}
+    >
       <div className="card-body">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
@@ -613,11 +617,16 @@ function RouteCard({
         )}
         {isAdmin && (
           <div className="flex gap-2 mt-auto pt-2">
-            <button className="btn btn-xs btn-outline" onClick={onEdit}>
+            <button
+              className="btn btn-xs btn-outline"
+              data-testid="edit-route"
+              onClick={onEdit}
+            >
               <IconEdit className="h-3 w-3" /> {t("common.edit")}
             </button>
             <button
               className="btn btn-xs btn-outline btn-error"
+              data-testid="delete-route"
               onClick={onDelete}
             >
               <IconTrash className="h-3 w-3" /> {t("common.delete")}
@@ -642,6 +651,7 @@ function NodeSearchResultRow({
       <button
         type="button"
         className="w-full text-left flex items-center gap-2"
+        data-testid="node-search-result"
         onClick={onSelect}
       >
         <span className="flex-1 min-w-0">
@@ -786,7 +796,7 @@ function RouteModal({
       title={isEdit ? t("routes.edit_route") : t("routes.add_route")}
       onClose={onCancel}
     >
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} data-testid="route-modal">
           <div className="grid grid-cols-1 gap-3 mb-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
@@ -796,6 +806,7 @@ function RouteModal({
                 <input
                   type="text"
                   className="input input-sm w-full"
+                  data-testid="route-from"
                   value={fromLabel}
                   onChange={(e) => setFromLabel(e.target.value)}
                   placeholder={t("routes.from_label")}
@@ -810,6 +821,7 @@ function RouteModal({
                 <input
                   type="text"
                   className="input input-sm w-full"
+                  data-testid="route-to"
                   value={toLabel}
                   onChange={(e) => setToLabel(e.target.value)}
                   placeholder={t("routes.to_label")}
@@ -825,6 +837,7 @@ function RouteModal({
               <input
                 type="text"
                 className="input input-sm w-full"
+                data-testid="route-description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder={t("routes.description_label")}
@@ -837,6 +850,7 @@ function RouteModal({
                 </label>
                 <select
                   className="select select-sm w-full"
+                  data-testid="route-visibility"
                   value={visibility}
                   onChange={(e) => setVisibility(e.target.value)}
                 >
@@ -855,6 +869,8 @@ function RouteModal({
                     <button
                       key={w}
                       type="button"
+                      data-testid="route-width"
+                      data-width={w}
                       className={`btn btn-xs ${
                         matchWidth === w ? "btn-primary" : "btn-outline"
                       }`}
@@ -874,6 +890,7 @@ function RouteModal({
                 <input
                   type="text"
                   className="input input-sm w-full"
+                  data-testid="route-path-search"
                   value={pathQuery}
                   onChange={(e) => {
                     setPathQuery(e.target.value);
@@ -912,7 +929,10 @@ function RouteModal({
                           {"\u2192"}
                         </span>
                       )}
-                      <span className="inline-flex items-center gap-0.5 bg-primary text-primary-content rounded-full px-2 py-1 text-sm">
+                      <span
+                        className="inline-flex items-center gap-0.5 bg-primary text-primary-content rounded-full px-2 py-1 text-sm"
+                        data-testid="route-path-chip"
+                      >
                         {i > 0 && (
                           <button
                             type="button"
@@ -953,6 +973,7 @@ function RouteModal({
                 <input
                   type="text"
                   className="input input-sm w-full"
+                  data-testid="route-observer-search"
                   value={obsQuery}
                   onChange={(e) => {
                     setObsQuery(e.target.value);
@@ -1012,6 +1033,7 @@ function RouteModal({
                 <input
                   type="number"
                   className="input input-sm w-full"
+                  data-testid="route-window"
                   value={windowHours}
                   onChange={(e) => setWindowHours(e.target.value)}
                   min={1}
@@ -1025,6 +1047,7 @@ function RouteModal({
                 <input
                   type="number"
                   className="input input-sm w-full"
+                  data-testid="route-threshold"
                   value={threshold}
                   onChange={(e) => setThreshold(e.target.value)}
                   min={1}
@@ -1038,6 +1061,7 @@ function RouteModal({
                 <input
                   type="number"
                   className="input input-sm w-full"
+                  data-testid="route-clear-threshold"
                   value={clearThreshold}
                   onChange={(e) => setClearThreshold(e.target.value)}
                   placeholder={String(3 * (parseInt(threshold, 10) || 5))}
@@ -1051,6 +1075,7 @@ function RouteModal({
                 <input
                   type="number"
                   className="input input-sm w-full"
+                  data-testid="route-max-span"
                   value={hopSpan}
                   onChange={(e) => setHopSpan(e.target.value)}
                   placeholder={"\u221E"}
@@ -1064,6 +1089,7 @@ function RouteModal({
                 <input
                   type="number"
                   className="input input-sm w-full"
+                  data-testid="route-max-path-length"
                   value={pathLength}
                   onChange={(e) => setPathLength(e.target.value)}
                   placeholder={"\u221E"}
@@ -1076,6 +1102,7 @@ function RouteModal({
                 <input
                   type="checkbox"
                   className="checkbox checkbox-sm"
+                  data-testid="route-enabled"
                   checked={enabled}
                   onChange={(e) => setEnabled(e.target.checked)}
                 />
@@ -1085,6 +1112,7 @@ function RouteModal({
                 <input
                   type="checkbox"
                   className="checkbox checkbox-sm"
+                  data-testid="route-reversible"
                   checked={reversible}
                   onChange={(e) => setReversible(e.target.checked)}
                 />
@@ -1096,12 +1124,18 @@ function RouteModal({
             <button
               type="button"
               className="btn btn-ghost"
+              data-testid="route-cancel"
               onClick={onCancel}
               disabled={saving}
             >
               {t("common.cancel")}
             </button>
-            <button type="submit" className="btn btn-primary" disabled={saving}>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              data-testid="route-save"
+              disabled={saving}
+            >
               {saving && (
                 <span className="loading loading-spinner loading-sm"></span>
               )}
@@ -1473,6 +1507,7 @@ export function RoutesPage() {
         <div className="flex justify-end mb-4">
           <button
             className="btn btn-primary btn-sm"
+            data-testid="add-route"
             onClick={openAddModal}
           >
             <IconPlus className="h-4 w-4" /> {t("routes.add_route")}

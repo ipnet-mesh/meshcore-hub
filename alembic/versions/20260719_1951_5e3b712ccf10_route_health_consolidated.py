@@ -531,8 +531,17 @@ def upgrade() -> None:
     # there are zero routes, so this is effectively a no-op; the loop is
     # retained so a restore from a dev backup that DOES have routes
     # backfills correctly.
+    #
+    # Runs inside a SAVEPOINT: the backfill imports the live ORM models,
+    # which can reference columns added by later migrations (e.g.
+    # routes.max_path_length). On Postgres a failed statement aborts the
+    # whole transaction, so without the savepoint the swallowed error would
+    # still kill the subsequent alembic_version stamp. Rolling back to the
+    # savepoint leaves the outer migration transaction healthy on both
+    # backends.
     try:
-        _backfill_history()
+        with conn.begin_nested():
+            _backfill_history()
     except Exception as e:  # noqa: BLE001 — never abort the migration
         print(f"[route health precompute] backfill skipped: {e}")
 

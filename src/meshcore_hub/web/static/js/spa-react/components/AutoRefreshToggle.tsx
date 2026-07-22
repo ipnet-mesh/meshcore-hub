@@ -26,6 +26,7 @@ export function AutoRefreshToggle({
       <input
         type="checkbox"
         className="toggle toggle-sm toggle-primary"
+        data-testid="auto-refresh-toggle"
         checked={!paused}
         onChange={onToggle}
       />

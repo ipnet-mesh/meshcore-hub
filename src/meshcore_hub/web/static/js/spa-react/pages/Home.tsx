@@ -65,6 +65,8 @@ function NavCard({
   return (
     <Link
       to={href}
+      data-testid="hero-card"
+      data-hero-href={href}
       className="w-20 h-20 sm:w-[6.75rem] sm:h-[6.75rem]
         border border-base-content/20 rounded-box
         hover:scale-105 hover:border-base-content/40

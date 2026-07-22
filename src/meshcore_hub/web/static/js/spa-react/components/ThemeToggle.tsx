@@ -19,7 +19,12 @@ export function ThemeToggle() {
 
   return (
     <label className="swap swap-rotate btn btn-ghost btn-circle btn-sm">
-      <input type="checkbox" checked={isLight} onChange={handleChange} />
+      <input
+        type="checkbox"
+        data-testid="theme-toggle"
+        checked={isLight}
+        onChange={handleChange}
+      />
       {/* sun icon - shown in dark mode (click to switch to light) */}
       <svg
         className="swap-off fill-current w-5 h-5"

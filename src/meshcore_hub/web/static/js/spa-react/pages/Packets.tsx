@@ -435,6 +435,7 @@ export function Packets() {
                   packets.map((p, i) => (
                     <tr
                       key={p.packet_hash ?? p.receptions?.[0]?.packet_id ?? i}
+                      data-testid="list-row"
                       className="hover cursor-pointer"
                       onClick={() => navigate(packetUrl(p))}
                     >

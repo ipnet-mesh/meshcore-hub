@@ -1,0 +1,245 @@
+# MeshCore Hub - Playwright End-to-End Test Stack
+#
+# Self-contained, throwaway stack for the Playwright suite in this directory.
+# Runs its OWN ephemeral Postgres (schema created by `migrate` via Alembic) and
+# NEVER touches the local development database: distinct project name, distinct
+# named volumes, no host port for Postgres, and no ${VAR} interpolation (so the
+# dev .env is never consulted).
+#
+# Usage (from the repo root):
+#   make e2e-build   # docker compose -f e2e/docker-compose.test.yml build
+#   make e2e-up      # ... up -d
+#   make e2e-test    # npm run test:e2e  (seeds data, then runs Playwright)
+#   make e2e-down    # ... down -v  (destroys the throwaway database)
+
+name: meshcore-e2e
+
+services:
+  # ==========================================================================
+  # PostgreSQL - ephemeral database for the e2e stack (not published to host)
+  # ==========================================================================
+  postgres:
+    image: postgres:17-alpine
+    container_name: meshcore-test-postgres
+    environment:
+      - POSTGRES_USER=meshcorehub
+      - POSTGRES_PASSWORD=e2epassword
+      - POSTGRES_DB=meshcorehub
+    volumes:
+      - test_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U meshcorehub -d meshcorehub"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  # ==========================================================================
+  # Database Migrations - create the `meshcorehub` schema + tables (Alembic)
+  # ==========================================================================
+  migrate:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: meshcore-test-migrate
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - test_data:/data
+    environment:
+      - DATA_HOME=/data
+      - DATABASE_BACKEND=postgres
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=meshcorehub
+      - DATABASE_SCHEMA=meshcorehub
+      - DATABASE_USER=meshcorehub
+      - DATABASE_PASSWORD=e2epassword
+    command: ["db", "upgrade"]
+
+  # ==========================================================================
+  # MQTT Broker
+  # ==========================================================================
+  mqtt:
+    image: ghcr.io/ipnet-mesh/meshcore-mqtt-broker:latest
+    container_name: meshcore-test-mqtt
+    ports:
+      - "11883:1883"
+    volumes:
+      - test_mqtt_data:/data
+    environment:
+      - MQTT_WS_PORT=1883
+      - MQTT_HOST=0.0.0.0
+      - AUTH_EXPECTED_AUDIENCE=mqtt.localhost
+      - SUBSCRIBER_MAX_CONNECTIONS_DEFAULT=5
+      - SUBSCRIBER_1=test-admin:test-password:1
+      - ABUSE_ENFORCEMENT_ENABLED=false
+      - ABUSE_DUPLICATE_WINDOW_SIZE=100
+      - ABUSE_DUPLICATE_WINDOW_MS=300000
+      - ABUSE_DUPLICATE_THRESHOLD=10
+      - ABUSE_MAX_DUPLICATES_PER_PACKET=5
+      - ABUSE_DUPLICATE_RATE_THRESHOLD=0.3
+      - ABUSE_DUPLICATE_RATE_WINDOW_MS=300000
+      - ABUSE_BUCKET_CAPACITY=20
+      - ABUSE_BUCKET_REFILL_RATE=3
+      - ABUSE_MAX_PACKET_SIZE=255
+      - ABUSE_MAX_TOPICS_PER_DAY=3
+      - ABUSE_ANOMALY_THRESHOLD=10
+      - ABUSE_MAX_IATA_CHANGES_24H=3
+      - ABUSE_TOPIC_HISTORY_SIZE=50
+      - ABUSE_TOPIC_HISTORY_WINDOW_MS=86400000
+      - ABUSE_PERSISTENCE_PATH=/data/abuse-detection.db
+      - ABUSE_PERSISTENCE_INTERVAL_MS=300000
+    healthcheck:
+      test: ["CMD", "node", "-e", "const net=require('net');const s=net.createConnection(1883,'127.0.0.1',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),3000)"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  # ==========================================================================
+  # Collector - mounts the deterministic e2e seed script (run via `make e2e-seed`
+  # / the Playwright global setup: `exec -T collector python /seed_data.py`)
+  # ==========================================================================
+  collector:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: meshcore-test-collector
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      mqtt:
+        condition: service_healthy
+    volumes:
+      - test_data:/data
+      - ./seed_data.py:/seed_data.py:ro
+    environment:
+      - LOG_LEVEL=INFO
+      - MQTT_HOST=mqtt
+      - MQTT_PORT=1883
+      - MQTT_PREFIX=test
+      - MQTT_TRANSPORT=websockets
+      - MQTT_WS_PATH=/
+      - MQTT_USERNAME=test-admin
+      - MQTT_PASSWORD=test-password
+      - DATA_HOME=/data
+      - DATABASE_BACKEND=postgres
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=meshcorehub
+      - DATABASE_SCHEMA=meshcorehub
+      - DATABASE_USER=meshcorehub
+      - DATABASE_PASSWORD=e2epassword
+    command: ["collector"]
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "meshcore-hub"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ==========================================================================
+  # API Server
+  # ==========================================================================
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: meshcore-test-api
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      mqtt:
+        condition: service_healthy
+    ports:
+      - "18000:8000"
+    volumes:
+      - test_data:/data
+    environment:
+      - LOG_LEVEL=INFO
+      - MQTT_HOST=mqtt
+      - MQTT_PORT=1883
+      - MQTT_PREFIX=test
+      - MQTT_TRANSPORT=websockets
+      - MQTT_WS_PATH=/
+      - MQTT_USERNAME=test-admin
+      - MQTT_PASSWORD=test-password
+      - DATA_HOME=/data
+      - DATABASE_BACKEND=postgres
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=meshcorehub
+      - DATABASE_SCHEMA=meshcorehub
+      - DATABASE_USER=meshcorehub
+      - DATABASE_PASSWORD=e2epassword
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - API_READ_KEY=test-read-key
+      - API_ADMIN_KEY=test-admin-key
+    command: ["api"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  # ==========================================================================
+  # Web Dashboard (serves the built SPA + proxies /api/* to the API)
+  #   - OIDC enabled with a known session secret so Playwright can forge the
+  #     signed `meshcore-session` cookie (see e2e/mint_session.py). No real IdP
+  #     is required; discovery failure only logs a warning.
+  #   - WEB_AUTO_REFRESH_SECONDS=2 makes list polling fast enough to assert.
+  #   - CONTENT_HOME provides the custom markdown page (e2e/content/pages).
+  # ==========================================================================
+  web:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: meshcore-test-web
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "18080:8080"
+    volumes:
+      - ./content:/content:ro
+    environment:
+      - LOG_LEVEL=INFO
+      - API_BASE_URL=http://api:8000
+      # Admin key: the web proxy uses this as its Bearer token to the API,
+      # and admin-only writes (routes/channels) require it at the API layer.
+      # Mirrors the root compose (API_KEY=${API_ADMIN_KEY:-${API_READ_KEY}}).
+      - API_KEY=test-admin-key
+      - WEB_HOST=0.0.0.0
+      - WEB_PORT=8080
+      - NETWORK_NAME=Test Network
+      - WEB_LOCALE=en
+      - WEB_THEME=dark
+      - WEB_AUTO_REFRESH_SECONDS=2
+      - CONTENT_HOME=/content
+      - OIDC_ENABLED=true
+      - OIDC_CLIENT_ID=e2e-client
+      - OIDC_CLIENT_SECRET=e2e-secret
+      - OIDC_DISCOVERY_URL=https://idp.invalid/.well-known/openid-configuration
+      - OIDC_REDIRECT_URI=http://localhost:18080/auth/callback
+      - OIDC_SESSION_SECRET=test-session-secret
+      - OIDC_COOKIE_SECURE=false
+    command: ["web"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+volumes:
+  test_pg_data:
+    name: meshcore_test_pg_data
+  test_data:
+    name: meshcore_test_data
+  test_mqtt_data:
+    name: meshcore_test_mqtt_data

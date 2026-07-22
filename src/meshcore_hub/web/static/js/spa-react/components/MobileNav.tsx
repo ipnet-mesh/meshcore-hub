@@ -12,6 +12,8 @@ export function MobileNav() {
           <NavLink
             to={item.href}
             end={item.end}
+            data-testid="nav-link"
+            data-nav-href={item.href}
             className={({ isActive }) => (isActive ? "active" : undefined)}
           >
             {item.icon} {item.label}

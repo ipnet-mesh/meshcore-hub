@@ -265,6 +265,27 @@ pytest tests/test_api/test_nodes.py
 pytest -k "test_list"
 ```
 
+### End-to-End Tests (Playwright)
+
+Browser E2E tests live in `e2e/` and run against a self-contained throwaway
+stack (its own ephemeral Postgres, isolated volumes — never the dev database):
+
+```bash
+npx playwright install chromium   # one-time: browser binary
+
+make e2e-build                    # build the images (first time / after changes)
+make e2e-up                       # start mqtt + postgres + migrate + collector + api + web
+make e2e-test                     # seeds deterministic data, then runs the suite
+make e2e-down                     # tear down (destroys the throwaway database)
+
+npm run typecheck:e2e             # typecheck the e2e suite
+```
+
+The Playwright global setup seeds the database (via `e2e/seed_data.py` inside
+the collector container), waits for the web service, and forges signed
+`meshcore-session` cookies (admin + member) so authenticated/admin flows can be
+tested without a real OIDC provider (`e2e/mint_session.py`).
+
 ### Code Quality
 
 ```bash

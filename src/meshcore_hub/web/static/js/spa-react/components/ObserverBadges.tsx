@@ -95,6 +95,8 @@ export function ObserverFilterBadges({
             key={area}
             type="button"
             className={`${cls} cursor-pointer`}
+            data-testid="observer-area"
+            data-area={area}
             title={title}
             onClick={() => onToggle(area)}
           >

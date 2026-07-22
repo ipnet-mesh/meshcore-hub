@@ -56,6 +56,8 @@ function ProfileTile({ profile }: { profile: MemberProfile }) {
   return (
     <Link
       to={`/profile/${profile.id}`}
+      data-testid="member-card"
+      data-profile-name={profile.name || ""}
       className="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow"
     >
       <div className="card-body">
@@ -104,6 +106,8 @@ function ProfileTile({ profile }: { profile: MemberProfile }) {
                   key={node.public_key}
                   className="badge badge-secondary badge-sm cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                   role="button"
+                  data-testid="member-node-badge"
+                  data-node-key={node.public_key}
                   tabIndex={0}
                   onClick={(e) => openNode(e, node.public_key)}
                   onKeyDown={(e) => {

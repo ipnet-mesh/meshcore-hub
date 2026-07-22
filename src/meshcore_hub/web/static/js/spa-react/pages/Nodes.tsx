@@ -226,7 +226,7 @@ export function Nodes() {
         const tagDescription = tagValue(node.tags, "description");
         const lastSeen = node.last_seen ? formatDateTime(node.last_seen) : "-";
         return (
-          <tr key={node.public_key} className="hover">
+          <tr key={node.public_key} className="hover" data-testid="list-row">
             <td>
               <NodeLink
                 name={displayName}

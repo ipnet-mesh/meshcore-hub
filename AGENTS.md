@@ -103,6 +103,38 @@ pytest --no-cov
 pre-commit run --all-files
 ```
 
+Browser E2E lives in **`e2e/`** (Playwright, headless Chromium) and replaces the
+old Python e2e suite. It runs against a **throwaway stack** (`e2e/docker-compose.test.yml`)
+with its own ephemeral Postgres and isolated volumes — it never touches the dev
+database. Like the rest of the stack, **the assistant never builds/runs these
+images**; the user does.
+
+```bash
+npx playwright install chromium        # one-time browser binary (host)
+make e2e-build && make e2e-up          # user: build + start mqtt/pg/migrate/collector/api/web
+make e2e-test                          # user: seeds via e2e/seed_data.py, then runs the suite
+make e2e-down                          # user: tear down (destroys the throwaway DB)
+npm run typecheck:e2e                  # assistant: typecheck the e2e TS (safe to run)
+npx playwright test --config=e2e/playwright.config.ts --list   # assistant: verify collection
+```
+
+Design notes when extending the suite:
+- **Auth is forged, not logged in.** No mock IdP exists; the web tier fully trusts
+  the signed `meshcore-session` cookie. `e2e/mint_session.py` (itsdangerous, run
+  with `.venv` python) mints admin/member cookies using the stack's
+  `OIDC_SESSION_SECRET=test-session-secret`; global setup writes them to
+  `e2e/.auth/*.json` and specs opt in via `test.use({ storageState })`. OIDC is
+  enabled in the test stack (which also unlocks the Members feature).
+- **Data is deterministic.** `e2e/seed_data.py` clears + recreates fixed rows
+  (nodes/observers with `area` tags, adverts, messages on channel idx 17 + the
+  "E2E General" custom channel, raw packets + path hops keyed to node prefixes,
+  a route + health, profiles + adoptions) using recent timestamps (7-day windows).
+- **Single shared backend:** `workers: 1`, `fullyParallel: false`; routes/profile
+  specs are `describe.serial`. `WEB_AUTO_REFRESH_SECONDS=2` makes polling assertable.
+- Selectors rely on purposeful `data-testid`s (theme/auto-refresh toggles, observer
+  area badges, path-hop badge + popover, route modal fields, nav/hero/member/list
+  rows) added to the React components.
+
 ## Database & Ops
 
 The default backend is **SQLite** (zero-config, file at `${DATA_HOME}/collector/meshcore.db`). **PostgreSQL** is also supported via `DATABASE_BACKEND=postgres` — see `docs/database.md` for the full backend reference, production provisioning, and schema-per-instance setup. Migrations are backend-agnostic; the commands below work for both.
