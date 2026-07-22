@@ -33,6 +33,15 @@ jobs:
           python-version-file: ".python-version"
           cache: pip
 
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install frontend deps
+        run: npm ci
+
       - name: Run pre-commit
         uses: pre-commit/action@v3.0.1
 
