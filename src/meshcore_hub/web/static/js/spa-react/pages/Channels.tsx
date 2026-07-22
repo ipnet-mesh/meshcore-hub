@@ -293,16 +293,10 @@ export function Channels() {
     error: queryError,
   } = useQuery({
     queryKey: qk.channels.list({}),
-    queryFn: async ({ signal }) => {
-      const resp = await apiGet<ChannelListResponse>(
-        "/api/v1/channels",
-        {},
-        { signal },
-      );
-      return resp.items || [];
-    },
+    queryFn: ({ signal }) =>
+      apiGet<ChannelListResponse>("/api/v1/channels", {}, { signal }),
   });
-  const channels = data ?? [];
+  const channels = data?.items ?? [];
   const error = queryError ? queryError.message : null;
   const [modal, setModal] = useState<ModalState | null>(null);
 

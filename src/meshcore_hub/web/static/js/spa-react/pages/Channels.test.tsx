@@ -2,7 +2,7 @@ import { screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { Channels } from "@/pages/Channels";
-import { renderWithProviders } from "@/test/renderWithProviders";
+import { renderWithProviders, createTestQueryClient } from "@/test/renderWithProviders";
 import { makeConfig } from "@/test/makeConfig";
 import * as api from "@/utils/api";
 
@@ -67,6 +67,17 @@ describe("Channels", () => {
     renderWithProviders(<Channels />);
     await waitFor(() => {
       expect(screen.queryByText("Public")).not.toBeInTheDocument();
+    });
+  });
+
+  it("renders correctly when cache was pre-populated by Dashboard (raw object shape)", async () => {
+    mockChannelsApi();
+    const client = createTestQueryClient();
+    client.setQueryData(["channels", "list", {}], CHANNELS);
+    renderWithProviders(<Channels />, { client });
+    await waitFor(() => {
+      expect(screen.getByText("Public")).toBeInTheDocument();
+      expect(screen.getByText("Ops")).toBeInTheDocument();
     });
   });
 });
