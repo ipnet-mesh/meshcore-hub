@@ -121,7 +121,7 @@ def seed_nodes(session: Session) -> dict[str, Node]:
         session.add(node)
         nodes[pk] = node
 
-    for i, (pk, name, _area, _lat, _lon) in enumerate(observer_specs):
+    for i, (pk, name, _area, lat, lon) in enumerate(observer_specs):
         node = Node(
             public_key=pk,
             name=name,
