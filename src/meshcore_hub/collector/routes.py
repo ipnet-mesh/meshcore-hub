@@ -786,8 +786,8 @@ def evaluate_route_history(
 
 
 # Thresholds for ``compute_average_quality`` — kept in sync with the
-# ``averageTier`` helper in ``web/static/js/charts.js`` so the server-side
-# rolling-average badge matches the chart's per-route line color.
+# ``averageRouteTier`` helper in ``web/static/js/spa-react/utils/charts.ts`` so
+# the server-side rolling-average badge matches the chart's per-route line color.
 AVERAGE_QUALITY_CLEAR_AT = 1.5
 AVERAGE_QUALITY_MARGINAL_AT = 0.75
 

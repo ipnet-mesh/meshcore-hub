@@ -35,16 +35,6 @@ execSync(
 
 console.log("Copying vendor files...");
 
-vendor("leaflet", ["dist/leaflet.css", "dist/leaflet.js", "dist/leaflet.js.map"], "leaflet");
-mkdirSync(join(VENDOR, "leaflet", "images"), { recursive: true });
-cpSync(
-  join("node_modules", "leaflet", "dist", "images"),
-  join(VENDOR, "leaflet", "images"),
-  { recursive: true },
-);
-
-vendor("chart.js", ["dist/chart.umd.min.js"], "chart.js");
-vendor("qrcodejs", ["qrcode.min.js"], "qrcodejs");
 vendor(
   "@fontsource-variable/ibm-plex-sans",
   [
@@ -62,38 +52,35 @@ vendor(
   "fonts",
 );
 
-console.log("Bundling SPA with esbuild...");
-mkdirSync(DIST, { recursive: true });
+console.log("Bundling SPA with Vite...");
+execSync("npx vite build", { stdio: "inherit" });
 
-const metafilePath = join(DIST, "meta.json");
-execSync(
-  `npx esbuild ${join(STATIC, "js", "spa", "app.js")}` +
-    ` --bundle --format=esm --splitting --minify` +
-    ` --outdir=${DIST}` +
-    ` --entry-names=[name].[hash]` +
-    ` --chunk-names=chunks/[name].[hash]` +
-    ` --metafile=${metafilePath}`,
-  { stdio: "inherit" },
-);
+// Vite emits a copy of the input HTML preserving its path relative to the
+// project root (dist/src/…/index.html).  The Jinja2 template is the real
+// HTML shell, so remove the artifact.
+import { rmSync } from "node:fs";
+const staleHtmlDir = join(DIST, "src");
+if (existsSync(staleHtmlDir)) {
+  rmSync(staleHtmlDir, { recursive: true, force: true });
+}
 
 console.log("Generating assets manifest...");
 
-const meta = JSON.parse(readFileSync(metafilePath, "utf-8"));
+const viteManifestPath = join(DIST, ".vite", "manifest.json");
 const assets = {};
 
-for (const [outputPath, info] of Object.entries(meta.outputs)) {
-  if (!info.entryPoint) continue;
-  const entryName = info.entryPoint.split("/").pop().replace(/\.js$/, ".js");
-  const fileName = outputPath.split("/").pop();
-  assets[entryName] = fileName;
+if (existsSync(viteManifestPath)) {
+  const viteManifest = JSON.parse(readFileSync(viteManifestPath, "utf-8"));
+  for (const [, info] of Object.entries(viteManifest)) {
+    if (!info.isEntry) continue;
+    assets["app.js"] = info.file;
+    if (info.css && info.css.length > 0) {
+      assets["app.css"] = info.css[0];
+    }
+  }
 }
 
-const vendorFiles = {
-  "leaflet.css": join(VENDOR, "leaflet", "leaflet.css"),
-  "leaflet.js": join(VENDOR, "leaflet", "leaflet.js"),
-  "chart.umd.min.js": join(VENDOR, "chart.js", "chart.umd.min.js"),
-  "qrcode.min.js": join(VENDOR, "qrcodejs", "qrcode.min.js"),
-};
+const vendorFiles = {};
 
 const vendorHashes = {};
 for (const [name, path] of Object.entries(vendorFiles)) {

@@ -193,6 +193,7 @@
     font-weight: 700;
     margin-top: 1.5rem;
     margin-bottom: 1rem;
+    scroll-margin-top: 6rem;
 }
 
 .prose h2 {
@@ -200,6 +201,7 @@
     font-weight: 600;
     margin-top: 1.25rem;
     margin-bottom: 0.75rem;
+    scroll-margin-top: 6rem;
 }
 
 .prose h3 {
@@ -207,6 +209,7 @@
     font-weight: 600;
     margin-top: 1rem;
     margin-bottom: 0.5rem;
+    scroll-margin-top: 6rem;
 }
 
 .prose h4 {
@@ -214,6 +217,7 @@
     font-weight: 600;
     margin-top: 1rem;
     margin-bottom: 0.5rem;
+    scroll-margin-top: 6rem;
 }
 
 .prose p {
@@ -253,6 +257,16 @@
 
 .prose a:hover {
     color: color-mix(in oklab, var(--color-primary) 70%, var(--color-base-content));
+}
+
+/* Heading anchor wrappers (rehype-autolink-headings, behavior: "wrap"):
+   inherit the heading color instead of the link color, and only underline on hover. */
+.prose :is(h1, h2, h3, h4, h5, h6) > a {
+    color: inherit;
+    text-decoration: none;
+}
+.prose :is(h1, h2, h3, h4, h5, h6) > a:hover {
+    text-decoration: underline;
 }
 
 .prose code {

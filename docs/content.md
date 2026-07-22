@@ -79,21 +79,24 @@ The markdown content is rendered as-is, so include your own `# Heading` if desir
 
 ### Supported Markdown Features
 
-Pages are rendered with [Python-Markdown](https://python-markdown.github.io/) with the following extensions enabled:
+Pages are shipped as raw markdown and rendered client-side by the React SPA
+(`react-markdown` + `remark-gfm`). Raw HTML in the source is **escaped** (not
+rendered) — this is a security choice; use markdown syntax instead of inline HTML.
 
 | Feature | Syntax | Notes |
 |---------|--------|-------|
-| Headings | `# H1` through `### H3` | Rendered with `.prose` styling |
+| Headings | `# H1` through `### H3` | Rendered with `.prose` styling; each heading gets an anchor `id` for deep-linking (e.g. `/pages/about#getting-started`) |
 | Bold / Italic | `**bold**`, `*italic*` | Standard Markdown |
 | Links | `[text](url)` | Relative paths supported |
-| Unordered lists | `- item` or `* item` | Nested lists supported (3 levels) |
-| Ordered lists | `1. item` | Nested lists supported (3 levels) |
-| Tables | Pipe-delimited (`\| Header \|`) | Auto-generated `<thead>`/`<tbody>` |
-| Fenced code blocks | ` ``` ` with optional language | Syntax highlighting via `codehilite` extension |
+| Unordered lists | `- item` or `* item` | Nested lists supported |
+| Ordered lists | `1. item` | Nested lists supported |
+| Tables | Pipe-delimited (`\| Header \|`) | GFM tables (thead/tbody) |
+| Fenced code blocks | ` ``` ` with optional language | Rendered as `<pre><code>` |
 | Inline code | `` `code` `` | Styled with monospace font |
 | Blockquotes | `> quote` | Left border styling |
 | Images | `![alt](/media/image.png)` | Use absolute paths to `/media/` |
-| Table of contents | `[TOC]` marker | Auto-generated from headings |
+| Task lists | `- [ ] item` / `- [x] item` | GFM task lists |
+| Strikethrough | `~~text~~` | GFM |
 
 ## Docker Configuration
 

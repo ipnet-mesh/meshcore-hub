@@ -327,6 +327,7 @@
     "copied_entities": "{{copied}} label(s) gekopieerd, {{skipped}} overgeslagen"
   },
   "footer": {
-    "powered_by": "Mogelijk gemaakt door"
+    "powered_by": "Mogelijk gemaakt door",
+    "tagline": "Off-Grid, Open-Source Versleutelde Berichten"
   }
 }

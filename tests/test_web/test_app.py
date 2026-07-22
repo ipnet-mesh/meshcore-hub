@@ -17,7 +17,7 @@ from meshcore_hub.web.app import (
     create_app,
 )
 
-from .conftest import ALL_FEATURES_ENABLED, MockHttpClient
+from .conftest import ALL_FEATURES_ENABLED, MockHttpClient, get_app_config
 
 
 @pytest.fixture
@@ -330,7 +330,7 @@ class TestFlashBannerVisibility:
     def test_banner_present_when_announcement_set(
         self, mock_http_client: MockHttpClient
     ) -> None:
-        """Banner HTML is present when network_announcement is set."""
+        """Banner content is exposed in the SPA config when network_announcement is set."""
         app = create_app(
             api_url="http://localhost:8000",
             api_key="test-api-key",
@@ -340,23 +340,19 @@ class TestFlashBannerVisibility:
         app.state.http_client = mock_http_client
         client = TestClient(app, raise_server_exceptions=True)
 
-        response = client.get("/")
-        assert response.status_code == 200
-        html = response.text
-        assert 'id="flash-banner"' in html
-        assert "Scheduled maintenance at 22:00" in html
+        config = get_app_config(client.get("/").text)
+        assert config["network_announcement"]
+        assert "Scheduled maintenance at 22:00" in config["network_announcement"]
 
     def test_banner_absent_when_announcement_none(self, client: TestClient) -> None:
-        """Banner HTML is absent when network_announcement is not set."""
-        response = client.get("/")
-        assert response.status_code == 200
-        html = response.text
-        assert 'id="flash-banner"' not in html
+        """Banner content is absent from the config when network_announcement is not set."""
+        config = get_app_config(client.get("/").text)
+        assert not config["network_announcement"]
 
     def test_banner_absent_for_empty_string(
         self, mock_http_client: MockHttpClient
     ) -> None:
-        """Banner is not shown when announcement is an empty string."""
+        """Banner is not exposed when announcement is an empty string."""
         app = create_app(
             api_url="http://localhost:8000",
             api_key="test-api-key",
@@ -366,14 +362,13 @@ class TestFlashBannerVisibility:
         app.state.http_client = mock_http_client
         client = TestClient(app, raise_server_exceptions=True)
 
-        response = client.get("/")
-        assert response.status_code == 200
-        assert 'id="flash-banner"' not in response.text
+        config = get_app_config(client.get("/").text)
+        assert not config["network_announcement"]
 
     def test_banner_absent_for_whitespace_only(
         self, mock_http_client: MockHttpClient
     ) -> None:
-        """Banner is not shown when announcement is whitespace-only."""
+        """Banner is not exposed when announcement is whitespace-only."""
         app = create_app(
             api_url="http://localhost:8000",
             api_key="test-api-key",
@@ -383,16 +378,20 @@ class TestFlashBannerVisibility:
         app.state.http_client = mock_http_client
         client = TestClient(app, raise_server_exceptions=True)
 
-        response = client.get("/")
-        assert response.status_code == 200
-        assert 'id="flash-banner"' not in response.text
+        config = get_app_config(client.get("/").text)
+        assert not config["network_announcement"]
 
 
 class TestFlashBannerMarkdown:
-    """Tests for Markdown rendering in the flash banner."""
+    """Tests that raw markdown is shipped in the SPA config for client-side rendering.
 
-    def test_bold_rendered(self, mock_http_client: MockHttpClient) -> None:
-        """Markdown bold is rendered to <strong>."""
+    The backend no longer converts markdown to HTML; the React ``<Markdown>``
+    component (react-markdown + remark-gfm) renders it. Raw HTML in the source
+    is preserved here but escaped by the client renderer (no rehype-raw).
+    """
+
+    def test_bold_source_preserved(self, mock_http_client: MockHttpClient) -> None:
+        """Raw markdown bold syntax is shipped verbatim in the config."""
         app = create_app(
             api_url="http://localhost:8000",
             api_key="test-api-key",
@@ -402,12 +401,11 @@ class TestFlashBannerMarkdown:
         app.state.http_client = mock_http_client
         client = TestClient(app, raise_server_exceptions=True)
 
-        response = client.get("/")
-        assert response.status_code == 200
-        assert "<strong>important</strong>" in response.text
+        config = get_app_config(client.get("/").text)
+        assert "**important**" in config["network_announcement"]
 
-    def test_link_rendered(self, mock_http_client: MockHttpClient) -> None:
-        """Markdown link is rendered to <a> tag."""
+    def test_link_source_preserved(self, mock_http_client: MockHttpClient) -> None:
+        """Raw markdown link syntax is shipped verbatim in the config."""
         app = create_app(
             api_url="http://localhost:8000",
             api_key="test-api-key",
@@ -417,16 +415,17 @@ class TestFlashBannerMarkdown:
         app.state.http_client = mock_http_client
         client = TestClient(app, raise_server_exceptions=True)
 
-        response = client.get("/")
-        assert response.status_code == 200
-        assert '<a href="https://example.com">click here</a>' in response.text
+        config = get_app_config(client.get("/").text)
+        assert "[click here](https://example.com)" in config["network_announcement"]
 
-    def test_raw_html_passed_through(self, mock_http_client: MockHttpClient) -> None:
-        """Raw HTML in announcement is passed through by the Markdown library.
+    def test_raw_html_preserved_but_escaped_client_side(
+        self, mock_http_client: MockHttpClient
+    ) -> None:
+        """Raw HTML in announcement is shipped as-is; the client escapes it.
 
-        This is safe because the announcement source is an operator-controlled
-        environment variable, not user input — same trust model as custom pages
-        in pages.py.
+        The backend trusts the operator-controlled source (same trust model as
+        custom pages). Client-side rendering via react-markdown escapes raw HTML
+        by default (no rehype-raw), so it is displayed as text, not rendered.
         """
         app = create_app(
             api_url="http://localhost:8000",
@@ -437,9 +436,8 @@ class TestFlashBannerMarkdown:
         app.state.http_client = mock_http_client
         client = TestClient(app, raise_server_exceptions=True)
 
-        response = client.get("/")
-        assert response.status_code == 200
-        assert "<b>bold</b>" in response.text
+        config = get_app_config(client.get("/").text)
+        assert "<b>bold</b>" in config["network_announcement"]
 
 
 class TestSystemAnnouncementBanner:
@@ -448,7 +446,7 @@ class TestSystemAnnouncementBanner:
     def test_system_banner_present_when_set(
         self, mock_http_client: MockHttpClient
     ) -> None:
-        """System banner HTML is present and Markdown-rendered when set."""
+        """System banner raw markdown is exposed in the config for client rendering."""
         app = create_app(
             api_url="http://localhost:8000",
             api_key="test-api-key",
@@ -458,18 +456,19 @@ class TestSystemAnnouncementBanner:
         app.state.http_client = mock_http_client
         client = TestClient(app, raise_server_exceptions=True)
 
-        html = client.get("/").text
-        assert 'id="system-banner"' in html
-        assert "<strong>Outage</strong> at 22:00" in html
+        config = get_app_config(client.get("/").text)
+        assert config["system_announcement"]
+        assert "**Outage** at 22:00" in config["system_announcement"]
 
     def test_system_banner_absent_when_none(self, client: TestClient) -> None:
-        """System banner HTML is absent when not set."""
-        assert 'id="system-banner"' not in client.get("/").text
+        """System banner content is absent from the config when not set."""
+        config = get_app_config(client.get("/").text)
+        assert not config["system_announcement"]
 
     def test_system_banner_absent_for_empty_string(
         self, mock_http_client: MockHttpClient
     ) -> None:
-        """System banner is not shown for an empty string."""
+        """System banner is not exposed for an empty string."""
         app = create_app(
             api_url="http://localhost:8000",
             api_key="test-api-key",
@@ -479,43 +478,12 @@ class TestSystemAnnouncementBanner:
         app.state.http_client = mock_http_client
         client = TestClient(app, raise_server_exceptions=True)
 
-        assert 'id="system-banner"' not in client.get("/").text
+        config = get_app_config(client.get("/").text)
+        assert not config["system_announcement"]
 
-    def test_system_banner_not_dismissable(
-        self, mock_http_client: MockHttpClient
-    ) -> None:
-        """System banner has no dismiss button or sessionStorage script."""
-        app = create_app(
-            api_url="http://localhost:8000",
-            api_key="test-api-key",
-            system_announcement="Heads up",
-            features=ALL_FEATURES_ENABLED,
-        )
-        app.state.http_client = mock_http_client
-        client = TestClient(app, raise_server_exceptions=True)
-
-        html = client.get("/").text
-        banner = html[html.index('id="system-banner"') :]
-        banner = banner[: banner.index("</div>")]
-        assert "Dismiss" not in banner
-        assert "sessionStorage" not in banner
-
-    def test_system_banner_stacked_above_network_banner(
-        self, mock_http_client: MockHttpClient
-    ) -> None:
-        """System banner is rendered above the network announcement banner."""
-        app = create_app(
-            api_url="http://localhost:8000",
-            api_key="test-api-key",
-            system_announcement="System notice",
-            network_announcement="Network notice",
-            features=ALL_FEATURES_ENABLED,
-        )
-        app.state.http_client = mock_http_client
-        client = TestClient(app, raise_server_exceptions=True)
-
-        html = client.get("/").text
-        assert html.index('id="system-banner"') < html.index('id="flash-banner"')
+    # NOTE: system-banner stacking order and the absence of a dismiss control are
+    # now rendering behaviour of the React <Announcements> component, covered by
+    # the frontend test suite (components/Announcements.test.tsx).
 
 
 class TestSystemMaintenance:
@@ -532,7 +500,7 @@ class TestSystemMaintenance:
         assert all(value is False for value in app.state.features.values())
 
     def test_maintenance_nav_only_home(self, mock_http_client: MockHttpClient) -> None:
-        """Desktop nav contains only Home (no feature links) in maintenance."""
+        """Config exposes all features off in maintenance, so the React nav shows only Home."""
         app = create_app(
             api_url="http://localhost:8000",
             api_key="test-api-key",
@@ -542,10 +510,8 @@ class TestSystemMaintenance:
         app.state.http_client = mock_http_client
         client = TestClient(app, raise_server_exceptions=True)
 
-        html = client.get("/dashboard").text
-        assert 'href="/dashboard"' not in html
-        assert 'href="/nodes"' not in html
-        assert 'href="/messages"' not in html
+        config = get_app_config(client.get("/dashboard").text)
+        assert not any(config["features"].values())
 
     def test_maintenance_flag_in_config_json(
         self, mock_http_client: MockHttpClient
@@ -729,3 +695,40 @@ class TestBootstrapHeaderSanitization:
         forwarded = mock_http_client.last_get_headers
         assert forwarded is not None
         assert forwarded["X-User-Name"] == "Matt"
+
+
+class TestSpaShellAndErrorFallback:
+    """Lock the shell-vs-error split.
+
+    The SPA shell (``spa.html``) is pure bootstrap served for every GET route;
+    React renders content (including 404s for unknown routes) client-side.
+    ``error.html`` is the minimal non-React fallback served only when the server
+    itself errors before React can boot.
+    """
+
+    def test_unknown_get_route_serves_spa_shell(self, client: TestClient) -> None:
+        """Unknown GET routes hit the catch-all → SPA shell (React renders 404)."""
+        response = client.get("/this-route-does-not-exist-anywhere")
+        assert response.status_code == 200
+        assert "window.__APP_CONFIG__" in response.text
+        assert 'id="app"' in response.text
+
+    def test_500_serves_error_html_fallback(
+        self, web_app: Any, mock_http_client: MockHttpClient
+    ) -> None:
+        """A server error serves the minimal error.html fallback, not the SPA.
+
+        Triggered by forcing the catch-all's config builder to raise; the generic
+        exception handler then renders ``error.html`` (route-order-independent —
+        a route added after the catch-all would be shadowed by ``/{path:path}``).
+        """
+        web_app.state.http_client = mock_http_client
+        client = TestClient(web_app, raise_server_exceptions=False)
+        with patch(
+            "meshcore_hub.web.app._build_config_json",
+            side_effect=RuntimeError("boom"),
+        ):
+            response = client.get("/")
+        assert response.status_code == 500
+        assert "Internal server error" in response.text
+        assert "Go Home" in response.text

@@ -1,21 +1,57 @@
 {
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "build": "node build.js"
+    "build": "node build.js",
+    "dev": "vite --config vite.config.ts",
+    "test:frontend": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test --config=e2e/playwright.config.ts",
+    "typecheck:e2e": "tsc -p e2e/tsconfig.json --noEmit"
   },
   "devDependencies": {
-    "esbuild": "^0.28.0"
+    "@playwright/test": "^1.61.1",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
+    "@types/leaflet": "^1.9.17",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^4",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.8",
+    "vite": "^6",
+    "vitest": "^4.1.10"
   },
   "dependencies": {
     "@fontsource-variable/ibm-plex-sans": "^5",
     "@fontsource/ibm-plex-mono": "^5",
     "@tailwindcss/cli": "^4",
+    "@tanstack/react-query": "^5.101.4",
     "chart.js": "^4",
     "daisyui": "^5",
+    "i18next": "^25",
+    "i18next-browser-languagedetector": "^8",
     "leaflet": "^1.9.4",
-    "lit-html": "^3",
-    "qrcodejs": "^1.0.0",
+    "react": "^19",
+    "react-chartjs-2": "^5",
+    "react-dom": "^19",
+    "react-i18next": "^15",
+    "react-leaflet": "^5",
+    "react-markdown": "^10.1.0",
+    "react-qr-code": "^2.2.0",
+    "react-router": "^7",
+    "rehype-autolink-headings": "^7.1.0",
+    "rehype-slug": "^6.0.0",
+    "remark-gfm": "^4.0.1",
     "tailwindcss": "^4"
+  },
+  "allowScripts": {
+    "esbuild@0.25.12": true,
+    "@parcel/watcher@2.5.1": true
   }
 }

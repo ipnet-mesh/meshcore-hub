@@ -9,7 +9,7 @@
   ```
   `--no-cov` skips coverage for speed; the pipe surfaces only the pass/fail summary.
 - Use Python (version in `.python-version`); activate a venv in `.venv` before running pytest, pre-commit, or alembic locally.
-- **All other operations run inside the compose stack** — never invoke `meshcore-hub` or `npm` directly on the host; build/run/exec via `docker compose` (see Development).
+- **Application operations run inside the compose stack** — never invoke `meshcore-hub` directly on the host; build/run/exec via `docker compose` (see Development). The frontend `npm`/`vite`/`tsc` toolchain is the exception — it runs on the host (see Frontend).
 - **Never `git push` without explicit confirmation** — staging and committing discrete changes is fine.
 - **Never build the Docker images or run `make build` / `make up`** — the user builds manually to test. Stop after code changes + tests + pre-commit pass.
 - **Always generate random Alembic revision IDs** — use `python -c "import secrets; print(secrets.token_hex(6))"` or let `alembic revision` auto-generate. Never hand-pick sequential or guessable IDs like `a1b2c3d4e5f6` — they collide with existing migrations and cause cycle errors at upgrade time.
@@ -40,6 +40,42 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile core ex
 # Shorthands (Makefile, mqtt+core profiles): make build | make up | make down | make logs
 ```
 
+## Frontend (React)
+
+The web UI is a **React 19 + TypeScript + Vite** SPA in
+`src/meshcore_hub/web/static/js/spa-react/` (alias `@/` → that dir). The Jinja2 shell
+(`web/templates/spa.html`) renders only SEO/`window.__APP_CONFIG__`/footer; React renders the
+navbar, banners, and routed pages into `<div id="app">`. **Frontend tooling runs on the host**
+(not in Docker): `npm install`, `npm run build` (Tailwind → vendor fonts → `vite build` →
+`static/dist/` + `assets.json`), `npx tsc --noEmit` (the TS gate — also run by the
+`frontend-typecheck` pre-commit hook; there is no JS *linter* in pre-commit), and
+`npm run test:frontend` (vitest). The Vite build is required to serve the UI;
+there is no fallback bundle.
+
+```bash
+npm install            # host: install frontend deps
+npm run build          # host: produce static/dist/ + assets.json
+npx tsc --noEmit       # host: typecheck (must be clean)
+npm run test:frontend  # host: vitest unit + component tests
+```
+
+- Charts: **react-chartjs-2** — typed config builders in `utils/charts.ts`, wrappers in
+  `components/charts/Charts.tsx` (imports `chart.js/auto`).
+- Maps: **react-leaflet** (`MapPage.tsx`, `NodeDetail.tsx`); both `import "leaflet/dist/leaflet.css"`.
+  That CSS ships in the Vite bundle, which `spa.html` loads in `<head>` **before** `app.css` so
+  the dark-mode map overrides win — don't reorder those `<link>`s.
+- QR codes: **react-qr-code**.
+- Navbar/shell: React (`components/Navbar.tsx`, `ThemeToggle.tsx`, `Announcements.tsx`,
+  `hooks/useNavItems.tsx`); nav uses react-router `NavLink` (client-side nav). Feature flags,
+  custom pages, and announcements all come from `window.__APP_CONFIG__`.
+- Page conventions: `useSearchParams()` for filters/pagination/sort, typed `apiGet<T>()` with an
+  `AbortController` in `useEffect`, `usePageTitle('entities.x')`, shared components
+  (`Pagination`, `FilterForm`, `StatCard`, `NodeDisplay`, etc.).
+- Tests: **vitest** + `@testing-library/react` (`*.test.ts(x)` next to code; setup in
+  `spa-react/test/`). Python web tests assert the embedded `__APP_CONFIG__`
+  (`tests/test_web/conftest.py::get_app_config`), not server-rendered nav HTML.
+- Only **fonts** are vendored (`build.js` copies them); chart/map/QR libs are bundled by Vite.
+
 ## Tests & Quality
 
 Coverage is **opt-in**; add `--cov=meshcore_hub` (or `make test-cov`) when you want it. The dev loop defaults to no coverage and parallel across CPU cores.
@@ -49,9 +85,10 @@ Coverage is **opt-in**; add `--cov=meshcore_hub` (or `make test-cov`) when you w
 pytest -nauto --no-cov 2>&1 | grep -iE "passed|failed" | tail -3
 
 # Makefile shorthands
-make test        # pytest -nauto --no-cov (parallel dev loop)
-make test-cov    # full run with coverage report
-make test-unit   # parallel, fast unit suites only (skips e2e)
+make test          # backend (pytest -nauto --no-cov) then frontend vitest
+make test-cov      # full backend run with coverage report
+make test-unit     # parallel, fast unit suites only (skips e2e)
+make test-frontend # frontend vitest only (npm run test:frontend)
 
 # Targeted by component (run only what you changed)
 pytest --no-cov tests/test_web/        # templates, static JS, web routes
@@ -65,6 +102,38 @@ pytest --no-cov
 # Quality checks
 pre-commit run --all-files
 ```
+
+Browser E2E lives in **`e2e/`** (Playwright, headless Chromium) and replaces the
+old Python e2e suite. It runs against a **throwaway stack** (`e2e/docker-compose.test.yml`)
+with its own ephemeral Postgres and isolated volumes — it never touches the dev
+database. Like the rest of the stack, **the assistant never builds/runs these
+images**; the user does.
+
+```bash
+npx playwright install chromium        # one-time browser binary (host)
+make e2e-build && make e2e-up          # user: build + start mqtt/pg/migrate/collector/api/web
+make e2e-test                          # user: seeds via e2e/seed_data.py, then runs the suite
+make e2e-down                          # user: tear down (destroys the throwaway DB)
+npm run typecheck:e2e                  # assistant: typecheck the e2e TS (safe to run)
+npx playwright test --config=e2e/playwright.config.ts --list   # assistant: verify collection
+```
+
+Design notes when extending the suite:
+- **Auth is forged, not logged in.** No mock IdP exists; the web tier fully trusts
+  the signed `meshcore-session` cookie. `e2e/mint_session.py` (itsdangerous, run
+  with `.venv` python) mints admin/member cookies using the stack's
+  `OIDC_SESSION_SECRET=test-session-secret`; global setup writes them to
+  `e2e/.auth/*.json` and specs opt in via `test.use({ storageState })`. OIDC is
+  enabled in the test stack (which also unlocks the Members feature).
+- **Data is deterministic.** `e2e/seed_data.py` clears + recreates fixed rows
+  (nodes/observers with `area` tags, adverts, messages on channel idx 17 + the
+  "E2E General" custom channel, raw packets + path hops keyed to node prefixes,
+  a route + health, profiles + adoptions) using recent timestamps (7-day windows).
+- **Single shared backend:** `workers: 1`, `fullyParallel: false`; routes/profile
+  specs are `describe.serial`. `WEB_AUTO_REFRESH_SECONDS=2` makes polling assertable.
+- Selectors rely on purposeful `data-testid`s (theme/auto-refresh toggles, observer
+  area badges, path-hop badge + popover, route modal fields, nav/hero/member/list
+  rows) added to the React components.
 
 ## Database & Ops
 

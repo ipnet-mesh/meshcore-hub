@@ -43,184 +43,27 @@
     <!-- Tailwind CSS with DaisyUI (built from source) -->
     <link rel="stylesheet" href="/static/css/tailwind.css?v={{ version }}" />
 
-    <!-- Leaflet CSS for maps -->
-    <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css?v={{ vendor_hashes['leaflet.css'] }}" />
+    <!-- Vite-bundled CSS (React components + Leaflet). Loaded before app.css
+         so app.css theme overrides (e.g. dark-mode map popups) still win. -->
+    {% if asset_app_css %}
+    <link rel="stylesheet" href="/static/dist/{{ asset_app_css }}">
+    {% endif %}
 
     <!-- Custom application styles -->
     <link rel="stylesheet" href="/static/css/app.css?v={{ version }}">
 </head>
 <body class="min-h-screen bg-base-200 flex flex-col">
-    <!-- Navbar -->
-    <div class="navbar bg-base-100 shadow-lg">
-        <div class="navbar-start">
-            <a href="/" class="btn btn-ghost text-xl">
-                <img src="{{ logo_url }}" alt="{{ network_name }}" class="theme-logo{% if logo_invert_light %} theme-logo--invert-light{% endif %} h-6 w-6 mr-2" />
-                {{ network_name }}
-            </a>
-        </div>
-        <div class="navbar-center hidden lg:flex">
-            <ul class="menu menu-horizontal px-1">
-                <li><a href="/" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg> {{ t('entities.home') }}</a></li>
-                {% if features.dashboard %}
-                <li><a href="/dashboard" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 nav-icon-dashboard" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg> {{ t('entities.dashboard') }}</a></li>
-                {% endif %}
-                {% if features.nodes %}
-                <li><a href="/nodes" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 nav-icon-nodes" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg> {{ t('entities.nodes') }}</a></li>
-                {% endif %}
-                {% if features.advertisements %}
-                <li><a href="/advertisements" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 nav-icon-adverts" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" /></svg> {{ t('entities.advertisements') }}</a></li>
-                {% endif %}
-                {% if features.routes %}
-                <li><a href="/routes" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 nav-icon-routes" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" /></svg> {{ t('entities.routes') }}</a></li>
-                {% endif %}
-                {% if features.channels %}
-                <li><a href="/channels" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 nav-icon-channels" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" /></svg> {{ t('entities.channels') }}</a></li>
-                {% endif %}
-                {% if features.messages %}
-                <li><a href="/messages" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 nav-icon-messages" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg> {{ t('entities.messages') }}</a></li>
-                {% endif %}
-                {% if features.packets %}
-                <li><a href="/packets" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 nav-icon-packets" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg> {{ t('entities.packets') }}</a></li>
-                {% endif %}
-                {% if features.map %}
-                <li><a href="/map" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 nav-icon-map" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg> {{ t('entities.map') }}</a></li>
-                {% endif %}
-                {% if features.members %}
-                <li><a href="/members" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 nav-icon-members" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg> {{ t('entities.members') }}</a></li>
-                {% endif %}
-                {% if features.pages %}
-                {% for page in custom_pages %}
-                <li><a href="{{ page.url }}" data-nav-link><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg> {{ page.title }}</a></li>
-                {% endfor %}
-                {% endif %}
-            </ul>
-        </div>
-        <div class="navbar-end gap-1 pr-2">
-            <span id="nav-loading" class="loading loading-spinner loading-sm hidden"></span>
-            <label class="swap swap-rotate btn btn-ghost btn-circle btn-sm">
-                <input type="checkbox" id="theme-toggle" />
-                <!-- sun icon - shown in dark mode (click to switch to light) -->
-                <svg class="swap-off fill-current w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M5.64,17l-.71.71a1,1,0,0,0,0,1.41,1,1,0,0,0,1.41,0l.71-.71A1,1,0,0,0,5.64,17ZM5,12a1,1,0,0,0-1-1H3a1,1,0,0,0,0,2H4A1,1,0,0,0,5,12Zm7-7a1,1,0,0,0,1-1V3a1,1,0,0,0-2,0V4A1,1,0,0,0,12,5ZM5.64,7.05a1,1,0,0,0,.7.29,1,1,0,0,0,.71-.29,1,1,0,0,0,0-1.41l-.71-.71A1,1,0,0,0,4.93,6.34Zm12,.29a1,1,0,0,0,.7-.29l.71-.71a1,1,0,1,0-1.41-1.41L17,5.64a1,1,0,0,0,0,1.41A1,1,0,0,0,17.66,7.34ZM21,11H20a1,1,0,0,0,0,2h1a1,1,0,0,0,0-2Zm-9,8a1,1,0,0,0-1,1v1a1,1,0,0,0,2,0V20A1,1,0,0,0,12,19ZM18.36,17A1,1,0,0,0,17,18.36l.71.71a1,1,0,0,0,1.41,0,1,1,0,0,0,0-1.41ZM12,6.5A5.5,5.5,0,1,0,17.5,12,5.51,5.51,0,0,0,12,6.5Zm0,9A3.5,3.5,0,1,1,15.5,12,3.5,3.5,0,0,1,12,15.5Z"/></svg>
-                <!-- moon icon - shown in light mode (click to switch to dark) -->
-                <svg class="swap-on fill-current w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21.64,13a1,1,0,0,0-1.05-.14,8.05,8.05,0,0,1-3.37.73A8.15,8.15,0,0,1,9.08,5.49a8.59,8.59,0,0,1,.25-2A1,1,0,0,0,8,2.36,10.14,10.14,0,1,0,22,14.05,1,1,0,0,0,21.64,13Zm-9.5,6.69A8.14,8.14,0,0,1,7.08,5.22v.27A10.15,10.15,0,0,0,17.22,15.63a9.79,9.79,0,0,0,2.1-.22A8.11,8.11,0,0,1,12.14,19.73Z"/></svg>
-            </label>
-            {% if oidc_enabled and not system_maintenance %}
-            <div id="auth-section"></div>
-            {% endif %}
-            <div class="dropdown dropdown-end lg:hidden">
-                <div tabindex="0" role="button" class="btn btn-ghost">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
-                </div>
-                <ul id="mobile-nav" tabindex="0" class="dropdown-content menu z-50 p-2 shadow bg-base-100 rounded-box w-56 mt-3">
-                </ul>
-            </div>
-        </div>
-    </div>
-
-    {% if system_announcement %}
-    <div id="system-banner" class="alert alert-error rounded-none py-2 px-4 text-center text-sm">
-        <div class="flash-banner-content">{{ system_announcement | safe }}</div>
-    </div>
-    {% endif %}
-
-    {% if network_announcement %}
-    <div id="flash-banner" class="alert alert-warning rounded-none py-2 px-4 text-center text-sm">
-        <div class="flash-banner-content">{{ network_announcement | safe }}</div>
-        <button aria-label="Dismiss" onclick="document.getElementById('flash-banner').style.display='none'; sessionStorage.setItem('flash-banner-dismissed','1')" class="btn btn-ghost btn-xs">&times;</button>
-    </div>
-    <script>
-        if (sessionStorage.getItem('flash-banner-dismissed') === '1') {
-            document.getElementById('flash-banner').style.display = 'none';
-        }
-    </script>
-    {% endif %}
-
-    <!-- Main Content -->
-    <main class="container mx-auto px-4 py-6 flex-1" id="app">
-    </main>
-
-    <!-- Footer -->
-    <footer class="footer p-4 bg-base-100 text-base-content mt-auto">
-        <!-- Left: MeshCore branding (stacks on top on mobile) -->
-        <div class="flex flex-col items-center gap-1 order-2 lg:order-1">
-            <a href="https://meshcore.io/" target="_blank" rel="noopener noreferrer" class="hover:opacity-80 transition-opacity flex mb-1">
-                <img src="/static/img/meshcore.svg" alt="MeshCore" class="theme-logo theme-logo--invert-light h-4" />
-            </a>
-            <span class="text-xs opacity-50">Off-Grid, Open-Source Encrypted Messaging</span>
-            <p class="text-sm opacity-70">
-                <a href="https://meshcore.io/" target="_blank" rel="noopener noreferrer" class="link link-hover">{{ t('links.website') }}</a>
-                <span> | </span>
-                <a href="https://github.com/meshcore-dev/MeshCore" target="_blank" rel="noopener noreferrer" class="link link-hover">{{ t('links.github') }}</a>
-            </p>
-        </div>
-
-        <!-- Right: Network info + Hub attribution -->
-        <div class="flex flex-col items-center gap-1 order-1 lg:order-2">
-            <p>
-                {{ network_name }}
-                {% if network_city and network_country %}
-                | {{ network_city }}, {{ network_country }}
-                {% endif %}
-            </p>
-            <p class="text-xs opacity-50">{{ t('footer.powered_by') }} <a href="https://github.com/ipnet-mesh/meshcore-hub" target="_blank" rel="noopener noreferrer" class="link link-hover">MeshCore Hub</a> {{ version }}</p>
-            <p class="text-sm opacity-70">
-                {% if network_contact_email %}
-                <a href="mailto:{{ network_contact_email }}" class="link link-hover">{{ network_contact_email }}</a>
-                {% endif %}
-                {% if network_contact_email and network_contact_discord %} | {% endif %}
-                {% if network_contact_discord %}
-                <a href="{{ network_contact_discord }}" target="_blank" rel="noopener noreferrer" class="link link-hover">{{ t('links.discord') }}</a>
-                {% endif %}
-                {% if (network_contact_email or network_contact_discord) and network_contact_github %} | {% endif %}
-                {% if network_contact_github %}
-                <a href="{{ network_contact_github }}" target="_blank" rel="noopener noreferrer" class="link link-hover">{{ t('links.github') }}</a>
-                {% endif %}
-                {% if (network_contact_email or network_contact_discord or network_contact_github) and network_contact_youtube %} | {% endif %}
-                {% if network_contact_youtube %}
-                <a href="{{ network_contact_youtube }}" target="_blank" rel="noopener noreferrer" class="link link-hover">{{ t('links.youtube') }}</a>
-                {% endif %}
-            </p>
-        </div>
-    </footer>
-
-    <!-- Leaflet JS for maps -->
-    <script src="/static/vendor/leaflet/leaflet.js?v={{ vendor_hashes['leaflet.js'] }}"></script>
-
-    <!-- Chart.js for charts -->
-    <script src="/static/vendor/chart.js/chart.umd.min.js?v={{ vendor_hashes['chart.umd.min.js'] }}"></script>
-
-    <!-- QR Code library -->
-    <script src="/static/vendor/qrcodejs/qrcode.min.js?v={{ vendor_hashes['qrcode.min.js'] }}"></script>
-
-    <!-- Chart helper functions -->
-    <script src="/static/js/charts.js?v={{ version }}"></script>
+    <!-- React shell: navbar, announcements, routed page content, and footer render here -->
+    <div id="app" class="flex-1 flex flex-col"></div>
 
     <!-- Embedded app configuration -->
     <script>
         window.__APP_CONFIG__ = {{ config_json|safe }};
     </script>
 
-    <!-- Theme toggle initialization -->
-    <script>
-        (function() {
-            var toggle = document.getElementById('theme-toggle');
-            if (toggle) {
-                var current = document.documentElement.getAttribute('data-theme');
-                toggle.checked = current === 'light';
-                toggle.addEventListener('change', function() {
-                    var theme = this.checked ? 'light' : 'dark';
-                    document.documentElement.setAttribute('data-theme', theme);
-                    localStorage.setItem('meshcore-theme', theme);
-                });
-            }
-        })();
-    </script>
-
-    <!-- SPA Application (ES Module) -->
+    <!-- SPA Application (ES Module, built by Vite) -->
     {% if asset_app_js %}
     <script type="module" src="/static/dist/{{ asset_app_js }}"></script>
-    {% else %}
-    <script type="module" src="/static/js/spa/app.js?v={{ version }}"></script>
     {% endif %}
 </body>
 </html>

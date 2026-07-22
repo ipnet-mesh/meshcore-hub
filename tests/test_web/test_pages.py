@@ -1,6 +1,5 @@
 """Tests for custom pages functionality (SPA)."""
 
-import json
 import tempfile
 from collections.abc import Generator
 from pathlib import Path
@@ -10,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from meshcore_hub.web.pages import CustomPage, PageLoader
+from tests.test_web.conftest import get_app_config
 
 
 class TestCustomPage:
@@ -21,7 +21,7 @@ class TestCustomPage:
             slug="about",
             title="About Us",
             menu_order=10,
-            content_html="<p>Content</p>",
+            content_markdown="# Content",
             file_path="/pages/about.md",
         )
         assert page.url == "/pages/about"
@@ -32,7 +32,7 @@ class TestCustomPage:
             slug="terms-of-service",
             title="Terms of Service",
             menu_order=50,
-            content_html="<p>Terms</p>",
+            content_markdown="# Terms",
             file_path="/pages/terms-of-service.md",
         )
         assert page.url == "/pages/terms-of-service"
@@ -79,8 +79,9 @@ This is the about page.
             assert pages[0].slug == "about"
             assert pages[0].title == "About Us"
             assert pages[0].menu_order == 10
-            assert "About</h1>" in pages[0].content_html
-            assert "<p>This is the about page.</p>" in pages[0].content_html
+            # Raw markdown body is preserved verbatim (rendered client-side)
+            assert "# About" in pages[0].content_markdown
+            assert "This is the about page." in pages[0].content_markdown
 
     def test_load_pages_default_slug_from_filename(self) -> None:
         """Test that slug defaults to filename when not specified."""
@@ -272,8 +273,8 @@ New content.
             assert len(pages) == 1
             assert pages[0].slug == "page"
 
-    def test_markdown_tables_rendered(self) -> None:
-        """Test that markdown tables are rendered to HTML."""
+    def test_markdown_tables_preserved(self) -> None:
+        """Test that GFM table markdown is preserved verbatim for client rendering."""
         with tempfile.TemporaryDirectory() as tmpdir:
             (Path(tmpdir) / "tables.md").write_text("""---
 title: Tables
@@ -289,11 +290,12 @@ title: Tables
 
             pages = loader.get_menu_pages()
             assert len(pages) == 1
-            assert "<table>" in pages[0].content_html
-            assert "<th>" in pages[0].content_html
+            md = pages[0].content_markdown
+            assert "| Header 1 | Header 2 |" in md
+            assert "| Cell 1" in md
 
-    def test_markdown_fenced_code_rendered(self) -> None:
-        """Test that fenced code blocks are rendered."""
+    def test_markdown_fenced_code_preserved(self) -> None:
+        """Test that fenced code blocks are preserved verbatim for client rendering."""
         with tempfile.TemporaryDirectory() as tmpdir:
             (Path(tmpdir) / "code.md").write_text("""---
 title: Code
@@ -310,11 +312,12 @@ def hello():
 
             pages = loader.get_menu_pages()
             assert len(pages) == 1
-            assert "<pre>" in pages[0].content_html
-            assert "def hello():" in pages[0].content_html
+            md = pages[0].content_markdown
+            assert "```python" in md
+            assert "def hello():" in md
 
-    def test_markdown_nested_unordered_list(self) -> None:
-        """Test that nested unordered lists produce nested <ul> elements."""
+    def test_markdown_nested_unordered_list_preserved(self) -> None:
+        """Test that nested unordered list markdown is preserved verbatim."""
         with tempfile.TemporaryDirectory() as tmpdir:
             (Path(tmpdir) / "nested.md").write_text("""---
 title: Nested
@@ -332,17 +335,13 @@ title: Nested
 
             pages = loader.get_menu_pages()
             assert len(pages) == 1
-            html = pages[0].content_html
-            assert "<ul>" in html
-            assert "<li>Item 1" in html
-            assert "<li>Sub item A" in html
-            assert "<li>Deep item" in html
-            outer_ul = html.index("<ul>")
-            inner_ul = html.index("<ul>", outer_ul + 1)
-            assert inner_ul > outer_ul
+            md = pages[0].content_markdown
+            assert "- Item 1" in md
+            assert "- Sub item A" in md
+            assert "- Deep item" in md
 
-    def test_markdown_nested_ordered_list(self) -> None:
-        """Test that nested ordered lists produce nested <ol> elements."""
+    def test_markdown_nested_ordered_list_preserved(self) -> None:
+        """Test that nested ordered list markdown is preserved verbatim."""
         with tempfile.TemporaryDirectory() as tmpdir:
             (Path(tmpdir) / "nested-ol.md").write_text("""---
 title: Nested OL
@@ -359,13 +358,9 @@ title: Nested OL
 
             pages = loader.get_menu_pages()
             assert len(pages) == 1
-            html = pages[0].content_html
-            assert "<ol>" in html
-            assert "<li>First" in html
-            assert "<li>Sub first" in html
-            outer_ol = html.index("<ol>")
-            inner_ol = html.index("<ol>", outer_ol + 1)
-            assert inner_ol > outer_ol
+            md = pages[0].content_markdown
+            assert "1. First" in md
+            assert "1. Sub first" in md
 
 
 class TestPagesRoute:
@@ -464,8 +459,8 @@ Here are some answers.
         data = response.json()
         assert data["slug"] == "about"
         assert data["title"] == "About Us"
-        assert "About Our Network" in data["content_html"]
-        assert "Welcome to the network" in data["content_html"]
+        assert "About Our Network" in data["content_markdown"]
+        assert "Welcome to the network" in data["content_markdown"]
 
     def test_spa_page_api_not_found(self, client_with_pages: TestClient) -> None:
         """Test that /spa/pages/{slug} returns 404 for unknown page."""
@@ -481,35 +476,29 @@ Here are some answers.
         data = response.json()
         assert data["slug"] == "faq"
         assert data["title"] == "FAQ"
-        assert "Frequently Asked Questions" in data["content_html"]
+        assert "Frequently Asked Questions" in data["content_markdown"]
 
     def test_pages_in_navigation(self, client_with_pages: TestClient) -> None:
-        """Test that custom pages appear in navigation."""
+        """Test that custom pages are exposed for the React navigation."""
         response = client_with_pages.get("/")
         assert response.status_code == 200
-        # Check for navigation links
-        assert 'href="/pages/about"' in response.text
-        assert 'href="/pages/faq"' in response.text
+        config = get_app_config(response.text)
+        urls = [p["url"] for p in config["custom_pages"]]
+        assert "/pages/about" in urls
+        assert "/pages/faq" in urls
 
     def test_pages_sorted_in_navigation(self, client_with_pages: TestClient) -> None:
-        """Test that pages are sorted by menu_order in navigation."""
+        """Test that pages are sorted by menu_order for the React navigation."""
         response = client_with_pages.get("/")
         assert response.status_code == 200
+        config = get_app_config(response.text)
+        urls = [p["url"] for p in config["custom_pages"]]
         # About (order 10) should appear before FAQ (order 20)
-        about_pos = response.text.find('href="/pages/about"')
-        faq_pos = response.text.find('href="/pages/faq"')
-        assert about_pos < faq_pos
+        assert urls.index("/pages/about") < urls.index("/pages/faq")
 
     def test_pages_in_config(self, client_with_pages: TestClient) -> None:
         """Test that custom pages are included in SPA config."""
-        response = client_with_pages.get("/")
-        text = response.text
-        config_start = text.find("window.__APP_CONFIG__ = ") + len(
-            "window.__APP_CONFIG__ = "
-        )
-        config_end = text.find(";", config_start)
-        config = json.loads(text[config_start:config_end])
-
+        config = get_app_config(client_with_pages.get("/").text)
         custom_pages = config["custom_pages"]
         assert len(custom_pages) == 2
         slugs = [p["slug"] for p in custom_pages]

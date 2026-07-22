@@ -1,6 +1,7 @@
 """Web dashboard test fixtures."""
 
-from typing import Any, Generator
+import json
+from typing import Any, Generator, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -20,6 +21,22 @@ ALL_FEATURES_ENABLED = {
     "members": True,
     "pages": True,
 }
+
+
+def get_app_config(html: str) -> dict[str, Any]:
+    """Extract the embedded ``window.__APP_CONFIG__`` object from SPA shell HTML.
+
+    The navbar, banners, and feature-gated nav are rendered client-side by React
+    from this config, so web tests assert on the config rather than on
+    server-rendered nav HTML.
+    """
+    marker = "window.__APP_CONFIG__ = "
+    start = html.index(marker) + len(marker)
+    script_end = html.index("</script>", start)
+    # Use the last ";" before </script> so semicolons inside JSON string values
+    # (e.g. announcement HTML) don't truncate the object.
+    end = html.rindex(";", start, script_end)
+    return cast(dict[str, Any], json.loads(html[start:end]))
 
 
 class MockHttpClient:

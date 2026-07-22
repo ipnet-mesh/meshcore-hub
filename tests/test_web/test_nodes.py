@@ -28,12 +28,10 @@ class TestNodesListPage:
         response = client.get("/nodes")
         assert "window.__APP_CONFIG__" in response.text
 
-    def test_nodes_contains_spa_script(self, client: TestClient) -> None:
-        """Test that nodes page includes SPA application script."""
+    def test_nodes_contains_spa_mount(self, client: TestClient) -> None:
+        """Test that nodes page renders the React SPA mount point."""
         response = client.get("/nodes")
-        has_bundled = "/static/dist/" in response.text
-        has_fallback = "/static/js/spa/app.js" in response.text
-        assert has_bundled or has_fallback
+        assert 'id="app"' in response.text
 
     def test_nodes_with_search_param(self, client: TestClient) -> None:
         """Test nodes page with search parameter returns SPA shell."""

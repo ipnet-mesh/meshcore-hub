@@ -1125,8 +1125,8 @@ class TestComputeAverageQuality:
     """Rolling-average tier over a history window (server-side badge source).
 
     Mirrors the ``averageRouteTier`` JS helper in
-    ``web/static/js/charts.js`` so the route card badge matches the chart
-    line color when both render the same window.
+    ``web/static/js/spa-react/utils/charts.ts`` so the route card badge matches
+    the chart line color when both render the same window.
     """
 
     @staticmethod

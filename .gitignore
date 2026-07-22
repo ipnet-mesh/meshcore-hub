@@ -229,3 +229,9 @@ node_modules/
 src/meshcore_hub/web/static/vendor/
 src/meshcore_hub/web/static/dist/
 src/meshcore_hub/web/static/css/tailwind.css
+
+# Playwright e2e artifacts
+/e2e/.auth/
+/e2e/test-results/
+/e2e/playwright-report/
+/e2e/blob-report/

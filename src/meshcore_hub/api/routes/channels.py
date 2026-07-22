@@ -25,7 +25,7 @@ router = APIRouter()
 
 def _channels_key_builder(request: Request) -> str:
     role = resolve_user_role(request) or "anonymous"
-    return f"channels:role={role}:{sorted_query_string(request)}"
+    return f"{request.url.path}:role={role}:{sorted_query_string(request)}"
 
 
 def _channel_to_read(channel: Channel, include_key: bool = False) -> ChannelRead:
