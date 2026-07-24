@@ -13,9 +13,8 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "allowJs": true,
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["src/meshcore_hub/web/static/js/spa-react/*"]
+      "@/*": ["./src/meshcore_hub/web/static/js/spa-react/*"]
     }
   },
   "include": ["src/meshcore_hub/web/static/js/spa-react"]
