@@ -361,7 +361,8 @@
     "recent_packets": "Recent Packets",
     "last_n_hours": "Last {{n}}h",
     "min_nodes_error": "At least 2 path nodes are required.",
-    "other_routes": "Other routes"
+    "other_routes": "Other routes",
+    "filter_mine": "Show only my routes"
   },
   "not_found": {
     "description": "The page you're looking for doesn't exist or has been moved."

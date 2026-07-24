@@ -103,6 +103,155 @@ class TestListRoutes:
         assert "Secret" in labels
 
 
+class TestRouteMineFilter:
+    """``?mine=true`` narrows the list to the caller's own routes."""
+
+    def test_mine_returns_only_caller_routes(self, client_no_auth, api_db_session):
+        api_db_session.add(
+            Route(
+                from_label="Mine",
+                to_label="End",
+                visibility="operator",
+                created_by="test-operator",
+            )
+        )
+        api_db_session.add(
+            Route(
+                from_label="Theirs",
+                to_label="End",
+                visibility="operator",
+                created_by="someone-else",
+            )
+        )
+        api_db_session.commit()
+
+        resp = client_no_auth.get("/api/v1/routes?mine=true", headers=OPERATOR_HEADERS)
+        assert resp.status_code == 200
+        labels = [r["from_label"] for r in resp.json()["items"]]
+        assert "Mine" in labels
+        assert "Theirs" not in labels
+        assert resp.json()["total"] == len(resp.json()["items"])
+
+    def test_mine_false_returns_all_visible(self, client_no_auth, api_db_session):
+        api_db_session.add(
+            Route(
+                from_label="Mine",
+                to_label="End",
+                visibility="operator",
+                created_by="test-operator",
+            )
+        )
+        api_db_session.add(
+            Route(
+                from_label="Theirs",
+                to_label="End",
+                visibility="operator",
+                created_by="someone-else",
+            )
+        )
+        api_db_session.commit()
+
+        resp = client_no_auth.get("/api/v1/routes?mine=false", headers=OPERATOR_HEADERS)
+        assert resp.status_code == 200
+        labels = [r["from_label"] for r in resp.json()["items"]]
+        assert "Mine" in labels
+        assert "Theirs" in labels
+
+    def test_mine_excludes_legacy_null_routes(self, client_no_auth, api_db_session):
+        api_db_session.add(
+            Route(
+                from_label="Owned",
+                to_label="End",
+                visibility="operator",
+                created_by="test-operator",
+            )
+        )
+        api_db_session.add(
+            Route(
+                from_label="Legacy",
+                to_label="End",
+                visibility="operator",
+                created_by=None,
+            )
+        )
+        api_db_session.commit()
+
+        resp = client_no_auth.get("/api/v1/routes?mine=true", headers=OPERATOR_HEADERS)
+        assert resp.status_code == 200
+        labels = [r["from_label"] for r in resp.json()["items"]]
+        assert "Owned" in labels
+        assert "Legacy" not in labels
+
+    def test_mine_empty_when_user_has_no_routes(self, client_no_auth, api_db_session):
+        api_db_session.add(
+            Route(
+                from_label="Theirs",
+                to_label="End",
+                visibility="operator",
+                created_by="someone-else",
+            )
+        )
+        api_db_session.commit()
+
+        resp = client_no_auth.get("/api/v1/routes?mine=true", headers=OPERATOR_HEADERS)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["items"] == []
+        assert data["total"] == 0
+
+    def test_mine_admin_sees_own_routes(self, client_no_auth, api_db_session):
+        api_db_session.add(
+            Route(
+                from_label="AdminRoute",
+                to_label="End",
+                visibility="admin",
+                created_by="test-admin",
+            )
+        )
+        api_db_session.add(
+            Route(
+                from_label="OpRoute",
+                to_label="End",
+                visibility="operator",
+                created_by="test-operator",
+            )
+        )
+        api_db_session.commit()
+
+        resp = client_no_auth.get("/api/v1/routes?mine=true", headers=ADMIN_HEADERS)
+        assert resp.status_code == 200
+        labels = [r["from_label"] for r in resp.json()["items"]]
+        assert "AdminRoute" in labels
+        assert "OpRoute" not in labels
+
+    def test_without_mine_param_returns_all_visible(
+        self, client_no_auth, api_db_session
+    ):
+        api_db_session.add(
+            Route(
+                from_label="Mine",
+                to_label="End",
+                visibility="operator",
+                created_by="test-operator",
+            )
+        )
+        api_db_session.add(
+            Route(
+                from_label="Theirs",
+                to_label="End",
+                visibility="operator",
+                created_by="someone-else",
+            )
+        )
+        api_db_session.commit()
+
+        resp = client_no_auth.get("/api/v1/routes", headers=OPERATOR_HEADERS)
+        assert resp.status_code == 200
+        labels = [r["from_label"] for r in resp.json()["items"]]
+        assert "Mine" in labels
+        assert "Theirs" in labels
+
+
 class TestCreateRoute:
     def test_create_success(self, client_no_auth, api_db_session):
         nodes = _sample_nodes(api_db_session)

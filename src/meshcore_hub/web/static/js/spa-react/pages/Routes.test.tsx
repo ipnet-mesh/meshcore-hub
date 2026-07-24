@@ -305,3 +305,109 @@ describe("Routes per-route ownership gating", () => {
     expect(links.filter((l) => l.textContent === "Test User")).toHaveLength(0);
   });
 });
+
+describe("Routes mine filter", () => {
+  function buildConfig(roles: string[], userSub: string) {
+    return makeConfig({
+      oidc_enabled: true,
+      roles,
+      role_names: { admin: "admin", operator: "operator", member: "member" },
+      user: { sub: userSub, name: "Test User" },
+    });
+  }
+
+  afterEach(() => {
+    window.__APP_CONFIG__ = makeConfig();
+  });
+
+  it("passes mine=true to apiGet when URL has ?mine=true", async () => {
+    const cfg = buildConfig(["operator"], "op-1");
+    window.__APP_CONFIG__ = cfg;
+    const spy = vi.spyOn(api, "apiGet").mockImplementation(async (path) => {
+      if (path === "/api/v1/routes") return ROUTES;
+      if (path.match(/\/api\/v1\/routes\/[^/]+$/)) return ROUTE_DETAIL;
+      if (path.includes("/history")) return ROUTE_HISTORY;
+      throw new Error(`Unexpected: ${path}`);
+    });
+
+    renderWithProviders(<Routes />, {
+      config: cfg,
+      route: "/routes?mine=true",
+    });
+    await waitFor(() => {
+      expect(spy).toHaveBeenCalledWith(
+        "/api/v1/routes",
+        expect.objectContaining({ mine: "true" }),
+        expect.anything(),
+      );
+    });
+  });
+
+  it("omits mine param when URL has no ?mine=true", async () => {
+    const cfg = buildConfig(["operator"], "op-1");
+    window.__APP_CONFIG__ = cfg;
+    const spy = vi.spyOn(api, "apiGet").mockImplementation(async (path) => {
+      if (path === "/api/v1/routes") return ROUTES;
+      if (path.match(/\/api\/v1\/routes\/[^/]+$/)) return ROUTE_DETAIL;
+      if (path.includes("/history")) return ROUTE_HISTORY;
+      throw new Error(`Unexpected: ${path}`);
+    });
+
+    renderWithProviders(<Routes />, { config: cfg, route: "/routes" });
+    await waitFor(() => {
+      expect(spy).toHaveBeenCalledWith(
+        "/api/v1/routes",
+        {},
+        expect.anything(),
+      );
+    });
+  });
+
+  it("hides filter toggle for members", async () => {
+    const cfg = buildConfig(["member"], "mem-1");
+    window.__APP_CONFIG__ = cfg;
+    mockRoutesApi();
+    renderWithProviders(<Routes />, { config: cfg });
+    await waitFor(() => {
+      expect(screen.getAllByText("NodeA").length).toBeGreaterThanOrEqual(1);
+    });
+    expect(screen.queryByTestId("routes-mine-toggle")).toBeNull();
+    expect(screen.queryByLabelText(/filters/i)).toBeNull();
+  });
+
+  it("hides filter toggle when OIDC is disabled", async () => {
+    window.__APP_CONFIG__ = makeConfig();
+    mockRoutesApi();
+    renderWithProviders(<Routes />);
+    await waitFor(() => {
+      expect(screen.getAllByText("NodeA").length).toBeGreaterThanOrEqual(1);
+    });
+    expect(screen.queryByTestId("routes-mine-toggle")).toBeNull();
+  });
+
+  it("shows the mine toggle for operators when filter panel is open", async () => {
+    const cfg = buildConfig(["operator"], "op-1");
+    window.__APP_CONFIG__ = cfg;
+    mockRoutesApi();
+    renderWithProviders(<Routes />, { config: cfg });
+    await screen.findByTestId("add-route");
+    fireEvent.click(screen.getByLabelText(/filters/i));
+    expect(await screen.findByTestId("routes-mine-toggle")).toBeInTheDocument();
+  });
+
+  it("checkbox is checked on load when URL has ?mine=true", async () => {
+    const cfg = buildConfig(["operator"], "op-1");
+    window.__APP_CONFIG__ = cfg;
+    mockRoutesApi();
+    renderWithProviders(<Routes />, {
+      config: cfg,
+      route: "/routes?mine=true",
+    });
+    await screen.findByTestId("add-route");
+    fireEvent.click(screen.getByLabelText(/filters/i));
+    const toggle = (await screen.findByTestId(
+      "routes-mine-toggle",
+    )) as HTMLInputElement;
+    expect(toggle.checked).toBe(true);
+  });
+});

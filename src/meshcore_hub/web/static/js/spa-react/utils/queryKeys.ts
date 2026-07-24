@@ -17,7 +17,7 @@ export const qk = {
   },
   routes: {
     all: ["routes"] as const,
-    list: () => ["routes", "list"] as const,
+    list: (params: unknown = {}) => ["routes", "list", params] as const,
     detail: (id: string) => ["routes", "detail", id] as const,
     history: (id: string, days: number) =>
       ["routes", "history", id, days] as const,

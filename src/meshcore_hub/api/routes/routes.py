@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from sqlalchemy import select
 
 from meshcore_hub.api.auth import RequireOperatorOrAdmin, RequireRead, X_USER_ID_HEADER
@@ -316,13 +316,26 @@ def list_routes(
     _: RequireRead,
     session: DbSession,
     request: Request,
+    mine: bool = Query(
+        default=False, description="Only return routes created by the caller"
+    ),
 ) -> RouteList:
-    """List routes, filtered by user role visibility."""
+    """List routes, filtered by user role visibility.
+
+    When ``mine`` is true, only routes whose ``created_by`` matches the
+    caller's user ID are returned (legacy routes with a NULL ``created_by``
+    are always excluded in this mode).
+    """
     role = resolve_user_role(request)
     max_level = get_max_visibility_level(role)
+    caller_id = request.headers.get(X_USER_ID_HEADER, "")
 
     routes = session.execute(select(Route).order_by(Route.from_label)).scalars().all()
     visible = [r for r in routes if VISIBILITY_LEVELS.get(r.visibility, 0) <= max_level]
+    if mine:
+        visible = [
+            r for r in visible if r.created_by is not None and r.created_by == caller_id
+        ]
     owners_by_id = _resolve_owners_batch(session, visible)
     filtered = [
         _route_to_read(

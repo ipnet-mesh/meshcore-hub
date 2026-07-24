@@ -283,7 +283,8 @@
     "recent_packets": "Recente packets",
     "last_n_hours": "Laatste {{n}}u",
     "min_nodes_error": "Minimaal 2 padknooppunten zijn vereist.",
-    "other_routes": "Overige routes"
+    "other_routes": "Overige routes",
+    "filter_mine": "Toon alleen mijn routes"
   },
   "not_found": {
     "description": "De pagina die u zoekt bestaat niet of is verplaatst."
