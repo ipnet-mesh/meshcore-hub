@@ -466,12 +466,12 @@ function DetailContent({
   return (
     <div className="mt-2 space-y-3 text-sm">
       {history && (
-        <div className="mb-3">
+        <div className="mb-3 min-w-0">
           <RouteDetailStrip data={history} />
           {historyData.length > 0 && (
-            <div className="flex text-xs opacity-50 mt-0.5">
+            <div className="flex text-xs opacity-50 mt-0.5 min-w-0">
               {historyData.map((d, i) => (
-                <span key={d.date} className="flex-1 text-center">
+                <span key={d.date} className="flex-1 text-center min-w-0 truncate">
                   {i === historyData.length - 1
                     ? t("routes.last_n_hours", { n: route.window_hours })
                     : new Date(`${d.date}T00:00:00`).toLocaleDateString(
@@ -487,7 +487,7 @@ function DetailContent({
       {matches.length > 0 && (
         <div>
           <strong className="opacity-70">{t("routes.recent_packets")}</strong>
-          <div className="mt-2 space-y-2">
+          <div className="mt-2 space-y-2 overflow-hidden">
             {matches.map((m, i) => (
               <MatchRow
                 key={`${m.packet_hash || "match"}-${i}`}
@@ -542,7 +542,7 @@ function RouteCard({
 
   return (
     <div
-      className="card bg-base-100 shadow-xl h-full"
+      className="card bg-base-100 shadow-xl h-full min-w-0"
       data-testid="route-card"
       data-route-label={`${route.from_label} → ${route.to_label}`}
     >
