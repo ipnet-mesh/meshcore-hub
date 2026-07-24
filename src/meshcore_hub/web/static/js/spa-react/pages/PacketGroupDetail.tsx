@@ -21,7 +21,7 @@ import {
 import { groupByObserver } from "@/utils/packetGroupHelpers";
 import { Loading, WarningBadge } from "@/components/Alerts";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
-import { IconSatelliteDish } from "@/components/icons";
+import { IconPackets, IconSatelliteDish } from "@/components/icons";
 import { NotFoundState } from "@/components/NotFoundState";
 import { TimeAgo } from "@/components/TimeAgo";
 import { DefinitionGrid } from "@/components/Definition";
@@ -355,6 +355,11 @@ export function PacketGroupDetail() {
           { label: leaf || t("packets.detail_title") },
         ]}
       />
+
+      <h1 className="text-3xl font-bold flex items-center gap-2 mb-6">
+        <IconPackets className="h-8 w-8" />
+        {leaf || t("packets.detail_title")}
+      </h1>
 
       {notFound && (
         <NotFoundState tone="warning" message={t("packets.not_found_retention")} />

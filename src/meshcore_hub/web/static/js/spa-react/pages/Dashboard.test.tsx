@@ -45,6 +45,9 @@ describe("Dashboard", () => {
     await waitFor(() => {
       expect(document.querySelector(".loading-spinner")).toBeNull();
     });
+    expect(
+      screen.getByRole("heading", { name: "entities.dashboard" }).querySelector("svg"),
+    ).not.toBeNull();
   });
 
   it("shows an error on fetch failure", async () => {

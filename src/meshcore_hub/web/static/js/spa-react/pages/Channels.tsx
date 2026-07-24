@@ -283,7 +283,7 @@ export function Channels() {
   const config = useAppConfig();
   const oidcEnabled = config.oidc_enabled;
   const isAdmin = hasRole("admin");
-  usePageTitle("channels.title");
+  usePageTitle("entities.channels");
 
   const queryClient = useQueryClient();
 
@@ -364,14 +364,7 @@ export function Channels() {
 
   return (
     <div>
-      <PageHeader
-        title={
-          <span className="flex items-center gap-2">
-            <IconChannel className="h-8 w-8" />
-            {t("channels.title")}
-          </span>
-        }
-      />
+      <PageHeader title={t("entities.channels")} icon={IconChannel} />
 
       {error && <ErrorAlert message={error} />}
 

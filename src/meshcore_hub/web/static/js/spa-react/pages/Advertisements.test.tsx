@@ -40,6 +40,11 @@ describe("Advertisements", () => {
     await waitFor(() => {
       expect(screen.getAllByText("AdNode").length).toBeGreaterThanOrEqual(1);
     });
+    expect(
+      screen
+        .getByRole("heading", { name: "entities.advertisements" })
+        .querySelector("svg"),
+    ).not.toBeNull();
   });
 
   it("shows an error alert on fetch failure", async () => {

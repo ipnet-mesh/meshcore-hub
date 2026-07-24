@@ -8,6 +8,7 @@ import { useFormatDateTime } from "@/utils/format";
 import { Loading, WarningBadge } from "@/components/Alerts";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { NotFoundState } from "@/components/NotFoundState";
+import { IconPackets } from "@/components/icons";
 import { DefinitionGrid } from "@/components/Definition";
 import {
   buildChannelNames,
@@ -89,6 +90,11 @@ export function PacketDetail() {
           { label: leaf || t("packets.detail_title") },
         ]}
       />
+
+      <h1 className="text-3xl font-bold flex items-center gap-2 mb-6">
+        <IconPackets className="h-8 w-8" />
+        {leaf || t("packets.detail_title")}
+      </h1>
 
       {notFound && (
         <NotFoundState

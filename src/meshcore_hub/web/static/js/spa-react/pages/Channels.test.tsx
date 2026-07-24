@@ -52,6 +52,9 @@ describe("Channels", () => {
       expect(screen.getByText("Public")).toBeInTheDocument();
       expect(screen.getByText("Ops")).toBeInTheDocument();
     });
+    expect(
+      screen.getByRole("heading", { name: "entities.channels" }).querySelector("svg"),
+    ).not.toBeNull();
   });
 
   it("shows an error alert on fetch failure", async () => {

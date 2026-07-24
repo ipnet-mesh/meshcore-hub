@@ -15,7 +15,7 @@ import { ErrorAlert, Loading, SuccessAlert } from "@/components/Alerts";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { CopyableValue } from "@/components/CopyableValue";
-import { IconEdit, IconPlus, IconTrash } from "@/components/icons";
+import { IconEdit, IconNodes, IconPlus, IconTrash } from "@/components/icons";
 import { MeshQrCode } from "@/components/MeshQrCode";
 import { Modal } from "@/components/Modal";
 import { NotFoundState } from "@/components/NotFoundState";
@@ -606,7 +606,10 @@ export function NodeDetailPage() {
           {emoji}
         </span>
         <div className="flex-1 min-w-0">
-          <h1 className="text-3xl font-bold">{displayName}</h1>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <IconNodes className="h-8 w-8" />
+            {displayName}
+          </h1>
           {tagDescription && (
             <p className="opacity-70 mt-2">{tagDescription}</p>
           )}

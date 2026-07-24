@@ -40,6 +40,9 @@ describe("Messages", () => {
     await waitFor(() => {
       expect(screen.getAllByText("Hello world").length).toBeGreaterThanOrEqual(1);
     });
+    expect(
+      screen.getByRole("heading", { name: "entities.messages" }).querySelector("svg"),
+    ).not.toBeNull();
   });
 
   it("shows an error alert on fetch failure", async () => {

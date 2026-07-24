@@ -69,6 +69,9 @@ describe("Routes", () => {
     await waitFor(() => {
       expect(screen.getAllByText("NodeA").length).toBeGreaterThanOrEqual(1);
     });
+    expect(
+      screen.getByRole("heading", { name: "entities.routes" }).querySelector("svg"),
+    ).not.toBeNull();
   });
 
   it("shows an error on fetch failure", async () => {

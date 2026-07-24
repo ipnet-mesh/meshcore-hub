@@ -55,6 +55,9 @@ describe("MapPage", () => {
     await waitFor(() => {
       expect(screen.getByTestId("mock-map")).toBeInTheDocument();
     });
+    expect(
+      screen.getByRole("heading", { name: "entities.map" }).querySelector("svg"),
+    ).not.toBeNull();
   });
 
   it("shows an error on fetch failure", async () => {

@@ -14,7 +14,7 @@ import { Loading, ErrorAlert } from "@/components/Alerts";
 import { CallsignBadge, RoleBadge } from "@/components/Badges";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
-import { IconAntenna, IconUsers } from "@/components/icons";
+import { IconAntenna, IconMembers, IconUsers } from "@/components/icons";
 import { usePageTitle } from "@/hooks/usePageTitle";
 
 interface MemberNode {
@@ -184,7 +184,7 @@ export function Members() {
   if (visible.length === 0) {
     return (
       <>
-        <PageHeader title={t("entities.members")} />
+        <PageHeader title={t("entities.members")} icon={IconMembers} />
         <EmptyState>
           <p className="text-lg">{t("members_page.empty_state")}</p>
           <p className="text-sm mt-2">{t("members_page.empty_description")}</p>
@@ -207,7 +207,7 @@ export function Members() {
 
   return (
     <>
-      <PageHeader title={t("entities.members")}>
+      <PageHeader title={t("entities.members")} icon={IconMembers}>
         <span className="badge badge-lg">
           {t("common.count_entity", {
             count: formatNumber(operators.length + members.length),
