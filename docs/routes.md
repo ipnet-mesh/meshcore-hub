@@ -44,11 +44,13 @@ The collector runs a background thread that re-evaluates every enabled route on 
 
 Routes carry the same role-based visibility levels as channels — `community`, `member`, `operator`, `admin`. A user only sees routes whose visibility is at or below their role's maximum level. Seeded routes default to `community` (visible to everyone); set a higher level to restrict a route to operators/admins only. Visibility is enforced on both the list and detail endpoints, so a hidden route's existence is not leaked.
 
+Both operators and admins can create, edit, and delete routes. A user may never scope a route above their own role (e.g. an operator cannot create an `admin`-visibility route) — this is enforced on the write endpoints and prevents a user from creating a route they could then never see or modify. Operators can only edit/delete routes whose visibility is at or below the operator tier; attempting to modify a higher-visibility route returns `404`.
+
 ## Defining routes
 
 Routes are keyed by their `from`/`to` endpoint labels and upserted by that pair. There are two ways to create them:
 
 - **Seed YAML** — add a `routes.yaml` to your `SEED_HOME` and run the seed process. See [seeding.md → Routes](seeding.md#routes) for the format and rules (path nodes must already exist in the database; the `(from, to)` pair must be unique).
-- **API** — `POST /api/v1/routes` (admin only) creates a route, with a `/preview` endpoint that dry-runs matching against an unsaved configuration so you can tune thresholds before committing. See `SCHEMAS.md` for the request/response shapes.
+- **API** — `POST /api/v1/routes` (operator or admin) creates a route, with a `/preview` endpoint that dry-runs matching against an unsaved configuration so you can tune thresholds before committing. See `SCHEMAS.md` for the request/response shapes.
 
-The `/routes` page renders the live status card, the per-day history strip, recent matching transmissions (with observer attribution), and — for admins — inline edit/delete controls.
+The `/routes` page renders the live status card, the per-day history strip, recent matching transmissions (with observer attribution), and — for operators and admins — inline edit/delete controls.

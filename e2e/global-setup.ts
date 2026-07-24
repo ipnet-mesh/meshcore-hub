@@ -152,6 +152,13 @@ export default async function globalSetup(): Promise<void> {
     "pw-member@example.com",
     "member",
   );
+  const operatorCookie = await mintSessionCookie(
+    "pw-operator",
+    "PW Operator",
+    "pw-operator@example.com",
+    "operator,member",
+  );
   await writeStorageState(adminCookie, path.join(AUTH_DIR, "admin.json"));
   await writeStorageState(memberCookie, path.join(AUTH_DIR, "member.json"));
+  await writeStorageState(operatorCookie, path.join(AUTH_DIR, "operator.json"));
 }

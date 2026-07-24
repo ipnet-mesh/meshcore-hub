@@ -1552,7 +1552,7 @@ class TestMutationInvalidationIntegration:
                 "node_public_keys": [n1.public_key, n2.public_key],
                 "match_width": 2,
             },
-            headers={"X-User-Roles": "admin"},
+            headers={"X-User-Id": "test-admin", "X-User-Roles": "admin"},
         )
         assert resp.status_code == 201
         mock_cache.delete.assert_any_call("/api/v1/routes")
@@ -1585,7 +1585,7 @@ class TestMutationInvalidationIntegration:
         resp = client_no_auth.put(
             f"/api/v1/routes/{route.id}",
             json={"from_label": "NewFrom", "to_label": "NewTo"},
-            headers={"X-User-Roles": "admin"},
+            headers={"X-User-Id": "test-admin", "X-User-Roles": "admin"},
         )
         assert resp.status_code == 200
         mock_cache.delete.assert_any_call("/api/v1/routes")
@@ -1614,7 +1614,7 @@ class TestMutationInvalidationIntegration:
         mock_cache = self._install_mock_cache(client_no_auth)
         resp = client_no_auth.delete(
             f"/api/v1/routes/{route.id}",
-            headers={"X-User-Roles": "admin"},
+            headers={"X-User-Id": "test-admin", "X-User-Roles": "admin"},
         )
         assert resp.status_code == 204
         mock_cache.delete.assert_any_call("/api/v1/routes")
@@ -1782,7 +1782,10 @@ class TestMutationVisibilityThroughHttpCache:
         client_no_auth.app.state.redis_cache_ttl = 30
 
         # 1) Initial GET — populates cache and returns an ETag.
-        first = client_no_auth.get("/api/v1/routes", headers={"X-User-Roles": "admin"})
+        first = client_no_auth.get(
+            "/api/v1/routes",
+            headers={"X-User-Id": "test-admin", "X-User-Roles": "admin"},
+        )
         assert first.status_code == 200
         assert first.headers["x-cache"] == "MISS"
         assert first.headers["cache-control"] == "private, no-cache"
@@ -1807,7 +1810,7 @@ class TestMutationVisibilityThroughHttpCache:
         mut = client_no_auth.put(
             f"/api/v1/routes/{route.id}",
             json={"from_label": "NewOrigin", "to_label": "NewDest"},
-            headers={"X-User-Roles": "admin"},
+            headers={"X-User-Id": "test-admin", "X-User-Roles": "admin"},
         )
         assert mut.status_code == 200
         # Mutations are always no-store.

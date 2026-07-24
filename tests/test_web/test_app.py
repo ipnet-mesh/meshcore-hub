@@ -293,6 +293,30 @@ class TestCheckApiAccess:
             "v1/packet-groups/abc123", "GET", False, frozenset(), mapping=mapping
         )
 
+    def test_built_mapping_admits_operator_for_routes(self) -> None:
+        """Operators (not just admins) may create/update/delete routes."""
+        mapping = _build_endpoint_access(role_admin="admin")
+        operator = frozenset({"operator"})
+        # Collection POST (create) + item PUT/DELETE (prefix-matched).
+        assert check_api_access(
+            "v1/routes", "POST", True, operator, user_id="op-1", mapping=mapping
+        )
+        assert check_api_access(
+            "v1/routes/abc", "PUT", True, operator, user_id="op-1", mapping=mapping
+        )
+        assert check_api_access(
+            "v1/routes/abc", "DELETE", True, operator, user_id="op-1", mapping=mapping
+        )
+        # Members are still denied route writes.
+        assert not check_api_access(
+            "v1/routes",
+            "POST",
+            True,
+            frozenset({"member"}),
+            user_id="m-1",
+            mapping=mapping,
+        )
+
 
 class TestRadioConfigSettingsFallback:
     """Tests that radio config falls back to settings when params are None."""
