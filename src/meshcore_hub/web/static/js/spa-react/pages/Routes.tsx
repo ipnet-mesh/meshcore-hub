@@ -7,7 +7,7 @@ import {
 } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 
 import { useAppConfig, hasRole } from "@/context/AppConfigContext";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
@@ -36,6 +36,7 @@ import {
   IconRuler,
   IconSatelliteDish,
   IconTrash,
+  IconUser,
 } from "@/components/icons";
 
 interface RouteResultInfo {
@@ -58,6 +59,13 @@ interface RouteObserverInfo {
   name?: string | null;
 }
 
+interface RouteOwnerInfo {
+  user_id: string;
+  name?: string | null;
+  callsign?: string | null;
+  profile_id: string;
+}
+
 interface RouteItem {
   id: string;
   from_label?: string | null;
@@ -76,6 +84,8 @@ interface RouteItem {
   route_result?: RouteResultInfo | null;
   route_nodes?: RouteNodeInfo[];
   route_observers?: RouteObserverInfo[];
+  created_by?: string | null;
+  owner?: RouteOwnerInfo | null;
 }
 
 interface RouteListResponse {
@@ -495,14 +505,14 @@ function DetailContent({
 
 function RouteCard({
   route,
-  canManage,
+  canEdit,
   packetsEnabled,
   onEdit,
   onDelete,
   onNavigate,
 }: {
   route: RouteItem;
-  canManage: boolean;
+  canEdit: boolean;
   packetsEnabled: boolean;
   onEdit: () => void;
   onDelete: () => void;
@@ -577,6 +587,21 @@ function RouteCard({
           <PathChips route={route} />
         </div>
         <StatsRow route={route} />
+        {route.created_by && (
+          <div className="text-xs opacity-60 flex items-center gap-1 mt-1">
+            <IconUser className="h-3 w-3" />
+            {route.owner ? (
+              <Link
+                to={`/profile/${route.owner.profile_id}`}
+                className="link link-hover"
+              >
+                {route.owner.name || route.owner.user_id}
+              </Link>
+            ) : (
+              <span>{route.created_by}</span>
+            )}
+          </div>
+        )}
         {detail ? (
           <DetailContent
             route={route}
@@ -590,7 +615,7 @@ function RouteCard({
             <span className="loading loading-spinner loading-sm opacity-50"></span>
           </div>
         )}
-        {canManage && (
+        {canEdit && (
           <div className="flex gap-2 mt-auto pt-2">
             <button
               className="btn btn-xs btn-outline"
@@ -1159,6 +1184,10 @@ export function RoutesPage() {
   const config = useAppConfig();
   const packetsEnabled = config.features?.packets !== false;
   const canManage = hasRole("admin") || hasRole("operator");
+  const currentUserId = config.user?.sub;
+  const isAdmin = hasRole("admin");
+  const canEditRoute = (r: RouteItem) =>
+    isAdmin || (!!r.created_by && r.created_by === currentUserId);
   usePageTitle("routes.title");
 
   const queryClient = useQueryClient();
@@ -1516,7 +1545,7 @@ export function RoutesPage() {
                 <RouteCard
                   key={r.id}
                   route={r}
-                  canManage={canManage}
+                  canEdit={canEditRoute(r)}
                   packetsEnabled={packetsEnabled}
                   onEdit={() => openEditModal(r)}
                   onDelete={() => openDeleteModal(r)}

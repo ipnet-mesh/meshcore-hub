@@ -11,6 +11,7 @@ from meshcore_hub.common.models import (
     Route,
     RouteNode,
 )
+from meshcore_hub.common.models.user_profile import UserProfile
 
 ADMIN_HEADERS = {"X-User-Id": "test-admin", "X-User-Roles": "admin"}
 OPERATOR_HEADERS = {"X-User-Id": "test-operator", "X-User-Roles": "operator"}
@@ -1319,7 +1320,16 @@ class TestPrecomputedRecentMatches:
 
 
 class TestRouteOperatorPermissions:
-    """Operators may manage routes but cannot scope above their own role."""
+    """Operators may manage routes but cannot scope above their own role.
+
+    Ownership model (PR #337):
+    - Operators can edit/delete only routes they created.
+    - Admins can edit/delete any route; they claim ownership of legacy
+      (unowned) routes on edit but do not displace an existing creator.
+    - Routes with NULL ``created_by`` (legacy) are admin-only.
+    """
+
+    # ── Create: visibility + created_by stamping ──────────────────────
 
     def test_operator_create_at_own_level(self, client_no_auth, api_db_session):
         nodes = _sample_nodes(api_db_session)
@@ -1388,8 +1398,50 @@ class TestRouteOperatorPermissions:
         assert resp.status_code == 201
         assert resp.json()["visibility"] == "admin"
 
-    def test_operator_update_own_level(self, client_no_auth, api_db_session):
-        route = Route(from_label="Op", to_label="End", visibility="operator")
+    def test_create_stamps_created_by(self, client_no_auth, api_db_session):
+        """Route creation stamps the caller's user_id into created_by."""
+        nodes = _sample_nodes(api_db_session)
+        api_db_session.commit()
+
+        resp = client_no_auth.post(
+            "/api/v1/routes",
+            json={
+                "from_label": "Owner",
+                "to_label": "End",
+                "visibility": "operator",
+                "node_public_keys": [n.public_key for n in nodes],
+            },
+            headers=OPERATOR_HEADERS,
+        )
+        assert resp.status_code == 201
+        assert resp.json()["created_by"] == "test-operator"
+
+    def test_admin_create_stamps_created_by(self, client_no_auth, api_db_session):
+        nodes = _sample_nodes(api_db_session)
+        api_db_session.commit()
+
+        resp = client_no_auth.post(
+            "/api/v1/routes",
+            json={
+                "from_label": "AdmOwner",
+                "to_label": "End",
+                "visibility": "admin",
+                "node_public_keys": [n.public_key for n in nodes],
+            },
+            headers=ADMIN_HEADERS,
+        )
+        assert resp.status_code == 201
+        assert resp.json()["created_by"] == "test-admin"
+
+    # ── Update: ownership enforcement ─────────────────────────────────
+
+    def test_operator_update_own_route(self, client_no_auth, api_db_session):
+        route = Route(
+            from_label="Op",
+            to_label="End",
+            visibility="operator",
+            created_by="test-operator",
+        )
         api_db_session.add(route)
         api_db_session.commit()
 
@@ -1402,7 +1454,12 @@ class TestRouteOperatorPermissions:
         assert resp.json()["description"] == "edited by operator"
 
     def test_operator_update_community_route(self, client_no_auth, api_db_session):
-        route = Route(from_label="Pub", to_label="End", visibility="community")
+        route = Route(
+            from_label="Pub",
+            to_label="End",
+            visibility="community",
+            created_by="test-operator",
+        )
         api_db_session.add(route)
         api_db_session.commit()
 
@@ -1414,6 +1471,7 @@ class TestRouteOperatorPermissions:
         assert resp.status_code == 200
 
     def test_operator_update_admin_route_404(self, client_no_auth, api_db_session):
+        """Above-tier routes yield 404 (existence hidden)."""
         route = Route(from_label="Secret", to_label="End", visibility="admin")
         api_db_session.add(route)
         api_db_session.commit()
@@ -1425,10 +1483,94 @@ class TestRouteOperatorPermissions:
         )
         assert resp.status_code == 404
 
+    def test_operator_update_other_operator_route_403(
+        self, client_no_auth, api_db_session
+    ):
+        """Operator cannot edit a route created by another operator."""
+        route = Route(
+            from_label="Other",
+            to_label="End",
+            visibility="operator",
+            created_by="different-operator",
+        )
+        api_db_session.add(route)
+        api_db_session.commit()
+
+        resp = client_no_auth.put(
+            f"/api/v1/routes/{route.id}",
+            json={"description": "attempt"},
+            headers=OPERATOR_HEADERS,
+        )
+        assert resp.status_code == 403
+
+    def test_operator_update_legacy_null_route_403(
+        self, client_no_auth, api_db_session
+    ):
+        """Routes with NULL created_by (legacy) are admin-only."""
+        route = Route(
+            from_label="Legacy",
+            to_label="End",
+            visibility="operator",
+            created_by=None,
+        )
+        api_db_session.add(route)
+        api_db_session.commit()
+
+        resp = client_no_auth.put(
+            f"/api/v1/routes/{route.id}",
+            json={"description": "attempt"},
+            headers=OPERATOR_HEADERS,
+        )
+        assert resp.status_code == 403
+
+    def test_operator_update_admin_created_route_403(
+        self, client_no_auth, api_db_session
+    ):
+        """Operator cannot edit a route created by an admin (even if visible)."""
+        route = Route(
+            from_label="AdminMade",
+            to_label="End",
+            visibility="operator",
+            created_by="test-admin",
+        )
+        api_db_session.add(route)
+        api_db_session.commit()
+
+        resp = client_no_auth.put(
+            f"/api/v1/routes/{route.id}",
+            json={"description": "attempt"},
+            headers=OPERATOR_HEADERS,
+        )
+        assert resp.status_code == 403
+
+    def test_admin_update_any_route(self, client_no_auth, api_db_session):
+        """Admin can update a route regardless of who created it."""
+        route = Route(
+            from_label="Any",
+            to_label="End",
+            visibility="operator",
+            created_by="someone-else",
+        )
+        api_db_session.add(route)
+        api_db_session.commit()
+
+        resp = client_no_auth.put(
+            f"/api/v1/routes/{route.id}",
+            json={"description": "admin edit"},
+            headers=ADMIN_HEADERS,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["description"] == "admin edit"
+
     def test_operator_escalate_visibility_rejected(
         self, client_no_auth, api_db_session
     ):
-        route = Route(from_label="Op", to_label="End", visibility="operator")
+        route = Route(
+            from_label="Op",
+            to_label="End",
+            visibility="operator",
+            created_by="test-operator",
+        )
         api_db_session.add(route)
         api_db_session.commit()
 
@@ -1439,8 +1581,87 @@ class TestRouteOperatorPermissions:
         )
         assert resp.status_code == 403
 
-    def test_operator_delete_own_level(self, client_no_auth, api_db_session):
-        route = Route(from_label="Op", to_label="End", visibility="operator")
+    def test_operator_cannot_claim_ownership_via_body(
+        self, client_no_auth, api_db_session
+    ):
+        """created_by in the PUT body is ignored (Pydantic extra='ignore')."""
+        route = Route(
+            from_label="Hijack",
+            to_label="End",
+            visibility="operator",
+            created_by="test-operator",
+        )
+        api_db_session.add(route)
+        api_db_session.commit()
+
+        resp = client_no_auth.put(
+            f"/api/v1/routes/{route.id}",
+            json={"description": "ok", "created_by": "attacker"},
+            headers=OPERATOR_HEADERS,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["created_by"] == "test-operator"
+
+    # ── Admin ownership semantics ─────────────────────────────────────
+
+    def test_admin_edit_preserves_existing_ownership(
+        self, client_no_auth, api_db_session
+    ):
+        """Admin editing an operator-created route does NOT take ownership."""
+        route = Route(
+            from_label="Preserve",
+            to_label="End",
+            visibility="operator",
+            created_by="test-operator",
+        )
+        api_db_session.add(route)
+        api_db_session.commit()
+
+        resp = client_no_auth.put(
+            f"/api/v1/routes/{route.id}",
+            json={"description": "admin tweaked it"},
+            headers=ADMIN_HEADERS,
+        )
+        assert resp.status_code == 200
+        # Ownership stays with the original creator
+        assert resp.json()["created_by"] == "test-operator"
+
+        # Original operator can still edit
+        resp2 = client_no_auth.put(
+            f"/api/v1/routes/{route.id}",
+            json={"description": "operator still owns it"},
+            headers=OPERATOR_HEADERS,
+        )
+        assert resp2.status_code == 200
+
+    def test_admin_edit_adopts_null_created_by(self, client_no_auth, api_db_session):
+        """Admin editing a legacy route (NULL created_by) takes ownership."""
+        route = Route(
+            from_label="Adopt",
+            to_label="End",
+            visibility="operator",
+            created_by=None,
+        )
+        api_db_session.add(route)
+        api_db_session.commit()
+
+        resp = client_no_auth.put(
+            f"/api/v1/routes/{route.id}",
+            json={"description": "adopted"},
+            headers=ADMIN_HEADERS,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["created_by"] == "test-admin"
+
+    # ── Delete: ownership enforcement ─────────────────────────────────
+
+    def test_operator_delete_own_route(self, client_no_auth, api_db_session):
+        route = Route(
+            from_label="Del",
+            to_label="End",
+            visibility="operator",
+            created_by="test-operator",
+        )
         api_db_session.add(route)
         api_db_session.commit()
 
@@ -1460,3 +1681,125 @@ class TestRouteOperatorPermissions:
             headers=OPERATOR_HEADERS,
         )
         assert resp.status_code == 404
+
+    def test_operator_delete_other_route_403(self, client_no_auth, api_db_session):
+        """Operator cannot delete a route created by someone else."""
+        route = Route(
+            from_label="Other",
+            to_label="End",
+            visibility="operator",
+            created_by="different-operator",
+        )
+        api_db_session.add(route)
+        api_db_session.commit()
+
+        resp = client_no_auth.delete(
+            f"/api/v1/routes/{route.id}",
+            headers=OPERATOR_HEADERS,
+        )
+        assert resp.status_code == 403
+
+    def test_operator_delete_legacy_null_route_403(
+        self, client_no_auth, api_db_session
+    ):
+        """Operator cannot delete a legacy route with NULL created_by."""
+        route = Route(
+            from_label="Legacy",
+            to_label="End",
+            visibility="operator",
+            created_by=None,
+        )
+        api_db_session.add(route)
+        api_db_session.commit()
+
+        resp = client_no_auth.delete(
+            f"/api/v1/routes/{route.id}",
+            headers=OPERATOR_HEADERS,
+        )
+        assert resp.status_code == 403
+
+    def test_admin_delete_any_route(self, client_no_auth, api_db_session):
+        """Admin can delete a route regardless of who created it."""
+        route = Route(
+            from_label="AnyDel",
+            to_label="End",
+            visibility="operator",
+            created_by="someone-else",
+        )
+        api_db_session.add(route)
+        api_db_session.commit()
+
+        resp = client_no_auth.delete(
+            f"/api/v1/routes/{route.id}",
+            headers=ADMIN_HEADERS,
+        )
+        assert resp.status_code == 204
+
+    # ── Owner name resolution in responses ────────────────────────────
+
+    def test_owner_name_resolved_in_list(self, client_no_auth, api_db_session):
+        """List includes owner friendly name when a profile exists, null otherwise."""
+        profile = UserProfile(
+            user_id="test-operator",
+            name="Alice Operator",
+        )
+        api_db_session.add(profile)
+        named = Route(
+            from_label="Named",
+            to_label="End",
+            visibility="operator",
+            created_by="test-operator",
+        )
+        ghost = Route(
+            from_label="Ghost",
+            to_label="End",
+            visibility="operator",
+            created_by="ghost-user",
+        )
+        api_db_session.add_all([named, ghost])
+        api_db_session.commit()
+
+        resp = client_no_auth.get(
+            "/api/v1/routes",
+            headers=OPERATOR_HEADERS,
+        )
+        assert resp.status_code == 200
+        items = resp.json()["items"]
+
+        named_match = [r for r in items if r["from_label"] == "Named"]
+        assert len(named_match) == 1
+        assert named_match[0]["owner"] is not None
+        assert named_match[0]["owner"]["name"] == "Alice Operator"
+        assert named_match[0]["owner"]["user_id"] == "test-operator"
+
+        ghost_match = [r for r in items if r["from_label"] == "Ghost"]
+        assert len(ghost_match) == 1
+        assert ghost_match[0]["created_by"] == "ghost-user"
+        assert ghost_match[0]["owner"] is None
+
+    def test_owner_resolved_in_detail(self, client_no_auth, api_db_session):
+        """GET /routes/{id} includes owner info."""
+        profile = UserProfile(
+            user_id="test-operator",
+            name="Bob",
+            callsign="VK1BOB",
+        )
+        api_db_session.add(profile)
+        route = Route(
+            from_label="Detail",
+            to_label="End",
+            visibility="operator",
+            created_by="test-operator",
+        )
+        api_db_session.add(route)
+        api_db_session.commit()
+
+        resp = client_no_auth.get(
+            f"/api/v1/routes/{route.id}",
+            headers=OPERATOR_HEADERS,
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["owner"] is not None
+        assert body["owner"]["name"] == "Bob"
+        assert body["owner"]["callsign"] == "VK1BOB"
