@@ -7,7 +7,7 @@ import {
 } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 
 import { useAppConfig, hasRole } from "@/context/AppConfigContext";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
@@ -16,6 +16,7 @@ import { usePageTitle } from "@/hooks/usePageTitle";
 import { Loading, ErrorAlert } from "@/components/Alerts";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
+import { FilterForm, FilterField, FilterToggle, autoSubmit } from "@/components/FilterForm";
 import { Modal } from "@/components/Modal";
 import { PageHeader } from "@/components/PageHeader";
 import { SectionGroup } from "@/components/SectionGroup";
@@ -1181,6 +1182,7 @@ function DeleteRouteModal({
 export function RoutesPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const config = useAppConfig();
   const packetsEnabled = config.features?.packets !== false;
   const canManage = hasRole("admin") || hasRole("operator");
@@ -1188,6 +1190,8 @@ export function RoutesPage() {
   const isAdmin = hasRole("admin");
   const canEditRoute = (r: RouteItem) =>
     isAdmin || (!!r.created_by && r.created_by === currentUserId);
+  const mine = searchParams.get("mine") === "true";
+  const [filterOpen, setFilterOpen] = useState(false);
   usePageTitle("routes.title");
 
   const queryClient = useQueryClient();
@@ -1197,11 +1201,11 @@ export function RoutesPage() {
     isLoading: loading,
     error: queryError,
   } = useQuery({
-    queryKey: qk.routes.list(),
+    queryKey: qk.routes.list({ mine }),
     queryFn: async ({ signal }) => {
       const data = await apiGet<RouteListResponse>(
         "/api/v1/routes",
-        {},
+        mine ? { mine: "true" } : {},
         { signal },
       );
       return data.items || [];
@@ -1511,7 +1515,8 @@ export function RoutesPage() {
       {error && <ErrorAlert message={error} />}
 
       {canManage && (
-        <div className="flex justify-end mb-4">
+        <div className="flex items-center justify-between mb-4 gap-2">
+          <FilterToggle open={filterOpen} onChange={() => setFilterOpen((v) => !v)} />
           <button
             className="btn btn-primary btn-sm"
             data-testid="add-route"
@@ -1519,6 +1524,28 @@ export function RoutesPage() {
           >
             <IconPlus className="h-4 w-4" /> {t("routes.add_route")}
           </button>
+        </div>
+      )}
+
+      {filterOpen && canManage && (
+        <div className="mb-4">
+          <FilterForm basePath="/routes">
+            <FilterField label={t("routes.filter_mine")}>
+              <label className="label cursor-pointer justify-start gap-2 py-1">
+                <input
+                  type="checkbox"
+                  name="mine"
+                  value="true"
+                  data-testid="routes-mine-toggle"
+                  className="checkbox checkbox-sm"
+                  key={`mine-${mine}`}
+                  defaultChecked={mine}
+                  onChange={autoSubmit}
+                />
+                <span className="text-sm">{t("routes.filter_mine")}</span>
+              </label>
+            </FilterField>
+          </FilterForm>
         </div>
       )}
 

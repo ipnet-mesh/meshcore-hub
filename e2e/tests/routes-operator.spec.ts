@@ -4,6 +4,8 @@ import { OPERATOR_STATE } from "../utils/helpers";
 test.use({ storageState: OPERATOR_STATE });
 
 const ROUTE_LABEL = "Op From \u2192 Op To";
+const SEEDED_LEGACY = "Alpha Site \u2192 Bravo Site";
+const SEEDED_OWNED = "Op North \u2192 Op South";
 
 test.describe.serial("routes (operator)", () => {
   test("operator can manage routes; admin visibility tier is hidden", async ({
@@ -13,7 +15,7 @@ test.describe.serial("routes (operator)", () => {
 
     // Operators see the seeded community route and the add button.
     const seededCard = page.locator(
-      '[data-testid="route-card"][data-route-label="Alpha Site \u2192 Bravo Site"]',
+      `[data-testid="route-card"][data-route-label="${SEEDED_LEGACY}"]`,
     );
     await expect(seededCard).toBeVisible();
     await expect(page.getByTestId("add-route")).toBeVisible();
@@ -60,5 +62,37 @@ test.describe.serial("routes (operator)", () => {
     await expect(confirm).toBeVisible();
     await confirm.getByRole("button", { name: "Delete" }).click();
     await expect(card).toHaveCount(0);
+  });
+
+  test("mine filter shows only routes the operator owns", async ({ page }) => {
+    await page.goto("/routes");
+
+    const legacyCard = page.locator(
+      `[data-testid="route-card"][data-route-label="${SEEDED_LEGACY}"]`,
+    );
+    const ownedCard = page.locator(
+      `[data-testid="route-card"][data-route-label="${SEEDED_OWNED}"]`,
+    );
+
+    // Both the legacy (NULL created_by) and operator-owned routes are visible.
+    await expect(legacyCard).toBeVisible();
+    await expect(ownedCard).toBeVisible();
+
+    // Open the filter panel and toggle "mine".
+    await page.locator("#filter-toggle").check();
+    await page.getByTestId("routes-mine-toggle").check();
+
+    // URL reflects the filter state.
+    await expect(page).toHaveURL(/mine=true/);
+
+    // Legacy route (NULL created_by) disappears; owned route stays.
+    await expect(legacyCard).toHaveCount(0);
+    await expect(ownedCard).toBeVisible();
+
+    // Turn the filter off — both routes return.
+    await page.getByTestId("routes-mine-toggle").uncheck();
+    await expect(page).not.toHaveURL(/mine=true/);
+    await expect(legacyCard).toBeVisible();
+    await expect(ownedCard).toBeVisible();
   });
 });

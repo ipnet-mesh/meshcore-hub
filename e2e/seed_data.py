@@ -407,6 +407,38 @@ def seed_routes(
         )
     session.flush()
 
+    # A second route owned by the e2e operator session (pw-operator).
+    # Used by the "mine" filter test: operator-owned routes stay visible
+    # when ?mine=true is active, while the legacy NULL-created_by route above
+    # disappears.
+    op_route = Route(
+        from_label="Op North",
+        to_label="Op South",
+        description="Operator-owned e2e route",
+        visibility="operator",
+        match_width=1,
+        window_hours=24,
+        packet_count_threshold=3,
+        clear_threshold=6,
+        max_hop_span=8,
+        enabled=True,
+        reversible=False,
+        created_by="pw-operator",
+    )
+    session.add(op_route)
+    session.flush()
+    for position, pk in enumerate((CHARLIE, DELTA)):
+        session.add(
+            RouteNode(
+                route_id=op_route.id,
+                node_id=nodes[pk].id,
+                position=position,
+                expected_hash=pk[:4].upper(),
+            )
+        )
+    session.add(RouteObserver(route_id=op_route.id, node_id=nodes[NORTH_2].id))
+    session.flush()
+
 
 def seed_profiles(session: Session, nodes: dict[str, Node]) -> None:
     specs = [
