@@ -8,6 +8,7 @@ import { qk } from "@/utils/queryKeys";
 import { useFormatDateTime } from "@/utils/format";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
+import { IconAdvertisements } from "@/components/icons";
 import { Pagination } from "@/components/Pagination";
 import {
   FilterForm,
@@ -235,7 +236,7 @@ export function Advertisements() {
 
   return (
     <>
-      <PageHeader title={t("entities.advertisements")} />
+      <PageHeader title={t("entities.advertisements")} icon={IconAdvertisements} />
 
       <ListToolbar
         total={total}

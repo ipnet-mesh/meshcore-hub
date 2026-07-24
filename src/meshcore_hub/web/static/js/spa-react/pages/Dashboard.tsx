@@ -15,6 +15,7 @@ import { RouteTypeBadge } from "@/components/RouteTypeBadge";
 import {
   IconAdvertisements,
   IconChannel,
+  IconDashboard,
   IconMessages,
   IconNodes,
   IconPackets,
@@ -428,7 +429,7 @@ export function DashboardPage() {
 
   return (
     <>
-      <PageHeader title={t("entities.dashboard")} />
+      <PageHeader title={t("entities.dashboard")} icon={IconDashboard} />
 
       {visibleChartCount > 0 && (
         <>

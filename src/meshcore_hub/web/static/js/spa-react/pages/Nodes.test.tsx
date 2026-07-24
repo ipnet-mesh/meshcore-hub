@@ -43,6 +43,9 @@ describe("Nodes", () => {
     await waitFor(() => {
       expect(screen.getAllByText("TestNode").length).toBeGreaterThanOrEqual(1);
     });
+    expect(
+      screen.getByRole("heading", { name: "entities.nodes" }).querySelector("svg"),
+    ).not.toBeNull();
   });
 
   it("shows an error alert on fetch failure", async () => {

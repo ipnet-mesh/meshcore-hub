@@ -62,6 +62,9 @@ describe("NodeDetail", () => {
     await waitFor(() => {
       expect(document.querySelector(".loading-spinner")).toBeNull();
     });
+    expect(
+      screen.getByRole("heading", { name: "DetailNode" }).querySelector("svg"),
+    ).not.toBeNull();
   });
 
   it("shows an error on fetch failure", async () => {

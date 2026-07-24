@@ -32,6 +32,9 @@ describe("Members", () => {
     });
     expect(screen.getByText("Bob")).toBeInTheDocument();
     expect(screen.queryByText("TestUser")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "entities.members" }).querySelector("svg"),
+    ).not.toBeNull();
   });
 
   it("shows an empty state when no visible profiles exist", async () => {

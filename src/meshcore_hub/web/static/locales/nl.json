@@ -19,6 +19,7 @@
     "admin": "Beheer",
     "tags": "Labels",
     "tag": "Label",
+    "channels": "Kanalen",
     "routes": "Routes"
   },
   "common": {

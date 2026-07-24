@@ -53,6 +53,9 @@ describe("PacketDetail", () => {
       expect(screen.getAllByText("abc123").length).toBeGreaterThanOrEqual(1);
     });
     expect(screen.getByText("Observer1")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "abc123" }).querySelector("svg"),
+    ).not.toBeNull();
   });
 
   it("shows not-found state on a 404 error", async () => {

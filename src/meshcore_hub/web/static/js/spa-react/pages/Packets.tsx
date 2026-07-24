@@ -23,7 +23,7 @@ import { Loading } from "@/components/Alerts";
 import { ListToolbar } from "@/components/ListToolbar";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState, EmptyRow } from "@/components/EmptyState";
-import { IconPath, IconRuler, IconSatelliteDish } from "@/components/icons";
+import { IconPath, IconPackets, IconRuler, IconSatelliteDish } from "@/components/icons";
 
 const EVENT_TYPES = [
   "advertisement",
@@ -251,7 +251,7 @@ export function Packets() {
 
   return (
     <div>
-      <PageHeader title={t("entities.packets")} />
+      <PageHeader title={t("entities.packets")} icon={IconPackets} />
 
       <ListToolbar
         total={packets !== null ? total : null}

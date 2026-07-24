@@ -11,6 +11,7 @@ import { Loading, ErrorAlert, SuccessAlert } from "@/components/Alerts";
 import { CallsignBadge, RoleBadge } from "@/components/Badges";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { PageHeader } from "@/components/PageHeader";
+import { IconUser } from "@/components/icons";
 import { TimeAgo } from "@/components/TimeAgo";
 import { usePageTitle } from "@/hooks/usePageTitle";
 
@@ -253,7 +254,7 @@ function PublicProfileView({ id }: { id: string }) {
           { label: profile.name || t("common.unnamed") },
         ]}
       />
-      <PageHeader title={t("user_profile.title")}>
+      <PageHeader title={t("user_profile.title")} icon={IconUser}>
         {isOwner && (
           <Link to="/profile" className="btn btn-primary btn-sm">
             {t("user_profile.edit_profile")}
@@ -374,7 +375,7 @@ function OwnProfileView() {
           { label: t("user_profile.title") },
         ]}
       />
-      <PageHeader title={t("user_profile.title")} />
+      <PageHeader title={t("user_profile.title")} icon={IconUser} />
 
       {flashMessage ? (
         <SuccessAlert message={flashMessage} />

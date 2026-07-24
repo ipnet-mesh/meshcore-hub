@@ -10,6 +10,7 @@ import { useFormatDateTime } from "@/utils/format";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { Pagination } from "@/components/Pagination";
+import { IconNodes } from "@/components/icons";
 import {
   FilterForm,
   FilterField,
@@ -249,7 +250,7 @@ export function Nodes() {
 
   return (
     <div>
-      <PageHeader title={t("entities.nodes")} />
+      <PageHeader title={t("entities.nodes")} icon={IconNodes} />
 
       <ListToolbar
         total={total}

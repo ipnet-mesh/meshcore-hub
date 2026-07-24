@@ -26,6 +26,7 @@ import {
 import { FilterToggle, OperatorSelect } from "@/components/FilterForm";
 import { ErrorAlert, Loading } from "@/components/Alerts";
 import { PageHeader } from "@/components/PageHeader";
+import { IconMap } from "@/components/icons";
 
 const MAX_BOUNDS_RADIUS_KM = 20;
 
@@ -386,7 +387,7 @@ export function MapPage() {
 
   return (
     <div>
-      <PageHeader title={t("entities.map")}>
+      <PageHeader title={t("entities.map")} icon={IconMap}>
         <span className="badge badge-lg">{countBadgeText}</span>
         {showFilteredBadge && (
           <span className="badge badge-lg badge-ghost">

@@ -53,6 +53,9 @@ describe("PacketGroupDetail", () => {
     await waitFor(() => {
       expect(screen.getAllByText("grouphash").length).toBeGreaterThanOrEqual(1);
     });
+    expect(
+      screen.getByRole("heading", { name: "grouphash" }).querySelector("svg"),
+    ).not.toBeNull();
   });
 
   it("shows an error on fetch failure", async () => {

@@ -18,6 +18,7 @@ import {
 } from "@/utils/messageHelpers";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
+import { IconMessages } from "@/components/icons";
 import { Pagination } from "@/components/Pagination";
 import {
   FilterForm,
@@ -278,7 +279,7 @@ export function Messages() {
 
   return (
     <>
-      <PageHeader title={t("entities.messages")} />
+      <PageHeader title={t("entities.messages")} icon={IconMessages} />
 
       <ListToolbar
         total={total}

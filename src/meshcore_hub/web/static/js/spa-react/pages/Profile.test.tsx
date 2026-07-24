@@ -38,6 +38,9 @@ describe("Profile (public view)", () => {
       expect(screen.getAllByText("Jane Operator").length).toBeGreaterThanOrEqual(1);
     });
     expect(screen.getAllByText("AB1CDE").length).toBeGreaterThanOrEqual(1);
+    expect(
+      screen.getByRole("heading", { name: "user_profile.title" }).querySelector("svg"),
+    ).not.toBeNull();
   });
 
   it("shows an error alert on fetch failure", async () => {

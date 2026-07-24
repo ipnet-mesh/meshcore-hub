@@ -1192,7 +1192,7 @@ export function RoutesPage() {
     isAdmin || (!!r.created_by && r.created_by === currentUserId);
   const mine = searchParams.get("mine") === "true";
   const [filterOpen, setFilterOpen] = useState(false);
-  usePageTitle("routes.title");
+  usePageTitle("entities.routes");
 
   const queryClient = useQueryClient();
 
@@ -1501,14 +1501,7 @@ export function RoutesPage() {
 
   return (
     <div>
-      <PageHeader
-        title={
-          <span className="flex items-center gap-2">
-            <IconPath className="h-8 w-8" />
-            {t("routes.title")}
-          </span>
-        }
-      />
+      <PageHeader title={t("entities.routes")} icon={IconPath} />
 
       <SummaryStrip routes={routes} />
 

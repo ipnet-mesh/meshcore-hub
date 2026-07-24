@@ -43,6 +43,9 @@ describe("Packets", () => {
     await waitFor(() => {
       expect(screen.getByText("hash1")).toBeInTheDocument();
     });
+    expect(
+      screen.getByRole("heading", { name: "entities.packets" }).querySelector("svg"),
+    ).not.toBeNull();
   });
 
   it("shows an error alert on fetch failure", async () => {
