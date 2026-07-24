@@ -20,12 +20,20 @@ export default defineConfig({
     outDir: DIST,
     emptyOutDir: true,
     manifest: true,
-    rollupOptions: {
+    rolldownOptions: {
       input: resolve(SPA_REACT, "index.html"),
       output: {
-        manualChunks: {
-          vendor: ["react", "react-dom", "react-router"],
-          i18n: ["i18next", "react-i18next", "i18next-browser-languagedetector"],
+        codeSplitting: {
+          groups: [
+            {
+              name: "vendor",
+              test: /[\\/]node_modules[\\/](react|react-dom|react-router)[\\/]/,
+            },
+            {
+              name: "i18n",
+              test: /[\\/]node_modules[\\/](i18next|react-i18next|i18next-browser-languagedetector)[\\/]/,
+            },
+          ],
         },
       },
     },
