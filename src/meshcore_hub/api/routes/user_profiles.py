@@ -7,7 +7,12 @@ from pydantic import AnyUrl
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
-from meshcore_hub.api.auth import RequireRead, RequireUserOwner, X_USER_ID_HEADER
+from meshcore_hub.api.auth import (
+    RequireRead,
+    RequireUserOwner,
+    X_USER_ID_HEADER,
+    X_USER_ROLES_HEADER,
+)
 from meshcore_hub.api.cache import cached
 from meshcore_hub.api.cache_invalidation import (
     invalidate_dashboard,
@@ -223,10 +228,14 @@ def update_profile(
         )
 
     if profile.user_id != caller_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: cannot modify another user's profile",
-        )
+        roles_header = request.headers.get(X_USER_ROLES_HEADER, "")
+        roles = [r.strip() for r in roles_header.split(",") if r.strip()]
+        admin_role = getattr(request.app.state, "oidc_role_admin", "admin")
+        if admin_role not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: cannot modify another user's profile",
+            )
 
     if profile_update.name is not None:
         profile.name = profile_update.name.strip()

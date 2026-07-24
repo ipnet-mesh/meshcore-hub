@@ -28,6 +28,10 @@ NO_ROLES_HEADERS = {
     "X-User-Id": TEST_USER_ID,
     "X-User-Roles": "",
 }
+ADMIN_HEADERS = {
+    "X-User-Id": OTHER_USER_ID,
+    "X-User-Roles": "admin",
+}
 
 
 class TestListProfiles:
@@ -382,6 +386,27 @@ class TestUpdateProfile:
             headers=OTHER_USER_HEADERS,
         )
         assert response.status_code == 403
+
+    def test_update_profile_admin_can_edit_other(
+        self, client_no_auth, sample_user_profile
+    ):
+        """Test that an admin can update another user's profile."""
+        response = client_no_auth.put(
+            f"/api/v1/user/profile/{sample_user_profile.id}",
+            json={
+                "name": "Admin Edited",
+                "callsign": "ADM1",
+                "description": "Admin revised this",
+                "url": "https://example.com/admin",
+            },
+            headers=ADMIN_HEADERS,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "Admin Edited"
+        assert data["callsign"] == "ADM1"
+        assert data["description"] == "Admin revised this"
+        assert data["url"] == "https://example.com/admin"
 
     def test_update_profile_rejects_missing_user_id(
         self, client_no_auth, sample_user_profile

@@ -32,6 +32,10 @@ test.describe("members", () => {
     await expect(page).toHaveURL(/\/profile\/[0-9a-f-]{36}/);
     await expect(page.getByText("Mem South").first()).toBeVisible();
     await expect(page.locator('nav[aria-label="Breadcrumb"]')).toBeVisible();
+
+    // A member viewing another user's profile must NOT see the admin edit
+    // button.
+    await expect(page.getByTestId("profile-admin-edit")).toHaveCount(0);
   });
 
   test("clicking a member node shows the node detail page", async ({ page }) => {
