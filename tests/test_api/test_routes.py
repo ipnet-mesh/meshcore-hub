@@ -1324,7 +1324,8 @@ class TestRouteOperatorPermissions:
 
     Ownership model (PR #337):
     - Operators can edit/delete only routes they created.
-    - Admins can edit/delete any route and take ownership on edit.
+    - Admins can edit/delete any route; they claim ownership of legacy
+      (unowned) routes on edit but do not displace an existing creator.
     - Routes with NULL ``created_by`` (legacy) are admin-only.
     """
 
@@ -1601,12 +1602,14 @@ class TestRouteOperatorPermissions:
         assert resp.status_code == 200
         assert resp.json()["created_by"] == "test-operator"
 
-    # ── Admin ownership transfer ──────────────────────────────────────
+    # ── Admin ownership semantics ─────────────────────────────────────
 
-    def test_admin_edit_transfers_ownership(self, client_no_auth, api_db_session):
-        """Admin editing a route takes ownership (created_by changes)."""
+    def test_admin_edit_preserves_existing_ownership(
+        self, client_no_auth, api_db_session
+    ):
+        """Admin editing an operator-created route does NOT take ownership."""
         route = Route(
-            from_label="Transfer",
+            from_label="Preserve",
             to_label="End",
             visibility="operator",
             created_by="test-operator",
@@ -1616,19 +1619,20 @@ class TestRouteOperatorPermissions:
 
         resp = client_no_auth.put(
             f"/api/v1/routes/{route.id}",
-            json={"description": "admin took over"},
+            json={"description": "admin tweaked it"},
             headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 200
-        assert resp.json()["created_by"] == "test-admin"
+        # Ownership stays with the original creator
+        assert resp.json()["created_by"] == "test-operator"
 
-        # Original operator can no longer edit
+        # Original operator can still edit
         resp2 = client_no_auth.put(
             f"/api/v1/routes/{route.id}",
-            json={"description": "try again"},
+            json={"description": "operator still owns it"},
             headers=OPERATOR_HEADERS,
         )
-        assert resp2.status_code == 403
+        assert resp2.status_code == 200
 
     def test_admin_edit_adopts_null_created_by(self, client_no_auth, api_db_session):
         """Admin editing a legacy route (NULL created_by) takes ownership."""

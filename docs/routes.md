@@ -46,7 +46,7 @@ Routes carry the same role-based visibility levels as channels — `community`, 
 
 Both operators and admins can create routes. A user may never scope a route above their own role (e.g. an operator cannot create an `admin`-visibility route) — this is enforced on the write endpoints and prevents a user from creating a route they could then never see or modify.
 
-**Ownership-based editing:** Each route records the user who created it (`created_by`). Operators can edit and delete only the routes they created. Admins can edit and delete any route, and take ownership when they edit a route they did not create (the `created_by` field updates to the admin's user ID). Routes created before ownership tracking was introduced have a `NULL` `created_by` and are admin-only. The creator's display name is shown on each route card when available. Attempting to modify a route above the caller's visibility tier returns `404`; modifying a visible route the caller does not own returns `403`.
+**Ownership-based editing:** Each route records the user who created it (`created_by`). Operators can edit and delete only the routes they created. Admins can edit and delete any route; they claim ownership of legacy (unowned) routes — those with a `NULL` `created_by` — when they edit them, but do not displace an existing creator. Routes created before ownership tracking was introduced have a `NULL` `created_by` and are admin-only. The creator's display name is shown on each route card when available. Attempting to modify a route above the caller's visibility tier returns `404`; modifying a visible route the caller does not own returns `403`.
 
 ## Defining routes
 

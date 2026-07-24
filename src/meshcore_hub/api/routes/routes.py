@@ -647,7 +647,8 @@ def update_route(
     """Update a route (operator or admin).
 
     Operators may only modify routes they created; admins can modify any
-    route and take ownership on edit.
+    route. Admins claim ownership of legacy (unowned) routes on edit but
+    do not displace an existing creator.
     """
     user_id, _ = caller
     route = session.execute(
@@ -657,10 +658,10 @@ def update_route(
         raise HTTPException(status_code=404, detail="Route not found")
     _assert_route_modifiable(request, route)
 
-    # Admin edits transfer ownership to the admin
-    if resolve_user_role(request) == "admin" and route.created_by != user_id:
+    # Admin claims ownership of legacy (unowned) routes on edit
+    if resolve_user_role(request) == "admin" and route.created_by is None:
         route.created_by = user_id
-        logger.info("Admin %s took ownership of route %s", user_id, route.id)
+        logger.info("Admin %s claimed ownership of legacy route %s", user_id, route.id)
 
     if body.from_label is not None or body.to_label is not None:
         new_from = body.from_label if body.from_label is not None else route.from_label
