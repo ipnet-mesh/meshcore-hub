@@ -40,7 +40,7 @@
     "react": "^19",
     "react-chartjs-2": "^5",
     "react-dom": "^19",
-    "react-i18next": "^15",
+    "react-i18next": "^17.0.0",
     "react-leaflet": "^5",
     "react-markdown": "^10.1.0",
     "react-qr-code": "^2.2.0",
