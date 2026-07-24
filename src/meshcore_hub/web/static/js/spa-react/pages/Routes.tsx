@@ -546,7 +546,7 @@ function RouteCard({
       data-testid="route-card"
       data-route-label={`${route.from_label} → ${route.to_label}`}
     >
-      <div className="card-body">
+      <div className="card-body overflow-hidden">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <h2 className="card-title">
@@ -1500,7 +1500,7 @@ export function RoutesPage() {
   }
 
   return (
-    <div>
+    <div className="overflow-x-hidden">
       <PageHeader title={t("entities.routes")} icon={IconPath} />
 
       <SummaryStrip routes={routes} />
