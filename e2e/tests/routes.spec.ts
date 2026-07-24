@@ -11,9 +11,14 @@ test.describe.serial("routes (admin)", () => {
   }) => {
     await page.goto("/routes");
 
-    await expect(
-      page.locator('[data-testid="route-card"][data-route-label="Alpha Site \u2192 Bravo Site"]'),
-    ).toBeVisible();
+    const seededCard = page.locator(
+      '[data-testid="route-card"][data-route-label="Alpha Site \u2192 Bravo Site"]',
+    );
+    await expect(seededCard).toBeVisible();
+
+    // Admin sees edit/delete on all routes, including legacy (NULL created_by) ones.
+    await expect(seededCard.getByTestId("edit-route")).toBeVisible();
+    await expect(seededCard.getByTestId("delete-route")).toBeVisible();
 
     await page.getByTestId("add-route").click();
     const modal = page.locator('[data-testid="route-modal"]');

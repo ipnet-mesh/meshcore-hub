@@ -12,12 +12,15 @@ test.describe.serial("routes (operator)", () => {
     await page.goto("/routes");
 
     // Operators see the seeded community route and the add button.
-    await expect(
-      page.locator(
-        '[data-testid="route-card"][data-route-label="Alpha Site \u2192 Bravo Site"]',
-      ),
-    ).toBeVisible();
+    const seededCard = page.locator(
+      '[data-testid="route-card"][data-route-label="Alpha Site \u2192 Bravo Site"]',
+    );
+    await expect(seededCard).toBeVisible();
     await expect(page.getByTestId("add-route")).toBeVisible();
+
+    // The seeded route has NULL created_by — operator must NOT see edit/delete.
+    await expect(seededCard.getByTestId("edit-route")).toHaveCount(0);
+    await expect(seededCard.getByTestId("delete-route")).toHaveCount(0);
 
     // The visibility dropdown must NOT offer the admin tier to an operator.
     await page.getByTestId("add-route").click();
@@ -45,7 +48,7 @@ test.describe.serial("routes (operator)", () => {
     );
     await expect(card).toBeVisible();
 
-    // Operator can edit the route they created.
+    // Operator owns the route they just created — edit/delete should be present.
     await card.getByTestId("edit-route").click();
     await expect(modal).toBeVisible();
     await expect(page.getByTestId("route-from")).toHaveValue("Op From");

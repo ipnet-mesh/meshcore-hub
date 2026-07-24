@@ -1,12 +1,13 @@
 """Route health monitoring API routes."""
 
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
 
-from meshcore_hub.api.auth import RequireOperatorOrAdmin, RequireRead
+from meshcore_hub.api.auth import RequireOperatorOrAdmin, RequireRead, X_USER_ID_HEADER
 from meshcore_hub.api.cache import cached, sorted_query_string
 from meshcore_hub.api.cache_invalidation import invalidate_routes
 from meshcore_hub.api.channel_visibility import (
@@ -15,6 +16,7 @@ from meshcore_hub.api.channel_visibility import (
     resolve_user_role,
 )
 from meshcore_hub.api.dependencies import DbSession
+from meshcore_hub.api.profile_utils import get_or_create_profile
 from meshcore_hub.collector.routes import (
     compute_persisted_quality_avg,
     derive_expected_hash,
@@ -34,6 +36,7 @@ from meshcore_hub.common.models.route_node import RouteNode
 from meshcore_hub.common.models.route_observer import RouteObserver
 from meshcore_hub.common.models.route_recent_match import RouteRecentMatch
 from meshcore_hub.common.models.route_result import RouteResult
+from meshcore_hub.common.models.user_profile import UserProfile
 from meshcore_hub.common.schemas.routes import (
     ContributingObserver,
     RecentMatchPath,
@@ -44,6 +47,7 @@ from meshcore_hub.common.schemas.routes import (
     RouteList,
     RouteNodeRead,
     RouteObserverRead,
+    RouteOwner,
     RoutePreviewRequest,
     RoutePreviewResponse,
     RouteRead,
@@ -52,6 +56,7 @@ from meshcore_hub.common.schemas.routes import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # Sentinel distinguishing "use the precomputed value" from "explicitly None"
 # (the latter is what create_route passes to preserve the "brand-new route
@@ -88,15 +93,28 @@ def _assert_visibility_within_role(request: Request, visibility: str) -> None:
 
 
 def _assert_route_modifiable(request: Request, route: Route) -> None:
-    """Reject modifying a route above the caller's visibility tier.
+    """Reject modifying a route the caller is not allowed to touch.
 
-    Returns 404 (mirroring the GET detail behaviour) so the existence of a
-    higher-visibility route is not leaked to lower-privileged callers.
+    Layer 1 — visibility: a route above the caller's tier yields **404**
+    so its existence is not leaked (mirrors GET detail behaviour).
+
+    Layer 2 — ownership: operators may only modify routes *they* created.
+    A visible-but-unowned route yields **403** (the caller can see it in
+    the list, so a transparent rejection is better UX).  ``created_by``
+    is ``None`` for legacy routes (pre-ownership-tracking) and is treated
+    as admin-only.  Admins bypass the ownership check entirely.
     """
     if VISIBILITY_LEVELS.get(route.visibility, 0) > _caller_max_visibility_level(
         request
     ):
         raise HTTPException(status_code=404, detail="Route not found")
+    if resolve_user_role(request) != "admin":
+        caller_id = request.headers.get(X_USER_ID_HEADER, "")
+        if route.created_by is None or route.created_by != caller_id:
+            raise HTTPException(
+                status_code=403,
+                detail="You can only modify routes you created",
+            )
 
 
 def _route_node_to_read(rn: RouteNode) -> RouteNodeRead:
@@ -130,13 +148,58 @@ def _result_to_summary(result: RouteResult | None) -> RouteResultSummary | None:
     )
 
 
-def _route_to_read(route: Route, *, quality_avg: Any = _UNSET) -> RouteRead:
+def _profile_to_owner(profile: UserProfile) -> RouteOwner:
+    """Convert a UserProfile to the lightweight RouteOwner display schema."""
+    return RouteOwner(
+        user_id=profile.user_id,
+        name=profile.name,
+        callsign=profile.callsign,
+        profile_id=profile.id,
+    )
+
+
+def _resolve_owner(session: DbSession, created_by: str | None) -> UserProfile | None:
+    """Resolve a single ``created_by`` user_id to a UserProfile."""
+    if not created_by:
+        return None
+    return session.execute(
+        select(UserProfile).where(UserProfile.user_id == created_by)
+    ).scalar_one_or_none()
+
+
+def _resolve_owners_batch(
+    session: DbSession, routes: list[Route]
+) -> dict[str, UserProfile]:
+    """Batch-resolve creator profiles for a list of routes (avoids N+1)."""
+    owner_ids = {r.created_by for r in routes if r.created_by}
+    if not owner_ids:
+        return {}
+    return {
+        p.user_id: p
+        for p in session.execute(
+            select(UserProfile).where(UserProfile.user_id.in_(owner_ids))
+        )
+        .scalars()
+        .all()
+    }
+
+
+def _route_to_read(
+    route: Route,
+    *,
+    quality_avg: Any = _UNSET,
+    owner: UserProfile | None = None,
+) -> RouteRead:
     """Serialize a Route to its list-level read schema.
 
     ``quality_avg`` defaults to the precomputed value persisted on
     ``route.route_result.quality_avg`` (written by the background
     evaluator). Callers may pass an explicit value (e.g. ``None`` on
     create responses) to override.
+
+    ``owner`` is the resolved UserProfile for ``route.created_by``, if
+    any.  Callers should pass it in to avoid per-row queries in list
+    contexts (use ``_resolve_owners_batch``).
     """
     if quality_avg is _UNSET:
         quality_avg = route.route_result.quality_avg if route.route_result else None
@@ -158,6 +221,8 @@ def _route_to_read(route: Route, *, quality_avg: Any = _UNSET) -> RouteRead:
         route_observers=[_route_observer_to_read(ro) for ro in route.route_observers],
         route_result=_result_to_summary(route.route_result),
         quality_avg=quality_avg,
+        created_by=route.created_by,
+        owner=_profile_to_owner(owner) if owner else None,
         created_at=route.created_at,
         updated_at=route.updated_at,
     )
@@ -257,22 +322,27 @@ def list_routes(
     max_level = get_max_visibility_level(role)
 
     routes = session.execute(select(Route).order_by(Route.from_label)).scalars().all()
+    visible = [r for r in routes if VISIBILITY_LEVELS.get(r.visibility, 0) <= max_level]
+    owners_by_id = _resolve_owners_batch(session, visible)
     filtered = [
-        _route_to_read(r)
-        for r in routes
-        if VISIBILITY_LEVELS.get(r.visibility, 0) <= max_level
+        _route_to_read(
+            r, owner=owners_by_id.get(r.created_by) if r.created_by else None
+        )
+        for r in visible
     ]
     return RouteList(items=filtered, total=len(filtered))
 
 
 @router.post("", response_model=RouteRead, status_code=201)
 def create_route(
-    __: RequireOperatorOrAdmin,
+    caller: RequireOperatorOrAdmin,
     session: DbSession,
     body: RouteCreate,
     request: Request,
 ) -> RouteRead:
     """Create a new route (operator or admin)."""
+    user_id, _ = caller
+    get_or_create_profile(session, user_id, request)
     _assert_visibility_within_role(request, body.visibility)
     existing = session.execute(
         select(Route).where(
@@ -309,6 +379,7 @@ def create_route(
         max_path_length=body.max_path_length,
         enabled=body.enabled,
         reversible=body.reversible,
+        created_by=user_id,
     )
     session.add(route)
     session.flush()
@@ -318,7 +389,8 @@ def create_route(
     session.refresh(route)
     _reevaluate_route(session, route)
     invalidate_routes(request)
-    return _route_to_read(route, quality_avg=None)
+    owner = _resolve_owner(session, route.created_by)
+    return _route_to_read(route, quality_avg=None, owner=owner)
 
 
 @router.get("/{route_id}", response_model=RouteDetail)
@@ -374,7 +446,7 @@ def get_route(
         for oid, cnt in contributing.items()
     ]
 
-    read = _route_to_read(route)
+    read = _route_to_read(route, owner=_resolve_owner(session, route.created_by))
     return RouteDetail(
         **read.model_dump(),
         contributing_observers=contributors,
@@ -566,19 +638,29 @@ def get_route_history(
 
 @router.put("/{route_id}", response_model=RouteRead)
 def update_route(
-    __: RequireOperatorOrAdmin,
+    caller: RequireOperatorOrAdmin,
     session: DbSession,
     route_id: str,
     body: RouteUpdate,
     request: Request,
 ) -> RouteRead:
-    """Update a route (operator or admin)."""
+    """Update a route (operator or admin).
+
+    Operators may only modify routes they created; admins can modify any
+    route and take ownership on edit.
+    """
+    user_id, _ = caller
     route = session.execute(
         select(Route).where(Route.id == route_id)
     ).scalar_one_or_none()
     if not route:
         raise HTTPException(status_code=404, detail="Route not found")
     _assert_route_modifiable(request, route)
+
+    # Admin edits transfer ownership to the admin
+    if resolve_user_role(request) == "admin" and route.created_by != user_id:
+        route.created_by = user_id
+        logger.info("Admin %s took ownership of route %s", user_id, route.id)
 
     if body.from_label is not None or body.to_label is not None:
         new_from = body.from_label if body.from_label is not None else route.from_label
@@ -636,7 +718,8 @@ def update_route(
     session.refresh(route)
     _reevaluate_route(session, route)
     invalidate_routes(request)
-    return _route_to_read(route)
+    owner = _resolve_owner(session, route.created_by)
+    return _route_to_read(route, owner=owner)
 
 
 @router.delete("/{route_id}", status_code=204)

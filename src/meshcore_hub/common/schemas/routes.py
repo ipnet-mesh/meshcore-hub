@@ -142,6 +142,17 @@ class RouteUpdate(BaseModel):
         return self
 
 
+class RouteOwner(BaseModel):
+    """Creator/owner of a route, for display on route cards."""
+
+    user_id: str
+    name: Optional[str] = None
+    callsign: Optional[str] = None
+    profile_id: str
+
+    model_config = {"from_attributes": True}
+
+
 class RouteRead(BaseModel):
     """Schema for reading a route (list-level with lightweight result)."""
 
@@ -169,6 +180,8 @@ class RouteRead(BaseModel):
             "back to ``route_result.quality`` for brand-new routes."
         ),
     )
+    created_by: Optional[str] = None
+    owner: Optional[RouteOwner] = None
     created_at: datetime
     updated_at: datetime
 
@@ -227,6 +240,8 @@ class RouteDetail(BaseModel):
     )
     contributing_observers: list[ContributingObserver] = []
     recent_matches: list[RecentMatchPath] = []
+    created_by: Optional[str] = None
+    owner: Optional[RouteOwner] = None
     created_at: datetime
     updated_at: datetime
 

@@ -21,7 +21,7 @@ User roles are read from the OIDC token's `roles` claim (configurable via `OIDC_
 | Role | Config Variable | Default | Description |
 |------|----------------|---------|-------------|
 | Admin | `OIDC_ROLE_ADMIN` | `admin` | Full write access to all API endpoints through the proxy |
-| Operator | `OIDC_ROLE_OPERATOR` | `operator` | Manage nodes, node tags, adoptions, and routes (create/edit/delete, scoped to the operator visibility tier) |
+| Operator | `OIDC_ROLE_OPERATOR` | `operator` | Manage nodes, node tags, adoptions, and routes (create; edit/delete only routes they created) |
 | Member | `OIDC_ROLE_MEMBER` | `member` | Read-only access (no endpoint assignments) |
 
 The role names are configurable to match your IdP's role naming convention. For example, if your IdP uses `superuser` instead of `admin`, set `OIDC_ROLE_ADMIN=superuser`.

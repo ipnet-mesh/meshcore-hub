@@ -30,6 +30,8 @@ const ROUTES = {
       route_result: { quality: "clear", state: "healthy" },
       route_nodes: [],
       route_observers: [],
+      created_by: null,
+      owner: null,
     },
   ],
 };
@@ -133,5 +135,173 @@ describe("Routes role-gated management", () => {
     const values = Array.from(select.options).map((o) => o.value);
     expect(values).toEqual(["community", "member", "operator"]);
     expect(values).not.toContain("admin");
+  });
+});
+
+describe("Routes per-route ownership gating", () => {
+  function buildConfig(roles: string[], userSub: string) {
+    return makeConfig({
+      oidc_enabled: true,
+      roles,
+      role_names: { admin: "admin", operator: "operator", member: "member" },
+      user: { sub: userSub, name: "Test User" },
+    });
+  }
+
+  afterEach(() => {
+    window.__APP_CONFIG__ = makeConfig();
+  });
+
+  it("hides edit/delete on routes the operator does not own", async () => {
+    const cfg = buildConfig(["operator"], "op-1");
+    window.__APP_CONFIG__ = cfg;
+    const data = {
+      items: [
+        {
+          ...ROUTES.items[0],
+          id: "other",
+          from_label: "OtherRoute",
+          created_by: "different-op",
+          owner: null,
+        },
+      ],
+    };
+    vi.spyOn(api, "apiGet").mockImplementation(async (path) => {
+      if (path === "/api/v1/routes") return data;
+      if (path.match(/\/api\/v1\/routes\/[^/]+$/)) return ROUTE_DETAIL;
+      if (path.includes("/history")) return ROUTE_HISTORY;
+      throw new Error(`Unexpected: ${path}`);
+    });
+
+    renderWithProviders(<Routes />, { config: cfg });
+    await waitFor(() => {
+      expect(screen.getByText("OtherRoute")).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId("edit-route")).toBeNull();
+    expect(screen.queryByTestId("delete-route")).toBeNull();
+  });
+
+  it("shows edit/delete on routes the operator owns", async () => {
+    const cfg = buildConfig(["operator"], "op-1");
+    window.__APP_CONFIG__ = cfg;
+    const data = {
+      items: [
+        {
+          ...ROUTES.items[0],
+          id: "mine",
+          from_label: "MyRoute",
+          created_by: "op-1",
+          owner: { user_id: "op-1", name: "Test Operator", profile_id: "p1" },
+        },
+      ],
+    };
+    vi.spyOn(api, "apiGet").mockImplementation(async (path) => {
+      if (path === "/api/v1/routes") return data;
+      if (path.match(/\/api\/v1\/routes\/[^/]+$/)) return ROUTE_DETAIL;
+      if (path.includes("/history")) return ROUTE_HISTORY;
+      throw new Error(`Unexpected: ${path}`);
+    });
+
+    renderWithProviders(<Routes />, { config: cfg });
+    await waitFor(() => {
+      expect(screen.queryByTestId("edit-route")).not.toBeNull();
+    });
+    expect(screen.getByTestId("edit-route")).toBeInTheDocument();
+    expect(screen.getByTestId("delete-route")).toBeInTheDocument();
+  });
+
+  it("shows edit/delete on all routes for an admin", async () => {
+    const cfg = buildConfig(["admin"], "adm-1");
+    window.__APP_CONFIG__ = cfg;
+    const data = {
+      items: [
+        {
+          ...ROUTES.items[0],
+          id: "legacy",
+          from_label: "LegacyRoute",
+          created_by: null,
+          owner: null,
+        },
+        {
+          ...ROUTES.items[0],
+          id: "other",
+          from_label: "OtherRoute",
+          created_by: "op-99",
+          owner: { user_id: "op-99", name: "Someone", profile_id: "p2" },
+        },
+      ],
+    };
+    vi.spyOn(api, "apiGet").mockImplementation(async (path) => {
+      if (path === "/api/v1/routes") return data;
+      if (path.match(/\/api\/v1\/routes\/[^/]+$/)) return ROUTE_DETAIL;
+      if (path.includes("/history")) return ROUTE_HISTORY;
+      throw new Error(`Unexpected: ${path}`);
+    });
+
+    renderWithProviders(<Routes />, { config: cfg });
+    await waitFor(() => {
+      expect(screen.getByText("LegacyRoute")).toBeInTheDocument();
+    });
+    const editButtons = screen.getAllByTestId("edit-route");
+    const deleteButtons = screen.getAllByTestId("delete-route");
+    expect(editButtons).toHaveLength(2);
+    expect(deleteButtons).toHaveLength(2);
+  });
+
+  it("displays the owner name badge when set", async () => {
+    const cfg = buildConfig(["operator"], "op-1");
+    window.__APP_CONFIG__ = cfg;
+    const data = {
+      items: [
+        {
+          ...ROUTES.items[0],
+          id: "named",
+          from_label: "NamedRoute",
+          created_by: "op-1",
+          owner: { user_id: "op-1", name: "Alice", profile_id: "p1" },
+        },
+      ],
+    };
+    vi.spyOn(api, "apiGet").mockImplementation(async (path) => {
+      if (path === "/api/v1/routes") return data;
+      if (path.match(/\/api\/v1\/routes\/[^/]+$/)) return ROUTE_DETAIL;
+      if (path.includes("/history")) return ROUTE_HISTORY;
+      throw new Error(`Unexpected: ${path}`);
+    });
+
+    renderWithProviders(<Routes />, { config: cfg });
+    await waitFor(() => {
+      expect(screen.getByText("Alice")).toBeInTheDocument();
+    });
+  });
+
+  it("hides the owner badge when no owner is set", async () => {
+    const cfg = buildConfig(["operator"], "op-1");
+    window.__APP_CONFIG__ = cfg;
+    const data = {
+      items: [
+        {
+          ...ROUTES.items[0],
+          id: "legacy",
+          from_label: "LegacyRoute",
+          created_by: null,
+          owner: null,
+        },
+      ],
+    };
+    vi.spyOn(api, "apiGet").mockImplementation(async (path) => {
+      if (path === "/api/v1/routes") return data;
+      if (path.match(/\/api\/v1\/routes\/[^/]+$/)) return ROUTE_DETAIL;
+      if (path.includes("/history")) return ROUTE_HISTORY;
+      throw new Error(`Unexpected: ${path}`);
+    });
+
+    renderWithProviders(<Routes />, { config: cfg });
+    await waitFor(() => {
+      expect(screen.getByText("LegacyRoute")).toBeInTheDocument();
+    });
+    // No owner link should be present (only the route card title contains "LegacyRoute")
+    const links = screen.queryAllByRole("link");
+    expect(links.filter((l) => l.textContent === "Test User")).toHaveLength(0);
   });
 });

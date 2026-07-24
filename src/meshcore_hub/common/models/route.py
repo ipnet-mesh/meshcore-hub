@@ -103,6 +103,10 @@ class Route(Base, UUIDMixin, TimestampMixin):
         server_default="true",
         nullable=False,
     )
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+    )
 
     route_nodes: Mapped[list["RouteNode"]] = relationship(
         "RouteNode",
