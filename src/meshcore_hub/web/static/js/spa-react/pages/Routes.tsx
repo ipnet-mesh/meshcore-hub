@@ -310,7 +310,7 @@ function StatsRow({ route }: { route: RouteItem }) {
         <IconPackets className="h-3.5 w-3.5" />
         <span>
           {matched}/{threshold}
-          {"\u2192"}
+          {"-"}
           {degraded}
         </span>
       </span>
@@ -473,7 +473,7 @@ function DetailContent({
               {historyData.map((d, i) => (
                 <span key={d.date} className="flex-1 text-center min-w-0 truncate">
                   {i === historyData.length - 1
-                    ? t("routes.last_n_hours", { n: route.window_hours })
+                    ? t("common.now")
                     : new Date(`${d.date}T00:00:00`).toLocaleDateString(
                         undefined,
                         { day: "2-digit", month: "2-digit" },

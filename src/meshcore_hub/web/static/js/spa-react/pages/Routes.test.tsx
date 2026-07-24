@@ -74,6 +74,52 @@ describe("Routes", () => {
     ).not.toBeNull();
   });
 
+  it("renders matched/threshold/degraded stat with dash separator", async () => {
+    const data = {
+      items: [
+        {
+          ...ROUTES.items[0],
+          route_result: {
+            quality: "clear",
+            state: "healthy",
+            matched_count: 3,
+            threshold: 5,
+            effective_clear: 2,
+          },
+        },
+      ],
+    };
+    vi.spyOn(api, "apiGet").mockImplementation(async (path) => {
+      if (path === "/api/v1/routes") return data;
+      if (path.match(/\/api\/v1\/routes\/[^/]+$/)) return ROUTE_DETAIL;
+      if (path.includes("/history")) return ROUTE_HISTORY;
+      throw new Error(`Unexpected: ${path}`);
+    });
+    renderWithProviders(<Routes />);
+    await waitFor(() => {
+      expect(screen.getByText("3/5-2")).toBeInTheDocument();
+    });
+  });
+
+  it("shows Now label for the last history chart entry", async () => {
+    const historyWithData = {
+      data: [
+        { date: "2026-07-20", matched: 0, total: 0 },
+        { date: "2026-07-21", matched: 1, total: 1 },
+      ],
+    };
+    vi.spyOn(api, "apiGet").mockImplementation(async (path) => {
+      if (path === "/api/v1/routes") return ROUTES;
+      if (path.match(/\/api\/v1\/routes\/[^/]+$/)) return ROUTE_DETAIL;
+      if (path.includes("/history")) return historyWithData;
+      throw new Error(`Unexpected: ${path}`);
+    });
+    renderWithProviders(<Routes />);
+    await waitFor(() => {
+      expect(screen.getByText("common.now")).toBeInTheDocument();
+    });
+  });
+
   it("shows an error on fetch failure", async () => {
     vi.spyOn(api, "apiGet").mockRejectedValue(new Error("routes error"));
     renderWithProviders(<Routes />);

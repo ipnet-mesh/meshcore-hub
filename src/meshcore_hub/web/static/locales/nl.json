@@ -108,7 +108,8 @@
     "filter_operator_label": "Operator",
     "filter_observer_label": "Waarnemer",
     "filter_observer_enable": "Klik om deze waarnemer te tonen",
-    "filter_observer_disable": "Klik om deze waarnemer te verbergen"
+    "filter_observer_disable": "Klik om deze waarnemer te verbergen",
+    "now": "Nu"
   },
   "links": {
     "website": "Website",
@@ -282,7 +283,6 @@
     "quality_no_coverage": "Geen dekking",
     "quality_unknown": "Onbekend",
     "recent_packets": "Recente packets",
-    "last_n_hours": "Laatste {{n}}u",
     "min_nodes_error": "Minimaal 2 padknooppunten zijn vereist.",
     "other_routes": "Overige routes",
     "filter_mine": "Toon alleen mijn routes"
