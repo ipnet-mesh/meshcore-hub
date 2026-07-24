@@ -2,5 +2,12 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "packageRules": [
+    {
+      "description": "Pinned to match nixpkgs playwright.browsers; see shell.nix",
+      "matchPackageNames": ["@playwright/test"],
+      "enabled": false
+    }
   ]
 }
