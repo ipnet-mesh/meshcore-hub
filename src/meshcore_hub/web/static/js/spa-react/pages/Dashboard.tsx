@@ -563,7 +563,7 @@ export function DashboardPage() {
         <div className={`grid grid-cols-1 ${gridCols(bottomCount)} gap-6`}>
           {showAdverts && (
             <div
-              className="card bg-base-100 shadow-xl panel-accent"
+              className="card bg-base-100 shadow-xl panel-accent min-w-0"
               style={panelStyle("--color-adverts")}
             >
               <div className="card-body">
@@ -604,12 +604,12 @@ export function DashboardPage() {
                                   to={`/nodes/${ad.public_key}`}
                                   className="link link-hover"
                                 >
-                                  <div className="font-medium">
+                                  <div className="font-medium max-w-[10rem] truncate">
                                     {displayName}
                                   </div>
                                 </Link>
                                 {friendlyName && (
-                                  <div className="text-xs opacity-50 font-mono">
+                                  <div className="text-xs opacity-50 font-mono max-w-[10rem] truncate">
                                     {ad.public_key.slice(0, 12)}...
                                   </div>
                                 )}
@@ -642,7 +642,7 @@ export function DashboardPage() {
 
           {showMessages && channelEntries.length > 0 && (
             <div
-              className="card bg-base-100 shadow-xl panel-accent"
+              className="card bg-base-100 shadow-xl panel-accent min-w-0"
               style={panelStyle("--color-messages")}
             >
               <div className="card-body">
