@@ -117,7 +117,8 @@
     "unnamed_node": "Unnamed Node",
     "validation_invalid_number": "Value must be a valid number",
     "validation_invalid_boolean": "Value must be true, false, yes, no, 1, or 0",
-    "sort_by": "Sort by"
+    "sort_by": "Sort by",
+    "now": "Now"
   },
   "links": {
     "website": "Website",
@@ -359,7 +360,6 @@
     "quality_no_coverage": "No Coverage",
     "quality_unknown": "Unknown",
     "recent_packets": "Recent Packets",
-    "last_n_hours": "Last {{n}}h",
     "min_nodes_error": "At least 2 path nodes are required.",
     "other_routes": "Other routes",
     "filter_mine": "Show only my routes"
