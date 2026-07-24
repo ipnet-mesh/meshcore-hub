@@ -21,7 +21,7 @@ User roles are read from the OIDC token's `roles` claim (configurable via `OIDC_
 | Role | Config Variable | Default | Description |
 |------|----------------|---------|-------------|
 | Admin | `OIDC_ROLE_ADMIN` | `admin` | Full write access to all API endpoints through the proxy |
-| Operator | `OIDC_ROLE_OPERATOR` | `operator` | Reserved for future use — no endpoint assignments yet |
+| Operator | `OIDC_ROLE_OPERATOR` | `operator` | Manage nodes, node tags, adoptions, and routes (create/edit/delete, scoped to the operator visibility tier) |
 | Member | `OIDC_ROLE_MEMBER` | `member` | Read-only access (no endpoint assignments) |
 
 The role names are configurable to match your IdP's role naming convention. For example, if your IdP uses `superuser` instead of `admin`, set `OIDC_ROLE_ADMIN=superuser`.
@@ -36,17 +36,21 @@ The proxy uses a hardcoded per-endpoint, per-method mapping in `src/meshcore_hub
 |-------------|--------|--------|
 | `v1/nodes` | GET | Open |
 | `v1/nodes/` | GET | Open |
-| `v1/nodes/` | POST, PUT, DELETE | `admin` |
+| `v1/nodes/` | POST, PUT, DELETE | `admin`, `operator` |
 | `v1/members` | GET | Open |
 | `v1/members` | POST, PUT, DELETE | `admin` |
 | `v1/messages` | GET | Open |
 | `v1/advertisements` | GET | Open |
+| `v1/adoptions` | POST, DELETE | `admin`, `operator` |
+| `v1/routes` | POST | `admin`, `operator` |
+| `v1/routes/` | PUT, DELETE | `admin`, `operator` |
 | `v1/dashboard` | GET | Open |
 | `v1/trace-paths` | GET | Open |
 | `v1/telemetry` | GET | Open |
 
 - **Open** = no authentication required (anonymous OK, works with or without OIDC)
 - **`admin`** = requires OIDC enabled + user has the `admin` role
+- **`admin`, `operator`** = requires OIDC enabled + user has the `admin` *or* `operator` role
 - Method not listed for a matched prefix = denied
 - No prefix match = denied
 

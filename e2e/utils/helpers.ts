@@ -9,6 +9,7 @@ const AUTH_DIR = path.resolve(
 );
 export const ADMIN_STATE = path.join(AUTH_DIR, "admin.json");
 export const MEMBER_STATE = path.join(AUTH_DIR, "member.json");
+export const OPERATOR_STATE = path.join(AUTH_DIR, "operator.json");
 
 export async function expectListLoaded(page: Page): Promise<void> {
   await expect(page.getByTestId("list-row").first()).toBeVisible();

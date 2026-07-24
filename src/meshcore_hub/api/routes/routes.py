@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
 
-from meshcore_hub.api.auth import RequireAdmin, RequireRead
+from meshcore_hub.api.auth import RequireOperatorOrAdmin, RequireRead
 from meshcore_hub.api.cache import cached, sorted_query_string
 from meshcore_hub.api.cache_invalidation import invalidate_routes
 from meshcore_hub.api.channel_visibility import (
@@ -62,6 +62,41 @@ _UNSET = object()
 def _routes_key_builder(request: Request) -> str:
     role = resolve_user_role(request) or "anonymous"
     return f"{request.url.path}:role={role}:{sorted_query_string(request)}"
+
+
+def _caller_max_visibility_level(request: Request) -> int:
+    """Max visibility tier the current caller may set or modify.
+
+    Operators can manage routes at or below the operator tier; admins at or
+    below the admin tier. This is the same role resolution the read handlers
+    use, so read and write visibility stay consistent.
+    """
+    return get_max_visibility_level(resolve_user_role(request))
+
+
+def _assert_visibility_within_role(request: Request, visibility: str) -> None:
+    """Reject a visibility value above the caller's own role tier.
+
+    Stops a user scoping a route to a role they could then never see or
+    modify (e.g. an operator creating an admin-visibility route).
+    """
+    if VISIBILITY_LEVELS.get(visibility, 0) > _caller_max_visibility_level(request):
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot set route visibility above your own role",
+        )
+
+
+def _assert_route_modifiable(request: Request, route: Route) -> None:
+    """Reject modifying a route above the caller's visibility tier.
+
+    Returns 404 (mirroring the GET detail behaviour) so the existence of a
+    higher-visibility route is not leaked to lower-privileged callers.
+    """
+    if VISIBILITY_LEVELS.get(route.visibility, 0) > _caller_max_visibility_level(
+        request
+    ):
+        raise HTTPException(status_code=404, detail="Route not found")
 
 
 def _route_node_to_read(rn: RouteNode) -> RouteNodeRead:
@@ -232,12 +267,13 @@ def list_routes(
 
 @router.post("", response_model=RouteRead, status_code=201)
 def create_route(
-    __: RequireAdmin,
+    __: RequireOperatorOrAdmin,
     session: DbSession,
     body: RouteCreate,
     request: Request,
 ) -> RouteRead:
-    """Create a new route (admin only)."""
+    """Create a new route (operator or admin)."""
+    _assert_visibility_within_role(request, body.visibility)
     existing = session.execute(
         select(Route).where(
             Route.from_label == body.from_label,
@@ -530,18 +566,19 @@ def get_route_history(
 
 @router.put("/{route_id}", response_model=RouteRead)
 def update_route(
-    __: RequireAdmin,
+    __: RequireOperatorOrAdmin,
     session: DbSession,
     route_id: str,
     body: RouteUpdate,
     request: Request,
 ) -> RouteRead:
-    """Update a route (admin only)."""
+    """Update a route (operator or admin)."""
     route = session.execute(
         select(Route).where(Route.id == route_id)
     ).scalar_one_or_none()
     if not route:
         raise HTTPException(status_code=404, detail="Route not found")
+    _assert_route_modifiable(request, route)
 
     if body.from_label is not None or body.to_label is not None:
         new_from = body.from_label if body.from_label is not None else route.from_label
@@ -564,6 +601,7 @@ def update_route(
     if body.description is not None:
         route.description = body.description
     if body.visibility is not None:
+        _assert_visibility_within_role(request, body.visibility)
         route.visibility = body.visibility
     if body.match_width is not None:
         route.match_width = body.match_width
@@ -603,17 +641,18 @@ def update_route(
 
 @router.delete("/{route_id}", status_code=204)
 def delete_route(
-    __: RequireAdmin,
+    __: RequireOperatorOrAdmin,
     session: DbSession,
     route_id: str,
     request: Request,
 ) -> None:
-    """Delete a route (admin only)."""
+    """Delete a route (operator or admin)."""
     route = session.execute(
         select(Route).where(Route.id == route_id)
     ).scalar_one_or_none()
     if not route:
         raise HTTPException(status_code=404, detail="Route not found")
+    _assert_route_modifiable(request, route)
     session.delete(route)
     session.commit()
     invalidate_routes(request)

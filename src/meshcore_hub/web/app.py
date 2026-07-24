@@ -166,12 +166,12 @@ def _build_endpoint_access(
         },
         "v1/routes": {
             "GET": _OPEN,
-            "POST": frozenset({role_admin}),
+            "POST": operator_admin,
         },
         "v1/routes/": {
             "GET": _OPEN,
-            "PUT": frozenset({role_admin}),
-            "DELETE": frozenset({role_admin}),
+            "PUT": operator_admin,
+            "DELETE": operator_admin,
             "POST": _OPEN,
         },
     }

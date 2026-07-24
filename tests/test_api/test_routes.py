@@ -12,6 +12,10 @@ from meshcore_hub.common.models import (
     RouteNode,
 )
 
+ADMIN_HEADERS = {"X-User-Id": "test-admin", "X-User-Roles": "admin"}
+OPERATOR_HEADERS = {"X-User-Id": "test-operator", "X-User-Roles": "operator"}
+MEMBER_HEADERS = {"X-User-Id": "test-member", "X-User-Roles": "member"}
+
 
 def _make_node(session, public_key: str, name: str | None = None) -> Node:
     node = Node(public_key=public_key, name=name, first_seen=datetime.now(timezone.utc))
@@ -91,7 +95,7 @@ class TestListRoutes:
         )
         api_db_session.commit()
 
-        resp = client_no_auth.get("/api/v1/routes", headers={"X-User-Roles": "admin"})
+        resp = client_no_auth.get("/api/v1/routes", headers=ADMIN_HEADERS)
         assert resp.status_code == 200
         labels = [r["from_label"] for r in resp.json()["items"]]
         assert "Public" in labels
@@ -111,7 +115,7 @@ class TestCreateRoute:
                 "node_public_keys": [n.public_key for n in nodes],
                 "match_width": 1,
             },
-            headers={"X-User-Roles": "admin"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 201
         data = resp.json()
@@ -133,7 +137,7 @@ class TestCreateRoute:
                 "node_public_keys": [n.public_key for n in nodes],
                 "reversible": False,
             },
-            headers={"X-User-Roles": "admin"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 201
         assert resp.json()["reversible"] is False
@@ -150,7 +154,7 @@ class TestCreateRoute:
                 "to_label": "End",
                 "node_public_keys": [n.public_key for n in nodes],
             },
-            headers={"X-User-Roles": "admin"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 409
 
@@ -165,7 +169,7 @@ class TestCreateRoute:
                 "to_label": "B",
                 "node_public_keys": [node.public_key],
             },
-            headers={"X-User-Roles": "admin"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 422
 
@@ -180,7 +184,7 @@ class TestCreateRoute:
                 "to_label": "B",
                 "node_public_keys": [node.public_key, node.public_key],
             },
-            headers={"X-User-Roles": "admin"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 422
 
@@ -197,24 +201,39 @@ class TestCreateRoute:
                 "packet_count_threshold": 5,
                 "clear_threshold": 3,
             },
-            headers={"X-User-Roles": "admin"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 422
 
-    def test_non_admin_rejected(self, client_with_auth, api_db_session):
+    def test_member_rejected(self, client_no_auth, api_db_session):
         nodes = _sample_nodes(api_db_session)
         api_db_session.commit()
 
-        resp = client_with_auth.post(
+        resp = client_no_auth.post(
             "/api/v1/routes",
             json={
                 "from_label": "A",
                 "to_label": "B",
                 "node_public_keys": [n.public_key for n in nodes],
             },
-            headers={"Authorization": "Bearer test-read-key"},
+            headers=MEMBER_HEADERS,
         )
         assert resp.status_code == 403
+
+    def test_no_identity_rejected(self, client_no_auth, api_db_session):
+        """A request without an X-User-Id identity cannot create routes."""
+        nodes = _sample_nodes(api_db_session)
+        api_db_session.commit()
+
+        resp = client_no_auth.post(
+            "/api/v1/routes",
+            json={
+                "from_label": "A",
+                "to_label": "B",
+                "node_public_keys": [n.public_key for n in nodes],
+            },
+        )
+        assert resp.status_code == 401
 
 
 class TestGetRouteDetail:
@@ -453,7 +472,7 @@ class TestRouteQualityAvg:
                 "to_label": "Route",
                 "node_public_keys": [n.public_key for n in nodes],
             },
-            headers={"X-User-Roles": "admin"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 201
         assert resp.json()["quality_avg"] is None
@@ -489,7 +508,7 @@ class TestRouteQualityAvg:
         resp = client_no_auth.put(
             f"/api/v1/routes/{route.id}",
             json={"description": "now with description"},
-            headers={"X-User-Roles": "admin"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 200
         assert resp.json()["quality_avg"] == "failing"
@@ -515,7 +534,7 @@ class TestUpdateRoute:
         resp = client_no_auth.put(
             f"/api/v1/routes/{route.id}",
             json={"from_label": "NewFrom", "to_label": "NewTo"},
-            headers={"X-User-Roles": "admin"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -544,7 +563,7 @@ class TestUpdateRoute:
         resp = client_no_auth.put(
             f"/api/v1/routes/{route.id}",
             json={"node_public_keys": [nodes[0].public_key, new_node.public_key]},
-            headers={"X-User-Roles": "admin"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -606,7 +625,7 @@ class TestUpdateRoute:
         resp = client_no_auth.put(
             f"/api/v1/routes/{route.id}",
             json={"packet_count_threshold": 3, "clear_threshold": 6},
-            headers={"X-User-Roles": "admin"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -662,7 +681,7 @@ class TestUpdateRoute:
         resp = client_no_auth.put(
             f"/api/v1/routes/{route.id}",
             json={"description": "still off"},
-            headers={"X-User-Roles": "admin"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 200
         assert (
@@ -678,14 +697,14 @@ class TestDeleteRoute:
 
         resp = client_no_auth.delete(
             f"/api/v1/routes/{route.id}",
-            headers={"X-User-Roles": "admin"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 204
 
     def test_not_found(self, client_no_auth):
         resp = client_no_auth.delete(
             "/api/v1/routes/nonexistent",
-            headers={"X-User-Roles": "admin"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 404
 
@@ -812,7 +831,7 @@ class TestRouteHistory:
 
         resp = client_no_auth.get(
             f"/api/v1/routes/{route.id}/history",
-            headers={"X-User-Roles": "admin"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 200
 
@@ -954,7 +973,7 @@ class TestUpdateRouteFields:
                 "enabled": False,
                 "reversible": False,
             },
-            headers={"X-User-Roles": "admin"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -978,7 +997,7 @@ class TestUpdateRouteFields:
         resp = client_no_auth.put(
             f"/api/v1/routes/{other.id}",
             json={"from_label": "OldFrom", "to_label": "OldTo"},
-            headers={"X-User-Roles": "admin"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 409
 
@@ -990,7 +1009,7 @@ class TestUpdateRouteFields:
         resp = client_no_auth.put(
             f"/api/v1/routes/{route.id}",
             json={"observer_public_keys": [obs.public_key]},
-            headers={"X-User-Roles": "admin"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -1014,14 +1033,14 @@ class TestUpdateRouteFields:
         client_no_auth.put(
             f"/api/v1/routes/{route.id}",
             json={"observer_public_keys": [obs.public_key]},
-            headers={"X-User-Roles": "admin"},
+            headers=ADMIN_HEADERS,
         )
 
         # Clear with an explicit empty list.
         resp = client_no_auth.put(
             f"/api/v1/routes/{route.id}",
             json={"observer_public_keys": []},
-            headers={"X-User-Roles": "admin"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 200
         assert resp.json()["route_observers"] == []
@@ -1029,7 +1048,7 @@ class TestUpdateRouteFields:
         # Confirm persistence via a fresh GET.
         detail = client_no_auth.get(
             f"/api/v1/routes/{route.id}",
-            headers={"X-User-Roles": "admin"},
+            headers=ADMIN_HEADERS,
         ).json()
         assert detail["route_observers"] == []
 
@@ -1042,7 +1061,7 @@ class TestUpdateRouteFields:
             json={
                 "node_public_keys": ["ff" + "0" * 62, "ee" + "0" * 62],
             },
-            headers={"X-User-Roles": "admin"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 400
 
@@ -1050,7 +1069,7 @@ class TestUpdateRouteFields:
         resp = client_no_auth.put(
             "/api/v1/routes/nonexistent",
             json={"description": "x"},
-            headers={"X-User-Roles": "admin"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 404
 
@@ -1081,7 +1100,7 @@ class TestGetRouteVisibility:
 
         resp = client_no_auth.get(
             f"/api/v1/routes/{route.id}",
-            headers={"X-User-Roles": "admin"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 200
 
@@ -1132,7 +1151,7 @@ class TestCreateWithObservers:
                 "node_public_keys": [n.public_key for n in nodes],
                 "observer_public_keys": [obs.public_key],
             },
-            headers={"X-User-Roles": "admin"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 201
         data = resp.json()
@@ -1281,7 +1300,7 @@ class TestPrecomputedRecentMatches:
         resp = client_no_auth.put(
             f"/api/v1/routes/{route.id}",
             json={"description": "trigger reeval"},
-            headers={"X-User-Roles": "admin"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 200
 
@@ -1297,3 +1316,147 @@ class TestPrecomputedRecentMatches:
         assert len(rows) == 1
         assert rows[0].first_position == 1
         assert rows[0].last_position == 2
+
+
+class TestRouteOperatorPermissions:
+    """Operators may manage routes but cannot scope above their own role."""
+
+    def test_operator_create_at_own_level(self, client_no_auth, api_db_session):
+        nodes = _sample_nodes(api_db_session)
+        api_db_session.commit()
+
+        resp = client_no_auth.post(
+            "/api/v1/routes",
+            json={
+                "from_label": "Op",
+                "to_label": "End",
+                "visibility": "operator",
+                "node_public_keys": [n.public_key for n in nodes],
+            },
+            headers=OPERATOR_HEADERS,
+        )
+        assert resp.status_code == 201
+        assert resp.json()["visibility"] == "operator"
+
+    def test_operator_create_below_level(self, client_no_auth, api_db_session):
+        nodes = _sample_nodes(api_db_session)
+        api_db_session.commit()
+
+        resp = client_no_auth.post(
+            "/api/v1/routes",
+            json={
+                "from_label": "Op",
+                "to_label": "End",
+                "visibility": "community",
+                "node_public_keys": [n.public_key for n in nodes],
+            },
+            headers=OPERATOR_HEADERS,
+        )
+        assert resp.status_code == 201
+
+    def test_operator_create_above_level_rejected(self, client_no_auth, api_db_session):
+        nodes = _sample_nodes(api_db_session)
+        api_db_session.commit()
+
+        resp = client_no_auth.post(
+            "/api/v1/routes",
+            json={
+                "from_label": "Op",
+                "to_label": "End",
+                "visibility": "admin",
+                "node_public_keys": [n.public_key for n in nodes],
+            },
+            headers=OPERATOR_HEADERS,
+        )
+        assert resp.status_code == 403
+
+    def test_admin_create_admin_visibility(self, client_no_auth, api_db_session):
+        """Admins can still set the highest visibility tier."""
+        nodes = _sample_nodes(api_db_session)
+        api_db_session.commit()
+
+        resp = client_no_auth.post(
+            "/api/v1/routes",
+            json={
+                "from_label": "Adm",
+                "to_label": "End",
+                "visibility": "admin",
+                "node_public_keys": [n.public_key for n in nodes],
+            },
+            headers=ADMIN_HEADERS,
+        )
+        assert resp.status_code == 201
+        assert resp.json()["visibility"] == "admin"
+
+    def test_operator_update_own_level(self, client_no_auth, api_db_session):
+        route = Route(from_label="Op", to_label="End", visibility="operator")
+        api_db_session.add(route)
+        api_db_session.commit()
+
+        resp = client_no_auth.put(
+            f"/api/v1/routes/{route.id}",
+            json={"description": "edited by operator"},
+            headers=OPERATOR_HEADERS,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["description"] == "edited by operator"
+
+    def test_operator_update_community_route(self, client_no_auth, api_db_session):
+        route = Route(from_label="Pub", to_label="End", visibility="community")
+        api_db_session.add(route)
+        api_db_session.commit()
+
+        resp = client_no_auth.put(
+            f"/api/v1/routes/{route.id}",
+            json={"description": "edited"},
+            headers=OPERATOR_HEADERS,
+        )
+        assert resp.status_code == 200
+
+    def test_operator_update_admin_route_404(self, client_no_auth, api_db_session):
+        route = Route(from_label="Secret", to_label="End", visibility="admin")
+        api_db_session.add(route)
+        api_db_session.commit()
+
+        resp = client_no_auth.put(
+            f"/api/v1/routes/{route.id}",
+            json={"description": "attempt"},
+            headers=OPERATOR_HEADERS,
+        )
+        assert resp.status_code == 404
+
+    def test_operator_escalate_visibility_rejected(
+        self, client_no_auth, api_db_session
+    ):
+        route = Route(from_label="Op", to_label="End", visibility="operator")
+        api_db_session.add(route)
+        api_db_session.commit()
+
+        resp = client_no_auth.put(
+            f"/api/v1/routes/{route.id}",
+            json={"visibility": "admin"},
+            headers=OPERATOR_HEADERS,
+        )
+        assert resp.status_code == 403
+
+    def test_operator_delete_own_level(self, client_no_auth, api_db_session):
+        route = Route(from_label="Op", to_label="End", visibility="operator")
+        api_db_session.add(route)
+        api_db_session.commit()
+
+        resp = client_no_auth.delete(
+            f"/api/v1/routes/{route.id}",
+            headers=OPERATOR_HEADERS,
+        )
+        assert resp.status_code == 204
+
+    def test_operator_delete_admin_route_404(self, client_no_auth, api_db_session):
+        route = Route(from_label="Secret", to_label="End", visibility="admin")
+        api_db_session.add(route)
+        api_db_session.commit()
+
+        resp = client_no_auth.delete(
+            f"/api/v1/routes/{route.id}",
+            headers=OPERATOR_HEADERS,
+        )
+        assert resp.status_code == 404

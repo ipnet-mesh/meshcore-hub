@@ -158,6 +158,16 @@ const PATH_MAX = 5;
 const PATH_HEAD = 2;
 const PATH_TAIL = 2;
 
+/** Max route-visibility tier the current user may set or modify. Mirrors the
+ * backend caller cap so a user can never scope a route above their own role
+ * (which would make it invisible/unmodifiable to them). */
+function maxVisibilityLevel(): number {
+  if (hasRole("admin")) return 3;
+  if (hasRole("operator")) return 2;
+  if (hasRole("member")) return 1;
+  return 0;
+}
+
 function qualityDot(quality: string, enabled: boolean): string {
   if (!enabled) return "\u25CC";
   const dots: Record<string, string> = {
@@ -485,14 +495,14 @@ function DetailContent({
 
 function RouteCard({
   route,
-  isAdmin,
+  canManage,
   packetsEnabled,
   onEdit,
   onDelete,
   onNavigate,
 }: {
   route: RouteItem;
-  isAdmin: boolean;
+  canManage: boolean;
   packetsEnabled: boolean;
   onEdit: () => void;
   onDelete: () => void;
@@ -580,7 +590,7 @@ function RouteCard({
             <span className="loading loading-spinner loading-sm opacity-50"></span>
           </div>
         )}
-        {isAdmin && (
+        {canManage && (
           <div className="flex gap-2 mt-auto pt-2">
             <button
               className="btn btn-xs btn-outline"
@@ -819,10 +829,13 @@ function RouteModal({
                   value={visibility}
                   onChange={(e) => setVisibility(e.target.value)}
                 >
-                  <option value="community">community</option>
-                  <option value="member">member</option>
-                  <option value="operator">operator</option>
-                  <option value="admin">admin</option>
+                  {VISIBILITY_ORDER.map((vis) =>
+                    VISIBILITY_ORDER.indexOf(vis) <= maxVisibilityLevel() ? (
+                      <option key={vis} value={vis}>
+                        {vis}
+                      </option>
+                    ) : null,
+                  )}
                 </select>
               </div>
               <div>
@@ -1145,7 +1158,7 @@ export function RoutesPage() {
   const navigate = useNavigate();
   const config = useAppConfig();
   const packetsEnabled = config.features?.packets !== false;
-  const isAdmin = hasRole("admin");
+  const canManage = hasRole("admin") || hasRole("operator");
   usePageTitle("routes.title");
 
   const queryClient = useQueryClient();
@@ -1468,7 +1481,7 @@ export function RoutesPage() {
 
       {error && <ErrorAlert message={error} />}
 
-      {isAdmin && (
+      {canManage && (
         <div className="flex justify-end mb-4">
           <button
             className="btn btn-primary btn-sm"
@@ -1503,7 +1516,7 @@ export function RoutesPage() {
                 <RouteCard
                   key={r.id}
                   route={r}
-                  isAdmin={isAdmin}
+                  canManage={canManage}
                   packetsEnabled={packetsEnabled}
                   onEdit={() => openEditModal(r)}
                   onDelete={() => openDeleteModal(r)}
