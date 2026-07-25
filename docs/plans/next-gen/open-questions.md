@@ -52,6 +52,25 @@ All six iteration-5 review questions resolved:
 | Q6b | Token signing algorithm | **HS256 default**, RS256 as config option |
 | Q6c | Feature-flag propagation | **Next-boundary** per flag (next packet / next tick / next request), as documented in §8.8.3 |
 
+## Resolved in iteration 8 (full-plan design review)
+
+A second full-plan review surfaced 13 issues — 4 schema-level blockers, 5 design risks, 4 softer notes —
+all now corrected in place and catalogued in [review-findings.md](review-findings.md). The blockers were
+resolved **before** the Phase 0 DDL freeze:
+
+| # | Issue | Resolution |
+|---|---|---|
+| F1 | Global unique constraints broke multi-tenancy (`nodes.public_key`, `event_hash`, `channels`, `settings` PK) | Instance-scoped composite uniques from Phase 0 — makes D21's "schema does not change" true |
+| F2 | Two of five CAGGs can't be built (source tables aren't hypertables) | Only `raw_receptions`-sourced CAGGs remain; message/advert/node-count become worker-maintained rollup tables |
+| F3 | RLS silently bypassable (owner bypass, autocommit reads, unscoped CAGGs + cache) | `FORCE RLS` + non-owner role, per-request transaction, `instance_id` in cache key, explicit CAGG predicate |
+| F5 | D5 benchmark scheduled after the schema it decides | Moved to Phase 0; Phase 1 = decode shadow, Phase 2 = full parallel-stack |
+| F4/F6/F7/F8 | Diff harness hash mismatch; compressed-hypertable FKs; unstable advisory-lock key; per-instance stream vs wildcard consumer | wire_hash join key; loose (FK-less) hypertable node refs; two-arg `pg_advisory_xact_lock(job, hashtext(instance_id))`; single `INGEST` stream |
+| F10/F11 | Spam sweep double-eval; telemetry dedup race; missing observer upsert; rowid lookup | Single-eval sweep; documented best-effort telemetry dedup; observer node upsert; `raw_reception_received_at` for chunk exclusion |
+| F9/F12/F13 | Python-shaped pseudocode; wizard SSR; scope/risk realism | TS-translation notes; wizard as SPA route; explicit strategy/risk note |
+
 ## No remaining open design questions
 
-The design covers Phases 0–7 concretely. All 22 decisions are locked. The remaining work is implementation, guided by the [phasing plan](phasing.md), [implementation checklist](implementation-checklist.md), and [testing/exit criteria](testing.md).
+The design covers Phases 0–7 concretely. All 22 decisions are locked; iteration 8 corrected implementation
+details without reopening any decision. The remaining work is implementation, guided by the
+[phasing plan](phasing.md), [implementation checklist](implementation-checklist.md),
+[testing/exit criteria](testing.md), and [review-findings.md](review-findings.md).

@@ -13,7 +13,10 @@ The §19.1 manifest consolidates six daemon threads into one `DerivedStateWorker
 
 ```typescript
 await db.transaction(async (tx) => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(${job.lockKey})`);
+    // Two-arg lock: (job key, stable per-instance key). In multi-tenant mode use
+    // hashtext(instanceId) as the second arg — NOT a positional instance_index, which shifts as
+    // tenants come/go and can double-execute across replicas (F7).
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${job.lockKey}, hashtext(${instanceId}))`);
     await tx.execute(sql`SET LOCAL app.instance_id = ${instanceId}`);
     try {
         await job.run(tx);

@@ -10,6 +10,7 @@
 - All handlers are `async` using **Drizzle ORM** over `node-postgres`, which provides native async I/O end-to-end.
 - DB I/O off the event loop; connection pool sized to async concurrency.
 - The `@cached` decorator's sync/async branch collapses to one async path.
+- **Every request runs inside a transaction that first issues `SET LOCAL app.instance_id` (RLS).** Reads included — `SET LOCAL` is transaction-scoped, so a read outside a transaction sees a NULL GUC and RLS returns 0 rows (data-model.md §1.5, §3.2). A Fastify `preHandler` opens the tx, sets the GUC from the resolved `Principal.instance_id`, and the handler runs inside it. The app connects as the non-owner `meshcore_app` role so `FORCE ROW LEVEL SECURITY` actually applies.
 
 ## Error response format
 
@@ -87,11 +88,16 @@ Replaces the dual/tri cache-key format and the hand-coded invalidation helpers.
 
 **One key format:**
 ```
-{namespace}:{scope}:{query_hash}
-  namespace = endpoint family ("nodes", "messages", "routes", ...)
-  scope     = "shared" | role_tier ("admin", "operator", "member", "community", "anonymous")
+{instance_id}:{namespace}:{scope}:{query_hash}
+  instance_id = the caller's tenant (from the Principal) — REQUIRED so tenants never share a cache entry
+  namespace  = endpoint family ("nodes", "messages", "routes", ...)
+  scope      = "shared" | role_tier ("admin", "operator", "member", "community", "anonymous")
   query_hash = sha256(sorted_query_params)[:16]
 ```
+
+The `instance_id` prefix is not optional: without it two tenants issuing the same query collide on one
+cache entry (a cross-tenant data leak), and invalidation cannot be scoped to one tenant. In single-tenant
+mode it is a constant prefix; in multi-tenant mode it is what makes the shared Redis safe.
 
 **Declarative invalidation graph** — the single source of truth, replacing AGENTS.md's "hard rule" hand-mapping:
 
@@ -124,9 +130,10 @@ def cached(namespace: str, *, ttl_setting: str = "cache_ttl"):
         @wraps(handler)
         async def wrapper(request: Request, *args, **kwargs):
             ns = NAMESPACES[namespace]
+            iid = request.state.principal.instance_id
             role = request.state.principal.role_tier if ns.role_scoped else "shared"
             qhash = sha256(sorted_query_string(request).encode())[:16].hex()
-            key = f"{namespace}:{role}:{qhash}"
+            key = f"{iid}:{namespace}:{role}:{qhash}"
 
             # Conditional GET → 304
             inm = request.headers.get("if-none-match")
@@ -160,7 +167,7 @@ async def invalidate_for(session_changes: Iterable[str], cache: CacheBackend, in
     for entity in session_changes:
         namespaces |= ENTITY_INVALIDATION.get(entity, set())
     for ns in namespaces:
-        await cache.delete(f"{ns}:*")   # SCAN + DEL by prefix
+        await cache.delete(f"{instance_id}:{ns}:*")   # SCAN + DEL by prefix, scoped to THIS tenant only
 ```
 
 A mutation handler declares what it changed:
@@ -180,9 +187,16 @@ A single `applyVisibility(query, principal)` Drizzle query builder construct tha
 
 ## Kill the N+1 and the count-subquery
 
-- **Eager-load** observer + tag data with `selectinload` at the ORM level (already done for nodes; extend to events).
+- **Eager-load** observer + tag data in one round-trip. In Drizzle this is the relational-queries API (`db.query.messages.findMany({ with: { observers: true, node: { with: { tags: true } } } })`) or an explicit `LEFT JOIN` + row aggregation — there is no `selectinload`; the pattern (avoid per-row hydration), not the SQLAlchemy mechanism, is what carries over.
 - **Precompute `total`** for hot list endpoints as a denormalized counter or a separate `count` query that doesn't wrap the full filtered query (keyset pagination where possible; for `packet_groups` use a `count(distinct wire_hash)` materialized helper).
 - **Cache `get_visible_channel_indices`** per request (it's role-scoped and stable) — compute once in the `Principal`.
+
+## Dashboard reads (CAGGs + rollups)
+
+- The two **CAGGs** (`cagg_daily_packet_counts`, `cagg_packet_breakdown_by_type`, over `raw_receptions`) are read directly, but **RLS does not propagate to a continuous aggregate** — the dashboard query must add an explicit `WHERE instance_id = <principal.instance_id>` predicate (data-model.md §3.6).
+- Daily **message/advert counts** and **node-count history** are read from the worker-maintained rollup tables (`dashboard_daily_message_counts`, `dashboard_daily_advert_counts`, `dashboard_node_count_history`), which *are* RLS-scoped like any tenant table (data-model.md §3.6a). These replace the two message/advert CAGGs that TimescaleDB cannot build over the OLTP tables.
+
+> **Implementation note (D22).** The pseudocode in this doc is Python-shaped (`@cached` decorator, `Depends`-injected `Principal`/`RequireAdmin`). In the locked TS stack these map to Fastify **`preHandler` hooks** (auth + the per-request transaction that sets `app.instance_id`) and a **cache plugin/hook** rather than a handler decorator — the contract (one key format, one invalidation graph, one resolved `Principal`) is identical; the wiring is Fastify-idiomatic, not decorator-based.
 
 ## OpenAPI as the contract
 
@@ -289,13 +303,14 @@ Rule of thumb: if changing it requires reconnecting to an external system or re-
 
 ```sql
 CREATE TABLE settings (
-  key         text PRIMARY KEY,
+  key         text NOT NULL,
   value       jsonb NOT NULL,           -- typed per category (validated server-side)
   category    text NOT NULL,            -- 'branding' | 'features' | 'tuning' | 'webhooks' | 'radio'
   description text,                     -- surfaced in the settings UI
   updated_by  text,                     -- user_id of last editor (audit)
   updated_at  timestamptz NOT NULL DEFAULT now(),
-  instance_id uuid NOT NULL REFERENCES instances(id)
+  instance_id uuid NOT NULL REFERENCES instances(id),
+  PRIMARY KEY (instance_id, key)        -- per-tenant: one row per key PER instance (NOT key alone)
 );
 ```
 

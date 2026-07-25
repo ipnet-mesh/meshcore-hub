@@ -68,12 +68,16 @@ flowchart TB
 
 ## 2. What's already free
 
-The single-tenant design (Phases 0–6) built multi-tenant foundations by default. These require **zero changes**:
+The single-tenant design (Phases 0–6) built multi-tenant foundations by default. These require **zero
+changes** — provided the Phase 0 schema is instance-scoped *including its uniqueness and stream topology*
+(the corrections in [review-findings.md](../review-findings.md) F1/F8 fold these into the base schema, so
+"the schema does not change" is now true rather than aspirational):
 
 | Capability | Why it's free |
 |---|---|
-| Per-tenant data isolation | `instance_id` + RLS on every table (D3) |
-| Per-tenant settings/branding | `settings` table is per-instance (D11) |
+| Per-tenant data isolation | `instance_id` + RLS on every table (D3), enforced with `FORCE ROW LEVEL SECURITY` + a non-owner app role |
+| Per-tenant uniqueness | every business key is `UNIQUE (instance_id, …)` from Phase 0 — `nodes.public_key`, `event_hash`, `channels.name/key_hex`, `settings (instance_id, key)` (F1) |
+| Per-tenant settings/branding | `settings` table is per-instance, PK `(instance_id, key)` (D11) |
 | Per-tenant custom pages | `custom_pages` table is per-instance (D20) |
 | Per-tenant channels/routes/tags/profiles | All tables carry `instance_id` |
 | Per-tenant NATS subjects | Already namespaced: `meshcore.ingest.<inst>.*`, `events.new.<inst>.*` |
@@ -87,6 +91,11 @@ The single-tenant assumption lives in exactly **three places** that Phase 7 modi
 1. `MqttIngester.__init__(instance_id=...)` — becomes a routing table lookup.
 2. `AuthMiddleware.instance_id` (from env) — becomes hostname/JWT resolution.
 3. OIDC config (Tier-1 env vars) — gains a per-instance DB path.
+
+The **NATS ingest stream is already single and platform-wide** (`INGEST`, subject `meshcore.ingest.>`,
+one durable `workers` consumer — ingest.md §6), so the shared worker pool's wildcard subscription needs
+no new stream in Phase 7. Had the stream been per-instance (`INGEST-<inst>`), the wildcard consumer group
+could not span it — hence the single-stream choice from Phase 0 (F8).
 
 ---
 
@@ -547,7 +556,7 @@ Workers are **tenant-agnostic**. They discover active tenants dynamically and pr
 |---|---|
 | **MqttIngester** | Already shared — decodes all MQTT traffic, routes per tenant via `ObserverAllowlistCache` (§4). New tenants picked up on `instance.created` NATS notification (cache reload). |
 | **IngestWorker** (pool) | Subscribes to `meshcore.ingest.>` (**wildcard — all tenants**). Each envelope carries `instance_id`; the worker sets `SET LOCAL app.instance_id` per batch. Consumer group `workers` distributes across replicas. New tenants need zero config — the wildcard subscription already covers their subject. |
-| **DerivedStateWorker** | Queries `SELECT id FROM instances WHERE deleted_at IS NULL` at startup + on `instance.created`/`instance.deleted` NATS notifications. For each active instance, runs the job manifest with `SET LOCAL app.instance_id`. Per-instance advisory lock keys (`lock_key = base_key + instance_index`) prevent one tenant's long-running job from blocking another's. Round-robin across instances. |
+| **DerivedStateWorker** | Queries `SELECT id FROM instances WHERE deleted_at IS NULL` at startup + on `instance.created`/`instance.deleted` NATS notifications. For each active instance, runs the job manifest with `SET LOCAL app.instance_id`. Per-instance advisory locks use the two-arg form `pg_advisory_xact_lock(job_key, hashtext(instance_id))` — a **stable** per-(job, instance) key, not a positional `base_key + instance_index` (which shifts as tenants come/go and can double-execute across replicas — F7). Round-robin across instances. |
 | **WebhookWorker** | Subscribes to `events.new.>` (**wildcard — all tenants**). Each event carries `instance_id`; the worker loads that tenant's webhook settings from `SettingsCache`. New tenants need zero config. |
 
 ### New-tenant pickup (zero operator intervention)

@@ -106,7 +106,7 @@ Existing operators migrate via the `db migrate-to-postgres` runbook before upgra
 
 NATS JetStream owns two roles in the target architecture:
 
-1. **Durable ingest stream** (`meshcore.ingest.<instance_id>`) — the MqttIngester produces decoded envelopes; the `IngestWorker` consumer group reads them. JetStream gives at-least-once delivery, disk persistence, and **server-side dedup** via the `Nats-Msg-Id` header (set to the packet's `wire_hash`) within a configurable duplicate window — so MQTT redelivery does not double-process.
+1. **Durable ingest stream** — a single platform-wide `INGEST` stream capturing `meshcore.ingest.>` (per-instance subject tokens `meshcore.ingest.<inst>.<feed>`). The MqttIngester produces decoded envelopes; the shared `IngestWorker` consumer group reads them. One stream (not one-per-instance) so the Phase 7 wildcard consumer group works — see [D4](../decisions/D04-nats-jetstream-ingest.md) (F8). JetStream gives at-least-once delivery, disk persistence, and **server-side dedup** via the `Nats-Msg-Id` header (packet `wire_hash`) within a configurable duplicate window — so MQTT redelivery does not double-process.
 2. **Realtime fan-out bus** (`events.new.<instance_id>`) — workers publish a small "new event" notification after commit; the API's SSE endpoint subscribes and pushes to clients.
 
 ### Why NATS over the alternatives
@@ -120,9 +120,9 @@ NATS JetStream owns two roles in the target architecture:
 
 ### Stream configuration
 
-The default Compose stack gains a `nats` service with a JetStream persistence volume. Operators of the existing bundled-Redis cache keep Redis; the ingest path no longer touches it.
+The default Compose stack gains a `nats` service with a JetStream persistence volume. Operators of the existing bundled-Redis cache keep Redis; the ingest path no longer touches it. One `INGEST` stream is created at provisioning (subject `meshcore.ingest.>`) with one durable consumer `workers` that all IngestWorker replicas bind to.
 
-- `duplicate_window = 5m` — server-side dedup on `Nats-Msg-Id` = packet `wire_hash`.
+- `duplicate_window = 5m` — server-side dedup on `Nats-Msg-Id` = packet `wire_hash` (tenant-prefixed in multi-tenant mode).
 - `max_age = 7d` — replay window for worker restarts.
 - `storage = file`.
 - `retention = limits`.

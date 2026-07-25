@@ -11,7 +11,9 @@ Today's ingest is a single-threaded MQTT callback with no backpressure (W1): one
 
 **NATS 2.10+ JetStream** owns both roles:
 
-1. **Durable ingest stream** (`INGEST-<inst>`, JetStream, `WorkQueuePolicy`, subject `meshcore.ingest.<inst>.*`). `MqttIngester` produces decoded envelopes; the `IngestWorker` consumer group (`durable="workers"`, `ack_explicit`) reads them. Server-side dedup via the `Nats-Msg-Id` header set to the packet's `wire_hash` within a `duplicate_window = 5m`. `max_age = 7d` (replay window for worker restarts), `storage = file`, `retention = limits`.
+1. **Durable ingest stream** — a **single, platform-wide `INGEST` stream** (JetStream, `WorkQueuePolicy`, subject `meshcore.ingest.>`; per-instance tokens `meshcore.ingest.<inst>.<feed>`). `MqttIngester` produces decoded envelopes; the `IngestWorker` consumer group (`durable="workers"`, `ack_explicit`) reads them. Server-side dedup via the `Nats-Msg-Id` header (packet `wire_hash`, tenant-prefixed in multi-tenant mode) within a `duplicate_window = 5m`. `max_age = 7d` (replay window for worker restarts), `storage = file`, `retention = limits`.
+
+   > **One stream, not one-per-instance (F8).** A JetStream consumer group cannot span multiple streams, and Phase 7's shared worker pool subscribes to `meshcore.ingest.>` across all tenants. Defining a per-instance `INGEST-<inst>` stream would break that wildcard consumer and require creating a stream per tenant at registration. A single stream from Phase 0 keeps multi-tenancy purely additive; single-tenant is just one instance's subjects.
 2. **Realtime fan-out bus** (`events.new.<inst>.{table}`, core non-durable pub/sub). Workers publish a small "event persisted" notification after commit; the API's SSE endpoint subscribes and pushes to clients.
 
 Redis narrows to optional API response cache only — it is no longer on the ingest or fan-out paths and may be omitted entirely.

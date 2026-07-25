@@ -5,7 +5,15 @@
 
 ## Context
 
-The schema is already instance-scoped: every tenant table carries `instance_id` with RLS (D3), NATS subjects are namespaced (`meshcore.ingest.<inst>.*`), cache keys are scoped, and settings/pages/channels/routes/tags/profiles are all per-instance. The single-tenant assumption lives in exactly three places: the MqttIngester's constructor (`instance_id` is a process-level arg), the API middleware (`instance_id` from env), and OIDC config (Tier-1 env vars).
+The schema is instance-scoped from Phase 0: every tenant table carries `instance_id` with RLS (D3), NATS subjects are namespaced (`meshcore.ingest.<inst>.*`), cache keys are scoped, and settings/pages/channels/routes/tags/profiles are all per-instance. The single-tenant assumption lives in exactly three places: the MqttIngester's constructor (`instance_id` is a process-level arg), the API middleware (`instance_id` from env), and OIDC config (Tier-1 env vars).
+
+> **Correction (iteration 8, F1/F8).** "The schema does not change" only holds because the base schema is
+> built multi-tenant-ready — which required four fixes folded into Phase 0: (1) every business-key unique
+> is `UNIQUE (instance_id, …)` (`nodes.public_key`, the `event_hash` columns, `channels.name/key_hex`);
+> (2) `settings` PK is `(instance_id, key)`, not `key` alone; (3) a **single** platform-wide `INGEST`
+> NATS stream (`meshcore.ingest.>`), so the Phase 7 wildcard consumer needs no new stream; (4) RLS is
+> `FORCE`d and the app runs as a non-owner role. With global uniques or a per-instance stream, Phase 7
+> would in fact require schema/topology migrations. See [review-findings.md](../review-findings.md).
 
 The question (iteration 7): can multiple MeshCore communities share one platform deployment — each with their own branding, pages, OIDC, and observer pool — while the MQTT backend accepts all observers and each tenant chooses which ones they want?
 

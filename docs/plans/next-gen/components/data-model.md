@@ -51,14 +51,16 @@ Route matching is **subsequence logic** over packet paths, not pure time-bucketi
 
 - `routes`, `route_nodes`, `route_observers` stay (definitions) — add the missing `UNIQUE(route_id, position)` and `UNIQUE(route_id, node_id)` constraints.
 - `route_results`, `route_result_history`, `route_recent_matches` stay as **worker-maintained tables** — but maintained by the single `DerivedStateWorker`, not 2 inline background cadences. The matcher reads `raw_receptions.path_hashes` directly (D5 outcome).
-- Continuous aggregates are reserved for the **dashboard** time-bucketing (daily message/advert/packet counts, breakdowns, node-count history).
+- Continuous aggregates are reserved for the **dashboard** time-bucketing that sources from a hypertable — daily **packet** counts and the packet breakdown by type (both over `raw_receptions`). Daily message/advert counts and node-count history source from OLTP/entity tables, so they are **worker-maintained rollup tables** (§3.6a), not CAGGs — the same rule as route health.
 
-Net: the route-health subsystem loses 2 background threads + the inline maintenance + the write-amplified hops table, but keeps its 3 derived tables. The bigger CAGG win is on the dashboard.
+Net: the route-health subsystem loses 2 background threads + the inline maintenance + the write-amplified hops table, but keeps its 3 derived tables. The CAGG win is the packet counts/breakdown; the dashboard's dedup'd-event counts move to cheap worker-maintained rollups.
 
 ### 1.5 Roles & security (S3, S4)
 
 - `user_profile_roles` join table (one row per profile × role) instead of CSV text. Indexable, constrainable.
 - **Row-level `instance_id` column** on every tenant-scoped table + Postgres RLS policies, **in addition to** `search_path`. Defense in depth: even a leaking connection cannot cross instances. (D3 locks row-level `instance_id` + RLS; schema-per-instance stays as an optional belt-and-braces layer.)
+- **RLS must be forced and the app must not own the tables.** Postgres skips RLS for a table's owner. The migration/DDL role owns the tables; the application connects as a **separate non-owner role** (`meshcore_app`), and every table sets `FORCE ROW LEVEL SECURITY` so even a mistakenly-privileged connection is still policy-checked. Without both of these, RLS is silently inert.
+- **All uniqueness is instance-scoped from Phase 0.** Every "unique" business key is `UNIQUE (instance_id, …)` — `nodes.public_key`, the dedup'd-event `event_hash` columns, `channels.name`/`key_hex`, `settings (instance_id, key)`. A physical node or a repeated on-air packet legitimately appears once *per tenant*; a global unique would let one tenant's row block another's insert. In single-tenant mode there is one instance, so this is behaviourally identical — but it is what makes Phase 7 genuinely additive (D21).
 
 ### 1.6 Naming consistency
 
@@ -94,9 +96,11 @@ HYPERTABLES (TimescaleDB, compressed)
   telemetry(received_at, id, node_id, parsed_data jsonb, object_key, ...)
   event_logs(received_at, id, event_type, payload jsonb, ...)           -- D2 locked
 
-CONTINUOUS AGGREGATES (dashboard time-bucketing — the A7 win)
-  cagg_daily_message_counts, cagg_daily_advert_counts, cagg_daily_packet_counts,
-  cagg_packet_breakdown_by_type, cagg_node_count_history
+CONTINUOUS AGGREGATES (only over the raw_receptions hypertable — the A7 win)
+  cagg_daily_packet_counts, cagg_packet_breakdown_by_type
+
+DASHBOARD ROLLUPS (worker-maintained — sources aren't hypertables, so NOT CAGGs)
+  dashboard_daily_message_counts, dashboard_daily_advert_counts, dashboard_node_count_history
 
 ROUTE HEALTH (worker-maintained — NOT CAGGs; subsequence logic)
   route_results(route_id PK, state, quality, quality_avg, matched_count, ..., instance_id)
@@ -139,18 +143,29 @@ A single-row seed (`INSERT INTO instances ...`) is created by the initial migrat
 
 ```sql
 ALTER TABLE <t> ENABLE ROW LEVEL SECURITY;
+ALTER TABLE <t> FORCE ROW LEVEL SECURITY;          -- also enforce for the table owner
 CREATE POLICY tenant_isolation ON <t>
-  USING (instance_id = current_setting('app.instance_id', true)::uuid);
+  USING       (instance_id = current_setting('app.instance_id', true)::uuid)
+  WITH CHECK  (instance_id = current_setting('app.instance_id', true)::uuid);   -- block cross-instance writes too
 ```
 
-The app issues `SET LOCAL app.instance_id = '<uuid>';` at the start of each transaction (node-postgres pool hook + Drizzle's `transaction()` callback). This is defense-in-depth on top of the existing schema-per-instance option.
+Roles: the DDL/migration role owns the tables; the application connects as a **non-owner role**
+(`meshcore_app`, granted DML only). Owner-bypass is why `FORCE` is required.
+
+The app issues `SET LOCAL app.instance_id = '<uuid>';` at the start of **every transaction — reads
+included**. Because `SET LOCAL` is transaction-scoped, any statement run in autocommit sees a NULL GUC
+and the policy returns 0 rows. The API therefore wraps **each request** in a transaction (a Fastify
+`preHandler`/`onRequest` hook opens the tx and issues the `SET LOCAL` before the handler runs); the
+`DerivedStateWorker` and `IngestWorker` already do this per job/batch. This is the one RLS footgun to
+guard in review — a read path that bypasses the request transaction silently loses tenant scoping.
+This is defense-in-depth on top of the existing schema-per-instance option.
 
 ### 3.3 Entities (OLTP)
 
 ```sql
 CREATE TABLE nodes (
   id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  public_key   char(64) UNIQUE NOT NULL,
+  public_key   char(64) NOT NULL,
   name         text,
   adv_type     text,
   flags        int,
@@ -161,7 +176,8 @@ CREATE TABLE nodes (
   last_seen    timestamptz,
   instance_id  uuid NOT NULL REFERENCES instances(id),
   created_at   timestamptz NOT NULL DEFAULT now(),
-  updated_at   timestamptz NOT NULL DEFAULT now()
+  updated_at   timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (instance_id, public_key)   -- per-tenant: the same physical node exists once per instance
 );
 
 CREATE TABLE node_tags (
@@ -201,19 +217,21 @@ CREATE TABLE user_profile_nodes (
   node_id         uuid NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
   adopted_at      timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (user_profile_id, node_id),
-  UNIQUE (node_id)             -- one adopter per node (RLS scopes per instance)
+  UNIQUE (node_id)             -- one adopter per node; node_id is already instance-specific (per-tenant node rows)
 );
 
 CREATE TABLE channels (
   id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name         text UNIQUE NOT NULL,
-  key_hex      text UNIQUE NOT NULL,
+  name         text NOT NULL,
+  key_hex      text NOT NULL,
   key_hash     smallint NOT NULL,        -- first byte of sha256(key); API exposes as 2-hex
   visibility   channel_visibility NOT NULL DEFAULT 'community',
   enabled      boolean NOT NULL DEFAULT true,
   instance_id  uuid NOT NULL REFERENCES instances(id),
   created_at   timestamptz NOT NULL DEFAULT now(),
-  updated_at   timestamptz NOT NULL DEFAULT now()
+  updated_at   timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (instance_id, name),
+  UNIQUE (instance_id, key_hex)
 );
 ```
 
@@ -263,7 +281,7 @@ CREATE TABLE route_observers (
 ```sql
 CREATE TABLE messages (
   id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  event_hash        bytea UNIQUE NOT NULL,    -- sha256(content) truncated to 16 bytes
+  event_hash        bytea NOT NULL,           -- sha256(content) truncated to 16 bytes
   kind              message_kind NOT NULL,    -- 'contact' | 'channel'
   pubkey_prefix     char(12),
   channel_idx       int,
@@ -279,7 +297,8 @@ CREATE TABLE messages (
   spam_score        real,
   received_at       timestamptz NOT NULL DEFAULT now(),
   instance_id       uuid NOT NULL REFERENCES instances(id),
-  created_at        timestamptz NOT NULL DEFAULT now()
+  created_at        timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (instance_id, event_hash)     -- dedup is per-tenant (multi-tenancy.md §10)
 );
 CREATE INDEX ix_messages_kind_received     ON messages(kind, received_at);
 CREATE INDEX ix_messages_prefix_received   ON messages(pubkey_prefix, received_at);
@@ -289,7 +308,7 @@ CREATE INDEX ix_messages_pathprefix_received ON messages(path_prefix, received_a
 
 CREATE TABLE advertisements (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  event_hash       bytea UNIQUE NOT NULL,
+  event_hash       bytea NOT NULL,
   public_key       char(64) NOT NULL,
   name             text,
   adv_type         text,
@@ -298,7 +317,8 @@ CREATE TABLE advertisements (
   advert_timestamp timestamptz,
   received_at      timestamptz NOT NULL DEFAULT now(),
   instance_id      uuid NOT NULL REFERENCES instances(id),
-  created_at       timestamptz NOT NULL DEFAULT now()
+  created_at       timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (instance_id, event_hash)     -- per-tenant dedup
 );
 CREATE INDEX ix_adverts_pubkey ON advertisements(public_key);
 CREATE INDEX ix_adverts_route_type_received ON advertisements(route_type, received_at);  -- previously unindexed
@@ -306,7 +326,7 @@ CREATE INDEX ix_adverts_received ON advertisements(received_at);
 
 CREATE TABLE trace_paths (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  event_hash    bytea UNIQUE NOT NULL,
+  event_hash    bytea NOT NULL,
   initiator_tag bigint NOT NULL,
   path_len      int,
   flags         int,
@@ -315,7 +335,8 @@ CREATE TABLE trace_paths (
   hop_count     int,
   received_at   timestamptz NOT NULL DEFAULT now(),
   instance_id   uuid NOT NULL REFERENCES instances(id),
-  created_at    timestamptz NOT NULL DEFAULT now()
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (instance_id, event_hash)     -- per-tenant dedup
 );
 CREATE INDEX ix_trace_initiator ON trace_paths(initiator_tag);
 CREATE INDEX ix_trace_received  ON trace_paths(received_at);
@@ -330,7 +351,7 @@ TimescaleDB. Note: hypertables require the time column in the PK.
 CREATE TABLE raw_receptions (
   received_at          timestamptz NOT NULL,
   id                   bigint GENERATED ALWAYS AS IDENTITY,   -- cheap, hypertable-friendly
-  observer_node_id     uuid REFERENCES nodes(id) ON DELETE SET NULL,
+  observer_node_id     uuid,                      -- loose ref to nodes.id; NO FK (see note below)
   wire_hash            char(32),                  -- LetsMesh on-air hash; Nats-Msg-Id source
   event_hash           bytea,                     -- backlink to dedup'd event, filled post-dispatch
   instance_id          uuid NOT NULL REFERENCES instances(id),
@@ -361,13 +382,18 @@ CREATE INDEX ix_raw_pathhash_gin          ON raw_receptions USING gin(path_hashe
 ALTER TABLE raw_receptions SET (timescaledb.compress, timescaledb.compress_segmentby = 'observer_node_id');
 SELECT add_compression_policy('raw_receptions', INTERVAL '24 hours');
 SELECT add_retention_policy('raw_receptions', INTERVAL '30 days');
+-- NOTE (F6): the four hypertables reference nodes.id as a LOOSE uuid (no FK, no ON DELETE action).
+-- A real FK with ON DELETE SET NULL/CASCADE would force cross-chunk DML — including on COMPRESSED
+-- chunks, where DML is restricted/expensive — every time hourly node cleanup deletes a node. A dangling
+-- node id is harmless here (same tolerance the plan already accepts for orphaned event_observers rows):
+-- history repopulates and ages out on retention. RLS still scopes rows by instance_id.
 
 -- event_observers (junction, also hypertable)
 CREATE TABLE event_observers (
   observed_at       timestamptz NOT NULL,
   event_hash        bytea NOT NULL,
   event_type        text NOT NULL,
-  observer_node_id  uuid NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+  observer_node_id  uuid NOT NULL,               -- loose ref to nodes.id; NO FK (hypertable, see F6 note)
   snr               real,
   path_len          int,
   instance_id       uuid NOT NULL REFERENCES instances(id),
@@ -387,12 +413,15 @@ SELECT add_retention_policy('event_observers', INTERVAL '30 days');
 CREATE TABLE telemetry (
   received_at      timestamptz NOT NULL,
   id               uuid DEFAULT gen_random_uuid(),
-  node_id          uuid REFERENCES nodes(id) ON DELETE SET NULL,
+  node_id          uuid,                    -- loose ref to nodes.id; NO FK (hypertable, see F6 note)
   node_public_key  char(64) NOT NULL,
   parsed_data      jsonb,
   object_key       text,
-  event_hash       bytea,                   -- backlink to dedup'd event; NOT UNIQUE (hypertable constraint —
-                                            -- dedup handled by NATS Nats-Msg-Id + worker-side existence check)
+  event_hash       bytea,                   -- backlink to dedup'd event; NOT UNIQUE (hypertable constraint).
+                                            -- Dedup is BEST-EFFORT: Nats-Msg-Id window dedup suppresses
+                                            -- redelivery, but two worker replicas can still both insert a
+                                            -- telemetry row (no unique to catch the race). Residual
+                                            -- duplicates are de-duplicated on read by (instance_id, event_hash).
   instance_id      uuid NOT NULL REFERENCES instances(id),
   PRIMARY KEY (received_at, id)
 );
@@ -400,12 +429,15 @@ SELECT create_hypertable('telemetry', 'received_at', chunk_time_interval => INTE
 CREATE INDEX ix_telemetry_node_received ON telemetry(node_id, received_at);
 CREATE INDEX ix_telemetry_parsed_gin    ON telemetry USING gin(parsed_data);
 SELECT add_compression_policy('telemetry', INTERVAL '24 hours');
+-- Optional retention (telemetry is otherwise unbounded). Enabled when tuning.telemetry_retention_days
+-- is set; the retention job (derived-state.md) keeps the policy in sync with the setting.
+-- SELECT add_retention_policy('telemetry', INTERVAL '90 days');
 
 -- event_logs (renamed from events_log for naming consistency; D2 locked)
 CREATE TABLE event_logs (
   received_at       timestamptz NOT NULL,
   id                uuid DEFAULT gen_random_uuid(),
-  observer_node_id  uuid REFERENCES nodes(id) ON DELETE SET NULL,
+  observer_node_id  uuid,                       -- loose ref to nodes.id; NO FK (hypertable, see F6 note)
   event_type        text NOT NULL,
   payload           jsonb,
   instance_id       uuid NOT NULL REFERENCES instances(id),
@@ -416,21 +448,88 @@ SELECT add_compression_policy('event_logs', INTERVAL '24 hours');
 SELECT add_retention_policy('event_logs', INTERVAL '30 days');
 ```
 
-Continuous aggregates (the dashboard win — replaces fan-out COUNTs):
+Continuous aggregates (the dashboard win — replaces fan-out COUNTs).
+
+**A continuous aggregate can only be built over a hypertable.** `messages` and `advertisements` are
+deliberately plain OLTP tables (content-hash dedup needs a global `event_hash` unique that a hypertable
+can't provide). So **only the two `raw_receptions`-sourced counts are true CAGGs**; the dedup'd-event and
+node-count rollups the dashboard needs are **worker-maintained tables** (see §3.7a) — the same
+"can't be a CAGG, so the worker owns it" rule the route-health tables follow (§1.4).
 
 ```sql
-CREATE MATERIALIZED VIEW cagg_daily_message_counts
+-- Valid CAGGs (source = raw_receptions, a hypertable):
+CREATE MATERIALIZED VIEW cagg_daily_packet_counts
 WITH (timescaledb.continuous) AS
-  SELECT date_trunc('day', received_at) AS day, kind, channel_idx,
-         count(*) AS cnt, instance_id
-  FROM messages GROUP BY 1, 2, 3, 4
+  SELECT date_trunc('day', received_at) AS day, instance_id, count(*) AS cnt
+  FROM raw_receptions GROUP BY 1, 2
   WITH NO DATA;
-SELECT add_continuous_aggregate_policy('cagg_daily_message_counts',
+SELECT add_continuous_aggregate_policy('cagg_daily_packet_counts',
   start_offset => INTERVAL '7 days', end_offset => INTERVAL '1 hour',
   schedule_interval => INTERVAL '5 minutes');
--- Similarly: cagg_daily_advert_counts, cagg_daily_packet_counts (over raw_receptions),
--- cagg_packet_breakdown_by_type, cagg_node_count_history.
+
+CREATE MATERIALIZED VIEW cagg_packet_breakdown_by_type
+WITH (timescaledb.continuous) AS
+  SELECT date_trunc('day', received_at) AS day, instance_id, event_type, count(*) AS cnt
+  FROM raw_receptions GROUP BY 1, 2, 3
+  WITH NO DATA;
+SELECT add_continuous_aggregate_policy('cagg_packet_breakdown_by_type',
+  start_offset => INTERVAL '7 days', end_offset => INTERVAL '1 hour',
+  schedule_interval => INTERVAL '5 minutes');
 ```
+
+**RLS note:** RLS policies on the underlying hypertable do **not** propagate to a continuous aggregate.
+Dashboard reads of these CAGGs must therefore carry an explicit `WHERE instance_id = current_setting(
+'app.instance_id')::uuid` predicate (the API adds it from the `Principal`) — the CAGG is not a
+tenant-safe surface on its own.
+
+### 3.6a Dashboard rollups (worker-maintained — the counts that can't be CAGGs)
+
+Daily **message** counts, **advert** counts, and **node-count history** are sourced from OLTP tables
+(`messages`, `advertisements`) or from entity state (`nodes`) that has no append-only time column — none
+can be a continuous aggregate. They are refreshed by the `dashboard-rollups` DerivedStateWorker job
+(see [derived-state.md](derived-state.md#job-manifest)) as instance-scoped, RLS'd tables:
+
+```sql
+CREATE TABLE dashboard_daily_message_counts (
+  day          date NOT NULL,
+  kind         message_kind NOT NULL,
+  channel_idx  int,
+  cnt          int NOT NULL,
+  instance_id  uuid NOT NULL REFERENCES instances(id),
+  PRIMARY KEY (instance_id, day, kind, channel_idx)
+);
+ALTER TABLE dashboard_daily_message_counts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dashboard_daily_message_counts FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON dashboard_daily_message_counts
+  USING (instance_id = current_setting('app.instance_id', true)::uuid);
+
+CREATE TABLE dashboard_daily_advert_counts (
+  day          date NOT NULL,
+  route_type   text,
+  cnt          int NOT NULL,
+  instance_id  uuid NOT NULL REFERENCES instances(id),
+  PRIMARY KEY (instance_id, day, route_type)
+);
+ALTER TABLE dashboard_daily_advert_counts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dashboard_daily_advert_counts FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON dashboard_daily_advert_counts
+  USING (instance_id = current_setting('app.instance_id', true)::uuid);
+
+CREATE TABLE dashboard_node_count_history (
+  day            date NOT NULL,
+  active_nodes   int NOT NULL,        -- nodes with last_seen on `day`
+  total_nodes    int NOT NULL,        -- cumulative known nodes as of `day`
+  instance_id    uuid NOT NULL REFERENCES instances(id),
+  PRIMARY KEY (instance_id, day)
+);
+ALTER TABLE dashboard_node_count_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dashboard_node_count_history FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON dashboard_node_count_history
+  USING (instance_id = current_setting('app.instance_id', true)::uuid);
+```
+
+The job upserts completed-day buckets (`INSERT … ON CONFLICT (…) DO UPDATE`) each run — idempotent,
+cheap (a handful of `GROUP BY` queries), and RLS-scoped like every other tenant table.
 
 ### 3.7 Route health (worker-maintained, not CAGGs)
 
@@ -468,7 +567,9 @@ CREATE POLICY tenant_isolation ON route_result_history
 
 CREATE TABLE route_recent_matches (
   route_id        uuid NOT NULL REFERENCES routes(id) ON DELETE CASCADE,
-  raw_reception_rowid bigint NOT NULL,   -- references raw_receptions.id (loose; hypertable FK)
+  raw_reception_rowid bigint NOT NULL,   -- references raw_receptions.id (loose; hypertable, no FK)
+  raw_reception_received_at timestamptz NOT NULL,  -- store the partition key so match lookups get chunk
+                                                   -- exclusion (raw_receptions PK is (received_at, id))
   first_position  int NOT NULL,
   last_position   int NOT NULL,
   instance_id     uuid NOT NULL REFERENCES instances(id),   -- denormalized for RLS
@@ -503,13 +604,14 @@ CREATE TABLE local_users (
 
 -- Runtime settings (D11 — see api.md)
 CREATE TABLE settings (
-  key         text PRIMARY KEY,
+  key         text NOT NULL,
   value       jsonb NOT NULL,
   category    text NOT NULL,              -- 'branding' | 'features' | 'tuning' | 'webhooks' | 'radio'
   description text,
   updated_by  text,
   updated_at  timestamptz NOT NULL DEFAULT now(),
-  instance_id uuid NOT NULL REFERENCES instances(id)
+  instance_id uuid NOT NULL REFERENCES instances(id),
+  PRIMARY KEY (instance_id, key)          -- per-tenant settings (one row per key PER instance)
 );
 
 -- Custom pages (D20 — moved from file-based CONTENT_HOME to DB)

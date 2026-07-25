@@ -10,7 +10,7 @@
 One `DerivedStateWorker` process (or a sidecar mode of the collector) owns all periodic work. The wins:
 
 - One set of metrics, one shutdown path, one retry policy.
-- **Dashboard aggregations become TimescaleDB continuous aggregates** (CAGGs). Daily message/advert/packet counts, packet-breakdown by event type, and node-count history are all *pure time-bucketing* — the textbook CAGG use case. The worker refreshes them every few minutes; the API reads precomputed buckets instead of issuing fan-out COUNTs (A7). This is where CAGGs pay off biggest.
+- **Dashboard aggregations are precomputed** instead of fan-out COUNTs (A7). Two of them — daily **packet** counts and the **packet breakdown by type** — source from the `raw_receptions` hypertable and are true TimescaleDB **continuous aggregates**. The other three — daily **message** counts, **advert** counts, and **node-count history** — source from OLTP/entity tables (`messages`, `advertisements`, `nodes`) that are *not* hypertables, so a CAGG cannot be built over them; the `dashboard-rollups` job maintains them as plain rollup tables (data-model.md §3.6a). Either way the API reads precomputed buckets, not live COUNTs.
 - **Route health stays as 3 derived tables** (`route_results`, `route_result_history`, `route_recent_matches`) maintained by the worker — *not* CAGGs. Route matching is subsequence logic over `raw_receptions.path_hashes`, which cannot be expressed as a fixed time-bucket aggregate. The wins here are (a) the matcher reads one array column instead of a write-amplified hops table (D5), and (b) one worker maintains all three tables + the preview endpoint instead of 2 background cadences + inline maintenance.
 - Spam rescoring can become a **DB function** invoked on insert (for the online score) plus a periodic sweep (for the symmetric hindsight score), instead of a Python loop issuing per-row queries.
 - Retention becomes **chunked** (drop-old-chunks for hypertables via TimescaleDB retention policies) — no multi-second exclusive locks (W10).
@@ -25,8 +25,14 @@ One process — `DerivedStateWorker` — owns every periodic job. Replaces the s
 | `route-history` | 3600s | `route-history-backfill` thread (3600s) | Refresh completed UTC-day buckets in `route_result_history` over the raw retention window, then recompute `route_results.quality_avg` (rolling 7-day average quality tier from the updated history + current snapshot). | Per (route, day): upsert keyed on the composite PK. |
 | `spam-rescore` | 120s | `spam-rescore` thread (120s) | Symmetric-window rescore of recent `messages.spam_score` (see Spam rescoring below). | Per message: only writes when the score changes. |
 | `retention` | hourly | `cleanup` thread (hourly) | Drop expired hypertable chunks (`raw_receptions`, `event_logs`, `event_observers` at 30d); `cleanup_inactive_nodes`; `recompute_observer_flags`. Chunked (see Chunked retention). | Chunk drops are idempotent; node cleanup is keyed on `last_seen`. |
+| `dashboard-rollups` | 300s | (new — the counts that can't be CAGGs, F2) | Upsert completed-day buckets into `dashboard_daily_message_counts`, `dashboard_daily_advert_counts`, `dashboard_node_count_history` (data-model.md §3.6a). These source from OLTP/entity tables, so they cannot be TimescaleDB continuous aggregates. | Per (instance, day, …): `INSERT … ON CONFLICT DO UPDATE`. |
 | `metrics-gauges` | 60s | (new — replaces the metrics COUNT fan-out A7) | Precompute the Prometheus gauge values into a `_metrics_cache` table; `/metrics` reads the cache (TTL-cached today, but the computation moves here). | Overwrite. |
 | `cagg-health` | 300s | (new) | Assert each CAGG's `refresh_status` is recent; log + alert if stale. Read-only check. | — |
+
+> **CAGGs vs rollups:** only `cagg_daily_packet_counts` and `cagg_packet_breakdown_by_type` (over the
+> `raw_receptions` hypertable) are true continuous aggregates. Daily message/advert counts and node-count
+> history come from OLTP/entity tables and are maintained by the `dashboard-rollups` job above — the same
+> "can't be a CAGG, so the worker owns it" rule route health follows.
 
 ## Scheduler implementation
 
@@ -57,7 +63,12 @@ class DerivedStateWorker:
 
     async def _run_one(self, job: PeriodicJob) -> None:
         async with self.sessions() as s:
-            await s.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": job.lock_key})
+            # Two-arg advisory lock: (job key, stable per-instance key). Use hashtext(instance_id) — NOT a
+            # positional instance_index, which shifts as tenants come/go and can differ between replicas,
+            # letting the same (job, instance) run twice (F7). The two-arg form also avoids cross-job
+            # collisions that `base_key + index` risks.
+            await s.execute(text("SELECT pg_advisory_xact_lock(:j, hashtext(:iid))"),
+                            {"j": job.lock_key, "iid": str(self.instance_id)})
             await s.execute(text("SET LOCAL app.instance_id = :id"), {"id": self.instance_id})
             try:
                 await job.run(s)
@@ -115,7 +126,22 @@ $$ LANGUAGE plpgsql STABLE;
 ```
 
 - **At insert** (IngestWorker): `UPDATE messages SET spam_score = compute_spam_score(id, ...) WHERE id = ?;`
-- **Sweep** (`spam-rescore` job): `UPDATE messages SET spam_score = compute_spam_score(id, ...) WHERE received_at > now() - '1 hour'::interval AND spam_score IS DISTINCT FROM compute_spam_score(id, ...);` — only writes changed rows.
+- **Sweep** (`spam-rescore` job): compute the score **once per candidate** in a subquery, then filter and
+  write from that single value — do **not** call the function in both `WHERE` and `SET` (it is COUNT-heavy
+  and would run twice per row every 120s):
+
+```sql
+UPDATE messages m
+SET    spam_score = s.new_score
+FROM (
+  SELECT id, compute_spam_score(id, :window, :min_path_hops, :path_threshold,
+                                :name_threshold, :w_path, :w_name) AS new_score
+  FROM   messages
+  WHERE  received_at > now() - INTERVAL '1 hour'
+) s
+WHERE m.id = s.id
+  AND m.spam_score IS DISTINCT FROM s.new_score;   -- only rows whose score actually changed
+```
 
 This kills the asymmetric-online / symmetric-sweep split's Python implementation (`spam.py` ~315 LOC collapses to the function + two call sites) while preserving the documented behaviour.
 
@@ -218,6 +244,14 @@ async def retention_job(session: AsyncSession) -> None:
 ```
 
 `cleanup_inactive_nodes` and `recompute_observer_flags` follow the same chunked pattern.
+
+**Node cleanup does not touch the hypertables (F6).** The hypertable columns that point at `nodes`
+(`raw_receptions.observer_node_id`, `event_observers.observer_node_id`, `telemetry.node_id`,
+`event_logs.observer_node_id`) are **loose `uuid` references with no FK** (data-model.md §3.6). If they were
+real FKs with `ON DELETE SET NULL/CASCADE`, deleting an inactive node would force DML across hypertable
+chunks — including compressed ones, where DML is restricted/costly — turning an hourly cleanup into a
+decompress storm. Instead, a deleted node simply leaves a dangling id in history (harmless, like the
+orphaned `event_observers` rows above); it compresses and ages out on retention.
 
 ## Observability
 

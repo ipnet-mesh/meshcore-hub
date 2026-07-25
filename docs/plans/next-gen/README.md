@@ -1,7 +1,9 @@
 # Next-Generation Architecture — MeshCore Hub Rewrite
 
-> **Status:** Design complete (iterations 1–7). All 22 architectural decisions locked. All design
-> questions resolved. Ready for implementation.
+> **Status:** Design complete (iterations 1–8). All 22 architectural decisions locked. All design
+> questions resolved. Iteration 8 applied 13 review corrections — see
+> [review-findings.md](review-findings.md) — four of them schema-level (multi-tenant uniqueness, CAGG
+> vs hypertable, RLS enforcement, phase sequencing) resolved before the Phase 0 DDL freeze.
 > **Supersedes:** The monolithic `REWRITE.md` (split into these files).
 
 This directory contains the complete design for a from-scratch rewrite of MeshCore Hub.
@@ -20,6 +22,7 @@ Then read the [decisions](decisions/) for the locked architectural choices, and 
 
 | Document | Purpose |
 |---|---|
+| [review-findings.md](review-findings.md) | Iteration-8 design-review findings (13 issues) and their resolutions, cross-referenced (F1–F13) into the docs below |
 | [overview.md](overview.md) | Current system inventory, pain points, target architecture principles, topology |
 | [code-warts.md](code-warts.md) | Catalog of 52 antipatterns and gotchas from the current codebase (lessons for the new repo) |
 | [phasing.md](phasing.md) | The 7-phase plan, risks, and design retrospective (what shifted across iterations) |
@@ -76,7 +79,7 @@ All 22 decisions are locked. See [decisions/](decisions/) for individual records
 |---|---|---|
 | Ingest | Sync MQTT callback, 1 thread | `MqttIngester` → NATS → `IngestWorker` pool |
 | History tables | `raw_packets` + `packet_path_hops`, 2-day cap | TimescaleDB hypertables, 30-day retention, compressed |
-| Route health | 7 tables + 2 background cadences | 3 worker-maintained tables + dashboard CAGGs |
+| Route health | 7 tables + 2 background cadences | 3 worker-maintained tables + dashboard CAGGs (packets) & rollup tables (messages/adverts/nodes) |
 | IDs/enums | `String(36)` UUIDs, string enums | Native `uuid`, Postgres enums, `JSONB` |
 | Auth | Header injection (implicit trust) | Short-lived JWT + local passwords + optional OIDC |
 | Cache | Dual/tri key format, hand-coded invalidation | Single key format + declarative dependency graph |

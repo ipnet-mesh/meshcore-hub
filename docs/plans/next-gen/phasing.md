@@ -6,8 +6,9 @@
 
 ## Phase 0 — Foundations (no behavior change)
 
-- Fresh schema design; native `uuid`, enums, `JSONB`, SHA-256 hashes.
-- Decide datastore strategy (D1, D2, D3, D4).
+- **Run the D5 fold-vs-separate benchmark first** (synthetic data, throwaway TimescaleDB — testing.md → [D5 plan](testing.md#d5-benchmark-plan-fold-vs-separate)). Its outcome decides the `raw_receptions.path_hashes` shape, so it must land **before** the DDL is authored. This was previously (mis)scheduled in Phase 2, which created a circular dependency — the schema was "frozen" in Phase 0 but the benchmark that shapes it ran two phases later (F5).
+- Fresh schema design (reflecting the D5 outcome); native `uuid`, enums, `JSONB`, SHA-256 hashes, instance-scoped composite uniques (F1), `FORCE ROW LEVEL SECURITY` + non-owner app role (F3).
+- Decide datastore strategy (D1, D2, D3, D4). Provision the **single** platform-wide `INGEST` JetStream stream (`meshcore.ingest.>`) — not a per-instance stream (F8).
 - Stand up the typed `DecodedPacket` models + declarative classification table.
 - Set up the TS client tooling (orval config, `make gen-client`, CI drift check); first real generation happens in Phase 4 against the new API spec.
 
@@ -19,7 +20,7 @@
 - Split `MqttIngester` (pure decode+produce) from `IngestWorker` (batched write).
 - Centralize dedup helper; collapse handler boilerplate.
 - **`WebhookWorker`** (D19): NATS core subscriber on `events.new.<inst>.*`; Tier-2 webhook settings; filter DSL wired into production.
-- **Parallel-stack validation:** new stack ingests live MQTT alongside the old; diff outputs.
+- **Decode/classify shadow validation:** run the `MqttIngester` against the live feed and diff its **envelopes** (decoded + classified output) against the old normalizer — no DB, no workers required. This isolates "does the new decode/classify match?" from the full end-to-end diff. The full **parallel-stack** validation (both stacks writing to their DBs, compared at the API) is a Phase 2 activity, because it needs the provisioned schema and the D5 outcome — running it here would make Phase 1 depend on Phase 2 (F5).
 
 > **Detailed design:** [components/ingest.md](components/ingest.md), [components/infrastructure.md](components/infrastructure.md). Exit criteria: [Phase 1](testing.md#phase-1--ingest-pipeline).
 
@@ -27,7 +28,8 @@
 
 - **Greenfield infra:** fresh Postgres+TimescaleDB, NATS, new schema. No historical data migration.
 - **Preserved-config export/import** (`db export-config` / `db import-config`): user_profiles + roles, routes + nodes + observers, node_tags, adoptions, channels, plus node identity stubs.
-- **D5 spike:** fold `packet_path_hops` into `raw_receptions.path_hashes` array; benchmark route matcher; keep folded if perf holds, else keep a hypertable.
+- **Full parallel-stack validation** (moved here from Phase 1): both stacks ingest the same live MQTT into their own DBs; the diff harness compares per-hour event counts and `wire_hash` coverage (F4) at the API. This is the DB-level gate; the decode-level shadow was Phase 1.
+- **D5 outcome applied** (the benchmark itself ran in Phase 0, F5): the schema already reflects fold-vs-separate; here the route matcher is validated against real data at the D5 gate.
 - **D8 step 1:** keep `raw_hex` in-DB but rely on TimescaleDB compression (10–20×). **D8 step 2 (only if measured necessary):** move bytes to a `BlobStore` (MinIO/local-volume) behind an interface.
 - No historical data migration — preserved config only (see [migration.md](components/migration.md)).
 
@@ -36,7 +38,7 @@
 ## Phase 3 — Derived state consolidation
 
 - Replace the 6 background threads with the single `DerivedStateWorker`.
-- Convert **dashboard aggregations** to TimescaleDB continuous aggregates (the pure time-bucketing ones).
+- Convert the **hypertable-sourced** dashboard aggregations (daily packet counts, packet breakdown by type — over `raw_receptions`) to TimescaleDB continuous aggregates. The message/advert/node-count aggregations source from OLTP/entity tables and **cannot be CAGGs** — they become worker-maintained rollup tables via the `dashboard-rollups` job (F2).
 - Route health: rewrite the matcher against `raw_receptions.path_hashes` (D5 outcome); collapse the 3 derived tables into worker-maintained state.
 - Move spam rescoring to a DB function + periodic sweep.
 
@@ -124,8 +126,34 @@ After the single-tenant stack (Phases 0–6) is stable, extend to shared-platfor
 | Local-password auth becomes a brute-force target | argon2id + exponential lockout (§8.3.2) + reverse-proxy rate limiting |
 | D5 fold benchmark fails (separate table needed) | Reversible — `raw_receptions.path_hashes` stays either way; hops table is additive |
 | Scope creep | Each phase is independently valuable and shippable; we can stop after any phase |
+| **Highest-risk migration shape:** greenfield rewrite + language switch (Python→TS) + two new infra deps (NATS, TimescaleDB) + multi-tenancy, all in one program | Sequenced so the language/infra risk is front-loaded (Phases 0–1) and de-risked by the decode-shadow (Phase 1) + parallel-stack (Phase 2) gates before any cutover; multi-tenancy is deferred to Phase 7 (fully additive). See the strategy note below. |
 
 ---
+
+## Strategy note — scope realism (F13)
+
+This is a candid caveat, not a decision reversal. The plan is a **from-scratch greenfield rewrite** of a
+mature, feature-complete product that *also* switches backend language (Python→TypeScript, D22), adopts
+two new infrastructure dependencies (NATS, TimescaleDB), and adds multi-tenancy. That is the highest-risk
+combination on the migration-strategy spectrum, and two framing claims deserve qualification:
+
+- **"Each phase is independently valuable and shippable" is true for *value*, not for *production*.**
+  Phases 0–5 are not individually production-serviceable: the ingest pipeline (Phase 1) has no schema to
+  write into until Phase 2's provisioning; the API (Phase 4) is not useful without auth; the frontend
+  (Phase 5) needs the API. The honest statement is that the *program* is shippable at the Phase 6 cutover,
+  with earlier phases being internally verifiable milestones. "We can stop after any phase" means we can
+  stop *building*, not that an intermediate phase is a deployable product.
+- **The strangler-fig alternative was considered and rejected in favour of greenfield** (the iteration-4
+  greenfield decision). Worth keeping visible: a strangler approach — the new TS pipeline writing into the
+  *existing* database, swapped in component-by-component behind the running Python app — trades the
+  greenfield's clean schema for a lower-risk cutover (no big-bang, no 5-day all-or-nothing window). The
+  greenfield was chosen because it eliminates the backfill subsystem entirely; the cost is that
+  correctness across the whole feature surface must be proven within the parallel-stack window rather than
+  incrementally in production.
+
+No timeline or effort estimate is asserted here; the surface (19 tables, ~13 API routers, the full SPA, a
+new language, new infra, multi-tenancy) is large, and the phase list is a dependency order, not a
+schedule.
 
 ## Design retrospective (what shifted across iterations 1–7)
 

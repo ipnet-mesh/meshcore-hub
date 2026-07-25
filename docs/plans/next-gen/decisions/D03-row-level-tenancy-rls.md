@@ -13,11 +13,25 @@ Today multi-tenant isolation is **connection-level only**: `SET search_path = in
 
 ```sql
 ALTER TABLE <t> ENABLE ROW LEVEL SECURITY;
+ALTER TABLE <t> FORCE ROW LEVEL SECURITY;          -- enforce even for the table owner (F3)
 CREATE POLICY tenant_isolation ON <t>
-  USING (instance_id = current_setting('app.instance_id', true)::uuid);
+  USING       (instance_id = current_setting('app.instance_id', true)::uuid)
+  WITH CHECK  (instance_id = current_setting('app.instance_id', true)::uuid);
 ```
 
-The app issues `SET LOCAL app.instance_id = '<uuid>';` at the start of every transaction (connection-pool hook + async-session `before_commit` hook). Schema-per-instance remains available as a belt-and-braces layer for operators who want physical separation; it is no longer the *only* boundary.
+The app issues `SET LOCAL app.instance_id = '<uuid>';` at the start of every transaction — **reads
+included** (a Fastify per-request `preHandler` opens the tx and sets the GUC; the workers do it per
+batch/job). Because `SET LOCAL` is transaction-scoped, a statement run in autocommit sees a NULL GUC and
+the policy returns 0 rows — so no DB access may happen outside the request/job transaction.
+
+**Two enforcement prerequisites (F3), or RLS is silently inert:**
+1. `FORCE ROW LEVEL SECURITY` on every policy'd table — Postgres skips RLS for the *owner* otherwise.
+2. The application connects as a **non-owner role** (`meshcore_app`, DML-only); the DDL/migration role
+   owns the tables. The Phase 6 "cross-instance query returns 0 rows" audit must run as the app role, not
+   the owner, or it proves nothing.
+
+Schema-per-instance remains available as a belt-and-braces layer for operators who want physical
+separation; it is no longer the *only* boundary.
 
 ## Consequences
 

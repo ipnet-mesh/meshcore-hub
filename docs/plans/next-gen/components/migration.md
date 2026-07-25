@@ -124,12 +124,18 @@ meshcore-hub admin diff-stacks \
   --api-key <read-key>
 ```
 
+> **Match on `wire_hash`, not `event_hash`.** The two stacks compute the content dedup hash with
+> different algorithms (old = MD5, new = SHA-256 truncated), so the *same* event has a different
+> `event_hash` in each stack — a coverage check keyed on `event_hash` would always report 0%. The
+> LetsMesh on-air `wire_hash` is identical in both stacks, so it is the correct join key for verifying the
+> new pipeline decoded the same packets.
+
 **What it compares (per hour bucket, per event type):**
 
 | Check | Query | Pass condition |
 |---|---|---|
 | **Event count parity** | `GET /api/v1/messages?since=<hour>&until=<hour>` (and adverts, packets) — compare `total` | Counts match within ±2 (tolerance for race at hour boundaries) |
-| **Hash coverage** | Sample 100 `event_hash` values from the old stack's hour; verify each exists in the new stack (`GET /api/v1/messages?event_hash=<hash>`) | 100% coverage |
+| **Hash coverage** | Sample 100 `wire_hash` values from the old stack's hour; verify each exists in the new stack (`GET /api/v1/packet-groups?wire_hash=<hash>`) | 100% coverage |
 | **Observer parity** | For the sampled events, compare observer counts (`event_observers` junction) | Counts match exactly |
 | **Node count** | `GET /api/v1/nodes` — compare `total` | Within ±5 (nodes appear/disappear on advert timing) |
 

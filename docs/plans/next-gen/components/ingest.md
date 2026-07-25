@@ -69,7 +69,7 @@ def persist_deduped_event(
 ```
 
 - Computes the SHA-256 content hash.
-- `INSERT ... ON CONFLICT (event_hash) DO NOTHING` (Postgres-native; drop the dialect branch).
+- `INSERT ... ON CONFLICT (instance_id, event_hash) DO NOTHING` (Postgres-native; drop the dialect branch). The conflict target is the **composite** `(instance_id, event_hash)` unique — dedup is per-tenant, so the same physical packet creates one event *per* instance (multi-tenancy.md §10).
 - On conflict, just attaches the observer.
 - Returns whether it was a new event (drives the pub/sub fan-out — only fire webhooks/realtime on first sighting).
 
@@ -86,8 +86,9 @@ async def persist_deduped_event(
     observer_id: UUID,
     observer_meta: ObserverMeta,
 ) -> DedupResult:
-    """INSERT ... ON CONFLICT (event_hash) DO NOTHING; attach observer either way.
-    Returns DedupResult(is_new, event_id, event_hash). Native Postgres — no dialect branch."""
+    """INSERT ... ON CONFLICT (instance_id, event_hash) DO NOTHING; attach observer either way.
+    Composite conflict target = per-tenant dedup (F1). Returns DedupResult(is_new, event_id, event_hash).
+    Native Postgres — no dialect branch."""
     ...
 
 # Each handler is ~15 lines, not ~50.
@@ -177,15 +178,23 @@ Key insight: `decoded` stays on the row even when D8 is activated. Only `raw_hex
 
 ## 6. NATS topology
 
-Two JetStream streams + one core (non-durable) subject:
+One JetStream stream + two core (non-durable) subject families. The stream is **single and
+platform-wide** — tenancy is a subject token, not a separate stream. This matters: a JetStream consumer
+group cannot span multiple streams, and Phase 7's shared worker pool subscribes across all tenants with a
+wildcard. One stream from Phase 0 makes multi-tenancy purely additive (D21).
 
 | Stream/Subject | Type | Subjects | Producers | Consumers |
 |---|---|---|---|---|
-| `INGEST-<inst>` | JetStream, durable, `WorkQueuePolicy` | `meshcore.ingest.<inst>.*` | MqttIngester | IngestWorker consumer group (`workers`, `ack_explicit`) |
-| `events.new.<inst>` | Core pub/sub (non-durable) | `events.new.<inst>.{messages,advertisements,...}` | IngestWorker (after commit) | API SSE endpoint(s) |
+| `INGEST` | JetStream, durable, `WorkQueuePolicy` | `meshcore.ingest.>` (per-instance tokens: `meshcore.ingest.<inst>.<feed>`) | MqttIngester | IngestWorker consumer group (durable `workers`, `ack_explicit`) — one shared consumer, all replicas bind to it |
+| `events.new.<inst>` | Core pub/sub (non-durable) | `events.new.<inst>.{messages,advertisements,...}` | IngestWorker (after commit) | API SSE endpoint(s), WebhookWorker |
 | `channel.keys.<inst>` | Core pub/sub | `channel.keys.<inst>.updated` | IngestWorker (after channel mutation) | MqttIngester (reload `ChannelKeyCache`) |
 
-Stream config: `duplicate_window = 5m` (server-side dedup on `Nats-Msg-Id` = packet `wire_hash`), `max_age = 7d` (replay window for worker restarts), `storage = file`, `retention = limits`.
+Stream config: `duplicate_window = 5m` (server-side dedup on `Nats-Msg-Id` = packet `wire_hash`; in
+multi-tenant mode the id is tenant-prefixed — multi-tenancy.md §4), `max_age = 7d` (replay window for
+worker restarts), `storage = file`, `retention = limits`.
+
+> Single-tenant mode is just one instance's subjects flowing through the same `INGEST` stream — no
+> per-instance stream to create, and the wildcard consumer already covers every future tenant.
 
 ---
 
@@ -278,7 +287,9 @@ class IngestWorker:
     ) -> None: ...
 
     async run(): Promise<void> {
-        const sub = await this.js.pullSubscribe("meshcore.ingest.*", { durable: "workers" });
+        // Subscribe to the whole ingest subject tree (all instances). `meshcore.ingest.*` would only
+        // match a 3-token subject; the real subjects are 4-token (meshcore.ingest.<inst>.<feed>).
+        const sub = await this.js.pullSubscribe("meshcore.ingest.>", { durable: "workers" });
         while (this._running) {
             const msgs = await sub.fetch(this.batchSize, { timeout: 5000 });
             await this._processBatch(msgs);
@@ -347,7 +358,7 @@ async function touchNode(tx: Tx, env: IngestEnvelope, instanceId: string): Promi
             last_seen: env.ingested_at,
             instance_id: instanceId,
         }).onConflictDoUpdate({
-            target: nodes.public_key,
+            target: [nodes.instance_id, nodes.public_key],   // composite unique — per-tenant node rows
             set: {
                 name: sql`COALESCE(EXCLUDED.name, nodes.name)`,
                 adv_type: sql`EXCLUDED.adv_type`,
@@ -368,12 +379,22 @@ async function touchNode(tx: Tx, env: IngestEnvelope, instanceId: string): Promi
         last_seen: env.ingested_at,
         instance_id: instanceId,
     }).onConflictDoUpdate({
-        target: nodes.public_key,
+        target: [nodes.instance_id, nodes.public_key],
         set: { last_seen: sql`EXCLUDED.last_seen`, updated_at: sql`now()` },
     }).returning();
     return node.id;
 }
 ```
+
+### The observing node must exist too
+
+The reception/junction rows carry `observer_node_id` (a loose `nodes.id` reference — no FK, F6). The
+worker therefore **find-or-creates the observing node** as well, using the same instance-scoped upsert as
+`touchNode` (keyed on `(instance_id, observer.public_key)`), before writing `raw_receptions` /
+`event_observers`. Because those columns are loose references (no FK), a stale id would not error — but
+resolving it here keeps the observer's `nodes` row present and `last_seen` current. The observer upsert
+and the source `touchNode` run in the same batch transaction (one round-trip each, deduplicated within
+the batch when many envelopes share an observer).
 
 - **Adverts** are the authoritative source for node metadata (name, type, flags, GPS). `COALESCE` preserves existing values when the advert field is null (partial adverts).
 - **Non-advert events** (messages, traces, telemetry) only bump `last_seen` — they don't carry name/GPS metadata.

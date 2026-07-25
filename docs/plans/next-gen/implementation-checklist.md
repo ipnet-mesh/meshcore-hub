@@ -16,11 +16,22 @@
 
 ## Phase 0 — Foundations
 
+### D5 benchmark (before the schema is authored — F5)
+- [ ] Write + run `bench/route_match_benchmark.ts` at Low/Medium/High shapes — [testing.md → D5 plan](testing.md#d5-benchmark-plan-fold-vs-separate)
+- [ ] Record the fold-vs-separate decision (fold if `sweep_ms ≤ 1.5×` + `p95 ≤ 500ms` at High); the DDL below reflects the outcome
+
 ### Schema
-- [ ] Write the initial Drizzle Kit migration for the full [target DDL](components/data-model.md#3-phase-0--schema-ddl-target-authoritative) (enums, entities, hypertables, CAGGs, RLS policies, retention policies). Hand-author TimescaleDB extension DDL (hypertables, CAGGs, compression, retention) as raw SQL — drizzle-kit handles OLTP tables only.
+- [ ] Write the initial Drizzle Kit migration for the full [target DDL](components/data-model.md#3-phase-0--schema-ddl-target-authoritative) (enums, entities, hypertables, CAGGs, dashboard rollup tables, RLS policies, retention policies). Hand-author TimescaleDB extension DDL (hypertables, CAGGs, compression, retention) as raw SQL — drizzle-kit handles OLTP tables only.
+- [ ] **Instance-scoped uniqueness (F1):** every business-key unique is `UNIQUE (instance_id, …)` — `nodes.public_key`, `messages/advertisements/trace_paths.event_hash`, `channels.name/key_hex`; `settings` PK is `(instance_id, key)`
+- [ ] **Only the two `raw_receptions`-sourced CAGGs (F2):** `cagg_daily_packet_counts`, `cagg_packet_breakdown_by_type`. Message/advert/node-count counts are worker-maintained rollup tables (`dashboard_daily_message_counts`, `dashboard_daily_advert_counts`, `dashboard_node_count_history`), NOT CAGGs
+- [ ] **Hypertable node references are loose (no FK) (F6):** `raw_receptions.observer_node_id`, `event_observers.observer_node_id`, `telemetry.node_id`, `event_logs.observer_node_id` are plain `uuid` (avoids cross-chunk DML on node cleanup)
+- [ ] **RLS hardening (F3):** every policy'd table has `FORCE ROW LEVEL SECURITY`; create the non-owner `meshcore_app` role (DML-only); the app connects as it, migrations run as the owner
 - [ ] Verify `drizzle-kit migrate` creates the schema cleanly on a fresh Postgres+TimescaleDB
-- [ ] Verify RLS: a cross-instance query returns 0 rows
+- [ ] Verify RLS **as the `meshcore_app` role**: a cross-instance query returns 0 rows (running as the owner proves nothing)
 - [ ] Seed the `instances` table from `NETWORK_NAME`
+
+### NATS
+- [ ] Provision the **single** platform-wide `INGEST` JetStream stream (subject `meshcore.ingest.>`) + one durable consumer `workers` — NOT a per-instance stream (F8)
 
 ### Typed decoder models
 - [ ] Define Zod `DecodedPacket` schemas matching `@michaelhart/meshcore-decoder` output
@@ -36,7 +47,7 @@
 
 ### NATS infrastructure
 - [ ] Provision NATS with JetStream (file-backed persistence volume)
-- [ ] Create the ingest stream (`INGEST-<inst>`, `duplicate_window=5m`, `max_age=7d`, `WorkQueuePolicy`)
+- [ ] Configure the single `INGEST` stream (subject `meshcore.ingest.>`, `duplicate_window=5m`, `max_age=7d`, `WorkQueuePolicy`) — created in Phase 0 (F8)
 - [ ] Create the core fan-out subject pattern (`events.new.<inst>.*`)
 - [ ] Create the channel-keys subject (`channel.keys.<inst>.updated`)
 
@@ -47,8 +58,9 @@
 - [ ] Set `Nats-Msg-Id` = `wire_hash` for server-side dedup
 
 ### IngestWorker (batched write)
-- [ ] Implement `IngestWorker.run`: pull-subscribe `meshcore.ingest.*`, fetch batches of 100, `SET LOCAL app.instance_id`, process, commit, publish `events.new`, ack
-- [ ] Implement [`persist_deduped_event`](components/ingest.md#74-dedup-as-a-first-class-service) helper (SHA-256 hash, `ON CONFLICT DO NOTHING`, observer attach)
+- [ ] Implement `IngestWorker.run`: pull-subscribe `meshcore.ingest.>` (wildcard, not `*` — F8), fetch batches of 100, `SET LOCAL app.instance_id`, process, commit, publish `events.new`, ack
+- [ ] Implement [`persist_deduped_event`](components/ingest.md#74-dedup-as-a-first-class-service) helper (SHA-256 hash, `ON CONFLICT (instance_id, event_hash) DO NOTHING` — composite target, F1; observer attach)
+- [ ] Implement `touchNode` + the observer-node upsert (both keyed on `(instance_id, public_key)`, F1/F11)
 - [ ] Implement the 4 structured handlers (~15 LOC each, using the dedup helper)
 - [ ] Implement the fallback `handle_event_log` handler
 
@@ -57,20 +69,21 @@
 - [ ] Wire the JSONPath-like filter DSL into production (evaluate `filter_expression` against event payload)
 - [ ] Verify webhook config reload on `settings.updated.<inst>.webhooks` NATS notification
 
-### Parallel-stack validation
-- [ ] Stand up new stack alongside old, both subscribed to the same MQTT
-- [ ] Build the diff harness (per-hour event counts by hash, old API vs new API)
-- [ ] Validate for 5 days (D14); diff = 0 for 3 consecutive days to proceed
+### Decode/classify shadow validation (F5 — DB-free)
+- [ ] Run the `MqttIngester` against the live feed; diff its envelopes (decoded + classified output) against the old normalizer (24h shadow, no DB/workers)
+- [ ] Full parallel-stack validation (both DBs, API diff) is **Phase 2** — it needs the provisioned schema + D5 outcome
 
 ---
 
 ## Phase 2 — Greenfield provisioning
 
-### D5 benchmark (before schema freeze)
-- [ ] Write `bench/route_match_benchmark.ts` — [testing.md → D5 plan](testing.md#d5-benchmark-plan-fold-vs-separate)
-- [ ] Run at Low/Medium/High dataset shapes
-- [ ] Record decision: fold (F) if `sweep_ms ≤ 1.5×` + `p95 ≤ 500ms` at High; else separate (S)
-- [ ] Freeze schema accordingly
+### D5 benchmark — done in Phase 0 (F5)
+- [ ] (Moved to Phase 0 — the DDL already reflects the fold-vs-separate outcome.) Here: validate the route matcher against real ingested data at the D5 gate.
+
+### Full parallel-stack validation
+- [ ] Stand up the new stack alongside the old, both subscribed to the same MQTT, both writing to their own DBs
+- [ ] Build the diff harness (per-hour event counts; `wire_hash` coverage — NOT `event_hash`, since MD5≠SHA-256 across stacks — F4)
+- [ ] Validate for 5 days (D14); diff = 0 for 3 consecutive days to proceed
 
 ### Config migration
 - [ ] Implement `meshcore-hub db export-config` on the old stack → JSON bundle
@@ -87,11 +100,11 @@
 - [ ] Implement `BlobStore` interface (`NoopBlobStore` default) — [ingest.md §5](components/ingest.md#5-raw-capture-compress-in-db-defer-object-storage)
 - [ ] D8 measurement: after 1 week of live data, check `hypertable_compression_stats('raw_receptions')` — activate object storage only if compressed size > 50% of DB and growth exceeds budget
 
-### Continuous aggregates
-- [ ] Create the 5 CAGGs (`WITH NO DATA`) via migration
-- [ ] Add refresh policies (5-min schedule, 7-day window)
-- [ ] Rewrite dashboard handlers to read CAGGs (no live-query fallback in greenfield)
-- [ ] Verify first buckets populate within 10 min of live ingest
+### Continuous aggregates + dashboard rollups (F2)
+- [ ] Create the **2** CAGGs over `raw_receptions` (`cagg_daily_packet_counts`, `cagg_packet_breakdown_by_type`) `WITH NO DATA`; add refresh policies (5-min schedule, 7-day window)
+- [ ] Create the **3** worker-maintained rollup tables (`dashboard_daily_message_counts`, `dashboard_daily_advert_counts`, `dashboard_node_count_history`) — sources are OLTP/entity tables, so they cannot be CAGGs
+- [ ] Rewrite dashboard handlers to read CAGGs (with explicit `instance_id` predicate — RLS doesn't propagate to CAGGs) + the rollup tables (no live-query fallback in greenfield)
+- [ ] Verify first CAGG buckets + rollup rows populate within 10 min of live ingest
 
 ---
 
@@ -99,14 +112,14 @@
 
 ### DerivedStateWorker
 - [ ] Implement `PeriodicJob` dataclass + `DerivedStateWorker` single-loop scheduler — [derived-state.md → Scheduler implementation](components/derived-state.md#scheduler-implementation)
-- [ ] Register the 6 jobs: route-evaluator, route-history, spam-rescore, retention, metrics-gauges, cagg-health
-- [ ] Implement `pg_advisory_xact_lock` per job (two-replica HA — D16)
-- [ ] Verify two replicas don't double-execute the same job
+- [ ] Register the 7 jobs: route-evaluator, route-history, spam-rescore, **dashboard-rollups** (F2), retention, metrics-gauges, cagg-health
+- [ ] Implement the two-arg `pg_advisory_xact_lock(job_key, hashtext(instance_id))` per job — stable per-(job, instance) key, not a positional index (two-replica HA — D16; F7)
+- [ ] Verify two replicas don't double-execute the same (job, instance)
 
 ### Spam scoring
 - [ ] Write the `compute_spam_score` PL/pgSQL function — [derived-state.md → Spam rescoring](components/derived-state.md#spam-rescoring-as-a-sql-function-online--sweep)
 - [ ] Wire it into the IngestWorker insert path (online score)
-- [ ] Wire it into the `spam-rescore` job (symmetric sweep)
+- [ ] Wire it into the `spam-rescore` job (symmetric sweep) — compute the score **once** per row in a subquery, filter + write from that value (do not call the function in both `WHERE` and `SET` — F10)
 - [ ] Verify parity: 24h replay, per-message score diff within ε
 
 ### Route health
@@ -128,8 +141,9 @@
 
 ### Async ORM
 - [ ] All route handlers are `async` with Drizzle ORM over `node-postgres`
-- [ ] Connection pool sized for async concurrency; `SET LOCAL app.instance_id` hook on the pool
-- [ ] Verify the pool correctly scopes transactions (advisory lock + RLS)
+- [ ] **Per-request transaction (F3):** a Fastify `preHandler` opens a transaction and issues `SET LOCAL app.instance_id` from the `Principal` for **every** request (reads included — `SET LOCAL` outside a tx is a no-op → RLS returns 0 rows)
+- [ ] App connects as the non-owner `meshcore_app` role so `FORCE ROW LEVEL SECURITY` applies
+- [ ] Verify the pool correctly scopes transactions (advisory lock + RLS), including read endpoints
 
 ### Auth
 - [ ] Implement `AuthMiddleware` preHandler (JWT → cookie → API key → anonymous) — [auth.md](components/auth.md#authmiddleware-single-resolution-point)
@@ -144,7 +158,7 @@
 - [ ] Remove all `X-User-*` header injection
 
 ### Cache contract
-- [ ] Implement the single `{namespace}:{scope}:{query_hash}` key format — [api.md → Unified cache contract](components/api.md#unified-cache-contract-concrete)
+- [ ] Implement the single `{instance_id}:{namespace}:{scope}:{query_hash}` key format — the `instance_id` prefix is required so tenants never share a cache entry (F3) — [api.md → Unified cache contract](components/api.md#unified-cache-contract-concrete)
 - [ ] Implement the `NAMESPACES` / `ENTITY_INVALIDATION` declarative graph
 - [ ] Implement the async `@cached` decorator (ETag, If-None-Match, 304, X-Cache header)
 - [ ] Implement `invalidate_for(entity_changes, cache, instance_id)`

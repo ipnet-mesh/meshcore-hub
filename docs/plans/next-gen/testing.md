@@ -13,12 +13,16 @@
 - [ ] Server-side dedup (`Nats-Msg-Id`) suppresses MQTT redelivery with zero double-inserts.
 - [ ] `WebhookWorker` dispatches matching events with correct retry/backoff; filter DSL evaluates correctly; config reload on `settings.updated.webhooks` works.
 
+## Phase 0 — Foundations (added exit gate)
+
+- [ ] **D5 benchmark decided fold-vs-separate**, decision recorded, target schema frozen accordingly — this runs in Phase 0, **before** the DDL migration is authored (it needs only a throwaway TimescaleDB; see [D5 plan](#d5-benchmark-plan-fold-vs-separate)). The schema is not frozen until the outcome is known.
+
 ## Phase 2 — Greenfield provisioning
 
-- [ ] D5 benchmark decided fold-vs-separate, decision recorded, target schema frozen accordingly.
 - [ ] `db export-config` on the old stack produces a complete bundle; `db import-config` on a fresh DB reproduces user_profiles + roles, routes + nodes + observers, node_tags, adoptions, (channels) with zero FK violations.
-- [ ] New infrastructure provisioned; `drizzle-kit migrate` creates the full schema cleanly; RLS policies enforced (a cross-instance query returns 0 rows).
-- [ ] All five CAGGs created with active refresh policies; first buckets populate within 10 minutes of live ingest.
+- [ ] New infrastructure provisioned; `drizzle-kit migrate` creates the full schema cleanly; RLS policies enforced **as the non-owner `meshcore_app` role with `FORCE ROW LEVEL SECURITY`** (a cross-instance query returns 0 rows; verify the check runs as the app role, not the table owner).
+- [ ] The **two** CAGGs (`cagg_daily_packet_counts`, `cagg_packet_breakdown_by_type`, over `raw_receptions`) created with active refresh policies; the **three** worker-maintained rollup tables (`dashboard_daily_message_counts`, `dashboard_daily_advert_counts`, `dashboard_node_count_history`) populated by the `dashboard-rollups` job; first buckets/rows populate within 10 minutes of live ingest.
+- [ ] Dashboard CAGG reads carry an explicit `instance_id` predicate (RLS does not propagate to continuous aggregates); rollup tables enforce RLS like any tenant table.
 - [ ] Hypertable compression + retention policies active and verified on all four hypertables (`raw_receptions`, `event_observers`, `telemetry`, `event_logs`): drop a chunk manually, confirm rows go; verify `event_observers` segments by `event_type` (query by event_type hits compressed batches correctly).
 - [ ] Parallel-stack diff harness reports 0 divergence for 3 consecutive days within the 5-day window (D14).
 
@@ -30,7 +34,7 @@
 - [ ] Route health tables rebuild correctly from `raw_receptions.path_hashes`; per-route `total_route_ms` within the D5 gate.
 - [ ] `quality_avg` matches today's output on a 7-day replay: for each route, the rolling 7-day ordinal average (clear=2, marginal=1, else=0; thresholds ≥1.5/≥0.75) produces the same tier as the old `compute_persisted_quality_avg`.
 - [ ] Retention enforces 30-day windows via chunk drops (verify `raw_receptions` row count stabilises).
-- [ ] Dashboard endpoints read CAGGs exclusively; live-query fallback removed.
+- [ ] Dashboard endpoints read the CAGGs + the worker-maintained rollup tables exclusively; live-query fallback removed. The `dashboard-rollups` job maintains the message/advert/node-count rollups.
 
 ## Phase 4 — API & auth
 
@@ -121,4 +125,4 @@ If folded fails the gate: fall back to the separate hypertable (still better tha
 
 #### Timing
 
-Budget half a day. Record results in `docs/plans/<date>-d5-fold-benchmark/` with the dataset parameters and the decision. **Run this before the new stack's schema is frozen**, so the DDL reflects the outcome.
+Budget half a day. Record results in `docs/plans/<date>-d5-fold-benchmark/` with the dataset parameters and the decision. **Run this in Phase 0, before the new stack's schema is frozen**, so the DDL migration reflects the outcome (it needs only a throwaway TimescaleDB — no dependency on any later phase).

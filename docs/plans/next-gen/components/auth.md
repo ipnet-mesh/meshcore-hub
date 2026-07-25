@@ -214,7 +214,14 @@ fastify.addHook("preHandler", async (request: FastifyRequest, reply: FastifyRepl
 });
 ```
 
-**`GET/POST /setup`** — a multi-step wizard (served server-rendered so it works before the SPA bootstrap):
+> **Prefer a SPA route over SSR (F12).** Server-rendering the wizard reintroduces the Jinja-style HTML
+> shell that Principle 5 (static, CDN-cacheable shell) exists to eliminate. The preferred implementation is
+> a **normal SPA route** (`/setup`) gated by a `needs_setup` boolean in the public `/api/v1/config`
+> payload: the static shell loads, sees `needs_setup = true`, and renders the wizard client-side — no
+> server-rendered HTML, no second templating path in the web tier. The `POST /setup` endpoints stay as a
+> plain JSON API. Server-rendering is a fallback only if the shell must not ship at all pre-setup.
+
+**`GET/POST /setup`** — a multi-step wizard (rendered by the SPA when `config.needs_setup` is true; see the note above):
 
 1. **Welcome / network identity** — network name, city, country, contact (writes the Tier-2 branding settings that are otherwise empty on a fresh DB).
 2. **Admin account** — username + password + confirm. Creates the first admin (see bootstrap insert sequence below).

@@ -11,7 +11,7 @@ The §13-D1 decision had to land before the §16 schema could be drafted — eve
 
 ## Decision
 
-**PostgreSQL 17 + TimescaleDB** (community edition, Apache-2.0). The high-volume append-only streams (`raw_receptions`, `event_observers`, `telemetry`, `event_logs`) become TimescaleDB hypertables partitioned by `received_at` (1-day chunks), with columnar compression policies after 24h and retention policies (default 30d, up from 2d). The five dashboard time-bucketing workloads become **continuous aggregates** (`cagg_daily_message_counts`, `cagg_daily_advert_counts`, `cagg_daily_packet_counts`, `cagg_packet_breakdown_by_type`, `cagg_node_count_history`) refreshed on a 5-minute policy — replacing the fan-out COUNTs.
+**PostgreSQL 17 + TimescaleDB** (community edition, Apache-2.0). The high-volume append-only streams (`raw_receptions`, `event_observers`, `telemetry`, `event_logs`) become TimescaleDB hypertables partitioned by `received_at` (1-day chunks), with columnar compression policies after 24h and retention policies (default 30d, up from 2d). The **hypertable-sourced** dashboard time-bucketing workloads become **continuous aggregates** (`cagg_daily_packet_counts`, `cagg_packet_breakdown_by_type`, both over `raw_receptions`) refreshed on a 5-minute policy — replacing the fan-out COUNTs. The other three dashboard rollups (daily message counts, advert counts, node-count history) source from OLTP/entity tables (`messages`, `advertisements`, `nodes`), which are **not** hypertables — a continuous aggregate cannot be built over them, so they are worker-maintained rollup tables instead (F2; data-model.md §3.6a).
 
 Route-health derived tables stay worker-maintained (subsequence logic is not a pure time-bucket aggregate — see §6.3.4 and D5).
 

@@ -1,7 +1,7 @@
 # D05: Fold `packet_path_hops` Into `raw_receptions.path_hashes` (Research Spike)
 
-- **Status:** Locked (spike — decision lands in Phase 2)
-- **Iteration:** 2
+- **Status:** Locked (spike — decision lands in **Phase 0**, before the DDL is authored)
+- **Iteration:** 2 (rescheduled to Phase 0 in iteration 8 — F5)
 
 ## Context
 
@@ -15,7 +15,7 @@
 - `sweep_ms(F) ≤ 1.5 × sweep_ms(S)`, AND
 - `p95_route_ms(F) ≤ 500ms`.
 
-**Fallback if the gate fails:** keep a separate `packet_path_hops` hypertable (still better than today because TimescaleDB-partitioned) **but stop denormalizing** `packet_hash`, `received_at`, `observer_node_id` (reachable via the FK to `raw_receptions`). The `raw_receptions.path_hashes` column stays either way (it backs the packet-group detail view). Budget half a day; record results in `docs/plans/<date>-d5-fold-benchmark/`. Run **before** the §16 schema is frozen.
+**Fallback if the gate fails:** keep a separate `packet_path_hops` hypertable (still better than today because TimescaleDB-partitioned) **but stop denormalizing** `packet_hash`, `received_at`, `observer_node_id` (reachable from `raw_receptions`). The `raw_receptions.path_hashes` column stays either way (it backs the packet-group detail view). Budget half a day; record results in `docs/plans/<date>-d5-fold-benchmark/`. **Run in Phase 0, before the DDL migration is authored** — the benchmark needs only a throwaway TimescaleDB, so it has no dependency on any later phase, and scheduling it in Phase 2 (as originally written) created a circular dependency with the Phase 0 schema freeze (F5).
 
 ## Consequences
 
