@@ -41,6 +41,7 @@ interface DashboardStats {
   advertisements_7d: number;
   messages_7d: number;
   packets_7d: number;
+  packets_window_days: number;
   total_operators: number;
   total_members: number;
 }
@@ -371,7 +372,9 @@ export function HomePage() {
                 color={getPageColor("packets")}
                 title={t("entities.packets")}
                 value={stats.packets_7d}
-                description={t("time.last_7_days")}
+                description={t("time.last_n_days", {
+                  n: stats.packets_window_days,
+                })}
               />
             )}
           </div>
