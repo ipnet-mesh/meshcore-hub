@@ -236,9 +236,9 @@ services:
       - NODE_CLEANUP_ENABLED=${NODE_CLEANUP_ENABLED:-true}
       - NODE_CLEANUP_DAYS=${NODE_CLEANUP_DAYS:-30}
       # Raw packet capture (derived from FEATURE_PACKETS so one var drives both
-      # capture and the web Packets page). Retention defaults to 7 days.
+      # capture and the web Packets page). Retention defaults to 2 days.
       - RAW_PACKET_CAPTURE_ENABLED=${FEATURE_PACKETS:-true}
-      - RAW_PACKET_RETENTION_DAYS=${RAW_PACKET_RETENTION_DAYS:-7}
+      - RAW_PACKET_RETENTION_DAYS=${RAW_PACKET_RETENTION_DAYS:-2}
       # Observer ingestion filter (allow/deny remote observers by public key/prefix).
       # Allowlist overrides denylist; both empty accepts all observers (default).
       - OBSERVER_ALLOWLIST=${OBSERVER_ALLOWLIST:-}

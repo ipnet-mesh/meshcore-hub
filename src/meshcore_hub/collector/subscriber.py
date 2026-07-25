@@ -52,7 +52,7 @@ class Subscriber(LetsMeshNormalizer):
         node_cleanup_days: int = 90,
         channel_refresh_interval_seconds: int = 300,
         raw_packet_capture_enabled: bool = False,
-        raw_packet_retention_days: int = 7,
+        raw_packet_retention_days: int = 2,
         observer_filter: Optional[ObserverFilter] = None,
     ):
         """Initialize subscriber.
@@ -903,7 +903,7 @@ def create_subscriber(
     node_cleanup_days: int = 90,
     channel_refresh_interval_seconds: int = 300,
     raw_packet_capture_enabled: bool = False,
-    raw_packet_retention_days: int = 7,
+    raw_packet_retention_days: int = 2,
     observer_filter: Optional[ObserverFilter] = None,
 ) -> Subscriber:
     """Create a configured subscriber instance.
@@ -989,7 +989,7 @@ def run_collector(
     node_cleanup_days: int = 90,
     channel_refresh_interval_seconds: int = 300,
     raw_packet_capture_enabled: bool = False,
-    raw_packet_retention_days: int = 7,
+    raw_packet_retention_days: int = 2,
     observer_filter: Optional[ObserverFilter] = None,
 ) -> None:
     """Run the collector (blocking).

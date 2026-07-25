@@ -426,7 +426,7 @@ def _load_recent_matches(
     """Return the route's top-3 recent matches in the ``RecentMatchPath`` shape.
 
     Reads the normalized ``route_recent_matches`` table (populated by the
-    background evaluator on every 60s tick), JOINs through ``raw_packets``
+    background evaluator on every 300s tick), JOINs through ``raw_packets``
     for the packet-level metadata, then fetches the matched hop slice from
     ``packet_path_hops`` in a second indexed query and slices
     ``[first_position .. last_position]`` per match in Python. Falls back
