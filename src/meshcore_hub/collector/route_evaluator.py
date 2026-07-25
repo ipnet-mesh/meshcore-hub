@@ -2,7 +2,7 @@
 
 Two-cadence sweep:
 
-* :func:`run_evaluation` runs on the short (default 60s) tick. For every
+* :func:`run_evaluation` runs on the short (default 300s) tick. For every
   enabled route it computes the current rolling-window snapshot via
   :func:`evaluate_route`, captures the top-3 recent matches, refreshes
   the rolling 7-day ``quality_avg``, and upserts everything into the

@@ -70,7 +70,7 @@ class Route(Base, UUIDMixin, TimestampMixin):
     )
     window_hours: Mapped[int] = mapped_column(
         Integer,
-        default=48,
+        default=6,
         nullable=False,
     )
     packet_count_threshold: Mapped[int] = mapped_column(

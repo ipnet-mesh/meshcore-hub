@@ -17,7 +17,7 @@ Each route carries these knobs:
 | Field | Default | Description |
 | --- | --- | --- |
 | `match_width` | `1` | Path-hash prefix width in bytes (1/2/3). Higher widths disambiguate nodes that share a short public-key prefix. |
-| `window_hours` | `48` | Rolling lookback window for the live status card. |
+| `window_hours` | `6` | Rolling lookback window for the live status card (1–12 hours). |
 | `packet_count_threshold` | `5` | Distinct matching packets at/above which the route is `healthy`. "Distinct" is per underlying event, not per transmission — see [How health is evaluated](#how-health-is-evaluated) above. |
 | `clear_threshold` | _(3× threshold)_ | Comfort bar for the `clear`/`marginal` split. Omit/null to use three times the threshold. |
 | `max_hop_span` | `8` | Caps the position gap between the first and last matched node, to reject matches that wander too far. |
@@ -38,7 +38,11 @@ By default every observer's receptions contribute to every route. A route may in
 
 ### Background evaluator
 
-The collector runs a background thread that re-evaluates every enabled route on a fixed cadence and upserts the result into `route_results` (one row per route, holding the latest `state`, `quality`, `matched_count`, and the threshold snapshots used). The cadence is controlled by `ROUTE_EVALUATOR_INTERVAL_SECONDS` (default `60`); set it to `0` to disable the evaluator, in which case route cards remain at `unknown` until it is re-enabled. The per-route history strip and the `/api/v1/routes/{id}/history` endpoint evaluate on demand over the raw `packet_path_hops` table and are not dependent on the background evaluator.
+The collector runs a background thread that re-evaluates every enabled route on a fixed cadence and upserts the result into `route_results` (one row per route, holding the latest `state`, `quality`, `matched_count`, and the threshold snapshots used). The cadence is controlled by `ROUTE_EVALUATOR_INTERVAL_SECONDS` (default `300`); set it to `0` to disable the evaluator, in which case route cards remain at `unknown` until it is re-enabled. The per-route history strip and the `/api/v1/routes/{id}/history` endpoint evaluate on demand over the raw `packet_path_hops` table and are not dependent on the background evaluator.
+
+Routes are **not** re-evaluated synchronously on create/update — the write handler returns immediately with the route's direct fields and whatever `route_result` snapshot the last sweep wrote (or `null` for a brand-new route). The next sweep (within `ROUTE_EVALUATOR_INTERVAL_SECONDS`) refreshes `state`, `quality`, `matched_count`, `quality_avg`, and the recent-matches card. Keep this in mind when changing `window_hours` / thresholds: the card reflects the new config on the next sweep, not on save.
+
+The route evaluation window (`window_hours`) defaults to **6 hours** and is capped at **12 hours** (`ge=1, le=12`). A tight window bounds the candidate set fed to the route evaluator's `packet_path_hops` scan; raise it only if you accept the additional scan cost, and never above the configured `RAW_PACKET_RETENTION_DAYS` (the window would otherwise extend past purged data and falsely report `no_coverage`).
 
 ## Visibility
 

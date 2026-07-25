@@ -1449,6 +1449,22 @@ def _make_reception_for_route(
 class TestRoutesOverview:
     """Tests for GET /dashboard/routes-overview."""
 
+    @pytest.fixture(autouse=True)
+    def _high_raw_packet_retention(self, monkeypatch):
+        """Bump raw-packet retention to 30d for this class.
+
+        These tests exercise the endpoint's ``days`` handling (default,
+        custom, include_today). They need a retention window wide enough
+        that ``days`` is not clamped — the clamp itself is covered
+        separately by ``test_days_clamped_to_retention``, which reads the
+        (patched) retention dynamically and therefore still works.
+        """
+        from meshcore_hub.common.config import CollectorSettings
+
+        monkeypatch.setattr(
+            CollectorSettings, "effective_raw_packet_retention_days", 30
+        )
+
     def test_empty(self, client_no_auth):
         """No routes seeded → empty routes array and by_state."""
         resp = client_no_auth.get("/api/v1/dashboard/routes-overview")

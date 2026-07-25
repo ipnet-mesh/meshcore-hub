@@ -48,7 +48,7 @@ test.describe.serial("routes (admin)", () => {
     await page.getByTestId("node-search-result").first().click();
     await expect(modal.getByText(/North Observer/).first()).toBeVisible();
 
-    await page.getByTestId("route-window").fill("72");
+    await page.getByTestId("route-window").fill("12");
     await page.getByTestId("route-threshold").fill("4");
     await page.getByTestId("route-clear-threshold").fill("8");
     await page.getByTestId("route-max-span").fill("6");
@@ -81,7 +81,7 @@ test.describe.serial("routes (admin)", () => {
     await expect(modal.getByText("Alpha Node")).toBeVisible();
     await expect(modal.getByText("Bravo Node")).toBeVisible();
     await expect(modal.getByText(/North Observer/).first()).toBeVisible();
-    await expect(page.getByTestId("route-window")).toHaveValue("72");
+    await expect(page.getByTestId("route-window")).toHaveValue("12");
     await expect(page.getByTestId("route-threshold")).toHaveValue("4");
     await expect(page.getByTestId("route-clear-threshold")).toHaveValue("8");
     await expect(page.getByTestId("route-max-span")).toHaveValue("6");

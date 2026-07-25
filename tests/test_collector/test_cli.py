@@ -495,7 +495,7 @@ class TestImportRoutes:
                 "    match_width: 1\n"
                 "    visibility: community\n"
                 "    description: a route\n"
-                "    window_hours: 48\n"
+                "    window_hours: 12\n"
                 "    packet_count_threshold: 5\n"
                 "    clear_threshold: 8\n"
                 "    max_hop_span: 3\n"
@@ -516,7 +516,7 @@ class TestImportRoutes:
             assert route.to_label == "Beta"
             assert route.visibility == "community"
             assert route.match_width == 1
-            assert route.window_hours == 48
+            assert route.window_hours == 12
             assert route.packet_count_threshold == 5
             assert route.clear_threshold == 8
             assert route.max_hop_span == 3
