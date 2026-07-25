@@ -1,6 +1,6 @@
 # Auth
 
-> **Related decisions:** D6 (auth boundary — JWT issued by the web tier, verified at API middleware; `X-User-*` header injection removed), D12 (multi-source auth — OIDC optional, built-in local password store always available, `AUTH_MODE=local|oidc|hybrid` default **hybrid**, all sources converge on one JWT issuance), D18 (CLI for ops, not config — one config surface per item).
+> **Related decisions:** D6 (auth boundary — JWT issued by the web tier, verified at API middleware; `X-User-*` header injection removed), D12 (multi-source auth — OIDC optional, built-in local password store always available, `AUTH_MODE=local|oidc|hybrid` default **hybrid**, all sources converge on one JWT issuance; per-tenant `auth_mode`/IdP in multi-tenant mode — multi-tenancy.md §6), D18 (CLI for ops, not config — one config surface per item).
 >
 > **Note:** Code examples are illustrative pseudocode showing design patterns (shapes, flows, contracts).
 > The implementation uses the TypeScript stack (D22): Fastify middleware, jose (JWT/JWS), argon2, Zod.
@@ -24,7 +24,7 @@ flowchart LR
 
 The defining property: **the API is credential-source-agnostic.** It verifies a JWT and resolves a `Principal`; it never knows *how* the web tier authenticated the user. That abstraction is what lets us offer multiple login methods without the API caring:
 
-- **Web tier** mints a short-lived JWT (signed `HS256`/`RS256` with `OIDC_SESSION_SECRET`) carrying `sub`, `roles`, `instance_id`, `exp`, stored in the existing signed cookie. Every login path converges here.
+- **Web tier** mints a short-lived JWT (signed `HS256`/`RS256` with `JWT_SESSION_SECRET`) carrying `sub`, `roles`, `instance_id`, `exp`, stored in the existing signed cookie. Every login path converges here.
 - **API** verifies the JWT at a single middleware; handlers receive a resolved `Principal` (with `role_tier`, `user_id`, `instance_id`) via `Depends`. No more `X-User-*` header injection — the JWT *is* the credential. Fixes S1, S2.
 - **Direct Bearer (API keys)** remain for m2m/CLI; they map to a `Principal` with a fixed role.
 - **Channel visibility** (redaction, below) is computed from the `Principal`, once, per request.
@@ -39,7 +39,7 @@ Three credential sources, each optional, all producing the same JWT:
 | **OIDC/OAuth2** *(optional — configure if you have an IdP)* | Org/multi-user deployments wanting SSO | Existing redirect/callback flow; roles from the IdP claim |
 | **API keys** *(always — for automation)* | CLI, scripts, other services talking to the API directly | Bearer token verified at the API middleware (no web tier involved) |
 
-`AUTH_MODE` (Tier-1 env var) selects which interactive sources the login page offers:
+`AUTH_MODE` selects which interactive sources the login page offers. It is a Tier-1 env var in single-tenant mode; in multi-tenant mode it is per-tenant (`tenant_oidc_configs.auth_mode`) with the env var as the platform default (multi-tenancy.md §6):
 
 - `local` — username/password form only. Zero external dependencies.
 - `oidc` — "Sign in with SSO" button only. For orgs that mandate the IdP.
@@ -91,13 +91,13 @@ local password verified ┘     → sets meshcore-session cookie
 
 - **Local users** are managed via a Users admin page (fits naturally in the Settings UI / D11). Admins create users, assign roles, reset passwords, disable accounts — all runtime, no env-var changes.
 - **OIDC users** are still provisioned just-in-time on first login (as today), with roles from the IdP claim; an admin can promote/demote via the same Users page.
-- The `AUTH_MODE` setting itself stays Tier-1 (env var) because it affects which bootstrap credentials are required.
+- The `AUTH_MODE` env var is the platform default (Tier-1, because it gates bootstrap). In multi-tenant mode each tenant overrides it via `tenant_oidc_configs.auth_mode` — a runtime DB setting requiring no restart (multi-tenancy.md §6).
 
 ## JWT token shape & session model
 
 Two artifacts: a **session cookie** (long-lived, the "refresh") and an **access JWT** (short-lived, per-request credential). The web tier mints a fresh access JWT from the session on each proxied request; the API only ever sees non-expired access JWTs. No separate refresh token reaches the API.
 
-**Access JWT claims (HS256, signed with `OIDC_SESSION_SECRET`):**
+**Access JWT claims (HS256, signed with `JWT_SESSION_SECRET`):**
 ```json
 {
   "iss": "meshcore-hub",
@@ -113,7 +113,7 @@ Two artifacts: a **session cookie** (long-lived, the "refresh") and an **access 
 ```
 
 - **5-minute access lifetime** — short enough that a stolen token has a tiny window, long enough that the web tier's per-request re-mint doesn't fight itself under burst load.
-- **7-day session cookie** (`meshcore-session`, HttpOnly, SameSite=Lax, signed with `OIDC_SESSION_SECRET` via `jose` JWS — same mechanism, updated library). Sliding renewal: each proxied request reissues if past half-life.
+- **7-day session cookie** (`meshcore-session`, HttpOnly, SameSite=Lax, signed with `JWT_SESSION_SECRET` via `jose` JWS — same mechanism, updated library). Sliding renewal: each proxied request reissues if past half-life.
 - **RS256 option:** if an operator wants asymmetric signing (web tier holds private key, API verifies with public key), expose via `JWT_SIGNING_ALG=rs256` + `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` PEM paths. Default HS256 — single issuer, simpler ops.
 
 ## The Principal (resolved once per request)
@@ -165,7 +165,7 @@ async function resolve(request: FastifyRequest): Promise<Principal> {
     }
     // 2. Session cookie (browser access — single-process mode, or SSE via proxy)
     //    Only active when this process also serves the web tier. The cookie is
-    //    a JWS signed with OIDC_SESSION_SECRET; verify inline → resolve Principal.
+    //    a JWS signed with JWT_SESSION_SECRET; verify inline → resolve Principal.
     const cookie = request.cookies?.["meshcore-session"];
     if (cookie && this.cookieVerifier) {
         const session = this.cookieVerifier.verify(cookie);  // throws on tamper/expiry → 401
@@ -218,7 +218,7 @@ fastify.addHook("preHandler", async (request: FastifyRequest, reply: FastifyRepl
 
 1. **Welcome / network identity** — network name, city, country, contact (writes the Tier-2 branding settings that are otherwise empty on a fresh DB).
 2. **Admin account** — username + password + confirm. Creates the first admin (see bootstrap insert sequence below).
-3. **Auth mode** — local (default) / oidc (enter IdP config) / hybrid. Sets the Tier-1 `AUTH_MODE`-equivalent as a setting.
+3. **Auth mode** — local (default) / oidc (enter IdP config) / hybrid. Written as a per-instance setting (`tenant_oidc_configs.auth_mode` in multi-tenant mode, seeded from the `AUTH_MODE` platform default).
 4. **Feature flags** — which pages to enable (sensible defaults pre-checked).
 5. **Done** — sets `fastify.state.needsSetup = false`, redirects to the dashboard, logged in as the new admin.
 

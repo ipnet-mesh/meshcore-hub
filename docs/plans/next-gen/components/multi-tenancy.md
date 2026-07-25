@@ -22,7 +22,7 @@ flowchart TB
         ING[MqttIngester<br/>decodes ALL traffic<br/>routes per tenant]
     end
     MQTT --> ING
-    ING -->|observer → tenant lookup| ROUTE{ObserverAllowlistCache<br/>dict[prefix → set[tenant_id]]}
+    ING -->|observer → tenant lookup| ROUTE{"ObserverAllowlistCache<br/>dict[prefix → set[tenant_id]]"}
 
     ROUTE -->|"O1 → Tenant A"| NS_A[(NATS: meshcore.ingest.&lt;A&gt;.*)]
     ROUTE -->|"O2 → Tenant A+B"| NS_A & NS_B
@@ -407,7 +407,7 @@ async function instanceResolution(request: FastifyRequest, reply: FastifyReply) 
 
 - `GET /api/v1/config` returns the **tenant's** settings (branding, features, pages, auth_mode).
 - The login page renders the **tenant's** auth options (local form, OIDC button, or both per the tenant's `auth_mode`).
-- JWT issuance uses the **tenant's** OIDC config (for the OIDC redirect) and the platform's `OIDC_SESSION_SECRET` (for signing — shared across tenants, since the API verifies with the same key).
+- JWT issuance uses the **tenant's** OIDC config (for the OIDC redirect) and the platform's `JWT_SESSION_SECRET` (for signing — shared across tenants, since the API verifies with the same key).
 - The setup wizard (D12) runs per-tenant: a fresh tenant with no admin sees the wizard on their hostname.
 - The platform's root domain (`meshhub.example.com`) serves a **landing page** with a "Create your community" link → the registration flow (§8).
 

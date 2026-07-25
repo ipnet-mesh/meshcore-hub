@@ -75,7 +75,7 @@ The cleanup phase after all functional phases land. Three tracks:
 ### 6.2 Security hardening pass
 - [ ] RLS audit: verify every tenant-scoped table enforces the `instance_id` policy; add a test that asserts cross-instance queries return 0 rows.
 - [ ] Rate-limit review: confirm local-login lockout thresholds; verify reverse-proxy `limit_req` / `fail2ban` rules for the auth endpoint.
-- [ ] JWT rotation drill: rotate `OIDC_SESSION_SECRET`; verify all sessions invalidate gracefully.
+- [ ] JWT rotation drill: rotate `JWT_SESSION_SECRET`; verify all sessions invalidate gracefully.
 - [ ] Dependency audit: `npm audit` clean (backend + frontend); no known CVEs in the lockfiles.
 
 ### 6.3 New-repo `AGENTS.md` / `CONTRIBUTING.md`

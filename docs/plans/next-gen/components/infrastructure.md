@@ -295,7 +295,7 @@ NATS_URL=nats://localhost:4222
 REDIS_URL=redis://localhost:6379
 MQTT_HOST=localhost
 MQTT_PORT=1883
-OIDC_SESSION_SECRET=dev-secret-not-for-production
+JWT_SESSION_SECRET=dev-secret-not-for-production
 LOG_LEVEL=debug
 ```
 
@@ -421,11 +421,11 @@ Needed to start the process; can't be read from the DB. ~20 vars. Everything els
 | `MQTT_PASSWORD` | No | — | ingester |
 | `MQTT_TLS` | No | `false` | ingester |
 | `REDIS_URL` | No | — (disabled) | api |
-| `OIDC_SESSION_SECRET` | Yes | — | web, api (JWT signing) |
-| `OIDC_CLIENT_ID` | No | — | web (OIDC, if configured) |
-| `OIDC_CLIENT_SECRET` | No | — | web |
-| `OIDC_DISCOVERY_URL` | No | — | web |
-| `AUTH_MODE` | No | `hybrid` | web (`local`/`oidc`/`hybrid`) |
+| `JWT_SESSION_SECRET` | Yes | — | web, api — **platform** JWT + session-cookie signing key, shared across all tenants (the trust anchor; cannot be per-tenant) |
+| `OIDC_CLIENT_ID` | No | — | web — platform-default IdP (fallback when a tenant has no own config in `tenant_oidc_configs`) |
+| `OIDC_CLIENT_SECRET` | No | — | web — platform-default IdP secret |
+| `OIDC_DISCOVERY_URL` | No | — | web — platform-default IdP discovery URL |
+| `AUTH_MODE` | No | `hybrid` | web — platform-default `local`/`oidc`/`hybrid`; per-tenant override in `tenant_oidc_configs.auth_mode` |
 | `API_HOST` | No | `0.0.0.0` | api |
 | `API_PORT` | No | `3000` | api |
 | `WEB_HOST` | No | `0.0.0.0` | web |
@@ -441,6 +441,8 @@ Needed to start the process; can't be read from the DB. ~20 vars. Everything els
 | `BLOB_STORE_PATH` | No | — | worker (`BLOB_STORE_TYPE=local`) |
 | `BLOB_STORE_ENDPOINT` | No | — | worker (`BLOB_STORE_TYPE=s3`) |
 | `BLOB_STORE_BUCKET` | No | — | worker |
+
+**Platform-scope vs tenant-scope auth config.** `JWT_SESSION_SECRET` is genuinely platform-wide: one key signs the JWT/session cookie for *every* tenant, and the API trusts the `instance_id` claim because the platform signed it (it cannot be per-tenant — the API learns the tenant *from* the JWT this key signs). The `OIDC_CLIENT_*` and `AUTH_MODE` vars are **platform defaults only**: in multi-tenant mode (D21, Phase 7) each tenant overrides them via `tenant_oidc_configs` (their own IdP + `auth_mode`), resolved per hostname; the env vars are the fallback when a tenant hasn't configured their own (multi-tenancy.md §6).
 
 ### CLI commands
 

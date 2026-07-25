@@ -212,7 +212,7 @@ Browser ──EventSource('/api/v1/events/stream')──→ Web tier
 
 The web tier already proxies all `/api/v1/*` calls — SSE is just a long-lived, streaming variant of the same proxy pattern. The implementation requirement: **the proxy must pipe chunks as they arrive, not buffer the response.** In Fastify, this means writing to `reply.raw` (the underlying `ServerResponse`) and calling `reply.raw.flushHeaders()` before the first chunk, or using `@fastify/http-proxy` which handles streaming correctly out of the box.
 
-**Single-process alternative:** if the deployment runs web + API as one Fastify process (the simpler model for small/community deployments), no proxy is needed. The `AuthMiddleware` resolves the Principal directly from the cookie (same `OIDC_SESSION_SECRET`, same JWS verification the web tier uses). This adds a fourth resolution path to the middleware (after JWT-header, API-key, anonymous): cookie → verify JWS → resolve Principal. The auth boundary is unchanged — the middleware is still the single resolution point; the Principal is still the single authz artifact. The JWT becomes optional in this mode (the cookie is the credential, verified inline rather than transmitted over a network).
+**Single-process alternative:** if the deployment runs web + API as one Fastify process (the simpler model for small/community deployments), no proxy is needed. The `AuthMiddleware` resolves the Principal directly from the cookie (same `JWT_SESSION_SECRET`, same JWS verification the web tier uses). This adds a fourth resolution path to the middleware (after JWT-header, API-key, anonymous): cookie → verify JWS → resolve Principal. The auth boundary is unchanged — the middleware is still the single resolution point; the Principal is still the single authz artifact. The JWT becomes optional in this mode (the cookie is the credential, verified inline rather than transmitted over a network).
 
 ### SSE realtime endpoint (concrete)
 
@@ -268,7 +268,7 @@ Not all config is the same. Split by *when it can change*:
 
 ```
 DATABASE_URL, NATS_URL, MQTT_HOST/PORT/..., REDIS_HOST/..., OIDC_CLIENT_ID/SECRET/DISCOVERY,
-OIDC_SESSION_SECRET, API_HOST/PORT, LOG_LEVEL, INSTANCE_NAME
+JWT_SESSION_SECRET, API_HOST/PORT, LOG_LEVEL, INSTANCE_NAME
 ```
 
 Rule of thumb: if changing it requires reconnecting to an external system or re-authenticating, it's Tier 1. Secrets stay here (or in a secret manager) — they shouldn't sit in a DB backup.

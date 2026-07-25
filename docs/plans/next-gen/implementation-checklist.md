@@ -134,7 +134,7 @@
 ### Auth
 - [ ] Implement `AuthMiddleware` preHandler (JWT → cookie → API key → anonymous) — [auth.md](components/auth.md#authmiddleware-single-resolution-point)
 - [ ] Implement `Principal` frozen object + resolution from JWT claims / session cookie / API key
-- [ ] Implement JWT issuance in the web tier (5m access, HS256, `OIDC_SESSION_SECRET`)
+- [ ] Implement JWT issuance in the web tier (5m access, HS256, `JWT_SESSION_SECRET`)
 - [ ] Implement session-cookie sliding renewal (7d, JWS via `jose`)
 - [ ] Implement local password store: `local_users` table, argon2id verify, exponential lockout
 - [ ] Implement the shared 3-table bootstrap insert (user_profiles + local_users + user_profile_roles) in one transaction

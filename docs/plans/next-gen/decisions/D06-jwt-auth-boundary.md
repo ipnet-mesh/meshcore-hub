@@ -11,7 +11,7 @@ Today's auth is two overlapping planes with an implicit trust boundary (S1): dir
 
 **Short-lived JWT issued by the web tier, verified at a single API middleware.**
 
-- **Web tier** mints an access JWT (default HS256 signed with `OIDC_SESSION_SECRET`; optional RS256 via `JWT_SIGNING_ALG=rs256` + `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` PEM paths) carrying `sub`, `roles`, `role_tier` (pre-resolved), `instance_id`, `type=access`, `iat`, `exp` (+5 minutes), `jti`. Stored in the existing signed `meshcore-session` cookie (7-day sliding renewal via `jose` JWS — same mechanism, updated library). Every login path (local password, OIDC callback — see D12) converges here.
+- **Web tier** mints an access JWT (default HS256 signed with `JWT_SESSION_SECRET`; optional RS256 via `JWT_SIGNING_ALG=rs256` + `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` PEM paths) carrying `sub`, `roles`, `role_tier` (pre-resolved), `instance_id`, `type=access`, `iat`, `exp` (+5 minutes), `jti`. Stored in the existing signed `meshcore-session` cookie (7-day sliding renewal via `jose` JWS — same mechanism, updated library). Every login path (local password, OIDC callback — see D12) converges here.
 - **API** verifies the JWT at a single `AuthMiddleware`; handlers receive a frozen `Principal` (`user_id`, `roles`, `role_tier`, `instance_id`, `channel_indices` pre-resolved) via `Depends`. **No more `X-User-*` header injection** — the JWT *is* the credential.
 - **Direct Bearer (API keys)** remain for CLI/automation; they map to a `Principal` with a fixed role at the same middleware.
 
