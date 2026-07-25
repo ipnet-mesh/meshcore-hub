@@ -18,14 +18,10 @@ from meshcore_hub.api.channel_visibility import (
 from meshcore_hub.api.dependencies import DbSession
 from meshcore_hub.api.profile_utils import get_or_create_profile
 from meshcore_hub.collector.routes import (
-    compute_persisted_quality_avg,
     derive_expected_hash,
-    evaluate_route,
     preview_route,
     read_route_history_from_db,
     recent_matches,
-    upsert_route_recent_matches,
-    upsert_route_result,
 )
 from meshcore_hub.common.config import get_collector_settings
 from meshcore_hub.common.models.node import Node
@@ -267,49 +263,6 @@ def _sync_observers(
         session.add(RouteObserver(route_id=route.id, node_id=node.id))
 
 
-def _reevaluate_route(session: DbSession, route: Route) -> None:
-    """Synchronously evaluate *route* and persist every derived field.
-
-    The background evaluator (collector.route_evaluator) writes
-    ``RouteResult`` on a schedule (default 60s). Without this synchronous
-    re-eval, the route's ``packet_count_threshold`` / ``clear_threshold``
-    changes take up to that interval to surface in the UI — the list card
-    displays ``route_result.threshold`` / ``effective_clear``, not the
-    route's just-updated direct fields, so it shows the stale snapshot
-    until the next evaluator cycle. Running the eval inline on every
-    create/update keeps the post-mutation GET consistent with the new
-    config at the cost of one bounded DB scan per write.
-
-    Refreshes the current snapshot, the persisted top-3 recent matches
-    (so the detail page is fresh), and the rolling ``quality_avg`` (so
-    the list/detail badge updates immediately when the snapshot tier
-    changes).
-    """
-    if not route.enabled:
-        return
-    now = datetime.now(timezone.utc)
-    since = now - timedelta(hours=route.window_hours)
-    state, quality, matched_count = evaluate_route(session, route, since)
-
-    matches = recent_matches(session, route, limit=3, now=now)
-    upsert_route_recent_matches(session, route.id, matches, limit=3)
-
-    quality_avg = compute_persisted_quality_avg(
-        session, route, today_quality=quality, now=now
-    )
-
-    upsert_route_result(
-        session,
-        route,
-        state,
-        quality,
-        matched_count,
-        quality_avg=quality_avg,
-    )
-    session.commit()
-    session.refresh(route)
-
-
 @router.get("", response_model=RouteList)
 @cached("routes", key_builder=_routes_key_builder)
 def list_routes(
@@ -400,7 +353,6 @@ def create_route(
     _sync_observers(session, route, observer_nodes)
     session.commit()
     session.refresh(route)
-    _reevaluate_route(session, route)
     invalidate_routes(request)
     owner = _resolve_owner(session, route.created_by)
     return _route_to_read(route, quality_avg=None, owner=owner)
@@ -730,7 +682,6 @@ def update_route(
 
     session.commit()
     session.refresh(route)
-    _reevaluate_route(session, route)
     invalidate_routes(request)
     owner = _resolve_owner(session, route.created_by)
     return _route_to_read(route, owner=owner)

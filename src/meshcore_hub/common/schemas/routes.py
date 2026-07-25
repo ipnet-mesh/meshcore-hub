@@ -64,7 +64,7 @@ class RouteCreate(BaseModel):
         default=1, ge=1, le=3, description="Hash prefix width (1-3 bytes)"
     )
     window_hours: int = Field(
-        default=48, ge=1, le=720, description="Evaluation window in hours"
+        default=6, ge=1, le=12, description="Evaluation window in hours"
     )
     packet_count_threshold: int = Field(
         default=5, ge=1, le=10000, description="Minimum distinct packets for healthy"
@@ -114,7 +114,7 @@ class RouteUpdate(BaseModel):
     description: Optional[str] = None
     visibility: Optional[Literal["community", "member", "operator", "admin"]] = None
     match_width: Optional[int] = Field(default=None, ge=1, le=3)
-    window_hours: Optional[int] = Field(default=None, ge=1, le=720)
+    window_hours: Optional[int] = Field(default=None, ge=1, le=12)
     packet_count_threshold: Optional[int] = Field(default=None, ge=1, le=10000)
     clear_threshold: Optional[int] = None
     max_hop_span: Optional[int] = None
@@ -255,7 +255,7 @@ class RoutePreviewRequest(BaseModel):
         ..., description="Ordered path node public keys"
     )
     match_width: int = Field(default=1, ge=1, le=3)
-    window_hours: int = Field(default=48, ge=1, le=720)
+    window_hours: int = Field(default=6, ge=1, le=12)
     packet_count_threshold: int = Field(default=5, ge=1, le=10000)
     clear_threshold: Optional[int] = None
     max_hop_span: Optional[int] = Field(default=8)

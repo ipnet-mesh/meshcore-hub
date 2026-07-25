@@ -2,6 +2,22 @@
 
 This guide covers upgrading from a previous MeshCore Hub release to the current version. Check the relevant version section below before upgrading.
 
+## Unreleased — Route evaluator performance remediation
+
+The background route evaluator was triggering a multi-second `packet_path_hops` scan per route per sweep, flooding the slow-query log and blocking route saves on the same scan. This release reduces load across four orthogonal levers. **Two are destructive / behaviour-changing — read before upgrading.**
+
+**Defaults changed (review before upgrading):**
+
+- `ROUTE_EVALUATOR_INTERVAL_SECONDS`: `60` → **`300`** (5× less frequent sweeps).
+- `RAW_PACKET_RETENTION_DAYS`: `7` → **`2`** (⚠️ **destructive** — on the next cleanup run, raw packets and their cascaded `packet_path_hops` rows older than 2 days are permanently purged; 5 days of historical packet/hop data is lost). Raise the env var if you need to keep longer history. Must stay ≥ your largest route `window_hours` (in days) so route windows don't extend past purged data.
+- `Route.window_hours`: default `48` → **`6`**, max `720` → **`12`** (⚠️ pre-existing routes with `window_hours > 12` are **clamped to 12** by the migration; clamped route IDs are printed during upgrade).
+
+**Behaviour change — no synchronous re-evaluation on save:** creating or updating a route no longer runs the evaluator inline. The write returns immediately with the route's direct fields and whatever `route_result` snapshot the last sweep wrote (`null` for a brand-new route). `state` / `quality` / `matched_count` / `quality_avg` / the recent-matches card refresh on the next sweep (within `ROUTE_EVALUATOR_INTERVAL_SECONDS`). This keeps saves fast; the trade-off is up-to-5-min staleness after a config change.
+
+**Database migration required** (revision `a59611449e2a`): clamps `routes.window_hours` to 12 and rebuilds `ix_packet_path_hops_raw_packet_id_position` as a covering index (`INCLUDE node_hash, packet_hash, event_hash, received_at, observer_node_id`) on PostgreSQL so the evaluator's outer scan becomes index-only. The index rebuild runs `CONCURRENTLY` (no write blocking). SQLite is unchanged (no `INCLUDE` support). The `window_hours` clamp is one-way (original values not recoverable on downgrade).
+
+**Performance rationale:** EXPLAIN analysis showed both candidate query plans (Merge Join full scan and forced Nested Loop) cost ~10–15 s at 6.4 M `packet_path_hops` rows; no SQL rewrite, stats change, or CTE trick could avoid the scan. The fix is purely data-volume pressure: smaller table (retention), smaller candidate set (window cap), index-only scan (covering index), and less frequent sweeps. See `docs/routes.md` for the updated evaluator contract.
+
 ## v0.17.0
 
 ### React Web UI
@@ -40,7 +56,7 @@ This creates seven tables — `routes`, `route_nodes`, `route_observers`, `route
 | Variable                                    | Default | Description                                                                                                                            |
 | ------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `FEATURE_ROUTES`                            | `true`  | Show the `/routes` page and nav entry. On by default.                                                                                  |
-| `ROUTE_EVALUATOR_INTERVAL_SECONDS`          | `60`    | Collector background evaluator cadence in seconds. `0` disables the evaluator (cards stay `unknown`).                                  |
+| `ROUTE_EVALUATOR_INTERVAL_SECONDS`          | `300`   | Collector background evaluator cadence in seconds. `0` disables the evaluator (cards stay `unknown`).                                  |
 | `ROUTE_HISTORY_BACKFILL_INTERVAL_SECONDS`   | `3600`  | Collector hourly history backfill cadence (recomputes completed-day buckets). `0` disables the backfill; strips reflect only live sweeps. |
 
 ### Observer Ingestion Filters (allow/deny remote observers)

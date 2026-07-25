@@ -25,7 +25,7 @@ const ROUTES = {
       enabled: true,
       reversible: false,
       match_width: 60,
-      window_hours: 24,
+      window_hours: 6,
       quality_avg: "clear",
       route_result: { quality: "clear", state: "healthy" },
       route_nodes: [],

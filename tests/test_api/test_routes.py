@@ -627,13 +627,18 @@ class TestRouteQualityAvg:
         assert resp.status_code == 201
         assert resp.json()["quality_avg"] is None
 
-    def test_computed_on_update_response(self, client_no_auth, api_db_session):
-        """Update handler recomputes the average inline.
+    def test_update_does_not_compute_quality_avg_inline(
+        self, client_no_auth, api_db_session
+    ):
+        """Update handler does NOT recompute ``quality_avg`` synchronously.
 
-        ``_reevaluate_route`` runs ``compute_persisted_quality_avg`` which
-        reads ``route_result_history`` and returns ``None`` when no rows
-        exist yet (a fresh route with no hourly backfill under its belt).
-        Seeding history before the PUT exercises the populated path.
+        Previously a PUT ran ``_reevaluate_route`` which called
+        ``compute_persisted_quality_avg`` inline. That synchronous eval was
+        removed (it duplicated the background evaluator's work and blocked
+        the request on a full ``packet_path_hops`` scan). Now the PUT
+        response carries whatever ``route_result`` already existed —
+        ``None`` for a route with no prior sweep — and the rolling
+        ``quality_avg`` is refreshed only by the background evaluator.
         """
         from meshcore_hub.common.models.route_result_history import (
             RouteResultHistory,
@@ -641,7 +646,9 @@ class TestRouteQualityAvg:
         from datetime import date
 
         route = self._make_route(api_db_session, enabled=True, label="UpdateMe")
-        # Seed 7 days of failing history so the average resolves to failing.
+        # Seed 7 days of failing history. Under the old inline-eval path
+        # this would have resolved quality_avg to "failing" on the PUT;
+        # with eval removed it must stay None (no route_result row).
         today = date.today()
         for i in range(1, 8):
             api_db_session.add(
@@ -661,7 +668,7 @@ class TestRouteQualityAvg:
             headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 200
-        assert resp.json()["quality_avg"] == "failing"
+        assert resp.json()["quality_avg"] is None
 
 
 class TestUpdateRoute:
@@ -720,19 +727,20 @@ class TestUpdateRoute:
         public_keys = [rn["public_key"] for rn in data["route_nodes"]]
         assert new_node.public_key in public_keys
 
-    def test_update_threshold_immediately_reflects_in_route_result(
+    def test_update_does_not_synchronously_refresh_route_result(
         self, client_no_auth, api_db_session
     ):
-        """Regression: PUT-changed threshold must surface in route_result now.
+        """PUT no longer refreshes ``route_result`` inline.
 
-        Before this fix, ``route_result`` (written by a background
-        evaluator on a 30-60s schedule) kept the OLD threshold until the
-        next evaluator cycle. The routes list card displays
-        ``route_result.threshold`` / ``effective_clear``, so the UI showed
-        stale values for ~30s after a PUT even though the server returned
-        ``x-cache: MISS`` with the route's direct fields updated. The
-        PUT handler now runs ``_reevaluate_route`` synchronously after
-        commit so the very next GET sees a fresh ``route_result``.
+        The synchronous ``_reevaluate_route`` call was removed because it
+        blocked the request on a full ``packet_path_hops`` scan (duplicating
+        the background evaluator's work). As a result, the PUT response
+        surfaces the route's direct fields (new threshold/clear) but the
+        embedded ``route_result`` snapshot retains whatever the last
+        background sweep wrote — it is refreshed on the next evaluator
+        tick (default every 300s), not on every write. This test pins
+        that contract: a stale seeded ``route_result`` survives a PUT
+        unchanged.
         """
         from meshcore_hub.common.models.route_result import RouteResult
 
@@ -755,10 +763,10 @@ class TestUpdateRoute:
                     expected_hash=n.public_key[:2].upper(),
                 )
             )
-        # Seed a stale RouteResult snapshot from a hypothetical prior
-        # evaluator run using the OLD config (threshold=6, clear=12).
-        # Without synchronous re-eval, this is what the PUT response
-        # would continue to return until the next background sweep.
+        # Seed a RouteResult snapshot from a hypothetical prior evaluator
+        # run using the OLD config (threshold=6, clear=12). Without
+        # synchronous re-eval, this stale snapshot is what the PUT
+        # response continues to return until the next background sweep.
         api_db_session.add(
             RouteResult(
                 route_id=route.id,
@@ -782,23 +790,28 @@ class TestUpdateRoute:
         # The route's direct fields reflect the new config...
         assert data["packet_count_threshold"] == 3
         assert data["clear_threshold"] == 6
-        # ...AND route_result must reflect them too, not the stale
-        # snapshot from the seeded prior evaluation.
+        # ...but route_result retains the STALE snapshot until the next
+        # background evaluator sweep refreshes it.
         assert data["route_result"] is not None
         assert (
-            data["route_result"]["threshold"] == 3
-        ), "route_result.threshold should reflect the new packet_count_threshold"
+            data["route_result"]["threshold"] == 6
+        ), "route_result.threshold stays stale until the next sweep"
         assert (
-            data["route_result"]["effective_clear"] == 6
-        ), "route_result.effective_clear should reflect the new clear_threshold"
+            data["route_result"]["effective_clear"] == 12
+        ), "route_result.effective_clear stays stale until the next sweep"
 
-    def test_disabled_route_does_not_trigger_evaluation(
+    def test_update_does_not_invoke_evaluator(
         self, client_no_auth, api_db_session, monkeypatch
     ):
-        """Disabled routes short-circuit ``_reevaluate_route`` (no point
-        evaluating a route that won't be displayed as active). Guards
-        against unnecessary DB scans on bulk config changes."""
-        from meshcore_hub.api.routes import routes as routes_module
+        """PUT must not synchronously invoke the route evaluator.
+
+        Regression guard: the synchronous ``_reevaluate_route`` call was
+        removed to keep writes fast (it triggered a full
+        ``packet_path_hops`` scan per mutation). This spies on the
+        evaluator entry points to ensure no one re-wires the write path
+        back to inline evaluation.
+        """
+        import meshcore_hub.api.routes.routes as routes_module
 
         called = {"count": 0}
 
@@ -806,14 +819,21 @@ class TestUpdateRoute:
             called["count"] += 1
             return ("healthy", "clear", 0)
 
-        monkeypatch.setattr(routes_module, "evaluate_route", _spy_evaluate)
+        # recent_matches is the only collector symbol the routes API still
+        # imports; evaluate_route is not imported by the module anymore,
+        # so spying on it via the collector namespace catches any future
+        # re-import that re-adds inline evaluation.
+        import meshcore_hub.collector.routes as collector_routes
+
+        monkeypatch.setattr(collector_routes, "evaluate_route", _spy_evaluate)
+        monkeypatch.setattr(routes_module, "recent_matches", _spy_evaluate)
 
         nodes = _sample_nodes(api_db_session, 2)
         route = Route(
-            from_label="Off",
-            to_label="Line",
+            from_label="No",
+            to_label="Eval",
             packet_count_threshold=3,
-            enabled=False,
+            enabled=True,
         )
         api_db_session.add(route)
         api_db_session.flush()
@@ -830,13 +850,11 @@ class TestUpdateRoute:
 
         resp = client_no_auth.put(
             f"/api/v1/routes/{route.id}",
-            json={"description": "still off"},
+            json={"description": "still no inline eval"},
             headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 200
-        assert (
-            called["count"] == 0
-        ), "evaluate_route must not be called for disabled routes"
+        assert called["count"] == 0, "PUT must not invoke the evaluator"
 
 
 class TestDeleteRoute:
@@ -869,7 +887,7 @@ class TestPreview:
             json={
                 "node_public_keys": [n.public_key for n in nodes],
                 "match_width": 1,
-                "window_hours": 24,
+                "window_hours": 12,
                 "packet_count_threshold": 3,
             },
         )
@@ -946,11 +964,13 @@ class TestRouteHistory:
         )
         api_db_session.commit()
 
-        resp = client_no_auth.get(f"/api/v1/routes/{route.id}/history?days=7")
+        # days=1 stays within the default raw-packet retention window, so
+        # it is not clamped; include_today=True adds one extra entry.
+        resp = client_no_auth.get(f"/api/v1/routes/{route.id}/history?days=1")
         assert resp.status_code == 200
         data = resp.json()
-        # days=7 + include_today=True → 8 entries
-        assert len(data["data"]) == 8
+        # days=1 + include_today=True → 2 entries
+        assert len(data["data"]) == 2
 
     def test_not_found(self, client_no_auth):
         resp = client_no_auth.get("/api/v1/routes/nonexistent/history")
@@ -1115,7 +1135,7 @@ class TestUpdateRouteFields:
                 "description": "updated desc",
                 "visibility": "member",
                 "match_width": 2,
-                "window_hours": 48,
+                "window_hours": 12,
                 "packet_count_threshold": 5,
                 "clear_threshold": 8,
                 "max_hop_span": 4,
@@ -1130,7 +1150,7 @@ class TestUpdateRouteFields:
         assert data["description"] == "updated desc"
         assert data["visibility"] == "member"
         assert data["match_width"] == 2
-        assert data["window_hours"] == 48
+        assert data["window_hours"] == 12
         assert data["packet_count_threshold"] == 5
         assert data["clear_threshold"] == 8
         assert data["max_hop_span"] == 4
@@ -1337,7 +1357,7 @@ class TestPreviewGuards:
                 "node_public_keys": [n.public_key for n in nodes],
                 "observer_public_keys": [obs.public_key],
                 "match_width": 1,
-                "window_hours": 24,
+                "window_hours": 12,
                 "packet_count_threshold": 3,
             },
         )
@@ -1347,7 +1367,7 @@ class TestPreviewGuards:
 class TestPrecomputedRecentMatches:
     """``route_recent_matches`` table → detail-page read path.
 
-    The 60s evaluator sweep persists top-3 matches as normalized rows
+    The evaluator sweep (default every 300s) persists top-3 matches as normalized rows
     (``route_id``, ``raw_packet_id``, ``first_position``, ``last_position``).
     The detail endpoint JOINs through ``raw_packets`` and slices the
     packet's hops on read, so the JSON shape stays identical to the
@@ -1429,9 +1449,18 @@ class TestPrecomputedRecentMatches:
         # Live path also slices the matched subpath.
         assert [h["node_hash"] for h in match["hops"]] == ["AA", "BB"]
 
-    def test_put_persists_normalized_matches(self, client_no_auth, api_db_session):
-        """PUT triggers ``_reevaluate_route`` which writes through the
-        normalized table — the subsequent GET reads from there."""
+    def test_put_does_not_persist_normalized_matches(
+        self, client_no_auth, api_db_session
+    ):
+        """PUT does NOT write ``route_recent_matches``.
+
+        The synchronous ``_reevaluate_route`` that used to persist matches
+        on every write was removed (it blocked the request on a full
+        ``packet_path_hops`` scan). The normalized table is now written
+        exclusively by the background evaluator sweep. Until that sweep
+        runs, the detail page falls back to the live compute path (see
+        ``test_detail_falls_back_to_live_when_table_empty``).
+        """
         from sqlalchemy import select
 
         from meshcore_hub.common.models import RouteRecentMatch
@@ -1449,13 +1478,13 @@ class TestPrecomputedRecentMatches:
 
         resp = client_no_auth.put(
             f"/api/v1/routes/{route.id}",
-            json={"description": "trigger reeval"},
+            json={"description": "no inline eval"},
             headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 200
 
-        # The synchronous re-evaluation on PUT should have written a
-        # match row through ``upsert_route_recent_matches``.
+        # PUT must not have written any match rows — only the background
+        # evaluator sweep populates this table.
         rows = (
             api_db_session.execute(
                 select(RouteRecentMatch).where(RouteRecentMatch.route_id == route.id)
@@ -1463,9 +1492,7 @@ class TestPrecomputedRecentMatches:
             .scalars()
             .all()
         )
-        assert len(rows) == 1
-        assert rows[0].first_position == 1
-        assert rows[0].last_position == 2
+        assert rows == []
 
 
 class TestRouteOperatorPermissions:

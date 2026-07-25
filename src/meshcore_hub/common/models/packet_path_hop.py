@@ -78,6 +78,13 @@ class PacketPathHop(Base, UUIDMixin, TimestampMixin):
             "ix_packet_path_hops_raw_packet_id_position",
             "raw_packet_id",
             "position",
+            postgresql_include=[
+                "node_hash",
+                "packet_hash",
+                "event_hash",
+                "received_at",
+                "observer_node_id",
+            ],
         ),
         Index(
             "ix_packet_path_hops_received_at",

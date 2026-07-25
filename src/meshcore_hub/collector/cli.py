@@ -804,7 +804,7 @@ def _import_routes(
                     route.description = value.get("description")
                     route.visibility = visibility
                     route.match_width = match_width
-                    route.window_hours = value.get("window_hours", 48)
+                    route.window_hours = value.get("window_hours", 6)
                     route.packet_count_threshold = value.get(
                         "packet_count_threshold", 5
                     )
@@ -827,7 +827,7 @@ def _import_routes(
                         description=value.get("description"),
                         visibility=visibility,
                         match_width=match_width,
-                        window_hours=value.get("window_hours", 48),
+                        window_hours=value.get("window_hours", 6),
                         packet_count_threshold=value.get("packet_count_threshold", 5),
                         clear_threshold=value.get("clear_threshold"),
                         max_hop_span=value.get("max_hop_span", 8),

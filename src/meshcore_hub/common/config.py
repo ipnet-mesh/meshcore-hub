@@ -253,10 +253,12 @@ class CollectorSettings(CommonSettings):
         description="Capture every inbound packets-feed packet into raw_packets",
     )
     raw_packet_retention_days: Optional[int] = Field(
-        default=7,
+        default=2,
         description=(
-            "Days to retain raw packets before cleanup (default 7, independent of "
-            "DATA_RETENTION_DAYS)"
+            "Days to retain raw packets before cleanup (default 2, independent of "
+            "DATA_RETENTION_DAYS). Bounds the packet_path_hops table size (hops "
+            "cascade-delete with their raw packet) and therefore the cost of the "
+            "route evaluator's full-scan query."
         ),
         ge=1,
     )
@@ -326,7 +328,7 @@ class CollectorSettings(CommonSettings):
         ge=0,
     )
     route_evaluator_interval_seconds: int = Field(
-        default=60,
+        default=300,
         description=(
             "Route evaluator interval in seconds. Each tick writes the current "
             "snapshot to route_results, upserts today's per-day bucket into "

@@ -53,12 +53,12 @@ class TestCollectorSettings:
         assert settings.database_url == "postgresql://user@host/db"
         assert settings.effective_database_url == "postgresql://user@host/db"
 
-    def test_raw_packet_retention_defaults_to_7(self) -> None:
-        """Unset raw_packet_retention_days defaults to 7, independent of global."""
+    def test_raw_packet_retention_defaults_to_2(self) -> None:
+        """Unset raw_packet_retention_days defaults to 2, independent of global."""
         settings = CollectorSettings(_env_file=None, data_retention_days=12)
 
-        assert settings.raw_packet_retention_days == 7
-        assert settings.effective_raw_packet_retention_days == 7
+        assert settings.raw_packet_retention_days == 2
+        assert settings.effective_raw_packet_retention_days == 2
 
     def test_raw_packet_retention_explicit_override(self) -> None:
         """An explicit raw_packet_retention_days wins over the global value."""
@@ -119,10 +119,10 @@ class TestCollectorSettings:
         assert settings.channel_refresh_interval_seconds == 60
 
     def test_route_evaluator_interval_seconds_default(self) -> None:
-        """Route evaluator interval defaults to 60."""
+        """Route evaluator interval defaults to 300."""
         settings = CollectorSettings(_env_file=None)
 
-        assert settings.route_evaluator_interval_seconds == 60
+        assert settings.route_evaluator_interval_seconds == 300
 
     def test_route_evaluator_interval_seconds_custom(self) -> None:
         """Route evaluator interval can be overridden (0 disables)."""

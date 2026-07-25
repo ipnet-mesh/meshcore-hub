@@ -721,7 +721,7 @@ function RouteModal({
   const [pathQuery, setPathQuery] = useState("");
   const [obsQuery, setObsQuery] = useState("");
   const [windowHours, setWindowHours] = useState(
-    String(route?.window_hours || 48),
+    String(route?.window_hours || 6),
   );
   const [threshold, setThreshold] = useState(
     String(route?.packet_count_threshold || 5),
@@ -1041,7 +1041,7 @@ function RouteModal({
                   value={windowHours}
                   onChange={(e) => setWindowHours(e.target.value)}
                   min={1}
-                  max={720}
+                  max={12}
                 />
               </div>
               <div>
@@ -1448,7 +1448,7 @@ export function RoutesPage() {
       description: values.description.trim() || null,
       visibility: values.visibility,
       match_width: values.match_width || 1,
-      window_hours: parseInt(values.window_hours, 10) || 48,
+      window_hours: parseInt(values.window_hours, 10) || 6,
       packet_count_threshold: parseInt(values.packet_count_threshold, 10) || 5,
       max_hop_span: values.max_hop_span
         ? parseInt(values.max_hop_span, 10)

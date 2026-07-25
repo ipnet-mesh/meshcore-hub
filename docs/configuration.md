@@ -91,7 +91,7 @@ The collector subscribes to MQTT events and persists them to the database. For p
 | Variable | Default | Description |
 | --- | --- | --- |
 | `CHANNEL_REFRESH_INTERVAL_SECONDS` | `300` | Seconds between channel-key refresh from the database (minimum `10`) |
-| `ROUTE_EVALUATOR_INTERVAL_SECONDS` | `60` | Seconds between route health evaluations. `0` disables the background evaluator (route cards then stay `unknown`). See [routes.md](routes.md) |
+| `ROUTE_EVALUATOR_INTERVAL_SECONDS` | `300` | Seconds between route health evaluations. `0` disables the background evaluator (route cards then stay `unknown`). See [routes.md](routes.md) |
 | `ROUTE_HISTORY_BACKFILL_INTERVAL_SECONDS` | `3600` | Seconds between route-health history backfill sweeps (recomputes completed-day buckets for the retention window). `0` disables the backfill; the dashboard strip and `/routes/{id}/history` then only reflect the live 60 s evaluator sweeps. See [routes.md](routes.md) |
 
 ### Observer Ingestion Filters
@@ -167,7 +167,7 @@ The collector automatically cleans up old event data and inactive nodes. Retenti
 | `NODE_CLEANUP_ENABLED` | `true` | Enable removal of inactive nodes (nodes with `last_seen=NULL` are never removed) |
 | `NODE_CLEANUP_DAYS` | `30` | Remove nodes not seen for this many days |
 | `RAW_PACKET_CAPTURE_ENABLED` | `false` | Capture raw packets into `raw_packets`. In Compose, derived from `FEATURE_PACKETS` — see [letsmesh.md → Raw Packet Capture](letsmesh.md#raw-packet-capture) |
-| `RAW_PACKET_RETENTION_DAYS` | `7` | Days to retain raw packets (independent of `DATA_RETENTION_DAYS`) |
+| `RAW_PACKET_RETENTION_DAYS` | `2` | Days to retain raw packets (independent of `DATA_RETENTION_DAYS`). Bounds the `packet_path_hops` table size (hops cascade-delete with their raw packet) and therefore the route evaluator's query cost |
 
 ## Spam Detection
 
