@@ -128,7 +128,9 @@
     "minutes_ago": "{{count}}m geleden",
     "less_than_minute": "<1m geleden",
     "last_7_days": "Laatste 7 dagen",
+    "last_n_days": "Laatste {{n}} dagen",
     "per_day_last_7_days": "Per dag (laatste 7 dagen)",
+    "per_day_last_n_days": "Per dag (laatste {{n}} dagen)",
     "over_time_last_7_days": "In de tijd (laatste 7 dagen)",
     "activity_per_day_last_7_days": "Activiteit per dag (laatste 7 dagen)",
     "routes_over_last_n_days": "Overeenkomende pakketten per route (laatste {{n}} dagen)"

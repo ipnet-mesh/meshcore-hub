@@ -137,7 +137,9 @@
     "minutes_ago": "{{count}}m ago",
     "less_than_minute": "<1m ago",
     "last_7_days": "Last 7 days",
+    "last_n_days": "Last {{n}} days",
     "per_day_last_7_days": "Per day (last 7 days)",
+    "per_day_last_n_days": "Per day (last {{n}} days)",
     "over_time_last_7_days": "Over time (last 7 days)",
     "activity_per_day_last_7_days": "Activity per day (last 7 days)",
     "routes_over_last_n_days": "Matched packets per route (last {{n}} days)"

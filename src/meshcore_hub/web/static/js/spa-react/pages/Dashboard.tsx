@@ -41,9 +41,11 @@ interface DashboardStats {
   advertisements_7d: number;
   messages_7d: number;
   packets_7d: number;
+  packets_window_days: number;
 }
 
 interface PacketBreakdown {
+  days: number;
   by_event_type: BreakdownBucket[];
   by_path_width: BreakdownBucket[];
 }
@@ -491,7 +493,9 @@ export function DashboardPage() {
                 colorVar="--color-packets"
                 icon={<IconPackets className="h-5 w-5" />}
                 title={t("entities.packets")}
-                subtitle={t("time.per_day_last_7_days")}
+                subtitle={t("time.per_day_last_n_days", {
+                  n: data.packetActivity?.days ?? 7,
+                })}
                 value={stats.packets_7d}
               >
                 <TrendLineChart
@@ -511,7 +515,9 @@ export function DashboardPage() {
                   colorVar="--color-packets"
                   icon={<IconPackets className="h-5 w-5" />}
                   title={t("entities.packet_event_types")}
-                  subtitle={t("time.last_7_days")}
+                  subtitle={t("time.last_n_days", {
+                    n: packetBreakdown?.days ?? 7,
+                  })}
                   value={eventTypeTotal}
                 >
                   <StackedBarChart
@@ -525,7 +531,9 @@ export function DashboardPage() {
                   colorVar="--color-packets"
                   icon={<IconPackets className="h-5 w-5" />}
                   title={t("entities.path_hash_width")}
-                  subtitle={t("time.last_7_days")}
+                  subtitle={t("time.last_n_days", {
+                    n: packetBreakdown?.days ?? 7,
+                  })}
                   value={pathWidthTotal}
                 >
                   <StackedBarChart

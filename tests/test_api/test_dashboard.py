@@ -51,6 +51,21 @@ class TestDateBucketKey:
 class TestDashboardStats:
     """Tests for GET /dashboard/stats endpoint."""
 
+    @pytest.fixture(autouse=True)
+    def _high_raw_packet_retention(self, monkeypatch):
+        """Bump raw-packet retention to 90d for this class.
+
+        The packet stat window is min(7, retention); at the default retention
+        of 2d it would clamp to 2d and break the days-handling assertions
+        below. The clamp itself is covered by
+        ``test_packets_window_days_tracks_retention``.
+        """
+        from meshcore_hub.common.config import CollectorSettings
+
+        monkeypatch.setattr(
+            CollectorSettings, "effective_raw_packet_retention_days", 90
+        )
+
     def test_get_stats_empty(self, client_no_auth):
         """Test getting stats with empty database."""
         response = client_no_auth.get("/api/v1/dashboard/stats")
@@ -157,6 +172,43 @@ class TestDashboardStats:
 
         assert data["total_packets"] == 3
         assert data["packets_7d"] == 2  # now + 3d (10d excluded)
+
+    def test_packets_window_days_tracks_retention(
+        self, client_no_auth, api_db_session, monkeypatch
+    ):
+        """The packet stat window is min(7, retention) and the count respects it.
+
+        With the default retention of 2d, a packet 3 days ago falls outside
+        the window even though it would be inside a 7d window — so packets_7d
+        undercounts relative to the old fixed-7d behaviour, and the response
+        exposes the actual window via packets_window_days so the UI can label
+        it honestly ("Last 2 days") instead of lying ("Last 7 days").
+        """
+        from meshcore_hub.common.config import CollectorSettings
+
+        now = datetime.now(timezone.utc)
+        api_db_session.add_all(
+            [
+                RawPacket(event_type="message", received_at=now),
+                RawPacket(event_type="message", received_at=now - timedelta(days=3)),
+            ]
+        )
+        api_db_session.commit()
+
+        # Default retention (2d): window clamps to 2, so the 3-day-old packet
+        # is excluded and the window is exposed for honest labelling.
+        monkeypatch.setattr(CollectorSettings, "effective_raw_packet_retention_days", 2)
+        data = client_no_auth.get("/api/v1/dashboard/stats").json()
+        assert data["packets_window_days"] == 2
+        assert data["packets_7d"] == 1  # only "now"; 3d is outside the 2d window
+
+        # Retention >= 7: window is the full 7 days, both packets counted.
+        monkeypatch.setattr(
+            CollectorSettings, "effective_raw_packet_retention_days", 30
+        )
+        data = client_no_auth.get("/api/v1/dashboard/stats").json()
+        assert data["packets_window_days"] == 7
+        assert data["packets_7d"] == 2
 
 
 class TestDashboardHtmlRemoved:
@@ -296,6 +348,17 @@ class TestDashboardActivity:
 class TestPacketActivity:
     """Tests for GET /dashboard/packet-activity endpoint."""
 
+    @pytest.fixture(autouse=True)
+    def _high_raw_packet_retention(self, monkeypatch):
+        """Bump raw-packet retention to 90d so the days-handling tests below
+        exercise the request parameter (the retention clamp is covered by
+        ``test_days_clamped_to_retention``)."""
+        from meshcore_hub.common.config import CollectorSettings
+
+        monkeypatch.setattr(
+            CollectorSettings, "effective_raw_packet_retention_days", 90
+        )
+
     def test_get_packet_activity_empty(self, client_no_auth):
         """Test getting packet activity with empty database."""
         response = client_no_auth.get("/api/v1/dashboard/packet-activity")
@@ -322,6 +385,18 @@ class TestPacketActivity:
         data = response.json()
         assert data["days"] == 90
         assert len(data["data"]) == 90
+
+    def test_days_clamped_to_retention(self, client_no_auth, monkeypatch):
+        """Days are clamped to the raw-packet retention window so the chart
+        never advertises days whose data has been purged."""
+        from meshcore_hub.common.config import CollectorSettings
+
+        monkeypatch.setattr(CollectorSettings, "effective_raw_packet_retention_days", 2)
+        response = client_no_auth.get("/api/v1/dashboard/packet-activity?days=30")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["days"] == 2
+        assert len(data["data"]) == 2
 
     def test_get_packet_activity_with_data(self, client_no_auth, api_db_session):
         """Test getting packet activity with packets across two days.
@@ -391,6 +466,17 @@ class TestPacketActivity:
 class TestPacketBreakdown:
     """Tests for GET /dashboard/packet-breakdown endpoint."""
 
+    @pytest.fixture(autouse=True)
+    def _high_raw_packet_retention(self, monkeypatch):
+        """Bump raw-packet retention to 90d so the days-handling tests below
+        exercise the request parameter (the retention clamp is covered by
+        ``test_days_clamped_to_retention``)."""
+        from meshcore_hub.common.config import CollectorSettings
+
+        monkeypatch.setattr(
+            CollectorSettings, "effective_raw_packet_retention_days", 90
+        )
+
     def test_get_packet_breakdown_empty(self, client_no_auth):
         """Empty database returns empty bucket lists."""
         response = client_no_auth.get("/api/v1/dashboard/packet-breakdown")
@@ -417,6 +503,17 @@ class TestPacketBreakdown:
         assert response.status_code == 200
         data = response.json()
         assert data["days"] == 90
+
+    def test_days_clamped_to_retention(self, client_no_auth, monkeypatch):
+        """Days are clamped to the raw-packet retention window so the breakdown
+        never advertises days whose data has been purged."""
+        from meshcore_hub.common.config import CollectorSettings
+
+        monkeypatch.setattr(CollectorSettings, "effective_raw_packet_retention_days", 2)
+        response = client_no_auth.get("/api/v1/dashboard/packet-breakdown?days=14")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["days"] == 2
 
     def test_breakdown_excludes_today(self, client_no_auth, api_db_session):
         """Today's packets are excluded from the breakdown window."""

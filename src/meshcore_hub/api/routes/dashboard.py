@@ -185,12 +185,19 @@ def get_stats(
     advertisements_24h = adv_row[1] or 0
     advertisements_7d = adv_row[2] or 0
 
-    # Raw-packet counts (total + last 7 days), observer-level volume metric
+    # Raw-packet counts (total + recent window), observer-level volume metric
     # with no role/channel filter (payload redaction lives on list/detail only).
+    # The "recent" window is capped at min(7, retention) because raw packets
+    # (and their cascaded packet_path_hops) are purged at RAW_PACKET_RETENTION_DAYS;
+    # a wider window would silently undercount against the "Last 7 days" label.
+    packets_window_days = min(
+        7, get_collector_settings().effective_raw_packet_retention_days
+    )
+    packets_since = now - timedelta(days=packets_window_days)
     packet_row = session.execute(
         select(
             func.count(RawPacket.id).label("total_packets"),
-            func.sum(case((RawPacket.received_at >= seven_days_ago, 1), else_=0)).label(
+            func.sum(case((RawPacket.received_at >= packets_since, 1), else_=0)).label(
                 "packets_7d"
             ),
         ).select_from(RawPacket)
@@ -252,6 +259,7 @@ def get_stats(
         total_members=total_members,
         total_packets=total_packets,
         packets_7d=packets_7d,
+        packets_window_days=packets_window_days,
     )
 
 
@@ -470,7 +478,14 @@ def get_packet_activity(
     Returns:
         Daily raw-packet counts for each day in the period (excluding today)
     """
-    days = min(days, 90)
+    # Clamp to the raw-packet retention window so the response never advertises
+    # days whose data has been purged (the route evaluator / dashboard stat uses
+    # the same cap). See get_dashboard_stats for the rationale.
+    days = min(
+        days,
+        90,
+        get_collector_settings().effective_raw_packet_retention_days,
+    )
 
     now = datetime.now(timezone.utc)
     end_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -524,7 +539,12 @@ def get_packet_breakdown(
         Counts bucketed by event type (top 6 + "other") and by path-hash
         byte width (1b/2b/3b, NULL excluded) for the period (excluding today).
     """
-    days = min(days, 90)
+    # Clamp to the raw-packet retention window (see get_dashboard_stats).
+    days = min(
+        days,
+        90,
+        get_collector_settings().effective_raw_packet_retention_days,
+    )
 
     now = datetime.now(timezone.utc)
     end_date = now.replace(hour=0, minute=0, second=0, microsecond=0)

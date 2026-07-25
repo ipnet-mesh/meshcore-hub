@@ -16,6 +16,9 @@ export interface ActivityPoint {
 }
 
 export interface ActivitySeries {
+  // `days` is present on all DailyActivity API responses but optional here so
+  // the type can be reused for activity charts that don't surface the window.
+  days?: number;
   data: ActivityPoint[];
 }
 

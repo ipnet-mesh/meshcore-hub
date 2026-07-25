@@ -296,6 +296,14 @@ class DashboardStats(BaseModel):
     )
     total_packets: int = Field(default=0, description="Total raw packets captured")
     packets_7d: int = Field(default=0, description="Packets captured in last 7 days")
+    packets_window_days: int = Field(
+        default=7,
+        description=(
+            "Actual window in days for packets_7d = min(7, "
+            "raw_packet_retention_days). The UI labels the stat with this "
+            "value so it never claims a 7-day window when retention is shorter."
+        ),
+    )
 
 
 class RecentActivity(BaseModel):
