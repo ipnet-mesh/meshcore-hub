@@ -5,7 +5,7 @@
 
 ## Context
 
-The job manifest (derived-state.md) consolidates six daemon threads into one `DerivedStateWorker` process owning every periodic job (route evaluator, route history, spam rescore, retention, metrics gauges, CAGG health). A single process is a SPOF — a crash stops all derived-state maintenance until restart. The question (derived-state.md → HA): how to provide HA without introducing a separate coordinator service (etcd/Consul) or a clustering framework?
+The job manifest (derived-state.md) consolidates six daemon threads into one `DerivedStateWorker` process owning every periodic job (route evaluator, route history, spam rescore, dashboard rollups, retention, metrics gauges, CAGG health). A single process is a SPOF — a crash stops all derived-state maintenance until restart. The question (derived-state.md → HA): how to provide HA without introducing a separate coordinator service (etcd/Consul) or a clustering framework?
 
 ## Decision
 

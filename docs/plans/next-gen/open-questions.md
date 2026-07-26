@@ -1,6 +1,6 @@
 # Open Questions
 
-> **Status (iteration 7):** All design questions resolved. The items below are **deferred
+> **Status (iteration 9):** All design questions resolved. The items below are **deferred
 > measurements** (decided in principle, final form pending a benchmark) — not open design
 > questions. See [decisions/](decisions/) for the 23 locked ADRs.
 

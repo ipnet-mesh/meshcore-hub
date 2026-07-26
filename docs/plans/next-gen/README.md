@@ -26,8 +26,8 @@ Then read the [decisions](decisions/) for the locked architectural choices, and 
 | [review-findings.md](review-findings.md) | Iteration-8 design-review findings (13 issues) and their resolutions, cross-referenced (F1–F13) into the docs below |
 | [overview.md](overview.md) | Current system inventory, pain points, target architecture principles, topology |
 | [code-warts.md](code-warts.md) | Catalog of 52 antipatterns and gotchas from the current codebase (lessons for the new repo) |
-| [phasing.md](phasing.md) | The 7-phase plan, risks, and design retrospective (what shifted across iterations) |
-| [implementation-checklist.md](implementation-checklist.md) | Single-page actionable checklist for every task across all 7 phases |
+| [phasing.md](phasing.md) | The 8-phase plan (Phase 0–7), risks, and design retrospective (what shifted across iterations) |
+| [implementation-checklist.md](implementation-checklist.md) | Single-page actionable checklist for every task across all 8 phases (Phase 0–7) |
 | [testing.md](testing.md) | Test strategy (vitest + Playwright pyramid, D23), D5 benchmark plan, and phase exit criteria |
 | [open-questions.md](open-questions.md) | All resolved — 2 deferred measurements remain (D5 benchmark, D8 compression check) |
 

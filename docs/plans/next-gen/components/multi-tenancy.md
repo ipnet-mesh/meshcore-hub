@@ -88,7 +88,7 @@ changes** — provided the Phase 0 schema is instance-scoped *including its uniq
 
 The single-tenant assumption lives in exactly **three places** that Phase 7 modifies:
 
-1. `MqttIngester.__init__(instance_id=...)` — becomes a routing table lookup.
+1. `MqttIngester`'s `instanceId` constructor arg — becomes a routing table lookup.
 2. `AuthMiddleware.instance_id` (from env) — becomes hostname/JWT resolution.
 3. OIDC config (Tier-1 env vars) — gains a per-instance DB path.
 

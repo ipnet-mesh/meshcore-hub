@@ -39,6 +39,7 @@ from production auth stays visible.
 | [frontend.md](components/frontend.md) | | | ✓ | ✓ |
 | [multi-tenancy.md](components/multi-tenancy.md) | ✓ | ✓ | ✓ | ✓ |
 | [migration.md](components/migration.md) (export/import) | ✓ | ✓ | | |
+| [infrastructure.md](components/infrastructure.md) (runtime, shutdown invariants) | | ✓ | | |
 
 > The exit criteria below are the **acceptance gates** for each phase; some are slow runtime
 > observations (5-day parallel-stack diff, live-load throughput) that no unit test can reproduce.
@@ -97,6 +98,16 @@ from production auth stays visible.
 - [ ] Login page renders local form / OIDC button / both per `auth_mode`; local 401 shows inline error.
 - [ ] Settings + Users admin pages functional; feature flags toggle at runtime; branding change propagates to open tabs via SSE within seconds.
 - [ ] Pages admin page: create/edit/delete custom pages with markdown editor; nav updates reflect changes.
+
+## Phase 6 — Polish & decommission
+
+- [ ] Parallel-stack diff clean for 3 consecutive days within the 5-day window (D14); old stack decommissionable (DNS/proxy/MQTT cut over, old containers stopped).
+- [ ] RLS audit: a cross-instance query returns 0 rows on **every** tenant-scoped table (including route-health tables), verified as the non-owner `meshcore_app` role.
+- [ ] JWT rotation drill: rotating `JWT_SESSION_SECRET` invalidates in-flight sessions gracefully.
+- [ ] `npm audit` clean (backend + frontend); no known CVEs in the lockfiles.
+- [ ] Load test: N observers × M packets/sec holds NATS backlog bounded and IngestWorker throughput ≥ 5× the old single-threaded path.
+- [ ] Dashboard p95 < 200ms under load (CAGGs effective); route evaluator p95 < 500ms per route at the D5 High shape.
+- [ ] New-repo `AGENTS.md`/`CONTRIBUTING.md` derived from [code-warts.md](code-warts.md); README/deployment/operator-migration docs updated; Swagger/ReDoc clean.
 
 ## Phase 7 — Multi-tenancy (self-provisioning)
 

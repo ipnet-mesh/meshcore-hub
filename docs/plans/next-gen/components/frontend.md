@@ -163,7 +163,7 @@ bootstrap().then(({ config, me }) => {
 
 ## SSE-driven live pages
 
-A single `useEventStream` hook connects to the SSE endpoint and patches the TanStack Query cache. The browser's native `EventSource` authenticates via the session cookie (same-origin, sent automatically) — no custom headers needed, because the web tier proxies the SSE connection and injects the JWT upstream (see [api.md → SSE Auth](api.md#realtime-sse)).
+A single `useEventStream` hook connects to the SSE endpoint and patches the TanStack Query cache. The browser's native `EventSource` authenticates via the session cookie (same-origin, sent automatically) — no custom headers needed, because the web tier proxies the SSE connection and injects the JWT upstream (see [api.md → SSE Auth](api.md#sse-auth-cookie-based-proxy-transparent)).
 
 ```tsx
 function useEventStream(eventTypes: string[]) {

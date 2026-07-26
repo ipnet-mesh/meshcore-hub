@@ -1,8 +1,28 @@
 # Implementation Phasing
 
-> The 7-phase implementation plan, risks, and explicit non-goals for the MeshCore Hub rewrite.
+> The 8-phase implementation plan (Phase 0–7), risks, and explicit non-goals for the MeshCore Hub rewrite.
 > Each phase is independently shippable and backwards-compatible (data migrations provided).
 > Phase exit criteria are consolidated in [testing.md](testing.md).
+
+## How to use this plan during implementation
+
+This plan is a **design contract**, not a project schedule. Three documents carry three different
+things — read all three for the phase you're on:
+
+- **[Component docs](components/)** — *what to build*: schemas, contracts, pseudocode, the authoritative design.
+- **[implementation-checklist.md](implementation-checklist.md)** — *the ordered task list*: one-line checkboxes per phase, each linking back to its component section. Use it as the milestone tracker.
+- **[testing.md](testing.md)** — *the acceptance gates*: phase exit criteria + the D5 benchmark + the test pyramid (D23).
+
+What lives **outside** this plan: per-phase build order and PR-level task decomposition — turning
+"Implement `AuthMiddleware` preHandler" into its ordered sub-tasks and review sequence. That is
+execution planning: it evolves with the code, so put it in the implementation repo's issue tracker
+and link each phase to it there. The plan deliberately asserts no timeline or effort estimate
+([Strategy note](#strategy-note--scope-realism-f13)); a baked-in task breakdown would contradict
+that posture and go stale on first contact with the code.
+
+**Suggested per-phase sequence:** (1) read the component doc(s) for the phase, (2) work the
+checklist in dependency order, (3) author the phase's `### Tests` deliverables alongside the code
+(D23), (4) satisfy the `testing.md` exit criteria before declaring the phase done.
 
 ## Phase 0 — Foundations (no behavior change)
 
