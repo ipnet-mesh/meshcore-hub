@@ -55,7 +55,7 @@
 **Rewrite:** [data-model.md](components/data-model.md) — fresh schema, each index deliberate, unique constraints enforced.
 
 ### DM6 — Dual-hash identity confusion
-**Where:** `event_hash` (MD5 content dedup) and `packet_hash` (LetsMesh wire hash) both appear on `Message`, `Advertisement`, `Telemetry`, `TracePath`, `RawPacket`, and denormalized onto `PacketPathHop`. The evaluator "prefers `event_hash` over `packet_hash`" with fallback logic. (`raw_packet.py:25-33`, `packet_path_hop.py:30-35`)
+**Where:** `event_hash` (MD5 content dedup) and `packet_hash` (the on-air wire hash) both appear on `Message`, `Advertisement`, `Telemetry`, `TracePath`, `RawPacket`, and denormalized onto `PacketPathHop`. The evaluator "prefers `event_hash` over `packet_hash`" with fallback logic. (`raw_packet.py:25-33`, `packet_path_hop.py:30-35`)
 **Cost:** Two nullable columns with fallback logic spread across 6 tables = real complexity and storage duplication.
 **Rewrite:** [data-model.md](components/data-model.md) §1.2 — `event_hash` (SHA-256) on dedup'd event tables; `wire_hash` only on `raw_receptions`.
 

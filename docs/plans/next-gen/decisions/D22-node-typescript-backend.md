@@ -9,7 +9,7 @@ The rewrite plan (iterations 1–6) assumed Python (FastAPI + SQLAlchemy + Alemb
 
 Two findings from the iteration-7 ecosystem research challenge this:
 
-1. **The MeshCore packet decoder is TypeScript-primary.** `@michaelhart/meshcore-decoder` (npm, 50 stars, powers the official LetsMesh analyzer) is the original implementation. `meshcoredecoder` (PyPI, 8 stars) is explicitly a port that lags the TS original. The current hub carries ~100 LOC of workaround code (`_enrich_payload_decoded`, `_flatten_control_parsed`) patching fields the Python port omits. Every new MeshCore protocol feature lands in the TS decoder first.
+1. **The MeshCore packet decoder is TypeScript-primary.** `@michaelhart/meshcore-decoder` (npm, 50 stars, powers the reference analyzer) is the original implementation. `meshcoredecoder` (PyPI, 8 stars) is explicitly a port that lags the TS original. The current hub carries ~100 LOC of workaround code (`_enrich_payload_decoded`, `_flatten_control_parsed`) patching fields the Python port omits. Every new MeshCore protocol feature lands in the TS decoder first.
 
 2. **The NATS JetStream Node client is first-party.** `@nats-io/nats-core` + `@nats-io/jetstream` (v3.4.0) is maintained by Synadia with typed consumer APIs, `Nats-Msg-Id` as a standard publish option, and active development. `nats-py` (v2.15.0) is community-maintained with sparse docs and slower feature parity. The ingest pipeline (D4) is the architectural centerpiece — the queue client quality matters.
 

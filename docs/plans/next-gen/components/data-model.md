@@ -24,7 +24,7 @@ These are the *structural* changes — column renames and feature additions are 
 Standardize on **one** content identity column per event table:
 
 - `event_hash` = content dedup key (stays).
-- `wire_hash` = the LetsMesh on-air hash, stored **only on `raw_receptions`** (the history store) and joined when needed — not denormalized onto every structured row.
+- `wire_hash` = the on-air wire hash, stored **only on `raw_receptions`** (the history store) and joined when needed — not denormalized onto every structured row.
 
 ### 1.3 Restructure the high-volume tables
 
@@ -352,7 +352,7 @@ CREATE TABLE raw_receptions (
   received_at          timestamptz NOT NULL,
   id                   bigint GENERATED ALWAYS AS IDENTITY,   -- cheap, hypertable-friendly
   observer_node_id     uuid,                      -- loose ref to nodes.id; NO FK (see note below)
-  wire_hash            char(32),                  -- LetsMesh on-air hash; Nats-Msg-Id source
+  wire_hash            char(32),                  -- on-air wire hash; Nats-Msg-Id source
   event_hash           bytea,                     -- backlink to dedup'd event, filled post-dispatch
   instance_id          uuid NOT NULL REFERENCES instances(id),
   -- D8: raw_hex stays for now (TimescaleDB compresses it); object_key nullable for a later move

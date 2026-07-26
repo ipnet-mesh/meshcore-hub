@@ -37,6 +37,18 @@ Internally, code stays **brand-agnostic** so a future rename never cascades thro
 - **Class & identifier names:** descriptive — `MqttIngester`, `IngestWorker`, `DerivedStateWorker`,
   `WebhookWorker`, `AuthMiddleware` — never brand-prefixed (`MeshloomIngester` etc.).
 
+**Legacy brand terms — not carried forward.** LetsMesh (a now-inactive platform whose MQTT observer
+pattern + topic format this project adopted for compatibility) is dropped from the new repo's
+vocabulary. Use generic terms:
+
+- "the on-air wire hash" (the `wire_hash` field) — not "LetsMesh hash".
+- "the MQTT upload feeds" (`packets` / `status` / `internal`) — not "LetsMesh feeds".
+- Descriptive fallback event types (e.g. `unhandled_packet`) — not `letsmesh_packet` / `letsmesh_status`.
+- No `letsmesh_*` module or class names in the new repo.
+
+Code-font citations of legacy files (`letsmesh_normalizer.py`, `LetsMeshNormalizer`) remain in the
+current-system analysis (overview.md, code-warts.md) as factual references to the old codebase.
+
 ## Phase 0 — Foundations (no behavior change)
 
 - **Run the D5 fold-vs-separate benchmark first** (synthetic data, throwaway TimescaleDB — testing.md → [D5 plan](testing.md#d5-benchmark-plan-fold-vs-separate)). Its outcome decides the `raw_receptions.path_hashes` shape, so it must land **before** the DDL is authored. This was previously (mis)scheduled in Phase 2, which created a circular dependency — the schema was "frozen" in Phase 0 but the benchmark that shapes it ran two phases later (F5).

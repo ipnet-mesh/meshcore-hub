@@ -127,7 +127,7 @@ meshcore-hub admin diff-stacks \
 > **Match on `wire_hash`, not `event_hash`.** The two stacks compute the content dedup hash with
 > different algorithms (old = MD5, new = SHA-256 truncated), so the *same* event has a different
 > `event_hash` in each stack — a coverage check keyed on `event_hash` would always report 0%. The
-> LetsMesh on-air `wire_hash` is identical in both stacks, so it is the correct join key for verifying the
+> The on-air `wire_hash` is identical in both stacks, so it is the correct join key for verifying the
 > new pipeline decoded the same packets.
 
 **What it compares (per hour bucket, per event type):**

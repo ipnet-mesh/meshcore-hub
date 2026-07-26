@@ -511,4 +511,4 @@ The end-to-end "stand up the new stack" order. This is a **greenfield** deployme
 8. **Cut over** DNS / MQTT exclusivity to the new stack.
 9. **Decommission** the old stack after the grace period.
 
-Steps 6–9 are where D14 (5-day parallel-stack window) is exercised. The diff harness compares per-hour event counts and `wire_hash` coverage between the old API and the new API — it matches on the LetsMesh on-air `wire_hash` (identical in both stacks), **not** `event_hash`, which differs because the old stack hashes with MD5 and the new with SHA-256 (see migration.md → diff harness). Any divergence blocks cutover.
+Steps 6–9 are where D14 (5-day parallel-stack window) is exercised. The diff harness compares per-hour event counts and `wire_hash` coverage between the old API and the new API — it matches on the on-air `wire_hash` (identical in both stacks), **not** `event_hash`, which differs because the old stack hashes with MD5 and the new with SHA-256 (see migration.md → diff harness). Any divergence blocks cutover.

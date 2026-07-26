@@ -214,7 +214,7 @@ JSON for v1 (debuggable; the decode is the expensive part, not serialization). S
     "feed": "packets",           // "packets" | "status" | "internal"
     "is_observer": true          // IATA code matches a known observer; drives nodes.is_observer via touchNode
   },
-  "wire_hash": "<32 hex>",       // LetsMesh on-air hash; becomes Nats-Msg-Id
+  "wire_hash": "<32 hex>",       // on-air wire hash; becomes Nats-Msg-Id
   "mqtt": {
     "topic": "meshcore/IPT/<pubkey>/packets",
     "qos": 1,

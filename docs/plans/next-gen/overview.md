@@ -67,7 +67,7 @@ flowchart LR
 
 | Domain | Feature | Notes |
 |---|---|---|
-| **Ingest** | MQTT LetsMesh feeds (`packets`, `status`, `internal`) | 3 wildcard topics; only ingest path |
+| **Ingest** | MQTT upload feeds (`packets`, `status`, `internal`) | 3 wildcard topics; only ingest path |
 | | Packet decode (meshcoredecoder lib) + 2048-entry cache | per-hex cache, FIFO eviction |
 | | Payload-type classification (0x00–0x0F) | normalizer cascade |
 | | Multi-observer aggregation | `event_observers` junction + dialect-aware upsert |
@@ -165,7 +165,7 @@ These are grouped by the architectural lever that addresses them. The tags — *
 | W1 | **Single-threaded ingest.** `_on_message` runs on paho's network thread; one DB session per message; no batching, no backpressure. A slow DB stalls all topics. | `subscriber.py` dispatch; AGENTS.md notes "the collector is the only writer." |
 | W2 | **`raw_packets` write amplification.** 16 columns (incl. `raw_hex` Text + `decoded` JSON = duplicate payload storage), **9 indexes** (5 composite), one row per observer reception, no dedup. Retention capped at 2 days because of cost. | `raw_packet.py:121-138` |
 | W3 | **`packet_path_hops` write amplification.** One row per (reception × hop); 6-hop packet × 4 observers = 24 rows. Denormalizes 4 columns from `raw_packets`. Required a Postgres covering-index rebuild (HEAD migration) and a `window_hours` clamp as a perf band-aid. | `packet_path_hop.py`; `a59611449e2a` |
-| W4 | **Dual-hash identity confusion.** `event_hash` (MD5 dedup) and `packet_hash` (LetsMesh wire hash) both appear on 6 tables with fallback logic. The evaluator "prefers event_hash" for dedup. | `raw_packet.py:25-33` |
+| W4 | **Dual-hash identity confusion.** `event_hash` (MD5 dedup) and `packet_hash` (the on-air wire hash) both appear on 6 tables with fallback logic. The evaluator "prefers event_hash" for dedup. | `raw_packet.py:25-33` |
 | W5 | **MD5 for dedup keys.** Not a security issue but cheaply-collidable; SHA-256 truncated costs nothing. | `hash_utils.py` |
 | W6 | **Route health = hand-rolled materialized views.** 7 tables, 2 background cadences, full-scan candidate loads, in-Python per-day partitioning. `route_results` is 1:1 with `routes` (a cache). | `routes.py` (1,364 LOC); `route_evaluator.py` |
 | W7 | **`events_log` is an unbounded audit sink** that roughly doubles per-event storage. | `event_log.py` |

@@ -105,7 +105,7 @@ Worker subscribe corrected to `meshcore.ingest.>`. Files: `components/ingest.md`
 The harness compared `event_hash` between stacks, but the old stack uses MD5 and the new uses SHA-256,
 so the same event has different hashes and coverage is always 0%.
 
-**Resolution:** the hash-coverage check keys on `wire_hash` (the LetsMesh on-air hash, identical in both
+**Resolution:** the hash-coverage check keys on `wire_hash` (the on-air wire hash, identical in both
 stacks). Files: `components/migration.md`, `testing.md`.
 
 ### F10 — Spam-rescore sweep evaluated the scoring function twice per row
