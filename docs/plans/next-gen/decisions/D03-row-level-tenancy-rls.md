@@ -5,11 +5,11 @@
 
 ## Context
 
-Today multi-tenant isolation is **connection-level only**: `SET search_path = instance_<id>` is the entire guard (S3). A connection that leaks out of its pool — a misconfigured worker, a query logged with the wrong session, a future async-session bug — silently crosses instances. The schema-per-instance model is operationally nice (one dump per instance, simple restore) but it is not defense in depth. The §13-D3 question: keep schema-per-instance as the *only* boundary, harden it with row-level `instance_id` + RLS, or move to a database-per-instance model?
+Today multi-tenant isolation is **connection-level only**: `SET search_path = instance_<id>` is the entire guard (S3). A connection that leaks out of its pool — a misconfigured worker, a query logged with the wrong session, a future async-session bug — silently crosses instances. The schema-per-instance model is operationally nice (one dump per instance, simple restore) but it is not defense in depth. The question: keep schema-per-instance as the *only* boundary, harden it with row-level `instance_id` + RLS, or move to a database-per-instance model?
 
 ## Decision
 
-**Row-level `instance_id` column on every tenant-scoped table + Postgres Row Level Security policies**, in addition to the existing schema-per-instance *option*. Every tenant-scoped table in the §16 schema (`nodes`, `node_tags`, `user_profiles`, `channels`, `routes`, `messages`, `advertisements`, `raw_receptions`, etc.) carries `instance_id uuid NOT NULL REFERENCES instances(id)`. Each table gets:
+**Row-level `instance_id` column on every tenant-scoped table + Postgres Row Level Security policies**, in addition to the existing schema-per-instance *option*. Every tenant-scoped table in the Phase 0 schema (data-model.md §3) (`nodes`, `node_tags`, `user_profiles`, `channels`, `routes`, `messages`, `advertisements`, `raw_receptions`, etc.) carries `instance_id uuid NOT NULL REFERENCES instances(id)`. Each table gets:
 
 ```sql
 ALTER TABLE <t> ENABLE ROW LEVEL SECURITY;

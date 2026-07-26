@@ -82,7 +82,7 @@ The cleanup phase after all functional phases land. Three tracks:
 
 ### 6.3 New-repo `AGENTS.md` / `CONTRIBUTING.md`
 - [ ] Derive "we do / we don't" rules from [code-warts.md](code-warts.md) — each wart becomes an explicit convention.
-- [ ] Document the one-config-surface rule (D18), the cache-invalidation graph (§20.4), the auth boundary (D6/D12), and the codegen gate (D09).
+- [ ] Document the one-config-surface rule (D18), the cache-invalidation graph (api.md → Unified cache contract), the auth boundary (D6/D12), and the codegen gate (D09).
 - [ ] Port the still-relevant operational gotchas from the old AGENTS.md, updating for the TS stack (parenthesized exception tuples become irrelevant; random migration ID guidance becomes "let drizzle-kit generate")
 
 ### 6.4 Documentation overhaul
@@ -114,6 +114,24 @@ After the single-tenant stack (Phases 0–6) is stable, extend to shared-platfor
 
 ---
 
+## Testing (cross-cutting — every phase)
+
+Locked in [D23](decisions/D23-test-pyramid-coverage.md). The rewrite ships with a regression suite,
+not just acceptance gates: **every component and piece of logic carries tests at the appropriate
+layer, and the suite must pass in CI** (qualitative coverage, no % floor).
+
+- **vitest** (one runner, D22): unit (pure logic), integration (Drizzle/RLS/cache/workers against
+  throwaway infra), and frontend component tests (Testing Library).
+- **Playwright** (headless Chromium, throwaway stack): user-facing E2E, driving **real local login**
+  where automatable (closing the `code-warts.md` TQ1 forged-session wart; OIDC stays forged/documented).
+
+This is distinct from the [phase exit criteria](testing.md#test-strategy-the-test-pyramid): the
+pyramid is fast and CI-runnable; the exit criteria include slow acceptance gates (5-day
+parallel-stack diff, live-load throughput) no unit test can reproduce. A phase is done when its
+checklist is ticked, its automated tests pass in CI, and its exit criteria pass.
+
+---
+
 ## Risks & Mitigations
 
 | Risk | Mitigation |
@@ -123,7 +141,7 @@ After the single-tenant stack (Phases 0–6) is stable, extend to shared-platfor
 | NATS is a new infra dependency | Single binary, trivial to operate; JetStream persistence is file-backed; well-documented |
 | JWT refresh UX complexity | Short-lived access token (5m) + refresh via the signed cookie; transparent to the user |
 | Frontend codegen friction | CI gate + `make gen-client` target; generated code is a build artifact |
-| Local-password auth becomes a brute-force target | argon2id + exponential lockout (§8.3.2) + reverse-proxy rate limiting |
+| Local-password auth becomes a brute-force target | argon2id + exponential lockout (auth.md → local auth) + reverse-proxy rate limiting |
 | D5 fold benchmark fails (separate table needed) | Reversible — `raw_receptions.path_hashes` stays either way; hops table is additive |
 | Scope creep | Each phase is independently valuable and shippable; we can stop after any phase |
 | **Highest-risk migration shape:** greenfield rewrite + language switch (Python→TS) + two new infra deps (NATS, TimescaleDB) + multi-tenancy, all in one program | Sequenced so the language/infra risk is front-loaded (Phases 0–1) and de-risked by the decode-shadow (Phase 1) + parallel-stack (Phase 2) gates before any cutover; multi-tenancy is deferred to Phase 7 (fully additive). See the strategy note below. |

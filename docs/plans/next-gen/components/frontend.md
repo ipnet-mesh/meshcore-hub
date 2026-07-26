@@ -8,8 +8,7 @@ Keep React 19 + Vite + TanStack Query + Tailwind/DaisyUI + react-router. The arc
 
 ### Codegen'd client + typed queries
 
-- `openapi-typescript` produces `api/schema.d.ts`; `openapi-fetch` gives a typed `GET /messages` client.
-- TanStack Query hooks generated from operation IDs (`useMessagesQuery`, `useNodeTagsMutation`) via `orval` or hand-written thin wrappers over the typed client.
+- **`orval`** generates the typed API client + TanStack Query hooks from the OpenAPI spec (D9 — committed upfront): `useMessagesQuery`, `useNodeTagsMutation`, etc., keyed by operation ID. `openapi-fetch` is the documented fallback only, not the primary path.
 - Delete every hand-written `interface NodeItem` / `Channel` / `Profile` copy.
 
 ### Route-level code-splitting
@@ -46,7 +45,7 @@ Keep React 19 + Vite + TanStack Query + Tailwind/DaisyUI + react-router. The arc
 
 ## Client generation (D9 — orval, committed)
 
-orval is adopted fleet-wide from Phase 4 (first real generation against the new API spec). Phase 0 sets up the tooling only (`orval.config.ts`, `make gen-client`, CI drift check). The `x-invalidates` OpenAPI extension maps each mutation to the `ENTITY_INVALIDATION` graph, and orval emits the matching `queryClient.invalidateQueries` calls automatically.
+orval's first real generation runs in Phase 4 (against the new API spec); **fleet-wide adoption — using the generated hooks everywhere and deleting the hand-copied types — is Phase 5.** Phase 0 sets up the tooling only (`orval.config.ts`, `make gen-client`, CI drift check). The `x-invalidates` OpenAPI extension maps each mutation to the `ENTITY_INVALIDATION` graph, and orval emits the matching `queryClient.invalidateQueries` calls automatically.
 
 **Proposed orval config:**
 ```ts
@@ -89,6 +88,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<HomePage/>} />                    // eager (landing)
+        <Route path="/setup" element={<SetupWizard/>} />            // rendered when config.needs_setup (F12); gate redirects all other paths here
         <Route path="/nodes" element={<NodesPage/>} />               // eager (common)
         <Route path="/dashboard" element={<Suspense fallback={<Skeleton/>}><DashboardPage/></Suspense>} />
         <Route path="/map" element={<Suspense fallback={<Skeleton/>}><MapPage/></Suspense>} />
@@ -137,7 +137,7 @@ The HTML shell becomes a **build-time static artifact** (CDN-cacheable), carryin
 // main.tsx — renders the public shell immediately, personalises after /config + /me
 async function bootstrap() {
   const [config, me] = await Promise.all([
-    apiGet<PublicConfig>('/api/v1/config'),                // public: branding, features, auth_mode
+    apiGet<PublicConfig>('/api/v1/config'),                // public: branding, features, auth_mode, custom_pages, needs_setup
     apiGet<PrincipalRead | null>('/api/v1/me').catch(() => null),  // null if not logged in
   ]);
   return { config, me };
@@ -159,6 +159,7 @@ bootstrap().then(({ config, me }) => {
 - `/api/v1/config` is public + cacheable (`Cache-Control: public, max-age=60`) — the network name, features, theme don't change per user. The browser caches it; every tab after the first is instant.
 - `/api/v1/me` returns the resolved Principal or `null` (anonymous). One call, no per-request inlining.
 - The shell renders **before** these resolve (a branded loading state), so first paint is fast and the personalisation is a progressive enhancement. This replaces today's per-request `__APP_CONFIG__` inlining with a cacheable shell.
+- **First-run gate (F12):** if `config.needs_setup` is true, `<App/>` mounts the `<SetupWizard/>` at `/setup` and the web-tier gate middleware redirects every other path there until setup completes (auth.md → First-run setup wizard). No server-rendered wizard — the same static shell renders it client-side.
 
 ## SSE-driven live pages
 

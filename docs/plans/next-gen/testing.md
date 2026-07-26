@@ -1,8 +1,50 @@
-# Testing & Validation — Phase Exit Criteria
+# Testing & Validation — Strategy, Policy & Phase Exit Criteria
 
-> Consolidated validation plan for the MeshCore Hub rewrite. Each phase ships behind a
-> measurable exit gate; cross-cutting benchmarks are listed at the end. Phase context lives
-> in [phasing.md](phasing.md).
+> Consolidated validation plan for the MeshCore Hub rewrite. Two complementary axes:
+> (1) the **test pyramid** — fast, CI-runnable regression tests authored with the code
+> ([below](#test-strategy-the-test-pyramid), locked in [D23](decisions/D23-test-pyramid-coverage.md));
+> and (2) **phase exit criteria** — the acceptance gates each phase ships behind. Cross-cutting
+> benchmarks are listed at the end. Phase context lives in [phasing.md](phasing.md).
+
+## Test strategy (the test pyramid)
+
+Locked in [D23](decisions/D23-test-pyramid-coverage.md). **Every rewritten component and every
+piece of business logic ships with automated tests at the appropriate layer, and the suite must
+pass in CI.** Coverage is qualitative — deliberately **no numeric floor**.
+
+| Layer | Runner | Infra | Owns |
+|---|---|---|---|
+| **Unit** | vitest | none | Pure logic: classifier table, dedup hash, `computeQualityAvg`, spam-score wrapper, cache-key builder, `apply_visibility`, the `meshcore.ingest.v1` envelope Zod schema, webhook filter DSL, `PacketFields`. |
+| **Integration** | vitest | dev-compose / throwaway Postgres+NATS+Redis | DB- and bus-touching paths: Drizzle repositories, RLS enforcement (`SET LOCAL app.instance_id`), the `@cached` decorator + declarative invalidation graph, `IngestWorker` batch-commit + ack ordering, `ChannelKeyCache`/`ObserverAllowlistCache` reload, `SettingsCache`, API handlers via Fastify `inject`. |
+| **Frontend component** | vitest + Testing Library | jsdom | `useEventStream`, generated-client wrappers, admin pages (Settings/Users/Pages/Observers), chart helpers (`averageRouteTier` threshold sync), login rendering per `auth_mode`. |
+| **E2E** | Playwright (headless Chromium) | throwaway stack (own Postgres, isolated volumes) | User flows: registration → login → admin → observer allowlist; SSE live updates; custom pages; settings. |
+
+vitest is the single runner for the first three layers (D22); Playwright is the only second
+runner, used solely for browser E2E.
+
+**E2E auth — real login, forged only where unavoidable (closes `code-warts.md` TQ1):** specs drive
+the real local-login flow (argon2id `local_users` path, D12). Session forging is permitted **only**
+for the un-automatable OIDC callback, and is documented in the spec directory so the divergence
+from production auth stays visible.
+
+### Component → required layers
+
+| Component | Unit | Integration | Frontend | E2E |
+|---|:---:|:---:|:---:|:---:|
+| [ingest.md](components/ingest.md) | ✓ | ✓ | | |
+| [data-model.md](components/data-model.md) (repos, RLS) | | ✓ | | |
+| [derived-state.md](components/derived-state.md) | ✓ | ✓ | | |
+| [auth.md](components/auth.md) | ✓ | ✓ | ✓ | ✓ |
+| [api.md](components/api.md) (cache, SSE, settings, pages) | ✓ | ✓ | | ✓ |
+| [frontend.md](components/frontend.md) | | | ✓ | ✓ |
+| [multi-tenancy.md](components/multi-tenancy.md) | ✓ | ✓ | ✓ | ✓ |
+| [migration.md](components/migration.md) (export/import) | ✓ | ✓ | | |
+
+> The exit criteria below are the **acceptance gates** for each phase; some are slow runtime
+> observations (5-day parallel-stack diff, live-load throughput) that no unit test can reproduce.
+> They complement the pyramid — a phase is done when its checkboxes are ticked, **its automated
+> tests pass in CI**, and its exit criteria pass. Per-phase test deliverables are itemised in the
+> [implementation checklist](implementation-checklist.md).
 
 ## Phase 1 — Ingest pipeline
 

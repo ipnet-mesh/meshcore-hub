@@ -121,28 +121,60 @@ CREATE TABLE tenant_observers (
 - **Non-empty allowlist = only those observers.** Prefix-match, identical to today's `OBSERVER_ALLOW_LIST` semantics. A prefix of `01ab21` matches observer `01ab2186c4d5...`.
 - **Shared observers.** An observer can appear in multiple tenants' allowlists (or in one tenant's allowlist while another tenant has an empty list). The MqttIngester fans out the envelope to all matching tenants.
 - **No deny list.** If a tenant wants "all except X," they enumerate the observers they want. This keeps the model simple; a deny list is a future refinement if demanded.
+- **Friendly name (`label`) is per-tenant and private.** Each allowlist row carries an optional `label` — a human note ("IPT downtown repeater") shown only in *this* tenant's Admin UI. It is distinct from the observer's network name (`nodes.name`, sourced from RF adverts/tags and shared across tenants): assigning a label does **not** rename the node, and two tenants may label the same shared observer differently.
 
 ### Management API
 
 ```typescript
-@router.get("/observers", response_model=list[ObserverAllowlistEntry])
-async def list_observers(principal: RequireAdmin) -> list[ObserverAllowlistEntry]:
-    """Tenant admin: list the observer allowlist. Empty = all observers."""
+// List the tenant's observer allowlist. Empty = all observers.
+fastify.get("/observers", { preHandler: requireAdmin }, async (request, reply) => {
+  // Returns: [{ prefix, label, knownName, createdAt }]
+  //   label     — the tenant's private friendly name (tenant_observers.label; nullable)
+  //   knownName — the observer's network name, LEFT JOINed from nodes.name for display (nullable)
+  ...
+});
 
-@router.post("/observers", response_model=ObserverAllowlistEntry, dependencies=[Depends(require_role("admin"))])
-async def add_observer(body: ObserverAdd, principal: RequireAdmin) -> ObserverAllowlistEntry:
-    """Add an observer prefix to the allowlist. Publishes observer.allowlist.updated on NATS."""
+// Add an observer to the allowlist, with an optional friendly name.
+fastify.post("/observers", { preHandler: requireAdmin }, async (request, reply) => {
+  const { prefix, label } = request.body as { prefix: string; label?: string };
+  // INSERT INTO tenant_observers (instance_id, observer_pubkey_prefix, label) ...
+  // Publishes observer.allowlist.updated.<instance_id> (routing changed → ingester cache reload).
+  ...
+});
 
-@router.delete("/observers/{prefix}", status_code=204, dependencies=[Depends(require_role("admin"))])
-async def remove_observer(prefix: str, principal: RequireAdmin) -> None:
-    """Remove an observer prefix. Publishes observer.allowlist.updated on NATS."""
+// Rename an observer's friendly name (label only — prefix/routing unchanged).
+fastify.put("/observers/:prefix", { preHandler: requireAdmin }, async (request, reply) => {
+  const { label } = request.body as { label: string | null };
+  // UPDATE tenant_observers SET label = ... WHERE (instance_id, observer_pubkey_prefix) = ...
+  // Label-only: does NOT publish observer.allowlist.updated (the routing cache keys on prefixes,
+  // which are unchanged) — just invalidates the API `observers` cache namespace.
+  ...
+});
+
+// Remove an observer from the allowlist.
+fastify.delete("/observers/:prefix", { preHandler: requireAdmin }, async (request, reply) => {
+  // Publishes observer.allowlist.updated.<instance_id> (routing changed → ingester cache reload).
+  return reply.code(204).send();
+});
 ```
 
-Mutations publish `observer.allowlist.updated.<instance_id>` on NATS core, triggering the MqttIngester's `ObserverAllowlistCache` to reload (same pattern as `ChannelKeyCache`).
+Routing-affecting mutations (`POST`/`DELETE`) publish `observer.allowlist.updated.<instance_id>` on NATS core, triggering the MqttIngester's `ObserverAllowlistCache` to reload (same pattern as `ChannelKeyCache`). A label-only `PUT` does **not** publish — the cache keys on prefixes, which are unchanged — it only invalidates the API `observers` cache namespace.
+
+### Available observers (picker source)
+
+The "add observer" flow offers a picker of observers the tenant has already seen, so the admin can select instead of typing a hex prefix:
+
+- **Source:** the carried-forward nodes list filtered to observers — `GET /api/v1/nodes?is_observer=true` (returns `public_key`, `name`, `is_observer`, `last_seen`; RLS-scoped, so a tenant only sees observers its own feed has ingested).
+- **On select:** the node's full `public_key` becomes the `observer_pubkey_prefix` (a full-key prefix matches exactly that observer), and the friendly-name field is **pre-filled from the node's known `name`** — editable before save. The stored value is the per-tenant `label`, not the node name.
+- **Manual entry stays:** the allowlist is prefix-based, so an admin can also type a prefix by hand to allow an observer that hasn't been seen yet (no `nodes` row required).
 
 ### Admin UI
 
-A new section in the Settings page (or a dedicated `/admin/observers` page): a table of observer prefixes with labels, an "add observer" input, and a note explaining "empty list = all observers." The tenant admin can also see a live list of known observers (from `nodes WHERE is_observer = true`) to pick from, but the allowlist is prefix-based (so they can add an observer before it's ever seen).
+A new section in the Settings page (or a dedicated `/admin/observers` page):
+
+- An **add-observer** control with two paths: pick from the available-observers list (above), which pre-fills the friendly name from the node's known name, or type a prefix by hand.
+- A table of the tenant's allowlist rows showing **prefix + friendly name (`label`)** — with the observer's known network name alongside for reference — plus inline **rename** (the `PUT` endpoint) and remove.
+- A note explaining "empty list = all observers."
 
 ---
 
@@ -153,39 +185,47 @@ The single MqttIngester process decodes **all** MQTT traffic and routes each env
 ### ObserverAllowlistCache
 
 ```typescript
-class ObserverAllowlistCache:
-    """Read-only snapshot: observer_prefix → set[instance_id].
-    Loaded from tenant_observers at startup; reloaded on NATS notification.
-    Immutable-snapshot swap (same pattern as ChannelKeyCache)."""
+class ObserverAllowlistCache {
+  // Read-only snapshot: observer prefix → set of instance_ids.
+  // Loaded from tenant_observers at startup; reloaded on NATS notification.
+  // Immutable-snapshot swap (same pattern as ChannelKeyCache).
+  private prefixMap!: Map<string, Set<string>>;   // prefix → tenant ids
+  private allowAllTenants!: Set<string>;          // tenants with empty allowlists
 
-    def route(self, observer_pubkey: str) -> list[UUID]:
-        """Return the tenant IDs that want this observer's traffic.
-        Empty allowlist tenants match ALL observers."""
-        matching = set()
-        for prefix, tenant_ids in self._prefix_map.items():
-            if observer_pubkey.startswith(prefix):
-                matching |= tenant_ids
-        matching |= self._allow_all_tenants   # tenants with empty allowlists
-        return list(matching)
+  /** Return the tenant IDs that want this observer's traffic.
+   *  Empty-allowlist tenants match ALL observers. */
+  route(observerPubkey: string): string[] {
+    const matching = new Set<string>();
+    for (const [prefix, tenantIds] of this.prefixMap) {
+      if (observerPubkey.startsWith(prefix)) {
+        for (const id of tenantIds) matching.add(id);
+      }
+    }
+    for (const id of this.allowAllTenants) matching.add(id);   // tenants with empty allowlists
+    return [...matching];
+  }
+}
 ```
 
-- **Load:** `SELECT instance_id, observer_pubkey_prefix FROM tenant_observers` at startup. Build two structures: `_prefix_map: dict[str, set[UUID]]` and `_allow_all_tenants: set[UUID]` (tenants with zero rows).
+- **Load:** `SELECT instance_id, observer_pubkey_prefix FROM tenant_observers` at startup — `label` is deliberately **not** loaded (it is display-only metadata for the Admin UI; routing keys on prefixes alone, so a label-only `PUT` needs no cache reload). Build two structures: `prefixMap: Map<string, Set<string>>` and `allowAllTenants: Set<string>` (tenants with zero rows).
 - **Reload:** subscribe to `observer.allowlist.updated.*` (core NATS); on notification, reload the snapshot atomically. The notification carries the `instance_id` so the cache can do a targeted reload (`WHERE instance_id = ?`) instead of a full table scan.
 - **Thread safety:** single-writer (the reload task), readers go through an immutable snapshot reference. Same as `ChannelKeyCache` (§ingest.md 11).
 
 ### Routing in on_message
 
 ```typescript
-async def on_message(self, topic: str, payload: bytes) -> None:
-    # 1. parse topic → observer pubkey (unchanged)
-    # 2. envelope = self._build_envelope(topic, payload)   # decode + normalize + classify
-    # 3. tenant_ids = self.observer_cache.route(envelope.observer.public_key)
-    # 4. for tenant_id in tenant_ids:
-    #        await js.publish(
-    #            subject=f"meshcore.ingest.{tenant_id}.{envelope.observer.feed}",
-    #            payload=JSON.stringify(envelope),
-    #            headers: { "Nats-Msg-Id": `${tenant_id}:${envelope.wire_hash}` })
-    # Envelope is tenant-agnostic; tenant routing is purely at the NATS subject level.
+async onMessage(topic: string, payload: Buffer): Promise<void> {
+    // 1. parse topic → observer pubkey (unchanged)
+    // 2. const envelope = this.buildEnvelope(topic, payload);   // decode + normalize + classify
+    // 3. const tenantIds = this.observerCache.route(envelope.observer.public_key);
+    // 4. for (const tenantId of tenantIds) {
+    //        await this.js.publish(
+    //            `meshcore.ingest.${tenantId}.${envelope.observer.feed}`,
+    //            JSON.stringify(envelope),
+    //            { headers: { "Nats-Msg-Id": `${tenantId}:${envelope.wire_hash}` } });
+    //    }
+    // Envelope is tenant-agnostic; tenant routing is purely at the NATS subject level.
+}
 ```
 
 **Key detail:** the `Nats-Msg-Id` is prefixed with `tenant_id` so that the same physical packet (same `wire_hash`) delivered to two tenants gets two distinct dedup keys. Without this, JetStream's server-side dedup would suppress the second tenant's copy.
@@ -199,15 +239,19 @@ async def on_message(self, topic: str, payload: bytes) -> None:
 The MqttIngester needs channel keys from **all tenants** to decrypt channel messages (the `channel_idx` is in the decrypted payload, needed for classification and the SSE visibility filter).
 
 ```typescript
-class ChannelKeyCache:
-    """Multi-tenant: dict[instance_id, frozenset[ChannelKey]].
-    Loads enabled channels for ALL instances at startup.
-    Reloads one tenant's keys on channel.keys.<inst>.updated."""
+class ChannelKeyCache {
+  // Multi-tenant: Map<instance_id, ReadonlySet<ChannelKey>>.
+  // Loads enabled channels for ALL instances at startup.
+  // Reloads one tenant's keys on channel.keys.<inst>.updated.
+  private snapshots!: Map<string, ReadonlySet<ChannelKey>>;
 
-    def all_keys(self) -> Iterator[ChannelKey]:
-        """Yield keys from all tenants (for decryption attempts)."""
-        for keys in self._snapshots.values():
-            yield from keys
+  /** Yield keys from all tenants (for decryption attempts). */
+  *allKeys(): IterableIterator<ChannelKey> {
+    for (const keys of this.snapshots.values()) {
+      yield* keys;
+    }
+  }
+}
 ```
 
 - **Load:** `SELECT instance_id, key_hex, key_hash FROM channels WHERE enabled` at startup (all instances).
@@ -240,15 +284,15 @@ CREATE TABLE tenant_oidc_configs (
 The web tier resolves OIDC config per request:
 
 ```typescript
-async def resolve_oidc_config(instance_id: UUID, settings: SettingsCache) -> OidcConfig | None:
-    # 1. Per-tenant DB config (authoritative if present)
-    if (cfg := await get_tenant_oidc(instance_id)) and cfg.enabled:
-        return cfg
-    # 2. Platform-level env-var defaults (fallback)
-    if settings.oidc_client_id:   # from Tier-1 env
-        return OidcConfig.from_env()
-    # 3. No OIDC — local-only
-    return None
+async function resolveOidcConfig(instanceId: string, settings: SettingsCache): Promise<OidcConfig | null> {
+  // 1. Per-tenant DB config (authoritative if present)
+  const cfg = await getTenantOidc(instanceId);
+  if (cfg && cfg.enabled) return cfg;
+  // 2. Platform-level env-var defaults (fallback)
+  if (settings.oidcClientId) return OidcConfig.fromEnv();   // from Tier-1 env
+  // 3. No OIDC — local-only
+  return null;
+}
 ```
 
 - Each tenant can point at their own IdP, share one with different client IDs, or use local-only auth.
@@ -260,9 +304,10 @@ async def resolve_oidc_config(instance_id: UUID, settings: SettingsCache) -> Oid
 Tenant admins configure OIDC via the Settings UI (a new "Authentication" section) or the API:
 
 ```typescript
-@router.put("/settings/oidc", dependencies=[Depends(require_role("admin"))])
-async def update_oidc_config(body: OidcConfigUpdate, principal: RequireAdmin) -> OidcConfigRead:
-    """Tenant admin: configure their own IdP. client_secret is write-only."""
+fastify.put("/settings/oidc", { preHandler: requireAdmin }, async (request, reply) => {
+  // Tenant admin: configure their own IdP. client_secret is write-only.
+  ...
+});
 ```
 
 ---
@@ -285,6 +330,8 @@ CREATE TABLE instance_hostnames (
   instance_id  uuid NOT NULL REFERENCES instances(id) ON DELETE CASCADE,
   is_primary   boolean NOT NULL DEFAULT false,
   is_custom    boolean NOT NULL DEFAULT false,  -- true for tenant-added custom domains
+  status       text NOT NULL DEFAULT 'active',  -- 'pending_dns' | 'active'; subdomains insert 'active', custom domains insert 'pending_dns'
+  last_seen_at timestamptz,                     -- set on the first request that arrives on this hostname; flips status pending_dns → active
   added_at     timestamptz NOT NULL DEFAULT now()
 );
 ```
@@ -334,7 +381,7 @@ fastify.post("/api/v1/domains", { preHandler: requireAdmin }, async (request, re
         return reply.status(409).send({ detail: "hostname already in use" });
 
     await db.insert(instanceHostnames).values({
-        hostname, instance_id: request.instanceId, is_custom: true,
+        hostname, instance_id: request.instanceId, is_custom: true, status: "pending_dns",
     });
     await nats.publish("hostname.updated", JSON.stringify({ hostname, instance_id: request.instanceId }));
 
@@ -349,7 +396,7 @@ fastify.post("/api/v1/domains", { preHandler: requireAdmin }, async (request, re
 fastify.get("/api/v1/domains", { preHandler: requireAdmin }, async (request, reply) => {
     const rows = await db.select().from(instanceHostnames)
         .where(eq(instanceHostnames.instance_id, request.instanceId));
-    return rows;   // [{ hostname, is_primary, is_custom, added_at }]
+    return rows;   // [{ hostname, is_primary, is_custom, status, last_seen_at, added_at }]
 });
 
 // Tenant admin: remove a custom domain (cannot remove the primary subdomain)
@@ -376,7 +423,9 @@ fastify.put("/api/v1/domains/:hostname/primary", { preHandler: requireAdmin }, a
 });
 ```
 
-**DNS verification — not required.** The hostname is a routing key, not a credential. Adding a hostname you don't control is harmless: without a DNS record pointing to the platform, the domain simply doesn't resolve. The tenant is motivated to configure DNS correctly because they want their domain to work. The Admin UI shows the CNAME target and a "pending DNS" hint until the first request arrives on that hostname (tracked via a `last_seen_at` column or the reverse proxy's access log — lightweight, no active probing).
+**DNS verification — not required.** The hostname is a routing key, not a credential. Adding a hostname you don't control is harmless: without a DNS record pointing to the platform, the domain simply doesn't resolve. The tenant is motivated to configure DNS correctly because they want their domain to work. The Admin UI shows the CNAME target and the row's `status` (`pending_dns` → `active`). The flip happens on the **first request** that arrives on that hostname: the reverse proxy (or a lightweight first-request hook) sets `last_seen_at = now()` and `status = 'active'` — no active probing.
+
+**Abuse guard (on-demand ACME).** Because custom-domain TLS is on-demand ACME (below), the reverse proxy must rate-limit certificate issuance per hostname — e.g. Caddy's `on_demand_tls` `ask` endpoint checking `instance_hostnames`, or a small allowlist of registered hostnames — so a flood of bogus custom-hostname inserts cannot exhaust the Let's Encrypt per-domain rate limit.
 
 **TLS provisioning:** the reverse proxy handles this automatically:
 
@@ -401,6 +450,12 @@ async function instanceResolution(request: FastifyRequest, reply: FastifyReply) 
     // 1. JWT-authenticated requests: instance_id from the token claim (already there)
     // 2. Unauthenticated requests: resolve from hostname
     const hostname = request.headers.host?.split(":")[0];
+    // The bare platform root (no matching hostname row) serves the platform landing + /register pages with
+    // NO instance context — it is not a tenant host. Only unknown *subdomains* 404.
+    if (hostname === PLATFORM_DOMAIN) {
+        request.instanceId = null;   // platform context (landing / registration)
+        return;
+    }
     const instanceId = await hostnameCache.resolve(hostname);
     if (!instanceId) {
         return reply.status(404).send({ detail: "unknown host" });
@@ -411,6 +466,7 @@ async function instanceResolution(request: FastifyRequest, reply: FastifyReply) 
 
 - The `HostnameCache` is a read-only snapshot (loaded at startup, refreshed on NATS notification when hostnames change). Same immutable-snapshot pattern as `ChannelKeyCache`.
 - **Fallback:** a Tier-1 env var `DEFAULT_INSTANCE_ID` for single-tenant deployments (Phases 0–6). When set, hostname resolution is skipped and all requests map to the default instance. This is the backwards-compatible path.
+- **Platform root:** the bare `PLATFORM_DOMAIN` apex (no subdomain) is not in `instance_hostnames` and resolves to `instanceId = null` — the instance-less platform context that serves the landing page and `/register` (§8). This is distinct from an *unknown subdomain*, which 404s. In multi-tenant mode there is no `DEFAULT_INSTANCE_ID`; the apex is the only instance-less host.
 
 ### What changes in the web tier
 
@@ -433,7 +489,16 @@ Tenants self-provision via a public registration flow. **No CLI, no superadmin, 
 ```typescript
 // Public — no auth required
 fastify.post("/api/v1/register", { schema: { body: RegisterBody } }, async (request, reply) => {
-    const { community_name, subdomain, admin_username, admin_password } = request.body;
+    const { community_name, subdomain, admin_username, admin_password, captcha_token } = request.body;
+
+    // Abuse controls — platform settings (read from the well-known platform instance; see note below).
+    const reg = await platformSettings("registration");
+    if (!reg.enabled)
+        return reply.status(403).send({ detail: "registration disabled" });
+    if (reg.require_captcha && !(await verifyCaptcha(captcha_token, request.ip)))
+        return reply.status(400).send({ detail: "captcha failed" });
+    if (reg.subdomain_reserved.includes(subdomain))
+        return reply.status(400).send({ detail: "reserved subdomain" });
 
     // Validate subdomain: alphanumeric + hyphens, 3-63 chars, unique
     if (!/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(subdomain))
@@ -443,7 +508,11 @@ fastify.post("/api/v1/register", { schema: { body: RegisterBody } }, async (requ
     if (await hostnameExists(hostname))
         return reply.status(409).send({ detail: "subdomain taken" });
 
-    // One transaction: instance + hostname + settings seed + admin bootstrap
+    // One transaction: instance + hostname + settings seed + admin bootstrap.
+    // RLS note (F3): this is the ONE explicit RLS-bypass path. The instance doesn't exist yet, so there is
+    // no app.instance_id GUC to set; the registration handler runs this bootstrap transaction as the
+    // RLS-bypassing OWNER role (the same role that runs migrations). Every post-registration tenant
+    // operation goes through the normal meshcore_app role + SET LOCAL app.instance_id path.
     await db.transaction(async (tx) => {
         const [instance] = await tx.insert(instances).values({ name: community_name }).returning();
         await tx.insert(instanceHostnames).values({
@@ -456,7 +525,10 @@ fastify.post("/api/v1/register", { schema: { body: RegisterBody } }, async (requ
     // After commit: notify all services
     await nats.publish("instance.created", JSON.stringify({ instance_id: instance.id, hostname }));
 
-    // Auto-login: mint session cookie, redirect to the tenant's dashboard
+    // Auto-login: mint session cookie, redirect to the tenant's dashboard.
+    // D6 carve-out: registration is the single flow where the API tier holds JWT_SESSION_SECRET and sets
+    // the session cookie directly — there is no pre-existing web-tier session to lean on for a brand-new
+    // tenant. Everywhere else the web tier issues credentials and the API only verifies (auth.md).
     return startSession(reply, { sub: `local:${admin_username}`, instance_id: instance.id, roles: ["admin"] })
         .redirect(302, `https://${hostname}/`);
 });
@@ -473,7 +545,7 @@ fastify.post("/api/v1/register", { schema: { body: RegisterBody } }, async (requ
 | `registration.require_captcha` | `false` | Optional hCaptcha/Turnstile challenge on the form |
 | `registration.subdomain_reserved` | `["www","api","admin","mail"]` | Reserved subdomains that can't be registered |
 
-These are **platform-level** settings (stored in the `settings` table with `instance_id = NULL` or a dedicated `platform_settings` scope — see note below). They are editable by the platform's first tenant's admin (the "platform admin" is just the admin of the first-created instance, not a separate role).
+These are **platform-level** settings, stored against the well-known platform instance id (the first instance — see the note below; `settings.instance_id` is `NOT NULL`, so there is no NULL or separate `platform_settings` scope). They are editable by the platform's first tenant's admin (the "platform admin" is just the admin of the first-created instance, not a separate role).
 
 > **Platform settings note:** the `settings` table is instance-scoped. Platform-level settings (registration control, `PLATFORM_DOMAIN`) are stored with a well-known `instance_id` (the first instance, created at initial deployment via the existing `NETWORK_NAME` seed). The registration endpoint reads from this instance's settings. This avoids a new table while keeping the "no superadmin role" principle — the platform admin is a regular tenant admin with access to the platform settings category.
 
@@ -522,6 +594,10 @@ DELETE FROM route_observers       WHERE route_id IN (SELECT id FROM routes WHERE
 DELETE FROM route_nodes           WHERE route_id IN (SELECT id FROM routes WHERE instance_id = :id);
 DELETE FROM custom_pages          WHERE instance_id = :id;
 DELETE FROM settings              WHERE instance_id = :id;
+DELETE FROM dashboard_daily_message_counts WHERE instance_id = :id;
+DELETE FROM dashboard_daily_advert_counts  WHERE instance_id = :id;
+DELETE FROM dashboard_node_count_history   WHERE instance_id = :id;
+DELETE FROM _metrics_cache        WHERE instance_id = :id;
 DELETE FROM messages              WHERE instance_id = :id;
 DELETE FROM advertisements        WHERE instance_id = :id;
 DELETE FROM trace_paths           WHERE instance_id = :id;
@@ -534,6 +610,11 @@ DELETE FROM event_observers       WHERE instance_id = :id;
 DELETE FROM raw_receptions        WHERE instance_id = :id;
 DELETE FROM telemetry             WHERE instance_id = :id;
 DELETE FROM event_logs            WHERE instance_id = :id;
+-- Dashboard CAGGs (cagg_daily_packet_counts, cagg_packet_breakdown_by_type) materialize from
+-- raw_receptions and group by instance_id (the dashboard reads filter on it — api.md). The raw_receptions
+-- DELETE above removes the source; run refresh_continuous_aggregate over the retention window so the
+-- deleted instance's materialized buckets recompute empty (the cagg-health job does this on its next tick
+-- if not run inline).
 -- Phase 7 tables (these DO have ON DELETE CASCADE from instances)
 DELETE FROM tenant_observers      WHERE instance_id = :id;
 DELETE FROM tenant_oidc_configs   WHERE instance_id = :id;
@@ -542,7 +623,7 @@ DELETE FROM instance_hostnames    WHERE instance_id = :id;
 DELETE FROM instances             WHERE id = :id;
 ```
 
-2. The CLI confirms interactively and runs each DELETE in a transaction, reporting row counts. The hypertable deletes are the slowest (full chunk scan filtered by `instance_id`); for 30 days of community-mesh data this is a multi-minute but not catastrophic operation.
+2. The CLI confirms interactively and runs each DELETE in a transaction, reporting row counts. The hypertable deletes are the slowest (full chunk scan filtered by `instance_id`); for 30 days of community-mesh data this is a multi-minute but not catastrophic operation. After the hypertable deletes, the CLI calls `refresh_continuous_aggregate` over the retention window so the deleted instance's materialized dashboard-CAGG buckets recompute empty (they group by `instance_id`, so they purge cleanly).
 
 **Why not `ON DELETE CASCADE` on core tables:** (a) TimescaleDB would scan every hypertable chunk on cascade — O(all data) with no chunk exclusion; (b) an accidental `DELETE FROM instances` (wrong WHERE, typo) would irrevocably destroy an entire tenant; (c) the explicit purge gives the operator row-count feedback and a confirmation gate. The Phase 7-specific tables (`tenant_observers`, `tenant_oidc_configs`, `instance_hostnames`) do use CASCADE because they're small and directly owned by the instance row.
 

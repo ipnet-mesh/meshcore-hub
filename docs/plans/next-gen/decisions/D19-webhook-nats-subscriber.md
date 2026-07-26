@@ -21,7 +21,7 @@ The ingest redesign (D4, ingest.md) moves the fan-out to NATS: the IngestWorker 
 
 ## Consequences
 
-**Positive:** The IngestWorker stays lean (no httpx calls on the hot path). Webhook slowness or endpoint downtime doesn't block the ingest ack. Config is runtime-editable (Tier-2 settings) instead of env-var-only. The filter DSL becomes functional. One more small consumer process, but it shares the NATS subscription pattern the SSE endpoint already uses.
+**Positive:** The IngestWorker stays lean (no outbound HTTP — undici/fetch — calls on the hot path). Webhook slowness or endpoint downtime doesn't block the ingest ack. Config is runtime-editable (Tier-2 settings) instead of env-var-only. The filter DSL becomes functional. One more small consumer process, but it shares the NATS subscription pattern the SSE endpoint already uses.
 
 **Negative:** Webhook events are lost if the `WebhookWorker` is down (non-durable NATS core). This matches today's behaviour (in-memory queue lost on crash) but is worth documenting. The `WebhookWorker` is another process to deploy and monitor.
 

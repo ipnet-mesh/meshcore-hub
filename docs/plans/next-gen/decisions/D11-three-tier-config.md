@@ -5,7 +5,7 @@
 
 ## Context
 
-Today ~200 env vars configure everything from branding to tuning to feature flags, and changing any of them — even an announcement banner — requires a container restart. The pain is acute for community-operated deployments where the operator isn't always the deployer: an incident-comms banner shouldn't be a git commit + redeploy. The §8.8 question: move config into a DB-backed UI-editable store, and if so, where do env vars still win? The user suggestion in iteration 4 was to move config into the API/UI.
+Today ~200 env vars configure everything from branding to tuning to feature flags, and changing any of them — even an announcement banner — requires a container restart. The pain is acute for community-operated deployments where the operator isn't always the deployer: an incident-comms banner shouldn't be a git commit + redeploy. The question (api.md → Settings API): move config into a DB-backed UI-editable store, and if so, where do env vars still win? The user suggestion in iteration 4 was to move config into the API/UI.
 
 ## Decision
 
@@ -17,7 +17,7 @@ Today ~200 env vars configure everything from branding to tuning to feature flag
 
 ## Consequences
 
-**Positive:** Operators tune spam thresholds, toggle feature flags, change branding, all at runtime without a restart — fits the community-operated model. The `__APP_CONFIG__` per-request rebuild (F5) collapses into `GET /api/v1/config` reading the cached snapshot. Config changes are auditable (`updated_by`, `updated_at`) and revertible, unlike env-var git commits. Aligns naturally with the static-shell design (§9.4).
+**Positive:** Operators tune spam thresholds, toggle feature flags, change branding, all at runtime without a restart — fits the community-operated model. The `__APP_CONFIG__` per-request rebuild (overview pain F5 — "per-request `__APP_CONFIG__` re-serialization" from overview.md §4.4; an overview pain-table number, not a review-findings F-number) collapses into `GET /api/v1/config` reading the cached snapshot. Config changes are auditable (`updated_by`, `updated_at`) and revertible, unlike env-var git commits. Aligns naturally with the static-shell design (frontend.md → Static shell).
 
 **Negative:** Split-brain risk between env and DB (mitigated by the explicit three-tier rule + small Tier-1 allowlist). Cross-service propagation lag must be documented per category (branding = next request; feature flags = next packet for the collector; tuning = next worker tick). Bad values need an escape hatch (the `settings reset --category=...` CLI — see D18).
 

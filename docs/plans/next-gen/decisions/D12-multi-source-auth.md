@@ -5,7 +5,7 @@
 
 ## Context
 
-Today interactive login is OIDC-only (with an API-key plane for m2m). That requires every deployment — including the smallest community operator with no identity provider — to stand up an OIDC IdP before the UI is usable. The §8.3 question (raised in iteration 4 by the user): offer a built-in local password source so deployments without an IdP still work, while keeping OIDC optional for orgs that want SSO. The D6 JWT boundary is what makes this clean: every source converges on one JWT issuance, so the API stays credential-source-agnostic.
+Today interactive login is OIDC-only (with an API-key plane for m2m). That requires every deployment — including the smallest community operator with no identity provider — to stand up an OIDC IdP before the UI is usable. The question (auth.md; raised in iteration 4 by the user): offer a built-in local password source so deployments without an IdP still work, while keeping OIDC optional for orgs that want SSO. The D6 JWT boundary is what makes this clean: every source converges on one JWT issuance, so the API stays credential-source-agnostic.
 
 ## Decision
 
@@ -25,7 +25,7 @@ Today interactive login is OIDC-only (with an API-key plane for m2m). That requi
 
 **Multi-tenant evolution (D21).** A single global `AUTH_MODE`/IdP would force every self-provisioned tenant into the platform operator's auth choice — contradicting self-service. So in Phase 7 the IdP config *and* `auth_mode` move to the per-tenant `tenant_oidc_configs` table (multi-tenancy.md §6): a community tenant runs local passwords, an enterprise tenant points at their own Okta, both on one platform. The Tier-1 `OIDC_CLIENT_*`/`AUTH_MODE` vars survive only as **platform-level defaults** (the fallback when a tenant hasn't configured their own). The one thing that stays irreducibly platform-wide is the JWT/session signing key (`JWT_SESSION_SECRET`, renamed from `OIDC_SESSION_SECRET` — it was never OIDC config): one key signs for all tenants, and the API trusts the `instance_id` claim because the platform signed it.
 
-A `local_users` row links to a `user_profiles` row (adoptions, tags, route ownership work unchanged — keyed on `user_profile.id`). The profile's `user_id` is namespaced `local:<username>` to avoid colliding with OIDC `sub` claims. Password hashing: argon2id (`argon2` npm package, native bindings), parameterised at install time. Rate limiting: `failed_attempts` + `locked_until` give exponential lockout (5 → 15s, 10 → 5m, 20 → 1h) without Redis. Bootstrap admin via `ADMIN_USERNAME`/`ADMIN_PASSWORD` env, `admin create-user` CLI, or the first-run setup wizard (§20.8). Local + OIDC users share one Users management page.
+A `local_users` row links to a `user_profiles` row (adoptions, tags, route ownership work unchanged — keyed on `user_profile.id`). The profile's `user_id` is namespaced `local:<username>` to avoid colliding with OIDC `sub` claims. Password hashing: argon2id (`argon2` npm package, native bindings), parameterised at install time. Rate limiting: `failed_attempts` + `locked_until` give exponential lockout (5 → 15s, 10 → 5m, 20 → 1h) without Redis. Bootstrap admin via `ADMIN_USERNAME`/`ADMIN_PASSWORD` env, `admin create-user` CLI, or the first-run setup wizard (auth.md → First-run setup wizard). Local + OIDC users share one Users management page.
 
 ## Consequences
 

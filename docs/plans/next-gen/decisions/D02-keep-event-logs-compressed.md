@@ -5,11 +5,11 @@
 
 ## Context
 
-Today `events_log` is the catch-all audit sink — every event that doesn't match a structured handler lands here as an unbounded JSON payload (W7), roughly doubling per-event storage. It is high-volume (one row per non-structured event across all topics) but carries real diagnostic value: it is where unknown payload types, internal MQTT topics, and operational oddities are inspectable after the fact. The §13-D2 question was whether to keep it at all in the rewrite, or drop it on the assumption that structured handlers + `raw_receptions` coverage made it redundant.
+Today `events_log` is the catch-all audit sink — every event that doesn't match a structured handler lands here as an unbounded JSON payload (W7), roughly doubling per-event storage. It is high-volume (one row per non-structured event across all topics) but carries real diagnostic value: it is where unknown payload types, internal MQTT topics, and operational oddities are inspectable after the fact. The question (this record) was whether to keep it at all in the rewrite, or drop it on the assumption that structured handlers + `raw_receptions` coverage made it redundant.
 
 ## Decision
 
-**Keep** `events_log`, **renamed to `event_logs`** for plural-table naming consistency (§6.3.6). It becomes a TimescaleDB hypertable (1-day chunks, partitioned by `received_at`) with aggressive compression after 24h and a 30-day default retention policy. Schema: `(received_at, id, observer_node_id, event_type, payload jsonb, instance_id)`. Compression + chunk-drop retention mean it costs a fraction of its current footprint while staying queryable for diagnostic detail views.
+**Keep** `events_log`, **renamed to `event_logs`** for plural-table naming consistency (data-model.md §1.6; cf. code-warts DM9). It becomes a TimescaleDB hypertable (1-day chunks, partitioned by `received_at`) with aggressive compression after 24h and a 30-day default retention policy. Schema: `(received_at, id, observer_node_id, event_type, payload jsonb, instance_id)`. Compression + chunk-drop retention mean it costs a fraction of its current footprint while staying queryable for diagnostic detail views.
 
 ## Consequences
 

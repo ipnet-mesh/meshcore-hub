@@ -2,7 +2,7 @@
 
 > **Status (iteration 7):** All design questions resolved. The items below are **deferred
 > measurements** (decided in principle, final form pending a benchmark) — not open design
-> questions. See [decisions/](decisions/) for the 22 locked ADRs.
+> questions. See [decisions/](decisions/) for the 23 locked ADRs.
 
 ## Deferred measurements (locked, pending execution)
 
@@ -50,7 +50,7 @@ All six iteration-5 review questions resolved:
 | Q5 | OIDC users role-editable | **Yes — DB-additive override** (`effective = IdP ∪ DB`); Users page shows both, DB is additive only |
 | Q6a | NATS vs Redis for fan-out | **Both** — NATS for pub/sub, Redis for KV cache (optional) |
 | Q6b | Token signing algorithm | **HS256 default**, RS256 as config option |
-| Q6c | Feature-flag propagation | **Next-boundary** per flag (next packet / next tick / next request), as documented in §8.8.3 |
+| Q6c | Feature-flag propagation | **Next-boundary** per flag (next packet / next tick / next request), as documented in api.md → Settings API (cross-service propagation) |
 
 ## Resolved in iteration 8 (full-plan design review)
 
@@ -70,7 +70,7 @@ resolved **before** the Phase 0 DDL freeze:
 
 ## No remaining open design questions
 
-The design covers Phases 0–7 concretely. All 22 decisions are locked; iteration 8 corrected implementation
-details without reopening any decision. The remaining work is implementation, guided by the
+The design covers Phases 0–7 concretely. All 23 decisions are locked; iteration 8 corrected implementation
+details without reopening any decision (iteration 9 added the testing-policy decision, D23). The remaining work is implementation, guided by the
 [phasing plan](phasing.md), [implementation checklist](implementation-checklist.md),
 [testing/exit criteria](testing.md), and [review-findings.md](review-findings.md).

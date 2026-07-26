@@ -102,81 +102,87 @@ mode it is a constant prefix; in multi-tenant mode it is what makes the shared R
 **Declarative invalidation graph** — the single source of truth, replacing AGENTS.md's "hard rule" hand-mapping:
 
 ```typescript
-NAMESPACES = {
-    # namespace:     role_scoped?  invalidated_when_these_entities_change
-    "nodes":         (False, {"node", "node_tag", "adoption"}),
-    "messages":      (True,  {"message", "node", "node_tag"}),
-    "advertisements":(False, {"advertisement", "node", "node_tag", "adoption"}),
-    "routes":        (True,  {"route"}),
-    "channels":      (True,  {"channel"}),
-    "profiles":      (False, {"profile", "adoption"}),
-    "packets":       (True,  {"raw_reception"}),
-    "packet_groups": (True,  {"raw_reception"}),
-    "dashboard":     (False, {"node","node_tag","message","advertisement","adoption","profile","route"}),
-    "settings":      (False, {"setting"}),
-    "me":            (False, {"profile", "adoption"}),
-    "pages":         (False, {"custom_page"}),
-    "config":        (False, {"setting", "custom_page"}),
-}
+const NAMESPACES: Record<string, { roleScoped: boolean; invalidatedBy: Set<string> }> = {
+  // namespace:      roleScoped  invalidated when these entities change
+  nodes:          { roleScoped: false, invalidatedBy: new Set(["node", "node_tag", "adoption"]) },
+  messages:       { roleScoped: true,  invalidatedBy: new Set(["message", "node", "node_tag"]) },
+  advertisements: { roleScoped: false, invalidatedBy: new Set(["advertisement", "node", "node_tag", "adoption"]) },
+  routes:         { roleScoped: true,  invalidatedBy: new Set(["route"]) },
+  channels:       { roleScoped: true,  invalidatedBy: new Set(["channel"]) },
+  profiles:       { roleScoped: false, invalidatedBy: new Set(["profile", "adoption"]) },
+  packets:        { roleScoped: true,  invalidatedBy: new Set(["raw_reception"]) },
+  packet_groups:  { roleScoped: true,  invalidatedBy: new Set(["raw_reception"]) },
+  dashboard:      { roleScoped: false, invalidatedBy: new Set(["node","node_tag","message","advertisement","adoption","profile","route"]) },
+  settings:       { roleScoped: false, invalidatedBy: new Set(["setting"]) },
+  me:             { roleScoped: false, invalidatedBy: new Set(["profile", "adoption"]) },
+  pages:          { roleScoped: false, invalidatedBy: new Set(["custom_page"]) },
+  config:         { roleScoped: false, invalidatedBy: new Set(["setting", "custom_page"]) },
+};
 
-# Inverted at startup: entity → set(namespaces to invalidate)
-ENTITY_INVALIDATION = invert(NAMESPACES)
+// Inverted at startup: entity → set of namespaces to invalidate
+const ENTITY_INVALIDATION: Map<string, Set<string>> = invert(NAMESPACES);
 ```
 
-**The `@cached` decorator** (async-only now that the API is async end-to-end):
+**The cache hook** (a Fastify route wrapper — the D22 replacement for the `@cached` decorator; async-only now that the API is async end-to-end):
 ```typescript
-def cached(namespace: str, *, ttl_setting: str = "cache_ttl"):
-    def decorator(handler):
-        @wraps(handler)
-        async def wrapper(request: Request, *args, **kwargs):
-            ns = NAMESPACES[namespace]
-            iid = request.state.principal.instance_id
-            role = request.state.principal.role_tier if ns.role_scoped else "shared"
-            qhash = sha256(sorted_query_string(request).encode())[:16].hex()
-            key = f"{iid}:{namespace}:{role}:{qhash}"
+async function cachedHandler(
+  route: { namespace: string; ttlSetting?: string; handler: RouteHandler },
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const ns = NAMESPACES[route.namespace];
+  const principal = request.principal;
+  const role = ns.roleScoped ? principal.roleTier : "shared";
+  const qhash = sha256(sortedQueryString(request)).subarray(0, 16).toString("hex");
+  const key = `${principal.instanceId}:${route.namespace}:${role}:${qhash}`;
 
-            # Conditional GET → 304
-            inm = request.headers.get("if-none-match")
-            cached_etag = await cache.get(f"{key}:etag")
-            if cached_etag and etag_matches(inm, cached_etag):
-                return Response(status_code=304, headers={"ETag": cached_etag})
+  // Conditional GET → 304
+  const inm = request.headers["if-none-match"];
+  const cachedEtag = await cache.get(`${key}:etag`);
+  if (cachedEtag && etagMatches(inm, cachedEtag)) {
+    return reply.code(304).header("ETag", cachedEtag).send();
+  }
 
-            # Cache lookup
-            if (body := await cache.get(key)) is not None:
-                request.state.cache_status = "HIT"
-                return Response(content=body, media_type="application/json",
-                                headers={"ETag": cached_etag or "", "X-Cache": "HIT"})
+  // Cache lookup
+  const body = await cache.get(key);
+  if (body !== null) {
+    request.cacheStatus = "HIT";
+    return reply.header("ETag", cachedEtag ?? "").header("X-Cache", "HIT")
+                .type("application/json").send(body);
+  }
 
-            # Miss → execute, serialize, store
-            request.state.cache_status = "MISS"
-            result = await handler(request, *args, **kwargs)
-            payload, etag = serialize(result)
-            ttl = getattr(request.app.state, ttl_setting)
-            await cache.set(key, payload, ttl=ttl)
-            await cache.set(f"{key}:etag", etag, ttl=ttl)
-            return Response(content=payload, media_type="application/json",
-                            headers={"ETag": etag, "X-Cache": "MISS"})
-        return wrapper
-    return decorator
+  // Miss → execute, serialize, store
+  request.cacheStatus = "MISS";
+  const result = await route.handler(request, reply);
+  const [payload, etag] = serialize(result);
+  const ttl = appState[route.ttlSetting ?? "cacheTtl"];
+  await cache.set(key, payload, ttl);
+  await cache.set(`${key}:etag`, etag, ttl);
+  return reply.header("ETag", etag).header("X-Cache", "MISS")
+              .type("application/json").send(payload);
+}
 ```
 
 **Invalidation after a mutation** — one call, the graph does the rest:
 ```typescript
-async def invalidate_for(session_changes: Iterable[str], cache: CacheBackend, instance_id):
-    namespaces = set()
-    for entity in session_changes:
-        namespaces |= ENTITY_INVALIDATION.get(entity, set())
-    for ns in namespaces:
-        await cache.delete(f"{instance_id}:{ns}:*")   # SCAN + DEL by prefix, scoped to THIS tenant only
+async function invalidateFor(sessionChanges: Iterable<string>, cache: CacheBackend, instanceId: string): Promise<void> {
+  const namespaces = new Set<string>();
+  for (const entity of sessionChanges) {
+    for (const ns of ENTITY_INVALIDATION.get(entity) ?? []) namespaces.add(ns);
+  }
+  for (const ns of namespaces) {
+    await cache.delete(`${instanceId}:${ns}:*`);   // SCAN + DEL by prefix, scoped to THIS tenant only
+  }
+}
 ```
 
 A mutation handler declares what it changed:
 ```typescript
-@router.put("/nodes/{pk}/tags/{key}")
-async def update_tag(...) -> NodeTagRead:
-    ... mutate, commit ...
-    await invalidate_for({"node_tag", "node"}, cache, instance_id)   # drops nodes + messages + adverts + dashboard
-    return tag
+fastify.put("/nodes/:pk/tags/:key", { preHandler: requireAdmin }, async (request, reply) => {
+  // ... mutate, commit ...
+  await invalidateFor(["node_tag", "node"], cache, request.principal.instanceId);   // drops nodes + messages + adverts + dashboard
+  return tag;
+});
 ```
 
 This replaces today's per-endpoint `_invalidate_node_tag_caches`/`_invalidate_adoption_caches` helpers and the dual-prefix `invalidate_dashboard` hack with a single declarative map.
@@ -196,7 +202,7 @@ A single `applyVisibility(query, principal)` Drizzle query builder construct tha
 - The two **CAGGs** (`cagg_daily_packet_counts`, `cagg_packet_breakdown_by_type`, over `raw_receptions`) are read directly, but **RLS does not propagate to a continuous aggregate** — the dashboard query must add an explicit `WHERE instance_id = <principal.instance_id>` predicate (data-model.md §3.6).
 - Daily **message/advert counts** and **node-count history** are read from the worker-maintained rollup tables (`dashboard_daily_message_counts`, `dashboard_daily_advert_counts`, `dashboard_node_count_history`), which *are* RLS-scoped like any tenant table (data-model.md §3.6a). These replace the two message/advert CAGGs that TimescaleDB cannot build over the OLTP tables.
 
-> **Implementation note (D22).** The pseudocode in this doc is Python-shaped (`@cached` decorator, `Depends`-injected `Principal`/`RequireAdmin`). In the locked TS stack these map to Fastify **`preHandler` hooks** (auth + the per-request transaction that sets `app.instance_id`) and a **cache plugin/hook** rather than a handler decorator — the contract (one key format, one invalidation graph, one resolved `Principal`) is identical; the wiring is Fastify-idiomatic, not decorator-based.
+> **Implementation note (D22).** The pseudocode in this doc is Python-shaped (`@cached` decorator, `Depends`-injected `Principal`/`RequireAdmin`, `selectinload` eager-loading). In the locked TS stack these map to Fastify **`preHandler` hooks** (auth + the per-request transaction that sets `app.instance_id`), a **cache plugin/hook** rather than a handler decorator, and **Drizzle relational queries** (`db.query.nodes.findMany({ with: { tags: true } })`) rather than `selectinload` — the contract (one key format, one invalidation graph, one resolved `Principal`, eager-load at the ORM level) is identical; the wiring is Fastify/Drizzle-idiomatic, not decorator-based.
 
 ## OpenAPI as the contract
 
@@ -226,7 +232,7 @@ Browser ──EventSource('/api/v1/events/stream')──→ Web tier
 
 The web tier already proxies all `/api/v1/*` calls — SSE is just a long-lived, streaming variant of the same proxy pattern. The implementation requirement: **the proxy must pipe chunks as they arrive, not buffer the response.** In Fastify, this means writing to `reply.raw` (the underlying `ServerResponse`) and calling `reply.raw.flushHeaders()` before the first chunk, or using `@fastify/http-proxy` which handles streaming correctly out of the box.
 
-**Single-process alternative:** if the deployment runs web + API as one Fastify process (the simpler model for small/community deployments), no proxy is needed. The `AuthMiddleware` resolves the Principal directly from the cookie (same `JWT_SESSION_SECRET`, same JWS verification the web tier uses). This adds a fourth resolution path to the middleware (after JWT-header, API-key, anonymous): cookie → verify JWS → resolve Principal. The auth boundary is unchanged — the middleware is still the single resolution point; the Principal is still the single authz artifact. The JWT becomes optional in this mode (the cookie is the credential, verified inline rather than transmitted over a network).
+**Single-process alternative:** if the deployment runs web + API as one Fastify process (the simpler model for small/community deployments), no proxy is needed. The `AuthMiddleware` resolves the Principal directly from the cookie (same `JWT_SESSION_SECRET`, same JWS verification the web tier uses). This enables the middleware's **cookie source** — the second resolution step, between JWT-header and API-key (see auth.md → AuthMiddleware): cookie → verify JWS → resolve Principal. In a split web/API deployment the cookie verifier is not configured, so that step is a no-op and the browser reaches the API via the web tier's injected JWT instead. The auth boundary is unchanged — the middleware is still the single resolution point; the Principal is still the single authz artifact. The JWT becomes optional in this mode (the cookie is the credential, verified inline rather than transmitted over a network).
 
 ### SSE realtime endpoint (concrete)
 
@@ -405,7 +411,7 @@ Every key below is seeded at instance creation (registration or CLI). The `value
 | `registration.subdomain_reserved` | string[] | `["www","api","admin","mail"]` | Subdomains that can't be registered |
 | `registration.max_domains_per_tenant` | int | `5` | Custom domain cap |
 
-**Total: 45 keys** across 6 categories. The seed migration inserts one row per key with the default value, `updated_by = 'seed'`, and the instance's `instance_id`. On first boot, Tier-1 env vars (`NETWORK_NAME`, etc.) override the matching seed values — this is the one-time bootstrap. After that, the DB is authoritative and the Admin UI is the edit surface.
+**Total: 53 keys** across 6 categories (branding 11, features 12, tuning 20, webhooks 1, radio 4, registration 5). The seed migration inserts one row per key with the default value, `updated_by = 'seed'`, and the instance's `instance_id`. On first boot, Tier-1 env vars (`NETWORK_NAME`, etc.) override the matching seed values — this is the one-time bootstrap. After that, the DB is authoritative and the Admin UI is the edit surface.
 
 ### Cross-service propagation
 
@@ -446,63 +452,64 @@ This is more nuanced than "env var read at boot," but the alternative (restart t
 ## Settings API (D11)
 
 ```typescript
-# Public — the static shell bootstraps from this (no auth)
-@router.get("/config", response_model=PublicConfig)
-async def get_public_config(settings: SettingsCache) -> PublicConfig:
-    """Branding + feature flags + radio display. No secrets, no tuning params."""
-    return settings.public_snapshot()
+// Public — the static shell bootstraps from this (no auth)
+fastify.get("/config", async (request, reply) => {
+  // Branding + features + radio + auth_mode + custom_pages + needs_setup. No secrets, no tuning params.
+  return settings.publicSnapshot();
+});
 
-# Authenticated self
-@router.get("/me", response_model=PrincipalRead)
-async def get_me(principal: RequireMember) -> PrincipalRead:
-    return PrincipalRead(user_id=principal.user_id, roles=list(principal.roles), ...)
+// Authenticated self
+fastify.get("/me", { preHandler: requireMember }, async (request, reply) => {
+  const p = request.principal;
+  return { userId: p.userId, roles: [...p.roles], /* ... */ } satisfies PrincipalRead;
+});
 
-# Admin-only — full settings, all categories
-@router.get("/settings", response_model=SettingsByCategory, dependencies=[Depends(require_role("admin"))])
-async def list_settings(settings: SettingsCache) -> SettingsByCategory:
-    return settings.full_snapshot()
+// Admin-only — full settings, all categories
+fastify.get("/settings", { preHandler: requireAdmin }, async (request, reply) => {
+  return settings.fullSnapshot();
+});
 
-@router.put("/settings/{category}", dependencies=[Depends(require_role("admin"))])
-async def update_settings(category: str, body: CategoryUpdate, settings: SettingsCache,
-                          bus: NatBus, principal: RequireAdmin) -> SettingsByCategory:
-    await settings.update_category(category, body, updated_by=principal.user_id)  # validate + write + commit
-    await bus.publish(f"settings.updated.{principal.instance_id}.{category}")    # cross-service invalidate
-    return settings.full_snapshot()
+fastify.put("/settings/:category", { preHandler: requireAdmin }, async (request, reply) => {
+  const { category } = request.params as { category: string };
+  await settings.updateCategory(category, request.body, request.principal.userId);   // validate + write + commit
+  await bus.publish(`settings.updated.${request.principal.instanceId}.${category}`); // cross-service invalidate
+  return settings.fullSnapshot();
+});
 ```
 
 **`SettingsCache`** — in-memory snapshot per instance, refreshed on NATS notification:
 ```typescript
-class SettingsCache:
-    async def load(self, instance_id: UUID) -> None: ...          # boot: SELECT * FROM settings
-    async def public_snapshot(self) -> PublicConfig: ...           # branding + features + radio
-    async def full_snapshot(self) -> SettingsByCategory: ...       # all categories (admin)
-    async updateCategory(cat, values, updatedBy) { ... }  // Zod-validate, UPSERT, commit
-    async def on_settings_updated(self, msg): ...                  # NATS subscriber → reload category
+class SettingsCache {
+  async load(instanceId: string): Promise<void> { ... }                       // boot: SELECT * FROM settings
+  async publicSnapshot(): Promise<PublicConfig> { ... }                        // branding + features + radio + auth_mode + custom_pages + needs_setup
+  async fullSnapshot(): Promise<SettingsByCategory> { ... }                    // all categories (admin)
+  async updateCategory(cat: string, values: unknown, updatedBy: string): Promise<void> { ... }  // Zod-validate, UPSERT, commit
+  async onSettingsUpdated(msg: NatsMsg): Promise<void> { ... }                 // NATS subscriber → reload category
+}
 ```
 
 Each category has a typed Zod schema validating writes — a bad value is rejected at the API, not discovered when a service reads it. The escape hatch if a value somehow bricks a service is the ops CLI `meshcore-hub settings reset --category=<cat>` (D18 — operational, not config-mirroring) or a "Reset to defaults" button per category in the Settings UI.
+
+**`PublicConfig` contract** (the public `/api/v1/config` payload, `Cache-Control: public, max-age=60`): `branding.*`, `features.*`, `radio.*`, `auth_mode`, `custom_pages: [{slug,title,url,menu_order}]`, and **`needs_setup: boolean`**. `needs_setup` is true iff no local admin exists yet (the same admin-existence count the gate middleware runs — see auth.md → First-run setup wizard); the static shell reads it and renders the SPA `/setup` route instead of the dashboard (F12). It is the only non-settings-derived field in the payload and costs one indexed count query, TTL-cached alongside the rest of the snapshot.
 
 ## Custom pages API (D20)
 
 Custom pages move from file-based `CONTENT_HOME` to a DB-backed Tier-3 entity:
 
 ```typescript
-@router.get("/pages", response_model=list[CustomPageRead])
-async def list_pages(db: DbSession) -> list[CustomPageRead]:
-    """Public — enabled pages only, sorted by menu_order. Drives nav + CustomPage route."""
+fastify.get("/pages", async (request, reply) => {
+  // Public — enabled pages only, sorted by menuOrder. Drives nav + CustomPage route.
+  ...
+});
 
-@router.get("/pages/{slug}", response_model=CustomPageRead)
-async def get_page(slug: str, db: DbSession) -> CustomPageRead:
-    """Public — single page by slug (includes markdown content)."""
+fastify.get("/pages/:slug", async (request, reply) => {
+  // Public — single page by slug (includes markdown content).
+  ...
+});
 
-@router.post("/pages", response_model=CustomPageRead, dependencies=[Depends(require_role("admin"))])
-async def create_page(body: CustomPageCreate, db: DbSession) -> CustomPageRead: ...
-
-@router.put("/pages/{slug}", response_model=CustomPageRead, dependencies=[Depends(require_role("admin"))])
-async def update_page(slug: str, body: CustomPageUpdate, db: DbSession) -> CustomPageRead: ...
-
-@router.delete("/pages/{slug}", status_code=204, dependencies=[Depends(require_role("admin"))])
-async def delete_page(slug: str, db: DbSession) -> None: ...
+fastify.post("/pages", { preHandler: requireAdmin }, async (request, reply) => { ... });
+fastify.put("/pages/:slug", { preHandler: requireAdmin }, async (request, reply) => { ... });
+fastify.delete("/pages/:slug", { preHandler: requireAdmin }, async (request, reply) => reply.code(204).send());
 ```
 
 Mutations invalidate the `pages` + `config` namespaces (nav metadata is served from `/api/v1/config`). The `PublicConfig` response includes `custom_pages: [{slug, title, url, menu_order}]` for the enabled pages — replacing the per-request `__APP_CONFIG__.custom_pages` injection.
@@ -542,6 +549,10 @@ fastify.get("/api/v1/map/data", async (request, reply) => {
 ```
 
 Replaces today's `/map/data` server-rendered endpoint (FE9). Now a standard `/api/v1/*` endpoint — benefits from caching, invalidation, and the generated client. The observer-area filter is server-side (removes the 500-node client fetch — FE6).
+
+### Nodes list — observer filter
+
+The carried-forward `GET /api/v1/nodes` supports an `?is_observer=true` filter (returns only nodes with `is_observer = true`: `public_key`, `name`, `last_seen`, …). The multi-tenant observer picker (multi-tenancy.md §3 → Available observers) uses it to let a tenant admin select from observers their feed has already seen and pre-fill a friendly name from the node's known `name`. Cached in the `nodes` namespace like the rest of the list.
 
 ### Route preview (live evaluation)
 

@@ -136,7 +136,7 @@ sections aren't under-specified for implementation.
 
 ### F12 — First-run setup wizard reintroduces server-rendered HTML
 The SSR wizard contradicts the static-shell principle (Principle 5). Documented the preferred approach —
-a normal SPA route gated by a `needsSetup` flag in `/api/v1/config` — with SSR kept only as a fallback.
+a normal SPA route gated by a `needs_setup` flag in `/api/v1/config` (snake_case on the wire; the server-internal gate flag is `fastify.state.needsSetup`) — with SSR kept only as a fallback.
 Files: `components/auth.md`.
 
 ### F13 — Greenfield rewrite + language switch + new infra + multi-tenancy is the highest-risk path

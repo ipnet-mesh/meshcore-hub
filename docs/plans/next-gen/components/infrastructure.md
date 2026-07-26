@@ -501,7 +501,7 @@ Every service handles `SIGTERM` (Docker `stop`) with a drain-then-exit sequence.
 
 The end-to-end "stand up the new stack" order. This is a **greenfield** deployment — fresh Postgres+TimescaleDB, NATS, new schema; no historical data migration. The few days of parallel-stack validation ([migration.md](migration.md#parallel-stack-validation-ship-gate); D14 locked at 5 days) give the new stack a continuous data view at cutover.
 
-1. **D5 benchmark** runs, decision recorded, §16 schema frozen.
+1. **D5 benchmark** runs, decision recorded, data-model.md §3 schema frozen.
 2. **New infrastructure provisioned:** Postgres 17 + TimescaleDB extension, NATS with JetStream persistence volume, (optional Redis for API cache).
 3. **`drizzle-kit migrate`** on the fresh DB — creates the full schema (entities, hypertables, CAGGs, RLS policies, retention policies).
 4. **`db import-config config-bundle.json`** — loads the preserved config (user_profiles + roles, routes + nodes + observers, node_tags, adoptions, channels) + node identity stubs.
@@ -511,4 +511,4 @@ The end-to-end "stand up the new stack" order. This is a **greenfield** deployme
 8. **Cut over** DNS / MQTT exclusivity to the new stack.
 9. **Decommission** the old stack after the grace period.
 
-Steps 6–9 are where D14 (5-day parallel-stack window) is exercised. The diff harness compares per-hour event counts by `event_hash` between the old API and the new API; any divergence blocks cutover.
+Steps 6–9 are where D14 (5-day parallel-stack window) is exercised. The diff harness compares per-hour event counts and `wire_hash` coverage between the old API and the new API — it matches on the LetsMesh on-air `wire_hash` (identical in both stacks), **not** `event_hash`, which differs because the old stack hashes with MD5 and the new with SHA-256 (see migration.md → diff harness). Any divergence blocks cutover.

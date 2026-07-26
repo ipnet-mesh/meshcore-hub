@@ -5,7 +5,7 @@
 
 ## Context
 
-Today's auth is two overlapping planes with an implicit trust boundary (S1): direct Bearer tokens for m2m, and OIDC-proxy-injected `X-User-*` headers for browser flows. The trust rests on "only the proxy holds the API key" — it is not cryptographically enforced. Some handlers read `X-User-*` directly off `request.headers`, bypassing the central auth deps (S2). Role-name resolution is duplicated between API and web tier (A8). The §13-D6 question: keep the dual-plane model, harden the header-injection path, or move to a single cryptographically-enforced credential?
+Today's auth is two overlapping planes with an implicit trust boundary (S1): direct Bearer tokens for m2m, and OIDC-proxy-injected `X-User-*` headers for browser flows. The trust rests on "only the proxy holds the API key" — it is not cryptographically enforced. Some handlers read `X-User-*` directly off `request.headers`, bypassing the central auth deps (S2). Role-name resolution is duplicated between API and web tier (A8). The question: keep the dual-plane model, harden the header-injection path, or move to a single cryptographically-enforced credential?
 
 ## Decision
 

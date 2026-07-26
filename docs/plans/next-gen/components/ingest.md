@@ -42,16 +42,16 @@ Replace the 1,200-line `LetsMeshNormalizer` field-extraction sprawl (P1, P6) wit
 ### Declarative classification (single source of truth)
 
 ```typescript
-# One declarative classification table — the single source of truth (replaces P7).
-CLASSIFIERS: list[Classifier] = [
-    ChannelMessageClassifier(),      # payload_type 5 → channel_msg_recv
-    ContactMessageClassifier(),      # payload_type 1|2|7 → contact_msg_recv
-    AdvertisementClassifier(),       # payload_type 4 (+ identity metadata)
-    TraceClassifier(),               # payload_type 9
-    ContactDiscoverClassifier(),     # payload_type 11, subType 0x90
-    TelemetryClassifier(), BatteryClassifier(), PathClassifier(), StatusClassifier(),  # type 1 branches
-    FallbackClassifier(),            # the 0x00–0x0F table → informational event_type
-]
+// One declarative classification table — the single source of truth (replaces P7).
+const CLASSIFIERS: Classifier[] = [
+  new ChannelMessageClassifier(),      // payload_type 5 → channel_msg_recv
+  new ContactMessageClassifier(),      // payload_type 1|2|7 → contact_msg_recv
+  new AdvertisementClassifier(),       // payload_type 4 (+ identity metadata)
+  new TraceClassifier(),               // payload_type 9
+  new ContactDiscoverClassifier(),     // payload_type 11, subType 0x90
+  new TelemetryClassifier(), new BatteryClassifier(), new PathClassifier(), new StatusClassifier(),  // type 1 branches
+  new FallbackClassifier(),            // the 0x00–0x0F table → informational event_type
+];
 ```
 
 Each `Classifier` produces a typed `PacketFields` summary (the `decode.meta` block of the ingest envelope below) from a `DecodedPacket`. No `Subscriber` god-class, no `self._normalize_*` cascade.
@@ -63,9 +63,10 @@ Each `Classifier` produces a typed `PacketFields` summary (the `decode.meta` blo
 Centralize the 4× duplicated dedup boilerplate (P4) into one helper:
 
 ```typescript
-def persist_deduped_event(
-    session, *, event_type, event_hash, build_fn, observer, observer_meta
-) -> EventPersistResult: ...
+function persistDedupedEvent(
+  tx: Tx,
+  args: { eventType: string; eventHash: Uint8Array; buildRow: () => Row; observer: ObserverRef; observerMeta: ObserverMeta },
+): Promise<EventPersistResult>;
 ```
 
 - Computes the SHA-256 content hash.
@@ -76,27 +77,31 @@ def persist_deduped_event(
 ### The worker-side helper
 
 ```typescript
-# One dedup helper — used by every structured handler (P4).
-async def persist_deduped_event(
-    session: AsyncSession,
-    *,
-    model: type[DeclarativeBase],
-    event_hash: bytes,               # sha256(content)[:16]
-    build_row: Callable[[], dict],
-    observer_id: UUID,
-    observer_meta: ObserverMeta,
-) -> DedupResult:
-    """INSERT ... ON CONFLICT (instance_id, event_hash) DO NOTHING; attach observer either way.
-    Composite conflict target = per-tenant dedup (F1). Returns DedupResult(is_new, event_id, event_hash).
-    Native Postgres — no dialect branch."""
-    ...
+// One dedup helper — used by every structured handler (P4).
+async function persistDedupedEvent(
+  tx: Tx,
+  args: {
+    table: PgTable;                    // Drizzle table (messages, advertisements, ...)
+    eventHash: Uint8Array;             // sha256(content) truncated to 16 bytes
+    buildRow: () => Record<string, unknown>;
+    observerId: string;                // uuid
+    observerMeta: ObserverMeta;
+  },
+): Promise<DedupResult> {
+  // INSERT ... ON CONFLICT (instance_id, event_hash) DO NOTHING; attach observer either way.
+  // Composite conflict target = per-tenant dedup (F1). Returns { isNew, eventId, eventHash }.
+  // Native Postgres — no dialect branch.
+  ...
+}
 
-# Each handler is ~15 lines, not ~50.
-class ChannelMessageHandler(EventHandler):
-    model = Message
-    def event_hash(self, env: IngestEnvelope) -> bytes:
-        return sha256(f"{env.text}|{env.pubkey_prefix}|{env.channel_idx}|{env.sender_ts}|{env.txt_type}".encode())[:16]
-    def build_row(self, env, observer_id, instance_id) -> dict: ...
+// Each handler is ~15 lines, not ~50.
+class ChannelMessageHandler implements EventHandler {
+  table = messages;
+  eventHash(env: IngestEnvelope): Uint8Array {
+    return sha256(`${env.text}|${env.pubkeyPrefix}|${env.channelIdx}|${env.senderTs}|${env.txtType}`).subarray(0, 16);
+  }
+  buildRow(env: IngestEnvelope, observerId: string, instanceId: string): Record<string, unknown> { ... }
+}
 ```
 
 ---
@@ -105,16 +110,12 @@ class ChannelMessageHandler(EventHandler):
 
 A single `DerivedStateWorker` process runs a registered set of periodic jobs:
 
-```
-every 300s : route-evaluator (refresh route_results + route_recent_matches from raw_receptions.path_hashes)
-every 3600s: route-history (refresh completed-day buckets in route_result_history)
-every 120s : spam-rescore (DB function sweep over recent messages)
-every 5m   : channel key refresh (push to ingesters via NATS, not a thread)
-hourly     : retention enforcement (chunk drops for hypertables, chunked DELETE for OLTP — W10)
-daily      : recompute observer flags
-```
+The full job manifest (cadences, idempotency, HA locking) lives in [derived-state.md → Job manifest](derived-state.md#job-manifest) — that is the source of truth. In summary the worker runs five periodic jobs (`route-evaluator` 300s, `route-history` 3600s, `spam-rescore` 120s, `retention` hourly, `dashboard-rollups` 300s) plus two metrics/health jobs (`metrics-gauges` 60s, `cagg-health` 300s). Two clarifications vs the old thread model:
 
-Implemented with a small library (`node-cron`, or a home-grown `PeriodicTask` that collapses the 5 identical loops into ~50 LOC). One process, one set of metrics, one shutdown path.
+- **Channel-key refresh is NOT a scheduled job.** It is event-driven: the `ChannelKeyCache` reloads on the `channel.keys.<inst>.updated` NATS notification (§11). There is no periodic channel sweep.
+- **Observer-flag recompute is part of the hourly `retention` job**, not a separate daily job (derived-state.md folds `recompute_observer_flags` into `retention`).
+
+Implemented with a small home-grown loop (no `node-cron`/APScheduler dependency — a `PeriodicJob` abstraction that collapses the old identical loops into ~50 LOC; see derived-state.md → Scheduler implementation). One process, one set of metrics, one shutdown path.
 
 > **Note:** The detailed job manifest, scheduler implementation (`pg_advisory_xact_lock` for HA), and the spam-retention/retention logic live in `components/derived-state.md`. This doc is the *ingest* surface; the worker that maintains derived state is its own component.
 
@@ -210,7 +211,8 @@ JSON for v1 (debuggable; the decode is the expensive part, not serialization). S
   "observer": {
     "public_key": "<64 hex, lowercased>",
     "iata": "IPT",
-    "feed": "packets"            // "packets" | "status" | "internal"
+    "feed": "packets",           // "packets" | "status" | "internal"
+    "is_observer": true          // IATA code matches a known observer; drives nodes.is_observer via touchNode
   },
   "wire_hash": "<32 hex>",       // LetsMesh on-air hash; becomes Nats-Msg-Id
   "mqtt": {
@@ -231,6 +233,7 @@ JSON for v1 (debuggable; the decode is the expensive part, not serialization). S
       "path_hash_width": 1,
       "channel_idx": 17,
       "source_pubkey_prefix": "01ab2186c4d5",
+      "source_pubkey_full": "<64 hex or null>",   // adverts carry the full sender key; status/internal may not. touchNode prefers this over the prefix
       "route_type": "flood",
       "advert_timestamp": null
     },
@@ -246,25 +249,26 @@ The envelope is **immutable** once produced. The MqttIngester is a pure `topic +
 ## 8. MqttIngester (pure decoder + producer)
 
 ```typescript
-class MqttIngester:
-    def __init__(
-        self,
-        mqtt: MqttClient,
-        js: JetStreamClient,           # publish client (@nats-io/jetstream)
-        decoder: MeshCoreDecoder,
-        key_cache: ChannelKeyCache,              # §9
-        observer_filter: ObserverFilter,
-        instance_id: UUID,
-    ) -> None: ...
+class MqttIngester {
+  constructor(
+    private mqtt: MqttClient,
+    private js: JetStreamClient,          // publish client (@nats-io/jetstream)
+    private decoder: MeshCoreDecoder,
+    private keyCache: ChannelKeyCache,    // §9
+    private observerFilter: ObserverFilter,
+    private instanceId: string,           // uuid
+  ) {}
 
-    async def on_message(self, topic: str, payload: bytes) -> None:
-        # 1. parse topic → observer pubkey / iata / feed (TopicBuilder, unchanged grammar)
-        # 2. observer allow/deny (prefix match) — cheap, pre-decode
-        # 3. envelope = self._build_envelope(topic, payload)   # decode + normalize + classify
-        # 4. ack = await js.publish(
-        #        subject=f"meshcore.ingest.{self.instance_id}.{envelope.observer.feed}",
-        #        headers: { "Nats-Msg-Id": envelope.wire_hash })   # server-side dedup
-        # No DB writes. No blocking on the DB. Bursts absorbed by JetStream.
+  async onMessage(topic: string, payload: Buffer): Promise<void> {
+    // 1. parse topic → observer pubkey / iata / feed (TopicBuilder, unchanged grammar)
+    // 2. observer allow/deny (prefix match) — cheap, pre-decode
+    // 3. const envelope = this.buildEnvelope(topic, payload);   // decode + normalize + classify
+    // 4. await this.js.publish(
+    //        `meshcore.ingest.${this.instanceId}.${envelope.observer.feed}`,
+    //        envelopeBytes, { headers: { "Nats-Msg-Id": envelope.wire_hash } });   // server-side dedup
+    // No DB writes. No blocking on the DB. Bursts absorbed by JetStream.
+  }
+}
 ```
 
 Decoupling win: a DB stall no longer stalls MQTT. The ingester's only external dependencies are the broker, NATS, and the read-only `ChannelKeyCache`. Horizontal scale = run N ingesters sharing the same MQTT subscription (shared subscription) — though one is usually enough.
@@ -274,17 +278,17 @@ Decoupling win: a DB stall no longer stalls MQTT. The ingester's only external d
 ## 9. IngestWorker (batched writer)
 
 ```typescript
-class IngestWorker:
-    def __init__(
-        self,
-        js: JetStream,
-        db: DbPool,                       // node-postgres pool (Drizzle)
-        blob: BlobStore,                  // no-op when D8 off
-        bus: NatBus,                      // core pub/sub for events.new + channel.keys
-        handlers: HandlerRegistry,
-        instance_id: UUID,
-        batch_size: int = 100,
-    ) -> None: ...
+class IngestWorker {
+    private _running = true;
+    constructor(
+        private js: JetStream,
+        private db: DrizzleDb,                  // node-postgres pool (Drizzle)
+        private blob: BlobStore,                // no-op when D8 off
+        private bus: NatBus,                    // core pub/sub for events.new + channel.keys
+        private handlers: HandlerRegistry,
+        private instanceId: string,             // uuid
+        private batchSize = 100,
+    ) {}
 
     async run(): Promise<void> {
         // Subscribe to the whole ingest subject tree (all instances). `meshcore.ingest.*` would only

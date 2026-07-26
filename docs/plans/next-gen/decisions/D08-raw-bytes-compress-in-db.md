@@ -5,7 +5,7 @@
 
 ## Context
 
-Today `raw_packets` stores `raw_hex` (Text) and `decoded` (JSON) on every row — duplicate payload storage that drives W2's "retention capped at 2 days because of cost" pain. The §6.3.3 / §7.6 sketch proposed moving bytes to a `BlobStore` (MinIO / local-volume / S3) from day one. On review, that adds a runtime dependency (an object store) for every deployment — including the smallest community operator — before measurement shows it is actually needed. The §13-D8 question: object storage from day one, or compress-in-DB first and measure?
+Today `raw_packets` stores `raw_hex` (Text) and `decoded` (JSON) on every row — duplicate payload storage that drives W2's "retention capped at 2 days because of cost" pain. The data-model/ingest sketch (data-model.md §1.3, ingest.md §5) proposed moving bytes to a `BlobStore` (MinIO / local-volume / S3) from day one. On review, that adds a runtime dependency (an object store) for every deployment — including the smallest community operator — before measurement shows it is actually needed. The question: object storage from day one, or compress-in-DB first and measure?
 
 ## Decision
 

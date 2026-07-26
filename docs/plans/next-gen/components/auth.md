@@ -118,31 +118,37 @@ Two artifacts: a **session cookie** (long-lived, the "refresh") and an **access 
 
 ## The Principal (resolved once per request)
 
-Every handler receives a frozen `Principal` via `Depends`. It carries everything the request needs for authz, pre-resolved at the middleware so handlers never recompute it:
+Every handler receives a frozen `Principal` (attached to the request by the `authMiddleware` preHandler). It carries everything the request needs for authz, pre-resolved at the middleware so handlers never recompute it:
 
 ```typescript
-@dataclass(frozen=True)
-class Principal:
-    user_id: str | None              # None = anonymous; "local:alice" / OIDC sub / "apikey:read"
-    roles: frozenset[str]
-    role_tier: str                   # highest resolved tier
-    instance_id: UUID
-    channel_indices: frozenset[int]  # visible channels, pre-resolved (redaction)
+// Resolved once per request at the middleware; handlers never recompute it. Immutable.
+class Principal {
+  private constructor(
+    readonly userId: string | null,                // null = anonymous; "local:alice" / OIDC sub / "apikey:read"
+    readonly roles: ReadonlySet<string>,
+    readonly roleTier: string,                     // highest resolved tier
+    readonly instanceId: string,                   // uuid
+    readonly channelIndices: ReadonlySet<number>,  // visible channels, pre-resolved (redaction)
+  ) {}
 
-    @property
-    def is_authenticated(self) -> bool: return self.user_id is not None
-    @property
-    def is_admin(self) -> bool:      return "admin" in self.roles
-    @property
-    def is_operator_or_admin(self) -> bool: return bool(self.roles & {"admin", "operator"})
+  get isAuthenticated(): boolean { return this.userId !== null; }
+  get isAdmin(): boolean { return this.roles.has("admin"); }
+  get isOperatorOrAdmin(): boolean { return this.roles.has("admin") || this.roles.has("operator"); }
+
+  static fromJwt(claims: JwtClaims, channels: ChannelResolver): Principal { ... }
+  static fromSession(session: Session, channels: ChannelResolver): Principal { ... }
+  static fromApiKey(key: string, readKey: string, adminKey: string, instanceId: string, channels: ChannelResolver): Principal { ... }
+  static anonymous(instanceId: string, channels: ChannelResolver): Principal { ... }
+}
 ```
 
-Dependency aliases replace today's scattered `RequireRead`/`RequireAdmin`/`RequireUserOwner`:
+Authz guards (Fastify `preHandler` hooks) replace today's scattered `RequireRead`/`RequireAdmin`/`RequireUserOwner`:
 ```typescript
-RequireRead   = Annotated[Principal, Depends(lambda p: p)]                       # any caller
-RequireMember = Annotated[Principal, Depends(require_authenticated)]             # any logged-in
-RequireAdmin  = Annotated[Principal, Depends(require_role("admin"))]
-RequireOperatorOrAdmin = Annotated[Principal, Depends(require_any_role("admin","operator"))]
+const requireRead            = guard(() => true);                 // any caller
+const requireMember          = guard((p) => p.isAuthenticated);   // any logged-in
+const requireAdmin           = guard((p) => p.isAdmin);
+const requireOperatorOrAdmin = guard((p) => p.isOperatorOrAdmin);
+// usage: fastify.get("/...", { preHandler: requireAdmin }, handler)
 ```
 
 ## AuthMiddleware (single resolution point)
@@ -186,17 +192,16 @@ async function resolve(request: FastifyRequest): Promise<Principal> {
 ## Local auth endpoints (D12)
 
 ```typescript
-@router.post("/auth/login")
-async def local_login(body: Credentials, request: Request) -> RedirectResponse:
-    user = await verify_local_credentials(body.username, body.password, request.app.state)
-    if user is None:
-        raise HTTPException(401, "invalid credentials")
-    return _start_session(user, request)   # mints session cookie, redirects to ?next=
+fastify.post("/auth/login", async (request, reply) => {
+  const { username, password } = request.body as Credentials;
+  const user = await verifyLocalCredentials(username, password, request.appState);
+  if (!user) return reply.status(401).send({ detail: "invalid credentials" });
+  return startSession(reply, user);   // mints session cookie, redirects to ?next=
+});
 
-@router.post("/auth/logout")
-async def logout(request: Request) -> RedirectResponse: ...
+fastify.post("/auth/logout", async (request, reply) => { ... });
 
-# OIDC endpoints unchanged: /auth/login (when AUTH_MODE has oidc), /auth/callback, /auth/logout
+// OIDC endpoints unchanged: /auth/login (when AUTH_MODE has oidc), /auth/callback, /auth/logout
 ```
 
 The login page renders the local form, the OIDC button, or both based on `PublicConfig.auth_mode` (see Frontend component doc, Login page).
@@ -220,18 +225,19 @@ fastify.addHook("preHandler", async (request: FastifyRequest, reply: FastifyRepl
 > payload: the static shell loads, sees `needs_setup = true`, and renders the wizard client-side — no
 > server-rendered HTML, no second templating path in the web tier. The `POST /setup` endpoints stay as a
 > plain JSON API. Server-rendering is a fallback only if the shell must not ship at all pre-setup.
+> (Casing: the public config field is `needs_setup` — snake_case like the rest of the wire payload; the server-internal gate flag is `fastify.state.needsSetup`, camelCase.)
 
 **`GET/POST /setup`** — a multi-step wizard (rendered by the SPA when `config.needs_setup` is true; see the note above):
 
 1. **Welcome / network identity** — network name, city, country, contact (writes the Tier-2 branding settings that are otherwise empty on a fresh DB).
 2. **Admin account** — username + password + confirm. Creates the first admin (see bootstrap insert sequence below).
-3. **Auth mode** — local (default) / oidc (enter IdP config) / hybrid. Written as a per-instance setting (`tenant_oidc_configs.auth_mode` in multi-tenant mode, seeded from the `AUTH_MODE` platform default).
+3. **Auth mode** — hybrid (default) / local / oidc (enter IdP config). Written as a per-instance setting (`tenant_oidc_configs.auth_mode` in multi-tenant mode, seeded from the `AUTH_MODE` platform default, which is `hybrid`).
 4. **Feature flags** — which pages to enable (sensible defaults pre-checked).
 5. **Done** — sets `fastify.state.needsSetup = false`, redirects to the dashboard, logged in as the new admin.
 
 ### Bootstrap insert sequence (shared by all three paths)
 
-Every bootstrap path (env-var, CLI, setup wizard) performs the same atomic 3-table insert inside one transaction:
+Every bootstrap path (env-var, CLI, setup wizard, and multi-tenant self-service registration — multi-tenancy.md §8) performs the same atomic 3-table insert inside one transaction:
 
 ```sql
 -- 1. Create the profile (user_id namespaced as local:<username>)

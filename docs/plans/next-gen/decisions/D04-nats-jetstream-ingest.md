@@ -5,7 +5,7 @@
 
 ## Context
 
-Today's ingest is a single-threaded MQTT callback with no backpressure (W1): one slow DB write on the paho thread stalls all topics, and there is no internal queue to absorb bursts. The `Subscriber(LetsMeshNormalizer)` god-class (P1) mixes decode, dispatch, persistence, and webhook fan-out on one thread. The §7 redesign splits receipt from write (`MqttIngester` → durable queue → `IngestWorker` pool), which requires picking the queue. The §13-D4 question also covered realtime fan-out for the SSE endpoint (D7): one tool for both roles, or two?
+Today's ingest is a single-threaded MQTT callback with no backpressure (W1): one slow DB write on the paho thread stalls all topics, and there is no internal queue to absorb bursts. The `Subscriber(LetsMeshNormalizer)` god-class (P1) mixes decode, dispatch, persistence, and webhook fan-out on one thread. The ingest redesign (ingest.md) splits receipt from write (`MqttIngester` → durable queue → `IngestWorker` pool), which requires picking the queue. The question also covered realtime fan-out for the SSE endpoint (D7): one tool for both roles, or two?
 
 ## Decision
 

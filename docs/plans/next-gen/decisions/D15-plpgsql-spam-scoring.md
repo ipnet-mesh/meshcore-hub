@@ -5,7 +5,7 @@
 
 ## Context
 
-Today's spam scoring has two paths that share logic but not implementation: an **online** score computed at insert time (asymmetric — only looks at prior messages), and a **symmetric** rescore sweep that re-evaluates recent messages with hindsight (looks at prior + subsequent). Both are implemented in Python, with the sweep job issuing per-row queries against `messages` (`spam.py` ~315 LOC). The §13-D15 question: keep the Python implementation, move both paths into the database as a shared PL/pgSQL function, or split them across worker jobs?
+Today's spam scoring has two paths that share logic but not implementation: an **online** score computed at insert time (asymmetric — only looks at prior messages), and a **symmetric** rescore sweep that re-evaluates recent messages with hindsight (looks at prior + subsequent). Both are implemented in Python today, with the sweep job issuing per-row queries against `messages` (`spam.py` ~315 LOC). The question: keep an in-language implementation, move both paths into the database as a shared PL/pgSQL function, or split them across worker jobs?
 
 ## Decision
 
@@ -18,7 +18,7 @@ Today's spam scoring has two paths that share logic but not implementation: an *
 
 **Positive:** One implementation shared by online + sweep — kills the asymmetric-online / symmetric-sweep Python split (`spam.py` ~315 LOC collapses to the function + two call sites). Pure function of its inputs → idempotent. The sweep's `IS DISTINCT FROM` check avoids unnecessary writes. Parameters are configurable via Tier-2 tuning settings (D11) — operators tune weights/thresholds at runtime.
 
-**Negative:** PL/pgSQL is a less familiar language for contributors than Python; debugging requires DB-side tools. A bad parameter (e.g. enormous window) can make the function slow — mitigated by per-category Pydantic validation on the settings write. Schema changes to `messages` require updating the function.
+**Negative:** PL/pgSQL is a less familiar language for contributors than TypeScript (the D22 stack); debugging requires DB-side tools. A bad parameter (e.g. enormous window) can make the function slow — mitigated by per-category Zod validation on the settings write. Schema changes to `messages` require updating the function.
 
 ## Alternatives considered
 

@@ -5,12 +5,17 @@
 > [component docs](components/), and [exit criteria](testing.md).
 >
 > **Backend stack (D22):** Node/TypeScript — Fastify 5, Drizzle ORM, @nats-io/nats-core + @nats-io/jetstream,
-> mqtt.js, ioredis, Zod, jose (JWT), argon2, commander (CLI), vitest (tests),
+> mqtt.js, ioredis, Zod, jose (JWT), argon2, commander (CLI),
 > `@michaelhart/meshcore-decoder` (primary decoder). See [D22](decisions/D22-node-typescript-backend.md)
 > for the full library mapping.
 >
+> **Testing (D23):** vitest (unit + integration + frontend component) + Playwright (e2e). Every
+> component and piece of logic ships with tests at the appropriate layer; the suite is CI-required
+> (qualitative coverage, no % floor). See [testing.md → Test strategy](testing.md#test-strategy-the-test-pyramid).
+>
 > **How to use:** work top-to-bottom within each phase. A phase is done when all its checkboxes
-> are ticked AND its [exit criteria](testing.md) pass.
+> are ticked, **its automated tests pass in CI** (each phase has a `### Tests` block below), AND
+> its [exit criteria](testing.md) pass.
 
 ---
 
@@ -41,6 +46,12 @@
 ### Tooling
 - [ ] Set up `orval` codegen: `orval.config.ts` + `make gen-client` target + CI drift check — [D09](decisions/D09-orval-client-generation.md). **Tooling only** — first real generation happens in Phase 4 against the new API spec.
 
+### Tests
+- [ ] Stand up the vitest workspace (unit + integration projects) + Playwright config; wire both into CI ([D23](decisions/D23-test-pyramid-coverage.md))
+- [ ] Integration: `drizzle-kit migrate` creates the full schema on a throwaway Postgres+TimescaleDB
+- [ ] Integration: RLS — a cross-instance query **as the `meshcore_app` role** returns 0 rows (`FORCE ROW LEVEL SECURITY` verified, not as owner)
+- [ ] Unit: Zod `DecodedPacket` schemas accept/reject representative decoder output; the declarative `CLASSIFIERS` table maps every payload-type → event-type → handler
+
 ---
 
 ## Phase 1 — Ingest pipeline
@@ -53,13 +64,13 @@
 
 ### MqttIngester (pure decode + produce)
 - [ ] Implement `MqttIngester.on_message`: parse topic → observer filter → decode → normalize → classify → produce envelope
-- [ ] Implement the [`meshcore.ingest.v1` envelope](components/ingest.md#172-the-ingest-envelope-meshcoreingestv1) Zod schema
+- [ ] Implement the [`meshcore.ingest.v1` envelope](components/ingest.md#7-the-ingest-envelope-meshcoreingestv1) Zod schema
 - [ ] Implement `ChannelKeyCache`: load on startup, reload on `channel.keys` NATS notification, thread-safe immutable-snapshot swap
 - [ ] Set `Nats-Msg-Id` = `wire_hash` for server-side dedup
 
 ### IngestWorker (batched write)
 - [ ] Implement `IngestWorker.run`: pull-subscribe `meshcore.ingest.>` (wildcard, not `*` — F8), fetch batches of 100, `SET LOCAL app.instance_id`, process, commit, publish `events.new`, ack
-- [ ] Implement [`persist_deduped_event`](components/ingest.md#74-dedup-as-a-first-class-service) helper (SHA-256 hash, `ON CONFLICT (instance_id, event_hash) DO NOTHING` — composite target, F1; observer attach)
+- [ ] Implement [`persist_deduped_event`](components/ingest.md#3-dedup-as-a-first-class-service) helper (SHA-256 hash, `ON CONFLICT (instance_id, event_hash) DO NOTHING` — composite target, F1; observer attach)
 - [ ] Implement `touchNode` + the observer-node upsert (both keyed on `(instance_id, public_key)`, F1/F11)
 - [ ] Implement the 4 structured handlers (~15 LOC each, using the dedup helper)
 - [ ] Implement the fallback `handle_event_log` handler
@@ -72,6 +83,13 @@
 ### Decode/classify shadow validation (F5 — DB-free)
 - [ ] Run the `MqttIngester` against the live feed; diff its envelopes (decoded + classified output) against the old normalizer (24h shadow, no DB/workers)
 - [ ] Full parallel-stack validation (both DBs, API diff) is **Phase 2** — it needs the provisioned schema + D5 outcome
+
+### Tests
+- [ ] Unit: `MqttIngester.on_message` topic-parse → observer-filter → classify (table-driven across payload types); `meshcore.ingest.v1` envelope schema; `Nats-Msg-Id` = `wire_hash`
+- [ ] Unit: `persist_deduped_event` SHA-256 hashing + `ON CONFLICT (instance_id, event_hash)` behaviour; the 4 structured handlers + fallback `handle_event_log`
+- [ ] Integration: `ChannelKeyCache` load-on-startup + immutable-snapshot reload on `channel.keys` notification
+- [ ] Integration: `IngestWorker` batch pull → `SET LOCAL app.instance_id` → commit → `events.new` publish → ack ordering (no ack before commit); server-side dedup suppresses a redelivered `Nats-Msg-Id`
+- [ ] Integration: `WebhookWorker` dispatch with retry/backoff + filter-DSL evaluation; config reload on `settings.updated.<inst>.webhooks`
 
 ---
 
@@ -106,6 +124,11 @@
 - [ ] Rewrite dashboard handlers to read CAGGs (with explicit `instance_id` predicate — RLS doesn't propagate to CAGGs) + the rollup tables (no live-query fallback in greenfield)
 - [ ] Verify first CAGG buckets + rollup rows populate within 10 min of live ingest
 
+### Tests
+- [ ] Integration: `db export-config` → `db import-config` roundtrip on a fresh DB reproduces all preserved config with zero FK violations; re-import is idempotent
+- [ ] Integration: the 2 CAGGs + 3 rollup tables exist with active refresh; a dashboard handler reads them with an explicit `instance_id` predicate (no live-query fallback)
+- [ ] Integration: `BlobStore` interface with `NoopBlobStore` default; compression/retention policy presence asserted
+
 ---
 
 ## Phase 3 — Derived state consolidation
@@ -135,6 +158,13 @@
 - [ ] Implement chunked DELETE for OLTP tables (`messages`, `advertisements`, `trace_paths`) — 5000-row batches
 - [ ] Verify row counts stabilise at the retention boundary
 
+### Tests
+- [ ] Unit: `computeQualityAvg` ordinal mapping (clear=2/marginal=1/else=0) + thresholds (≥1.5/≥0.75) + brand-new-route null edge; the `PeriodicJob` scheduler cadence math
+- [ ] Unit: route-matcher subsequence algorithm against `path_hashes` (true positives + false-positive rejection)
+- [ ] Integration: two-replica advisory-lock — two `DerivedStateWorker`s never double-execute the same `(job, instance)` (`pg_advisory_xact_lock(job_key, hashtext(instance_id))`)
+- [ ] Integration: `compute_spam_score` PL/pgSQL online + sweep parity (score computed once per row — not in both `WHERE` and `SET`, F10); the 3 route-health tables rebuild from fresh data
+- [ ] Integration: chunked retention DELETE batches OLTP rows and stabilises at the boundary
+
 ---
 
 ## Phase 4 — API & auth
@@ -153,7 +183,7 @@
 - [ ] Implement local password store: `local_users` table, argon2id verify, exponential lockout
 - [ ] Implement the shared 3-table bootstrap insert (user_profiles + local_users + user_profile_roles) in one transaction
 - [ ] Implement bootstrap paths: env-var (`ADMIN_USERNAME`/`ADMIN_PASSWORD`), CLI (`admin create-user`), setup wizard — all use the shared insert
-- [ ] Implement the first-run setup wizard (5-step, server-rendered, `needsSetup` flag gated on the admin-existence query)
+- [ ] Implement the first-run setup wizard **backend** (F12 — SPA route, not SSR): a `needs_setup` boolean in `/api/v1/config`, a gate middleware redirecting all routes to `/setup` while it is true, and the JSON `GET/POST /setup` API. Server-rendering is a documented fallback only. The React wizard page itself lands in Phase 5
 - [ ] Implement `/auth/login`, `/auth/logout` (local) + `/auth/callback` (OIDC)
 - [ ] Remove all `X-User-*` header injection
 
@@ -169,7 +199,7 @@
 - [ ] Per-event channel-visibility filter
 - [ ] 15s heartbeat; bounded backpressure (NATS pending-msg cap 256)
 - [ ] Web tier proxy: verify it pipes SSE chunks without buffering (streaming proxy, not buffered)
-- [ ] If single-process mode: add cookie resolution path to AuthMiddleware (4th source after JWT-header / API-key / anonymous)
+- [ ] If single-process mode: enable the AuthMiddleware cookie source (the 2nd resolution step, between JWT-header and API-key — a no-op in split web/API deployments; see auth.md)
 
 ### Settings API
 - [ ] Create the `settings` table + seed migration (defaults per known key)
@@ -186,6 +216,14 @@
 - [ ] Implement `POST/PUT/DELETE /api/v1/pages` (admin CRUD)
 - [ ] Include enabled pages list in `PublicConfig` response (drives nav)
 - [ ] Mutations invalidate `pages` + `config` namespaces
+
+### Tests
+- [ ] Unit: `AuthMiddleware` resolution order (JWT → cookie → API key → anonymous); `Principal` claim mapping; cache-key builder `{instance_id}:{namespace}:{scope}:{query_hash}`; single `apply_visibility` construct
+- [ ] Unit: argon2id verify + exponential-lockout backoff math; the shared 3-table bootstrap insert shape
+- [ ] Integration (Fastify `inject`): per-request transaction issues `SET LOCAL app.instance_id` on **read** endpoints too (RLS returns rows, not 0); cross-instance read returns 0 rows
+- [ ] Integration: `@cached` ETag / If-None-Match / 304 / X-Cache round-trip; `invalidate_for` walks the `ENTITY_INVALIDATION` graph and evicts the right namespaces
+- [ ] Integration: local login + OIDC callback converge on the same JWT/cookie issuance; SSE pushes with per-message channel-visibility filter + 15s heartbeat
+- [ ] Integration: settings + custom-pages mutations invalidate `settings`/`pages`/`config` and surface in `PublicConfig`
 
 ---
 
@@ -224,6 +262,12 @@
 - [ ] Replace all `alert()` with toast notifications
 - [ ] Unify title management (one path)
 
+### Tests
+- [ ] Component (vitest + Testing Library): `useEventStream` hybrid patch/invalidate + 30s poll fallback; generated-client wrappers; login page renders local/OIDC/both per `auth_mode`
+- [ ] Component: Settings / Users / Pages admin pages; `averageRouteTier` threshold sync with backend `computeQualityAvg` (1.5/0.75)
+- [ ] E2E (Playwright, real local login — [D23](decisions/D23-test-pyramid-coverage.md)): login → dashboard; Messages/Packets SSE live update; create/edit/delete a custom page and see the nav update
+- [ ] E2E: first-run setup wizard flow; settings/feature-flag change propagates to an open tab via SSE
+
 ---
 
 ## Phase 6 — Polish & decommission
@@ -250,6 +294,11 @@
 - [ ] Dashboard p95 < 200ms under load
 - [ ] Route evaluator p95 < 500ms per route at D5 High shape
 
+### Tests
+- [ ] Integration: RLS audit suite — cross-instance query returns 0 rows on **every** tenant-scoped table (including route-health tables)
+- [ ] Integration: JWT rotation — rotate `JWT_SESSION_SECRET`, assert in-flight sessions invalidate gracefully
+- [ ] CI gate: `npm audit` clean (backend + frontend) enforced as a required check
+
 ---
 
 ## Phase 7 — Multi-tenancy (self-provisioning)
@@ -263,7 +312,7 @@
 
 ### Observer scoping (D21)
 - [ ] Create `tenant_observers` table (instance_id, observer_pubkey_prefix, label)
-- [ ] Implement observer allowlist CRUD API (`GET/POST/DELETE /api/v1/observers`, admin-gated)
+- [ ] Implement observer allowlist CRUD API (`GET/POST/PUT/DELETE /api/v1/observers`, admin-gated) — each row carries an optional per-tenant friendly name (`label`); `PUT` renames the label only (no ingester reload, routing is prefix-keyed)
 - [ ] Implement `ObserverAllowlistCache` in MqttIngester (read-only snapshot, NATS reload on `observer.allowlist.updated.*`)
 - [ ] Implement multi-tenant produce: `route(observer_pubkey) → set[tenant_id]`, publish to each tenant's NATS subject
 - [ ] Tenant-prefix `Nats-Msg-Id` (`{tenant_id}:{wire_hash}`) for per-tenant JetStream dedup
@@ -304,7 +353,14 @@
 - [ ] Hostname cache excludes soft-deleted instances (`deleted_at IS NULL`)
 
 ### Admin UI
-- [ ] `/admin/observers` page (allowlist CRUD + known-observer picker from `nodes WHERE is_observer`)
+- [ ] `/admin/observers` page (allowlist CRUD + known-observer picker from `nodes WHERE is_observer`, pre-filling the friendly name from the node's known name; stored as a per-tenant `label`; inline rename)
 - [ ] Settings → Authentication section (per-tenant OIDC config form)
 - [ ] Settings → Community section (custom domain management, soft-delete community)
 - [ ] Landing page at platform root with "Create your community" flow
+
+### Tests
+- [ ] Unit: `ObserverAllowlistCache` routing (`route(observer_pubkey) → set[tenant_id]`, `_allow_all_tenants` on empty allowlist); subdomain validation + reserved-list; tenant-prefix `Nats-Msg-Id`
+- [ ] Integration: tenant isolation — cross-instance query returns 0 rows on every tenant-scoped table after registering two tenants; a shared observer yields one dedup'd event **per tenant**
+- [ ] Integration: `HostnameCache` excludes soft-deleted instances; `InstanceResolutionMiddleware` (JWT claim → hostname → `DEFAULT_INSTANCE_ID`)
+- [ ] E2E (Playwright, real login): register a tenant → land on subdomain logged in → manage observer allowlist (picker pre-fills the friendly name, inline rename) → add a custom domain; second tenant on the same deployment is isolated
+- [ ] E2E: per-tenant auth — tenant A local-only vs tenant B renders its own IdP button per hostname (OIDC callback itself stays forged/documented per D23)

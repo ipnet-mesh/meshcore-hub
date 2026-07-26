@@ -7,7 +7,7 @@
 
 ## Overview
 
-One `DerivedStateWorker` process (or a sidecar mode of the collector) owns all periodic work. The wins:
+One `DerivedStateWorker` process (the `derived` service — there is no `collector` in the new stack; in small deployments it can run as a sidecar of another service) owns all periodic work. The wins:
 
 - One set of metrics, one shutdown path, one retry policy.
 - **Dashboard aggregations are precomputed** instead of fan-out COUNTs (A7). Two of them — daily **packet** counts and the **packet breakdown by type** — source from the `raw_receptions` hypertable and are true TimescaleDB **continuous aggregates**. The other three — daily **message** counts, **advert** counts, and **node-count history** — source from OLTP/entity tables (`messages`, `advertisements`, `nodes`) that are *not* hypertables, so a CAGG cannot be built over them; the `dashboard-rollups` job maintains them as plain rollup tables (data-model.md §3.6a). Either way the API reads precomputed buckets, not live COUNTs.
@@ -17,7 +17,7 @@ One `DerivedStateWorker` process (or a sidecar mode of the collector) owns all p
 
 ## Job manifest
 
-One process — `DerivedStateWorker` — owns every periodic job. Replaces the six daemon threads. The channel-refresh thread is **gone entirely** (replaced by the ChannelKeyCache NATS event mechanism). The webhook processor thread is replaced by a separate **`WebhookWorker`** NATS subscriber (D19 — see [ingest.md §12](ingest.md#12-webhook-delivery-d19)). What remains is four periodic jobs + two health checks.
+One process — `DerivedStateWorker` — owns every periodic job. Replaces the six daemon threads. The channel-refresh thread is **gone entirely** (replaced by the ChannelKeyCache NATS event mechanism). The webhook processor thread is replaced by a separate **`WebhookWorker`** NATS subscriber (D19 — see [ingest.md §12](ingest.md#12-webhook-delivery-d19)). What remains is five periodic jobs (`route-evaluator`, `route-history`, `spam-rescore`, `retention`, `dashboard-rollups`) plus two metrics/health jobs (`metrics-gauges`, `cagg-health`) — seven in total, per the manifest below.
 
 | Job | Cadence | Replaces (today) | What it does | Idempotency |
 |---|---|---|---|---|
@@ -26,7 +26,7 @@ One process — `DerivedStateWorker` — owns every periodic job. Replaces the s
 | `spam-rescore` | 120s | `spam-rescore` thread (120s) | Symmetric-window rescore of recent `messages.spam_score` (see Spam rescoring below). | Per message: only writes when the score changes. |
 | `retention` | hourly | `cleanup` thread (hourly) | Drop expired hypertable chunks (`raw_receptions`, `event_logs`, `event_observers` at 30d); `cleanup_inactive_nodes`; `recompute_observer_flags`. Chunked (see Chunked retention). | Chunk drops are idempotent; node cleanup is keyed on `last_seen`. |
 | `dashboard-rollups` | 300s | (new — the counts that can't be CAGGs, F2) | Upsert completed-day buckets into `dashboard_daily_message_counts`, `dashboard_daily_advert_counts`, `dashboard_node_count_history` (data-model.md §3.6a). These source from OLTP/entity tables, so they cannot be TimescaleDB continuous aggregates. | Per (instance, day, …): `INSERT … ON CONFLICT DO UPDATE`. |
-| `metrics-gauges` | 60s | (new — replaces the metrics COUNT fan-out A7) | Precompute the Prometheus gauge values into a `_metrics_cache` table; `/metrics` reads the cache (TTL-cached today, but the computation moves here). | Overwrite. |
+| `metrics-gauges` | 60s | (new — replaces the metrics COUNT fan-out A7) | Precompute the Prometheus gauge values into `_metrics_cache`, one row per `(key, instance_id)`. `/metrics` reads the cache as the RLS-bypassing **owner** role and emits instance-labeled series — a scrape has no tenant context (see the `_metrics_cache` note in data-model.md §3.8). | Overwrite. |
 | `cagg-health` | 300s | (new) | Assert each CAGG's `refresh_status` is recent; log + alert if stale. Read-only check. | — |
 
 > **CAGGs vs rollups:** only `cagg_daily_packet_counts` and `cagg_packet_breakdown_by_type` (over the
@@ -36,49 +36,57 @@ One process — `DerivedStateWorker` — owns every periodic job. Replaces the s
 
 ## Scheduler implementation
 
-A small home-grown loop (no APScheduler dependency). Each job is a registered `PeriodicJob` with: name, interval, `async def run(session)`, and a `pg_advisory_lock` key.
+A small home-grown loop (no scheduler dependency). Each job is a registered `PeriodicJob` with: a name, an interval, an async `run(tx)`, and a `pg_advisory_lock` key.
 
 ```typescript
-@dataclass
-class PeriodicJob:
-    name: str
-    interval: timedelta
-    lock_key: int          # pg_advisory_xact_lock key — prevents double-execution across replicas
-    run: Callable[[AsyncSession], Awaitable[None]]
+interface PeriodicJob {
+  name: string;
+  intervalMs: number;                 // cadence in milliseconds
+  lockKey: number;                     // pg_advisory_xact_lock key — prevents double-execution across replicas
+  run: (tx: Tx) => Promise<void>;      // Tx = a Drizzle transaction over node-postgres
+}
 
-class DerivedStateWorker:
-    constructor(private db: DbPool, private jobs: PeriodicJob[]) {}
+class DerivedStateWorker {
+  private running = true;
+  private nextRun = new Map<string, number>();   // job name → next due timestamp (epoch ms)
 
-    async def run(self) -> None:
-        # One loop, tracks per-job next_run time. On each tick, due jobs run sequentially
-        # (these are DB-heavy; parallelism just adds contention). A crash restarts the
-        # process and all jobs self-heal on their next due time.
-        while self._running:
-            now = utcnow()
-            for job in self.jobs:
-                if now >= self._next_run[job.name]:
-                    await self._run_one(job)
-                    self._next_run[job.name] = now + job.interval
-            await asyncio.sleep(1)
+  constructor(private db: DrizzleDb, private jobs: PeriodicJob[], private instanceId: string) {}
 
-    async def _run_one(self, job: PeriodicJob) -> None:
-        async with self.sessions() as s:
-            # Two-arg advisory lock: (job key, stable per-instance key). Use hashtext(instance_id) — NOT a
-            # positional instance_index, which shifts as tenants come/go and can differ between replicas,
-            # letting the same (job, instance) run twice (F7). The two-arg form also avoids cross-job
-            # collisions that `base_key + index` risks.
-            await s.execute(text("SELECT pg_advisory_xact_lock(:j, hashtext(:iid))"),
-                            {"j": job.lock_key, "iid": str(self.instance_id)})
-            await s.execute(text("SET LOCAL app.instance_id = :id"), {"id": self.instance_id})
-            try:
-                await job.run(s)
-                await s.commit()
-                self._record(job.name, status="ok")
-            except Exception:
-                await s.rollback()
-                self._record(job.name, status="error")
-                logger.exception("job %s failed", job.name)
-                # do NOT re-raise; a failed job shouldn't kill the worker
+  async run(): Promise<void> {
+    // One loop, tracks per-job nextRun. On each tick, due jobs run sequentially
+    // (these are DB-heavy; parallelism just adds contention). A crash restarts the
+    // process and all jobs self-heal on their next due time.
+    while (this.running) {
+      const now = Date.now();
+      for (const job of this.jobs) {
+        if (now >= (this.nextRun.get(job.name) ?? 0)) {
+          await this.runOne(job);
+          this.nextRun.set(job.name, now + job.intervalMs);
+        }
+      }
+      await sleep(1000);
+    }
+  }
+
+  private async runOne(job: PeriodicJob): Promise<void> {
+    try {
+      await this.db.transaction(async (tx) => {
+        // Two-arg advisory lock: (job key, stable per-instance key). Use hashtext(instance_id) — NOT a
+        // positional instance_index, which shifts as tenants come/go and can differ between replicas,
+        // letting the same (job, instance) run twice (F7). The two-arg form also avoids cross-job
+        // collisions that `baseKey + index` risks.
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${job.lockKey}, hashtext(${this.instanceId}))`);
+        await tx.execute(sql`SET LOCAL app.instance_id = ${this.instanceId}`);
+        await job.run(tx);   // normal return commits; a throw rolls the transaction back
+      });
+      this.record(job.name, "ok");
+    } catch (err) {
+      this.record(job.name, "error");
+      logger.error({ err, job: job.name }, "job failed");
+      // do NOT re-raise; a failed job shouldn't kill the worker
+    }
+  }
+}
 ```
 
 The `pg_advisory_xact_lock` makes the worker **HA-safe**: run two replicas, only one executes a given job per interval (the other blocks briefly then no-ops). This is the cheap version of distributed scheduling — no separate coordinator service.
@@ -211,7 +219,7 @@ The clear/marginal thresholds (`1.5` / `0.75`) must be kept in sync with the fro
 
 ## Chunked retention (no giant DELETE)
 
-Today's `cleanup_old_data` issues one `DELETE FROM <table> WHERE received_at < cutoff` per table (§4.1-W10) — a multi-second exclusive lock on large tables. TimescaleDB makes this free:
+Today's `cleanup_old_data` issues one `DELETE FROM <table> WHERE received_at < cutoff` per table (overview.md §4.1, pain W10) — a multi-second exclusive lock on large tables. TimescaleDB makes this free:
 
 ```sql
 -- Retention policies (set once, enforced automatically by chunk drops):
@@ -228,19 +236,23 @@ SELECT add_retention_policy('event_observers', INTERVAL '30 days');
 For the OLTP tables that aren't hypertables (`messages`, `advertisements`, `trace_paths`), retention stays a worker job but **chunked**:
 
 ```typescript
-async def retention_job(session: AsyncSession) -> None:
-    cutoff = utcnow() - timedelta(days=settings.data_retention_days)
-    for table in ("messages", "advertisements", "trace_paths"):
-        # Chunked delete: 5000 rows per statement, loop until 0 affected.
-        # Each statement is short-lived → no long lock.
-        while True:
-            result = await session.execute(text(f"""
-                DELETE FROM {table} WHERE id IN (
-                    SELECT id FROM {table} WHERE received_at < :cutoff LIMIT 5000
-                ) FOR UPDATE SKIP LOCKED
-            """), {"cutoff": cutoff})
-            if result.rowcount < 5000:
-                break
+async function retentionJob(tx: Tx, dataRetentionDays: number): Promise<void> {
+  const cutoff = new Date(Date.now() - dataRetentionDays * 24 * 60 * 60 * 1000);
+  for (const table of ["messages", "advertisements", "trace_paths"] as const) {
+    // Chunked delete: 5000 rows per statement, loop until fewer than 5000 affected.
+    // Each statement is short-lived → no long lock. The table name comes from a fixed
+    // allowlist (never user input), so identifier interpolation is safe.
+    const ident = sql.identifier(table);
+    for (;;) {
+      const result = await tx.execute(sql`
+        DELETE FROM ${ident} WHERE id IN (
+          SELECT id FROM ${ident} WHERE received_at < ${cutoff} LIMIT 5000
+        ) FOR UPDATE SKIP LOCKED
+      `);
+      if (result.rowCount < 5000) break;
+    }
+  }
+}
 ```
 
 `cleanup_inactive_nodes` and `recompute_observer_flags` follow the same chunked pattern.
@@ -261,4 +273,4 @@ Each job emits:
 - A histogram `derived_job_duration_seconds{job="..."}`.
 - The `cagg-health` job additionally exports `cagg_refresh_lag_seconds{name="..."}`.
 
-These replace the collector's `HealthReporter` (which today just tracks MQTT/DB connectivity). The worker's health endpoint (`/health/derived`) reports whether any job is overdue beyond `2 × interval`.
+These replace the collector's `HealthReporter` (which today just tracks MQTT/DB connectivity). The worker's health endpoint (`/health/derived`) reports a job as overdue once it is past `2 × interval` (a degraded-health signal); the Prometheus alert (infrastructure.md → alerting) escalates to a pageable warning at `3 × interval`, so the health check warns before the alert fires.

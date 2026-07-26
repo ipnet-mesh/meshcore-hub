@@ -5,11 +5,11 @@
 
 ## Context
 
-The §19.1 manifest consolidates six daemon threads into one `DerivedStateWorker` process owning every periodic job (route evaluator, route history, spam rescore, retention, metrics gauges, CAGG health). A single process is a SPOF — a crash stops all derived-state maintenance until restart. The §19.2 / §13-D16 question: how to provide HA without introducing a separate coordinator service (etcd/Consul) or a clustering framework?
+The job manifest (derived-state.md) consolidates six daemon threads into one `DerivedStateWorker` process owning every periodic job (route evaluator, route history, spam rescore, retention, metrics gauges, CAGG health). A single process is a SPOF — a crash stops all derived-state maintenance until restart. The question (derived-state.md → HA): how to provide HA without introducing a separate coordinator service (etcd/Consul) or a clustering framework?
 
 ## Decision
 
-**Two-replica deployment with `pg_advisory_xact_lock` per job.** Each `PeriodicJob` carries a `lock_key: int`. The worker's `_run_one` acquires `SELECT pg_advisory_xact_lock(:k)` at the start of the job's transaction:
+**Two-replica deployment with `pg_advisory_xact_lock` per job.** Each `PeriodicJob` carries a `lockKey: int`. The worker's `runOne` acquires the **two-argument** lock `pg_advisory_xact_lock(lockKey, hashtext(instanceId))` at the start of the job's transaction — a stable per-(job, instance) key (F7), not a positional index:
 
 ```typescript
 await db.transaction(async (tx) => {

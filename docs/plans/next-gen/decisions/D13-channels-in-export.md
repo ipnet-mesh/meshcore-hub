@@ -5,7 +5,7 @@
 
 ## Context
 
-The §18.2 preserved-config export/import carries data that cannot be repopulated from RF traffic: `user_profiles` + roles, `routes` + nodes + observers, `node_tags`, adoptions, and node identity stubs. The open question (Q-C in iteration 4): are channels in this set? Channels are *borderline* — the `name` and `visibility` tier could plausibly be re-entered by hand, but the `key_hex` is an operator secret **never transmitted over RF**. Without it, the ingester's `ChannelKeyCache` cannot decrypt incoming channel messages, and the parallel-stack validation window (D14) would lose every channel message.
+The preserved-config export/import (migration.md) carries data that cannot be repopulated from RF traffic: `user_profiles` + roles, `routes` + nodes + observers, `node_tags`, adoptions, and node identity stubs. The open question (Q-C in iteration 4): are channels in this set? Channels are *borderline* — the `name` and `visibility` tier could plausibly be re-entered by hand, but the `key_hex` is an operator secret **never transmitted over RF**. Without it, the ingester's `ChannelKeyCache` cannot decrypt incoming channel messages, and the parallel-stack validation window (D14) would lose every channel message.
 
 ## Decision
 

@@ -35,11 +35,11 @@ Standardize on **one** content identity column per event table:
 - **TimescaleDB hypertable** partitioned by `received_at` (1-day chunks), columnar compression after 24h, configurable retention (default 30d instead of 2d).
 - Fewer, targeted indexes; compression makes scan-heavy queries cheap.
 
-**`packet_path_hops`** (D5 spike — Phase 2):
+**`packet_path_hops`** (D5 spike — Phase 0):
 
 - **Preferred target:** fold into a `path_hashes text[]` array column on `raw_receptions` + a GIN index. One insert per reception instead of 1+N; the matcher loads one array instead of joining N rows.
 - **Fallback:** if the GIN-containment candidate query regresses perf, keep a separate hypertable but **stop denormalizing** `packet_hash`, `received_at`, `observer_node_id` (reachable via the FK).
-- Decide with a benchmark in Phase 2; the array path is the default assumption in the DDL below.
+- Decide with a benchmark in **Phase 0**, before this DDL is authored (rescheduled from Phase 2 — F5, since the benchmark shapes the schema); the array path is the default assumption in the DDL below.
 
 **`telemetry`**: hypertable; `parsed_data` JSONB + GIN; raw LPP bytes follow the same D8 `object_key` pattern as `raw_receptions`.
 
@@ -115,7 +115,7 @@ OBJECT STORAGE (deferred — D8; only if measured necessary)
 
 ## 3. Phase 0 — Schema DDL (target, authoritative)
 
-Postgres-only (D10). Native `uuid`, native enums, `JSONB`, TimescaleDB hypertables. Every tenant-scoped table carries `instance_id` with an RLS policy (D3). PKs are `gen_random_uuid()` except where noted — specifically the high-volume hypertables use a **`bigserial`/`IDENTITY` PK** (Q-A), and `trace_paths.hops` is a **single `jsonb` array** (Q-B). See §4 for the rationale.
+Postgres-only (D10). Native `uuid`, native enums, `JSONB`, TimescaleDB hypertables. Every tenant-scoped table carries `instance_id` with an RLS policy (D3). PKs are `gen_random_uuid()` except for the hypertables, whose PK must include the time column (TimescaleDB requirement): `raw_receptions` uses a cheap **`bigint IDENTITY`** second column (Q-A), `telemetry`/`event_logs` pair the time column with a `uuid`, and `event_observers` uses a natural composite key — see §4. `trace_paths.hops` is a **single `jsonb` array** (Q-B).
 
 ### 3.1 Enums
 
@@ -428,6 +428,7 @@ CREATE TABLE telemetry (
 SELECT create_hypertable('telemetry', 'received_at', chunk_time_interval => INTERVAL '1 day');
 CREATE INDEX ix_telemetry_node_received ON telemetry(node_id, received_at);
 CREATE INDEX ix_telemetry_parsed_gin    ON telemetry USING gin(parsed_data);
+ALTER TABLE telemetry SET (timescaledb.compress, timescaledb.compress_segmentby = 'node_id');
 SELECT add_compression_policy('telemetry', INTERVAL '24 hours');
 -- Optional retention (telemetry is otherwise unbounded). Enabled when tuning.telemetry_retention_days
 -- is set; the retention job (derived-state.md) keeps the policy in sync with the setting.
@@ -444,6 +445,7 @@ CREATE TABLE event_logs (
   PRIMARY KEY (received_at, id)
 );
 SELECT create_hypertable('event_logs', 'received_at', chunk_time_interval => INTERVAL '1 day');
+ALTER TABLE event_logs SET (timescaledb.compress, timescaledb.compress_segmentby = 'event_type');
 SELECT add_compression_policy('event_logs', INTERVAL '24 hours');
 SELECT add_retention_policy('event_logs', INTERVAL '30 days');
 ```
@@ -453,7 +455,7 @@ Continuous aggregates (the dashboard win — replaces fan-out COUNTs).
 **A continuous aggregate can only be built over a hypertable.** `messages` and `advertisements` are
 deliberately plain OLTP tables (content-hash dedup needs a global `event_hash` unique that a hypertable
 can't provide). So **only the two `raw_receptions`-sourced counts are true CAGGs**; the dedup'd-event and
-node-count rollups the dashboard needs are **worker-maintained tables** (see §3.7a) — the same
+node-count rollups the dashboard needs are **worker-maintained tables** (see §3.6a) — the same
 "can't be a CAGG, so the worker owns it" rule the route-health tables follow (§1.4).
 
 ```sql
@@ -493,7 +495,7 @@ can be a continuous aggregate. They are refreshed by the `dashboard-rollups` Der
 CREATE TABLE dashboard_daily_message_counts (
   day          date NOT NULL,
   kind         message_kind NOT NULL,
-  channel_idx  int,
+  channel_idx  int NOT NULL DEFAULT -1,   -- -1 = the "no channel" bucket (contact messages); a PK column can't be nullable and ON CONFLICT can't match NULL
   cnt          int NOT NULL,
   instance_id  uuid NOT NULL REFERENCES instances(id),
   PRIMARY KEY (instance_id, day, kind, channel_idx)
@@ -505,7 +507,7 @@ CREATE POLICY tenant_isolation ON dashboard_daily_message_counts
 
 CREATE TABLE dashboard_daily_advert_counts (
   day          date NOT NULL,
-  route_type   text,
+  route_type   text NOT NULL DEFAULT '',   -- '' = the "no route_type" bucket; a PK column can't be nullable and ON CONFLICT can't match NULL
   cnt          int NOT NULL,
   instance_id  uuid NOT NULL REFERENCES instances(id),
   PRIMARY KEY (instance_id, day, route_type)
@@ -529,7 +531,10 @@ CREATE POLICY tenant_isolation ON dashboard_node_count_history
 ```
 
 The job upserts completed-day buckets (`INSERT … ON CONFLICT (…) DO UPDATE`) each run — idempotent,
-cheap (a handful of `GROUP BY` queries), and RLS-scoped like every other tenant table.
+cheap (a handful of `GROUP BY` queries), and RLS-scoped like every other tenant table. The worker
+`COALESCE`s the nullable source columns into the sentinel (`channel_idx → -1`, `route_type → ''`)
+before the upsert so every bucket — including the "no channel"/"no route_type" bucket — matches on a
+total primary key (NULL ≠ NULL would otherwise break idempotency for exactly those rows).
 
 ### 3.7 Route health (worker-maintained, not CAGGs)
 
@@ -548,6 +553,7 @@ CREATE TABLE route_results (
   instance_id      uuid NOT NULL REFERENCES instances(id)   -- denormalized for RLS (1:1 with routes)
 );
 ALTER TABLE route_results ENABLE ROW LEVEL SECURITY;
+ALTER TABLE route_results FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON route_results
   USING (instance_id = current_setting('app.instance_id', true)::uuid);
 
@@ -562,6 +568,7 @@ CREATE TABLE route_result_history (
   PRIMARY KEY (route_id, day)     -- also serves as the index; no separate redundant one
 );
 ALTER TABLE route_result_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE route_result_history FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON route_result_history
   USING (instance_id = current_setting('app.instance_id', true)::uuid);
 
@@ -576,6 +583,7 @@ CREATE TABLE route_recent_matches (
   PRIMARY KEY (route_id, raw_reception_rowid)
 );
 ALTER TABLE route_recent_matches ENABLE ROW LEVEL SECURITY;
+ALTER TABLE route_recent_matches FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON route_recent_matches
   USING (instance_id = current_setting('app.instance_id', true)::uuid);
 -- Capped at 3/route by the worker (ROUTE_RECENT_MATCHES_LIMIT), as today.
@@ -628,8 +636,13 @@ CREATE TABLE custom_pages (
   UNIQUE (instance_id, slug)
 );
 
--- Precomputed Prometheus gauges (derived-state.md metrics-gauges job)
--- Per-tenant: the DerivedStateWorker computes metrics per instance in the shared worker pool.
+-- Precomputed Prometheus gauges (derived-state.md metrics-gauges job).
+-- instance_id here is a gauge LABEL (one row per (key, instance)), NOT a tenancy guard: the
+-- metrics-gauges job computes per-instance values so the platform can emit instance-labeled series.
+-- Deliberately NO RLS policy on this table — a Prometheus scrape has no per-request tenant context,
+-- so the /metrics endpoint reads it as the RLS-bypassing owner role and aggregates across ALL
+-- instances (one series per instance_id). Access is controlled at the scrape layer
+-- (network policy / basic-auth on /metrics), not by RLS.
 CREATE TABLE _metrics_cache (
   key         text NOT NULL,
   instance_id uuid NOT NULL REFERENCES instances(id),
@@ -653,15 +666,15 @@ CREATE TABLE _metrics_cache (
 
 Two structural sub-decisions were agreed during iteration 3 and are baked into the DDL above. They are narrower than the D-numbered decisions but worth surfacing explicitly because they shape the high-volume tables.
 
-### Q-A — `bigserial`/`IDENTITY` PK on hypertables
+### Q-A — hypertable primary keys (time-column composite; `bigint IDENTITY` on `raw_receptions`)
 
-The high-volume hypertables (`raw_receptions`, `event_observers`, `event_logs`, `telemetry`) use a **`bigint GENERATED ALWAYS AS IDENTITY`** primary key rather than a `uuid` PK, paired with the time column in a composite `PRIMARY KEY (received_at, id)`.
+TimescaleDB hypertables **must include the time column in the primary key**, so none of them can use a bare `uuid` PK. The four hypertables satisfy this differently, by volume and access pattern:
 
-- TimescaleDB hypertables require the time column in the PK; a sequential 8-byte `bigint` is the cheapest possible second PK column.
-- 8 bytes vs 16 bytes per `uuid`, on tables that grow by millions of rows/day — the storage + index savings compound.
-- `GENERATED ALWAYS AS IDENTITY` is the SQL-standard spelling of "let Postgres manage this sequence"; no `SERIAL` pseudo-type, no manual `nextval`.
-- OLTP entity tables (`nodes`, `messages`, `advertisements`, `trace_paths`, …) keep `uuid` PKs — they're low-volume, and FK uniformity + natural-key usability matter more than 8 bytes.
-- This is reflected verbatim in §3.6: `raw_receptions.id bigint GENERATED ALWAYS AS IDENTITY`.
+- **`raw_receptions`** (the highest-volume table — one row per observer reception) uses a **`bigint GENERATED ALWAYS AS IDENTITY`** second PK column: `PRIMARY KEY (received_at, id)`. A sequential 8-byte `bigint` is the cheapest possible second PK column — 8 bytes vs 16 bytes per `uuid`, on a table that grows by millions of rows/day, so the storage + index savings compound. `GENERATED ALWAYS AS IDENTITY` is the SQL-standard spelling of "let Postgres manage this sequence"; no `SERIAL` pseudo-type, no manual `nextval`. Reflected in §3.6: `raw_receptions.id bigint GENERATED ALWAYS AS IDENTITY`.
+- **`event_observers`** (junction) uses a **natural composite key** `PRIMARY KEY (observed_at, event_hash, observer_node_id)` — no surrogate id at all, because `(event_hash, observer_node_id)` already identifies a reception uniquely and the junction is never FK-referenced.
+- **`telemetry` and `event_logs`** (lower volume) pair the time column with a **`uuid`**: `PRIMARY KEY (received_at, id)` where `id uuid DEFAULT gen_random_uuid()`. At their volume the 8-byte saving isn't worth the FK-uniformity loss, and `event_logs` rows are occasionally referenced by id.
+
+OLTP entity tables (`nodes`, `messages`, `advertisements`, `trace_paths`, …) keep bare `uuid` PKs — they're low-volume, and FK uniformity + natural-key usability matter more than 8 bytes.
 
 ### Q-B — single `hops jsonb` array on `trace_paths`
 

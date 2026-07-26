@@ -59,7 +59,7 @@ export carries:
   user_profiles, user_profile_roles, user_profile_nodes
   routes, route_nodes, route_observers
   node_tags
-  channels                 (if Q-C = migrate)
+  channels                 (D13 — locked: channels are exported)
   custom_pages             (D20 — read from old CONTENT_HOME/pages/*.md via PageLoader)
   node_stubs               (distinct public_keys referenced by any of the above)
 ```
@@ -105,7 +105,7 @@ Idempotent and re-runnable: `import-config` is safe to invoke multiple times (up
 Because the target is **greenfield infrastructure**, validation is parallel-stack, not parallel-schema. Two complete stacks ingest the same live MQTT feed:
 
 1. **Stand up the new stack** (fresh Postgres+TimescaleDB, NATS, ingester, workers, API) alongside the old, subscribed to the **same MQTT broker/topics**. Both ingest live RF traffic simultaneously.
-2. **Diff harness** (below): a CLI job compares per-hour event counts by `event_hash` between the old API and the new API. Any divergence blocks cutover.
+2. **Diff harness** (below): a CLI job compares per-hour event counts and `wire_hash` coverage between the old API and the new API (match on `wire_hash`, not `event_hash` — see the note below). Any divergence blocks cutover.
 3. **Validate for N days** (3–7) until confidence is high — the new stack has now repopulated a few days of fresh data, so there's no missing-history gap at cutover.
 4. **Cut over** DNS / reverse-proxy / MQTT subscription exclusivity to the new stack. The old stack stops ingesting.
 5. **Decommission** the old stack once the new one has served live traffic cleanly for a grace period.
@@ -135,7 +135,7 @@ meshcore-hub admin diff-stacks \
 | Check | Query | Pass condition |
 |---|---|---|
 | **Event count parity** | `GET /api/v1/messages?since=<hour>&until=<hour>` (and adverts, packets) — compare `total` | Counts match within ±2 (tolerance for race at hour boundaries) |
-| **Hash coverage** | Sample 100 `wire_hash` values from the old stack's hour; verify each exists in the new stack (`GET /api/v1/packet-groups?wire_hash=<hash>`) | 100% coverage |
+| **Hash coverage** | Sample 100 `wire_hash` values from the old stack's hour; verify each exists in the new stack (`GET /api/v1/packet-groups/<wire_hash>`) | 100% coverage |
 | **Observer parity** | For the sampled events, compare observer counts (`event_observers` junction) | Counts match exactly |
 | **Node count** | `GET /api/v1/nodes` — compare `total` | Within ±5 (nodes appear/disappear on advert timing) |
 

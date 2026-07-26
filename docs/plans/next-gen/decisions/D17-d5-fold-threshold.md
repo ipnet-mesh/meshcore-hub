@@ -1,11 +1,11 @@
 # D17: D5 Fold Threshold (1.5× / 500ms / 40% Commonality)
 
 - **Status:** Locked
-- **Iteration:** 4
+- **Iteration:** 4 (benchmark rescheduled to Phase 0 in iteration 8 — F5)
 
 ## Context
 
-D5 defers the fold-vs-separate decision to a Phase 2 benchmark because the GIN-containment candidate query's behaviour under high hash commonality is the unknown. To make the spike produce a decision rather than a debate, §18.3.4 / §13-D17 needed a quantitative gate: what read-cost regression is acceptable in exchange for the write-cost win?
+D5 defers the fold-vs-separate decision to a Phase 0 benchmark (rescheduled from Phase 2 in iteration 8 — F5, so the outcome lands before the schema is frozen) because the GIN-containment candidate query's behaviour under high hash commonality is the unknown. To make the spike produce a decision rather than a debate, testing.md's D5 benchmark plan needed a quantitative gate: what read-cost regression is acceptable in exchange for the write-cost win?
 
 ## Decision
 
@@ -16,7 +16,7 @@ D5 defers the fold-vs-separate decision to a Phase 2 benchmark because the GIN-c
 
 If either fails, fall back to the separate hypertable (still better than today because TimescaleDB-partitioned and no longer denormalized). The `raw_receptions.path_hashes` column stays either way (backs the packet-group detail view); the hops table is additive only in the fallback.
 
-**Rationale:** the folded schema eliminates the hops table's write amplification (a 6-hop packet × 4 observers = 24 rows today → 1 row folded). That write-cost win is worth up to a **1.5× read-cost tradeoff** because reads happen on a 300s evaluator cadence while writes happen on every packet. The **500ms p95 guard** prevents any single route becoming a latency outlier. The **40% commonality** test level is the documented "breaker" — high commonality inflates GIN candidate sets, shifting cost from candidate-fetch to the Python subsequence pass.
+**Rationale:** the folded schema eliminates the hops table's write amplification (a 6-hop packet × 4 observers = 24 rows today → 1 row folded). That write-cost win is worth up to a **1.5× read-cost tradeoff** because reads happen on a 300s evaluator cadence while writes happen on every packet. The **500ms p95 guard** prevents any single route becoming a latency outlier. The **40% commonality** test level is the documented "breaker" — high commonality inflates GIN candidate sets, shifting cost from candidate-fetch to the TypeScript subsequence pass.
 
 ## Consequences
 

@@ -5,7 +5,7 @@
 
 ## Context
 
-Today the Click CLI mirrors config: `--retention-days` on the cleanup command, `--mqtt-host` as a service flag, and so on. This creates two problems. First, parameter explosion threads through `create_app` → `run_collector` — every CLI flag is another constructor argument that may or may not override the env var. Second, the "which wins, env or flag?" ambiguity is undocumented and inconsistent. The §5.1 principle 8 / §13-D18 question (iteration 5: user said "ditch CLI," then clarified "keep for migrations/management, just don't duplicate config"): shrink the CLI to genuine operational commands, or keep it as a third config surface?
+Today the Click CLI mirrors config: `--retention-days` on the cleanup command, `--mqtt-host` as a service flag, and so on. This creates two problems. First, parameter explosion threads through `create_app` → `run_collector` — every CLI flag is another constructor argument that may or may not override the env var. Second, the "which wins, env or flag?" ambiguity is undocumented and inconsistent. The principle 8 (overview.md §5) / the question (iteration 5: user said "ditch CLI," then clarified "keep for migrations/management, just don't duplicate config"): shrink the CLI to genuine operational commands, or keep it as a third config surface?
 
 ## Decision
 
@@ -16,12 +16,12 @@ Today the Click CLI mirrors config: `--retention-days` on the cleanup command, `
 
 **never also a CLI flag.** No `--retention-days` on the cleanup command when retention is a runtime setting; no `--mqtt-host` service flag when `MQTT_HOST` env var exists.
 
-The Click group **stays** but shrinks to genuine operational commands that aren't config:
+The CLI group (Click today; **commander** in the D22 TypeScript stack) **stays** but shrinks to genuine operational commands that aren't config:
 
 | Command | Purpose |
 |---|---|
-| `db upgrade` / `db revision` | Migrations (alembic) |
-| `db export-config` / `db import-config` | Preserved-config migration (§18.2) |
+| `db upgrade` / `db revision` | Migrations (alembic today; **drizzle-kit** in the D22 TS stack) |
+| `db export-config` / `db import-config` | Preserved-config migration (migration.md) |
 | `admin create-user` | Headless bootstrap (D12) |
 | `health` | Docker healthchecks |
 | `cleanup --now` / `routes --rebuild` | Force-run a job outside its cadence |

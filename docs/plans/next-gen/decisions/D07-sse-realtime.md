@@ -5,7 +5,7 @@
 
 ## Context
 
-Today's "realtime" is polling-only (F3): every live page runs a redundant client (TanStack) + server (Redis/ETag) cache, and every poll round-trips even on 304. There is no `/ws` or SSE anywhere. The §8.6 question: add WebSocket, SSE, or stay polling? Live pages (Messages, Packets, Dashboard activity) need instant updates; the 30s poll is the source of the "feels stale" complaint.
+Today's "realtime" is polling-only (overview pain F3 — "polling-only realtime" from overview.md §4.4; an overview pain-table number, not a review-findings F-number): every live page runs a redundant client (TanStack) + server (Redis/ETag) cache, and every poll round-trips even on 304. There is no `/ws` or SSE anywhere. The question (api.md → Realtime): add WebSocket, SSE, or stay polling? Live pages (Messages, Packets, Dashboard activity) need instant updates; the 30s poll is the source of the "feels stale" complaint.
 
 ## Decision
 
