@@ -1,5 +1,8 @@
 # Next-Generation Architecture — MeshCore Hub Rewrite
 
+> **Moved:** The live version of this plan is now at **[ipnet-mesh/meshloom](https://github.com/ipnet-mesh/meshloom)**
+> (`docs/plan/`). This copy is a frozen snapshot of the design record (commit `fd51e72`).
+>
 > **Status:** Design complete (iterations 1–9). All 23 architectural decisions locked. All design
 > questions resolved. Iteration 8 applied 13 review corrections — see
 > [review-findings.md](review-findings.md) — four of them schema-level (multi-tenant uniqueness, CAGG
