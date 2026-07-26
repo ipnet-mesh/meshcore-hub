@@ -6,6 +6,8 @@
 > vs hypertable, RLS enforcement, phase sequencing) resolved before the Phase 0 DDL freeze.
 > Iteration 9 added [D23](decisions/D23-test-pyramid-coverage.md) (test pyramid & CI coverage policy).
 > **Supersedes:** The monolithic `REWRITE.md` (split into these files).
+> **New product name:** **Meshloom** — the rewrite's repo / npm package / CLI / docs / domain brand.
+> Internal code stays brand-agnostic (`meshapp`); see [phasing.md → Naming convention](phasing.md#naming-convention).
 
 This directory contains the complete design for a from-scratch rewrite of MeshCore Hub.
 The product and domain model are preserved; the **system architecture** is reshaped around

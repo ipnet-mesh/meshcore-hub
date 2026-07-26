@@ -24,6 +24,19 @@ that posture and go stale on first contact with the code.
 checklist in dependency order, (3) author the phase's `### Tests` deliverables alongside the code
 (D23), (4) satisfy the `testing.md` exit criteria before declaring the phase done.
 
+## Naming convention
+
+The rewrite's product/brand name is **Meshloom** (`meshloom`): repo, npm package, CLI binary, docs,
+domain. **MeshCore is the protocol/decoder's term, not ours** — do not use "MeshCore" or "core" in
+the new product's branding. In this plan, "MeshCore Hub" refers only to the *current* product being
+rewritten; the new product is **Meshloom**.
+
+Internally, code stays **brand-agnostic** so a future rename never cascades through the codebase:
+
+- **Package / module root:** `meshapp` (generic) — not `meshloom`.
+- **Class & identifier names:** descriptive — `MqttIngester`, `IngestWorker`, `DerivedStateWorker`,
+  `WebhookWorker`, `AuthMiddleware` — never brand-prefixed (`MeshloomIngester` etc.).
+
 ## Phase 0 — Foundations (no behavior change)
 
 - **Run the D5 fold-vs-separate benchmark first** (synthetic data, throwaway TimescaleDB — testing.md → [D5 plan](testing.md#d5-benchmark-plan-fold-vs-separate)). Its outcome decides the `raw_receptions.path_hashes` shape, so it must land **before** the DDL is authored. This was previously (mis)scheduled in Phase 2, which created a circular dependency — the schema was "frozen" in Phase 0 but the benchmark that shapes it ran two phases later (F5).
