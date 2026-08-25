@@ -2,6 +2,7 @@
 
 import json
 import logging
+import socket
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
@@ -174,6 +175,7 @@ class MQTTClient:
         )
         self._connected = False
         self._message_handlers: dict[str, list[MessageHandler]] = {}
+        self._topic_qos: dict[str, int] = {}
 
         # Set WebSocket path when using MQTT over WebSockets.
         if transport == "websockets":
@@ -193,6 +195,67 @@ class MQTTClient:
         self._client.on_connect = self._on_connect
         self._client.on_disconnect = self._on_disconnect
         self._client.on_message = self._on_message
+        self._client.on_subscribe = self._on_subscribe
+
+    def _apply_socket_keepalive(self) -> None:
+        """Enable TCP keepalive on the active socket.
+
+        Some brokers destroy connections without sending a FIN/RST, which
+        leaves a half-open socket that paho never sees as disconnected. TCP
+        keepalive lets the kernel probe the peer and fail the socket so paho
+        can reconnect and resubscribe.
+
+        With transport=websockets, paho's socket() returns a _WebsocketWrapper;
+        the raw socket is unwrapped from its ``_socket`` attribute. Best-effort:
+        failures (unsupported option, no socket yet) are logged at DEBUG and
+        never fatal.
+        """
+        sock = getattr(self._client, "socket", lambda: None)()
+        if sock is None:
+            logger.debug("No MQTT socket available for TCP keepalive setup")
+            return
+        if not hasattr(sock, "setsockopt"):
+            raw = getattr(sock, "_socket", None)
+            if raw is None or not hasattr(raw, "setsockopt"):
+                logger.debug(
+                    "MQTT socket does not expose setsockopt; skipping TCP keepalive"
+                )
+                return
+            sock = raw
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            if hasattr(socket, "TCP_KEEPIDLE"):
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
+            if hasattr(socket, "TCP_KEEPINTVL"):
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 30)
+            if hasattr(socket, "TCP_KEEPCNT"):
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+            logger.debug("TCP keepalive enabled on MQTT socket")
+        except (OSError, AttributeError) as e:
+            logger.debug("Could not enable TCP keepalive on MQTT socket: %s", e)
+
+    def _on_subscribe(
+        self,
+        client: mqtt.Client,
+        userdata: Any,
+        mid: Any,
+        reason_code_list: Any,
+        properties: Any = None,
+    ) -> None:
+        """Handle subscribe callback: verify broker granted the subscription."""
+        reason_codes = (
+            list(reason_code_list)
+            if reason_code_list is not None and not isinstance(reason_code_list, int)
+            else [reason_code_list]
+        )
+        for rc in reason_codes:
+            value = getattr(rc, "value", rc)
+            if value == 0x80 or (isinstance(value, str) and "0x80" in value):
+                logger.error(
+                    "MQTT broker refused subscription (mid=%s, reason=%s)", mid, rc
+                )
+            else:
+                logger.debug("Subscription acknowledged (mid=%s, granted=%s)", mid, rc)
 
     def _on_connect(
         self,
@@ -208,10 +271,13 @@ class MQTTClient:
             logger.info(
                 f"Connected to MQTT broker at {self.config.host}:{self.config.port}"
             )
+            # Enable TCP keepalive on the fresh socket so half-open
+            # connections are detected and paho can reconnect.
+            self._apply_socket_keepalive()
             # Resubscribe to topics on reconnect
-            for topic in self._message_handlers.keys():
-                self._client.subscribe(topic)
-                logger.debug(f"Resubscribed to topic: {topic}")
+            for topic, qos in self._topic_qos.items():
+                self._client.subscribe(topic, qos)
+                logger.debug(f"Resubscribed to topic: {topic} (qos={qos})")
         else:
             logger.error(f"Failed to connect to MQTT broker: {reason_code}")
 
@@ -317,6 +383,7 @@ class MQTTClient:
         """
         if topic not in self._message_handlers:
             self._message_handlers[topic] = []
+            self._topic_qos[topic] = qos
             if self._connected:
                 self._client.subscribe(topic, qos)
                 logger.debug(f"Subscribed to topic: {topic}")
@@ -331,6 +398,7 @@ class MQTTClient:
         """
         if topic in self._message_handlers:
             del self._message_handlers[topic]
+            self._topic_qos.pop(topic, None)
             self._client.unsubscribe(topic)
             logger.debug(f"Unsubscribed from topic: {topic}")
 

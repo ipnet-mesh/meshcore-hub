@@ -78,7 +78,6 @@ class Subscriber(LetsMeshNormalizer):
         self._running = False
         self._shutdown_event = threading.Event()
         self._handlers: dict[str, EventHandler] = {}
-        self._mqtt_connected = False
         self._db_connected = False
         self._health_reporter: Optional[HealthReporter] = None
         # Webhook processing
@@ -131,7 +130,7 @@ class Subscriber(LetsMeshNormalizer):
         Returns:
             True if MQTT and database are connected
         """
-        return self._running and self._mqtt_connected and self._db_connected
+        return self._running and self.mqtt.is_connected and self._db_connected
 
     def _load_channel_keys_from_db(self) -> bool:
         """Load channel keys from the database (synchronous).
@@ -204,7 +203,7 @@ class Subscriber(LetsMeshNormalizer):
         return {
             "healthy": self.is_healthy,
             "running": self._running,
-            "mqtt_connected": self._mqtt_connected,
+            "mqtt_connected": self.mqtt.is_connected,
             "database_connected": self._db_connected,
         }
 
@@ -769,11 +768,11 @@ class Subscriber(LetsMeshNormalizer):
             try:
                 self.mqtt.connect()
                 self.mqtt.start_background()
-                self._mqtt_connected = True
-                logger.info("Connected to MQTT broker")
+                logger.info(
+                    "MQTT connection initiated (awaiting broker acknowledgement)"
+                )
                 break
             except Exception as e:
-                self._mqtt_connected = False
                 if attempt < max_retries:
                     logger.warning(
                         "MQTT connection attempt %d/%d failed: %s. Retrying in %.1fs...",
@@ -880,7 +879,6 @@ class Subscriber(LetsMeshNormalizer):
         # Stop MQTT
         self.mqtt.stop()
         self.mqtt.disconnect()
-        self._mqtt_connected = False
 
         logger.info("Collector subscriber stopped")
 

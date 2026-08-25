@@ -14,6 +14,7 @@ class TestSubscriber:
     def mock_mqtt_client(self):
         """Create a mock MQTT client."""
         client = MagicMock()
+        client.is_connected = False
         client.topic_builder = MagicMock()
         client.topic_builder.prefix = "meshcore"
         client.topic_builder.all_events_topic.return_value = "meshcore/+/event/#"
@@ -1224,6 +1225,7 @@ class TestSubscriberDispatch:
     def mock_mqtt_client(self):
         """Create a mock MQTT client."""
         client = MagicMock()
+        client.is_connected = False
         client.topic_builder = MagicMock()
         client.topic_builder.prefix = "meshcore"
         client.topic_builder.all_events_topic.return_value = "meshcore/+/event/#"
@@ -1298,8 +1300,22 @@ class TestSubscriberDispatch:
             subscriber.start()
 
         assert mock_mqtt_client.connect.call_count == 2
-        assert subscriber._mqtt_connected is True
+        assert subscriber._running is True
         subscriber.stop()
+
+    def test_health_reflects_mqtt_connection_state(self, mock_mqtt_client, db_manager):
+        """Health tracks the client's real connection state, not an optimistic flag."""
+        subscriber = Subscriber(mock_mqtt_client, db_manager)
+        subscriber._running = True
+        subscriber._db_connected = True
+
+        mock_mqtt_client.is_connected = False
+        assert subscriber.is_healthy is False
+        assert subscriber.get_health_status()["mqtt_connected"] is False
+
+        mock_mqtt_client.is_connected = True
+        assert subscriber.is_healthy is True
+        assert subscriber.get_health_status()["mqtt_connected"] is True
 
     def test_start_mqtt_all_retries_exhausted(self, mock_mqtt_client, db_manager):
         """Subscriber raises when all MQTT retries fail."""
