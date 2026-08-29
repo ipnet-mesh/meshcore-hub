@@ -6,6 +6,7 @@ from typing import Any, AsyncGenerator
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from meshcore_hub import __version__
@@ -63,7 +64,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if _cache is not None and hasattr(_cache, "close"):
         _cache.close()
     if _db_manager:
-        _db_manager.dispose()
+        # adispose: the async engine's pooled connections must be closed
+        # from this (running) event loop.
+        await _db_manager.adispose()
         _db_manager = None
     logger.info("Database connection closed")
 
@@ -288,15 +291,19 @@ def create_app(
         return {"status": "healthy", "version": __version__}
 
     @app.get("/health/ready", tags=["Health"])
-    def health_ready() -> dict:
-        """Readiness check including database and optional Redis."""
+    def health_ready() -> JSONResponse:
+        """Readiness check including database and optional Redis.
+
+        Returns 503 when not ready so Docker/Kubernetes readiness probes
+        (which judge by HTTP status code) pull the instance from rotation.
+        """
         try:
             db = get_db_manager()
             with db.session_scope() as session:
                 session.execute(text("SELECT 1"))
             result: dict[str, str] = {"status": "ready", "database": "connected"}
         except Exception as e:
-            result = {"status": "not_ready", "database": str(e)}
+            result = {"status": "not_ready", "database": type(e).__name__}
 
         redis_cache = getattr(app.state, "redis_cache", None)
         redis_enabled = getattr(app.state, "redis_enabled", False)
@@ -306,7 +313,8 @@ def create_app(
             else:
                 result["redis"] = "unreachable"
 
-        return result
+        status_code = 200 if result.get("status") == "ready" else 503
+        return JSONResponse(content=result, status_code=status_code)
 
     return app
 

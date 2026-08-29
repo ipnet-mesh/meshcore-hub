@@ -243,24 +243,19 @@ class WebhookDispatcher:
 
         results: dict[str, bool] = {}
 
-        # Dispatch to all matching webhooks concurrently
-        tasks = []
-        for webhook in self.webhooks:
-            if not webhook.enabled:
-                continue
-            if webhook.matches_event(event_type, payload):
-                tasks.append(self._send_webhook(webhook, event_data))
+        # Dispatch to all matching webhooks concurrently. Evaluate
+        # matches_event once — re-running it for the zip would double the
+        # filter work and risk desynchronizing results from tasks.
+        matched = [
+            webhook
+            for webhook in self.webhooks
+            if webhook.enabled and webhook.matches_event(event_type, payload)
+        ]
+        tasks = [self._send_webhook(webhook, event_data) for webhook in matched]
 
         if tasks:
             task_results = await asyncio.gather(*tasks, return_exceptions=True)
-            for webhook, result in zip(
-                [
-                    w
-                    for w in self.webhooks
-                    if w.enabled and w.matches_event(event_type, payload)
-                ],
-                task_results,
-            ):
+            for webhook, result in zip(matched, task_results):
                 if isinstance(result, Exception):
                     results[webhook.name] = False
                     logger.error(f"Webhook {webhook.name} failed: {result}")
@@ -312,11 +307,25 @@ class WebhookDispatcher:
                         f"(status={response.status_code})"
                     )
                     return True
-                else:
-                    logger.warning(
-                        f"Webhook {webhook.name} returned status {response.status_code}"
+
+                last_error = Exception(f"HTTP {response.status_code}")
+
+                # Permanent client errors (bad URL, auth, payload rejected)
+                # will never succeed on retry — fail fast instead of
+                # multiplying the outage window. 408/429 are retryable.
+                if 400 <= response.status_code < 500 and response.status_code not in (
+                    408,
+                    429,
+                ):
+                    logger.error(
+                        f"Webhook {webhook.name} returned status "
+                        f"{response.status_code}; not retryable"
                     )
-                    last_error = Exception(f"HTTP {response.status_code}")
+                    return False
+
+                logger.warning(
+                    f"Webhook {webhook.name} returned status " f"{response.status_code}"
+                )
 
             except httpx.TimeoutException as e:
                 logger.warning(f"Webhook {webhook.name} timed out: {e}")

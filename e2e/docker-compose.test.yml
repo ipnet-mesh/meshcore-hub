@@ -135,7 +135,8 @@ services:
       - DATABASE_PASSWORD=e2epassword
     command: ["collector"]
     healthcheck:
-      test: ["CMD", "pgrep", "-f", "meshcore-hub"]
+      # Same probe as the main compose file — the image has no pgrep.
+      test: ["CMD", "meshcore-hub", "health", "collector"]
       interval: 5s
       timeout: 5s
       retries: 3

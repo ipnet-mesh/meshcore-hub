@@ -11,6 +11,7 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 
 import { useAppConfig, hasRole } from "@/context/AppConfigContext";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
+import { useFormatDateTime } from "@/utils/format";
 import { qk, invalidate } from "@/utils/queryKeys";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { Loading, ErrorAlert } from "@/components/Alerts";
@@ -372,6 +373,7 @@ function MatchRow({
   onNavigate: (url: string) => void;
 }) {
   const { t } = useTranslation();
+  const { formatDateTime } = useFormatDateTime();
   const prefixLen = 2 * (route.match_width || 1);
   const pathLookup = new Map(
     (route.route_nodes || []).map((rn) => [
@@ -439,7 +441,7 @@ function MatchRow({
       })}
       {match.received_at && (
         <span className="ml-auto opacity-40 whitespace-nowrap">
-          {new Date(match.received_at).toLocaleString()}
+          {formatDateTime(match.received_at)}
         </span>
       )}
     </div>
@@ -474,9 +476,9 @@ function DetailContent({
                 <span key={d.date} className="flex-1 text-center min-w-0 truncate">
                   {i === historyData.length - 1
                     ? t("common.now")
-                    : new Date(`${d.date}T00:00:00`).toLocaleDateString(
+                    : new Date(`${d.date}T00:00:00Z`).toLocaleDateString(
                         undefined,
-                        { day: "2-digit", month: "2-digit" },
+                        { day: "2-digit", month: "2-digit", timeZone: "UTC" },
                       )}
                 </span>
               ))}

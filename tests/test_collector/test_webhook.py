@@ -319,6 +319,51 @@ class TestWebhookDispatcher:
         await dispatcher.stop()
 
     @pytest.mark.asyncio
+    async def test_dispatch_4xx_not_retried(self, dispatcher):
+        """Permanent client errors must fail fast instead of retrying."""
+        webhook = WebhookConfig(
+            url="https://example.com/webhook",
+            name="notfound-webhook",
+            max_retries=3,
+            retry_backoff=0.01,
+        )
+        dispatcher.add_webhook(webhook)
+        await dispatcher.start()
+
+        mock_response = AsyncMock()
+        mock_response.status_code = 404
+
+        with patch.object(dispatcher._client, "post", return_value=mock_response) as m:
+            result = await dispatcher.dispatch("event", {"data": "test"})
+            assert result == {"notfound-webhook": False}
+            # Exactly one request despite max_retries=3.
+            assert m.call_count == 1
+
+        await dispatcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_dispatch_5xx_retried(self, dispatcher):
+        """Server errors are still retried."""
+        webhook = WebhookConfig(
+            url="https://example.com/webhook",
+            name="server-error-webhook",
+            max_retries=2,
+            retry_backoff=0.01,
+        )
+        dispatcher.add_webhook(webhook)
+        await dispatcher.start()
+
+        mock_response = AsyncMock()
+        mock_response.status_code = 503
+
+        with patch.object(dispatcher._client, "post", return_value=mock_response) as m:
+            result = await dispatcher.dispatch("event", {"data": "test"})
+            assert result == {"server-error-webhook": False}
+            assert m.call_count == 3  # initial + 2 retries
+
+        await dispatcher.stop()
+
+    @pytest.mark.asyncio
     async def test_dispatch_timeout(self, dispatcher):
         """Test dispatch handles timeouts."""
         webhook = WebhookConfig(

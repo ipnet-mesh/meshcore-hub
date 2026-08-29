@@ -183,11 +183,16 @@ function createChartOptions(showLegend: boolean): ChartOptions<"line"> {
 }
 
 function formatDateLabels(data: { date: string }[]): string[] {
+  // Backend buckets are UTC date-only strings ("%Y-%m-%d"). Parse them as
+  // UTC and format with an explicit timeZone so users in negative UTC
+  // offsets don't see every label shifted to the previous day.
   return data.map((d) => {
-    const date = new Date(d.date);
+    const date = new Date(`${d.date}T00:00:00Z`);
+    if (Number.isNaN(date.getTime())) return d.date;
     return date.toLocaleDateString("en-GB", {
       day: "numeric",
       month: "short",
+      timeZone: "UTC",
     });
   });
 }

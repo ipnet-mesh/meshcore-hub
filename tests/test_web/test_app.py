@@ -552,6 +552,25 @@ class TestSystemMaintenance:
 
         assert '"system_maintenance": true' in client.get("/").text
 
+    def test_maintenance_blocks_api_proxy(
+        self, mock_http_client: MockHttpClient
+    ) -> None:
+        """Maintenance mode must gate the API proxy, not just the SPA UI."""
+        app = create_app(
+            api_url="http://localhost:8000",
+            api_key="test-api-key",
+            system_maintenance=True,
+            features=ALL_FEATURES_ENABLED,
+        )
+        app.state.http_client = mock_http_client
+        client = TestClient(app, raise_server_exceptions=True)
+
+        response = client.get("/api/v1/nodes")
+        assert response.status_code == 503
+        assert response.json()["code"] == "MAINTENANCE"
+        # The proxy must not have forwarded anything to the backend.
+        assert mock_http_client.last_request_params is None
+
     def test_maintenance_off_by_default(self, client: TestClient) -> None:
         """Without maintenance, nav links render normally (regression)."""
         html = client.get("/").text

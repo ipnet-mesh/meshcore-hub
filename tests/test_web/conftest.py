@@ -247,7 +247,12 @@ class MockHttpClient:
         }
 
     def set_response(
-        self, method: str, path: str, status_code: int = 200, json_data: Any = None
+        self,
+        method: str,
+        path: str,
+        status_code: int = 200,
+        json_data: Any = None,
+        exc: Exception | None = None,
     ) -> None:
         """Set a custom response for a specific endpoint.
 
@@ -256,11 +261,14 @@ class MockHttpClient:
             path: URL path
             status_code: Response status code
             json_data: JSON response body
+            exc: When set, the client raises this instead of responding
+                (simulates an unreachable backend)
         """
         key = f"{method}:{path}"
         self._responses[key] = {
             "status_code": status_code,
             "json": json_data,
+            "exc": exc,
         }
 
     def set_paged_response(self, method: str, path: str, handler: Any) -> None:
@@ -292,6 +300,8 @@ class MockHttpClient:
             return self._response_from_data(
                 {"status_code": 404, "json": {"detail": "Not found"}}
             )
+        if response_data.get("exc") is not None:
+            raise response_data["exc"]
         return self._response_from_data(response_data)
 
     async def request(
