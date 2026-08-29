@@ -141,6 +141,45 @@ async def require_admin(
     )
 
 
+async def optional_user_identity(
+    request: Request,
+    token: Annotated[str | None, Depends(get_current_token)],
+) -> str | None:
+    """Optionally resolve a proxy-injected user identity via X-User-Id header.
+
+    Same trust model as :func:`require_user_owner` — when API keys are
+    configured, the bearer key must be valid for the header to be trusted.
+    Unlike ``require_user_owner``, a missing header is not an error: it
+    returns ``None`` so public endpoints can fall back to anonymous access.
+
+    Returns:
+        The user_id string from the X-User-Id header, or None.
+
+    Raises:
+        HTTPException: 401 if a key is required but missing/invalid.
+    """
+    read_key, admin_key = get_api_keys(request)
+
+    if read_key or admin_key:
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        key_valid = (read_key and hmac.compare_digest(token, read_key)) or (
+            admin_key and hmac.compare_digest(token, admin_key)
+        )
+        if not key_valid:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid API key",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+    return request.headers.get(X_USER_ID_HEADER) or None
+
+
 # Dependency types for use in routes
 RequireRead = Annotated[str | None, Depends(require_read)]
 RequireAdmin = Annotated[str, Depends(require_admin)]
@@ -253,3 +292,4 @@ RequireOperator = Annotated[tuple[str, list[str]], Depends(require_operator)]
 RequireOperatorOrAdmin = Annotated[
     tuple[str, list[str]], Depends(require_operator_or_admin)
 ]
+OptionalUserIdentity = Annotated[str | None, Depends(optional_user_identity)]

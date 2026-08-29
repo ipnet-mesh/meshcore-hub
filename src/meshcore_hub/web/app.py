@@ -20,7 +20,10 @@ from meshcore_hub import __version__
 from meshcore_hub.collector.letsmesh_decoder import LetsMeshPacketDecoder
 from meshcore_hub.common.i18n import load_locale, t
 from meshcore_hub.common.schemas import RadioConfig
-from meshcore_hub.web.middleware import CacheControlMiddleware
+from meshcore_hub.web.middleware import (
+    CacheControlMiddleware,
+    SecurityHeadersMiddleware,
+)
 from meshcore_hub.web.oidc import (
     get_session_roles,
     get_session_user,
@@ -546,12 +549,24 @@ def create_app(
 
     # Add cache control headers based on resource type
     app.add_middleware(CacheControlMiddleware)
+    # Security headers + nonce-based CSP (kill switch via WEB_SECURITY_HEADERS)
+    app.add_middleware(
+        SecurityHeadersMiddleware,
+        enabled=settings.web_security_headers,
+        csp_extra=settings.web_csp_extra,
+    )
 
     # OIDC / session middleware
     if settings.oidc_enabled:
+        if not settings.oidc_session_secret:
+            raise RuntimeError(
+                "OIDC_SESSION_SECRET must be set when OIDC is enabled "
+                "(OIDC_ENABLED=true). Generate one with: "
+                'python -c "import secrets; print(secrets.token_urlsafe(48))"'
+            )
         app.add_middleware(
             SessionMiddleware,
-            secret_key=settings.oidc_session_secret or "insecure-dev-secret",
+            secret_key=settings.oidc_session_secret,
             session_cookie="meshcore-session",
             max_age=settings.oidc_session_max_age,
             same_site="lax",
@@ -921,6 +936,28 @@ def create_app(
         """Return node location data as JSON for the map."""
         if not request.app.state.features.get("map", True):
             return JSONResponse({"detail": "Map feature is disabled"}, status_code=404)
+
+        # Resolve the viewer's identity/roles exactly like the API proxy so
+        # the per-endpoint access mapping applies to this server-side
+        # profiles fetch too. Without this, /map/data would leak profile
+        # data to viewers the proxy would deny at /api/v1/user/profiles.
+        oidc_enabled = getattr(request.app.state, "oidc_enabled", False)
+        viewer_user_id: str | None = None
+        viewer_roles: frozenset[str] = frozenset()
+        if oidc_enabled:
+            user = get_session_user(request)
+            viewer_user_id = user.get("sub") if user else None
+            roles_claim = getattr(request.app.state, "oidc_roles_claim", "roles")
+            viewer_roles = frozenset(get_session_roles(request, roles_claim))
+        profiles_allowed = check_api_access(
+            "v1/user/profiles",
+            "GET",
+            oidc_enabled,
+            viewer_roles,
+            user_id=viewer_user_id,
+            mapping=request.app.state.endpoint_access,
+        )
+
         nodes_with_location: list[dict[str, Any]] = []
         profiles_by_id: dict[str, dict[str, Any]] = {}
         error: str | None = None
@@ -928,16 +965,17 @@ def create_app(
         nodes_with_coords = 0
 
         try:
-            profile_items, _, _ = await _fetch_all_pages(
-                request.app.state.http_client, "/api/v1/user/profiles"
-            )
-            for profile in profile_items:
-                profiles_by_id[profile["id"]] = {
-                    "id": profile.get("id"),
-                    "name": profile.get("name"),
-                    "callsign": profile.get("callsign"),
-                    "roles": profile.get("roles", []),
-                }
+            if profiles_allowed:
+                profile_items, _, _ = await _fetch_all_pages(
+                    request.app.state.http_client, "/api/v1/user/profiles"
+                )
+                for profile in profile_items:
+                    profiles_by_id[profile["id"]] = {
+                        "id": profile.get("id"),
+                        "name": profile.get("name"),
+                        "callsign": profile.get("callsign"),
+                        "roles": profile.get("roles", []),
+                    }
 
             # Fetch all nodes from the API, following pagination. The API caps
             # limit at 500 and sorts last_seen desc, so a single request only
@@ -1043,7 +1081,7 @@ def create_app(
                 "lon": sum(n["lon"] for n in adopted_nodes) / len(adopted_nodes),
             }
 
-        return JSONResponse(
+        response = JSONResponse(
             {
                 "nodes": nodes_with_location,
                 "profiles": list(profiles_by_id.values()),
@@ -1057,6 +1095,12 @@ def create_app(
                 },
             }
         )
+        # With OIDC enabled the payload can vary by viewer (profiles are
+        # access-gated), so shared caches must not store it. The middleware
+        # honors an explicitly preset Cache-Control header.
+        if oidc_enabled:
+            response.headers["cache-control"] = "private, max-age=300"
+        return response
 
     # --- Custom Pages API ---
     @app.get("/spa/pages/{slug}", tags=["SPA"])
@@ -1334,6 +1378,7 @@ def create_app(
                 "config_json": config_json,
                 "asset_app_js": request.app.state.asset_app_js,
                 "asset_app_css": request.app.state.asset_app_css,
+                "csp_nonce": getattr(request.state, "csp_nonce", None),
             },
         )
 

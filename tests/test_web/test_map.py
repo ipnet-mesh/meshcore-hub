@@ -1,10 +1,11 @@
 """Tests for the map page routes."""
 
 from typing import Any
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from tests.test_web.conftest import MockHttpClient
+from tests.test_web.conftest import MEMBER_USER, MockHttpClient
 
 
 class TestMapPage:
@@ -84,6 +85,89 @@ class TestMapDataEndpoint:
         # Node One has no location tags, so should not appear
         node_names = [n["name"] for n in nodes]
         assert "Node One" not in node_names
+
+
+class TestMapDataProfilesAccess:
+    """Tests for viewer-gated profile data in /map/data."""
+
+    PROFILES_PAYLOAD = {
+        "items": [
+            {
+                "id": "profile-1",
+                "name": "Op One",
+                "callsign": "OP1ABC",
+                "roles": ["operator"],
+            }
+        ],
+        "total": 1,
+    }
+
+    @staticmethod
+    def _restrict_profiles(web_app: Any) -> None:
+        """Restrict GET v1/user/profiles to the member role."""
+        web_app.state.endpoint_access["v1/user/profiles"]["GET"] = frozenset({"member"})
+
+    def test_restricted_profiles_hidden_from_anonymous(
+        self, web_app_with_oidc: Any, mock_http_client: MockHttpClient
+    ) -> None:
+        """Anonymous viewers get no profiles when the mapping restricts them."""
+        self._restrict_profiles(web_app_with_oidc)
+        web_app_with_oidc.state.http_client = mock_http_client
+
+        client = TestClient(web_app_with_oidc, raise_server_exceptions=True)
+        response = client.get("/map/data")
+
+        assert response.status_code == 200
+        assert response.json()["profiles"] == []
+        # Viewer-dependent payload must never be publicly cacheable
+        assert "private" in response.headers["cache-control"]
+
+    def test_restricted_profiles_visible_to_member(
+        self, web_app_with_oidc: Any, mock_http_client: MockHttpClient
+    ) -> None:
+        """Viewers with the required role still receive profiles."""
+        self._restrict_profiles(web_app_with_oidc)
+        mock_http_client.set_response(
+            "GET", "/api/v1/user/profiles", json_data=self.PROFILES_PAYLOAD
+        )
+        web_app_with_oidc.state.http_client = mock_http_client
+
+        with (
+            patch("meshcore_hub.web.app.get_session_user", return_value=MEMBER_USER),
+            patch("meshcore_hub.web.oidc.get_session_user", return_value=MEMBER_USER),
+        ):
+            client = TestClient(web_app_with_oidc, raise_server_exceptions=True)
+            response = client.get("/map/data")
+
+        assert response.status_code == 200
+        profiles = response.json()["profiles"]
+        assert len(profiles) == 1
+        assert profiles[0]["name"] == "Op One"
+        assert "private" in response.headers["cache-control"]
+
+    def test_open_mapping_serves_profiles_to_anonymous(
+        self, web_app_with_oidc: Any, mock_http_client: MockHttpClient
+    ) -> None:
+        """Default open mapping serves profiles even to anonymous viewers."""
+        mock_http_client.set_response(
+            "GET", "/api/v1/user/profiles", json_data=self.PROFILES_PAYLOAD
+        )
+        web_app_with_oidc.state.http_client = mock_http_client
+
+        client = TestClient(web_app_with_oidc, raise_server_exceptions=True)
+        response = client.get("/map/data")
+
+        assert response.status_code == 200
+        assert len(response.json()["profiles"]) == 1
+        # OIDC enabled => payload may vary by viewer; keep it private
+        assert "private" in response.headers["cache-control"]
+
+    def test_oidc_disabled_keeps_public_cache(self, client: TestClient) -> None:
+        """Without OIDC the payload is identical for everyone; public is safe."""
+        response = client.get("/map/data")
+
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "public, max-age=300"
 
 
 class TestMapDataAPIErrors:

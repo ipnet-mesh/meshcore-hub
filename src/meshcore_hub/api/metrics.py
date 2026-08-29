@@ -35,8 +35,10 @@ _cache: dict[str, Any] = {"output": b"", "expires_at": 0.0}
 def verify_basic_auth(request: Request) -> bool:
     """Verify HTTP Basic Auth credentials for metrics endpoint.
 
-    Uses username 'metrics' and the API read key as password.
-    Returns True if no read key is configured (public access).
+    Uses username 'metrics' and the API read key as password. When a read
+    key is configured, valid Basic auth is always required. When no key is
+    configured, access is denied unless METRICS_PUBLIC (app.state
+    'metrics_public') explicitly opts in.
 
     Args:
         request: FastAPI request
@@ -46,9 +48,9 @@ def verify_basic_auth(request: Request) -> bool:
     """
     read_key = getattr(request.app.state, "read_key", None)
 
-    # No read key configured = public access
+    # No read key configured: deny unless explicitly made public
     if not read_key:
-        return True
+        return bool(getattr(request.app.state, "metrics_public", False))
 
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Basic "):
@@ -379,11 +381,18 @@ async def metrics(request: Request) -> Response:
     """Prometheus metrics endpoint.
 
     Returns metrics in Prometheus text exposition format.
-    Supports HTTP Basic Auth with username 'metrics' and API read key as password.
+    Supports HTTP Basic Auth with username 'metrics' and API read key as
+    password. When no read key is configured, access is denied unless
+    METRICS_PUBLIC=true explicitly opts in to unauthenticated access.
     Results are cached with a configurable TTL to reduce database load.
     """
     # Check authentication
     if not verify_basic_auth(request):
+        logger.warning(
+            "Denied unauthenticated /metrics request. To expose metrics: "
+            "set API_READ_KEY (scrape with Basic auth user 'metrics') or "
+            "set METRICS_PUBLIC=true."
+        )
         return PlainTextResponse(
             "Unauthorized",
             status_code=401,

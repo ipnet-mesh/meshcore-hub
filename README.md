@@ -182,7 +182,7 @@ Health check endpoints are also available:
 
 - **Health**: http://localhost:8000/health
 - **Ready**: http://localhost:8000/health/ready (includes database check)
-- **Metrics**: http://localhost:8000/metrics (Prometheus format — point your Prometheus scraper here)
+- **Metrics**: http://localhost:8000/metrics (Prometheus format — requires `API_READ_KEY` + Basic auth user `metrics`, or `METRICS_PUBLIC=true`, when no key is set)
 
 ### Authentication
 

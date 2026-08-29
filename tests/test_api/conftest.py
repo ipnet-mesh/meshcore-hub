@@ -176,6 +176,9 @@ def app_no_auth(db_url, api_db_engine, mock_mqtt, mock_db_manager):
         database_url=db_url,
         read_key=None,
         admin_key=None,
+        # /metrics denies unauthenticated access by default; the no-auth
+        # app opts in so data-shape tests keep working without a key.
+        metrics_public=True,
     )
     _wire_overrides(app, api_db_engine, mock_mqtt, mock_db_manager)
     yield app

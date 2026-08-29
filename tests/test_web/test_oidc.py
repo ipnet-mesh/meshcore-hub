@@ -4,9 +4,32 @@ import json
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from meshcore_hub.web.oidc import init_oidc, strip_userinfo
+
+
+class TestSessionSecretRequired:
+    """OIDC requires an explicit session signing secret (no insecure fallback)."""
+
+    def test_missing_secret_fails_startup(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """OIDC enabled without OIDC_SESSION_SECRET must refuse to start."""
+        from meshcore_hub.common.config import get_web_settings
+        from meshcore_hub.web.app import create_app as create_web_app
+
+        real_settings = get_web_settings()
+        monkeypatch.setattr(
+            "meshcore_hub.common.config.get_web_settings",
+            lambda: real_settings.model_copy(
+                update={"oidc_enabled": True, "oidc_session_secret": None}
+            ),
+        )
+
+        with pytest.raises(RuntimeError, match="OIDC_SESSION_SECRET"):
+            create_web_app(api_url="http://localhost:8000")
 
 
 class TestOIDCSettingsValidation:

@@ -6,7 +6,7 @@
     <title>{{ network_name }}</title>
 
     <!-- Theme initialization (before CSS to prevent flash) -->
-    <script>
+    <script nonce="{{ csp_nonce }}">
         (function() {
             var theme = localStorage.getItem('meshcore-theme');
             if (theme) document.documentElement.setAttribute('data-theme', theme);
@@ -57,7 +57,7 @@
     <div id="app" class="flex-1 flex flex-col"></div>
 
     <!-- Embedded app configuration -->
-    <script>
+    <script nonce="{{ csp_nonce }}">
         window.__APP_CONFIG__ = {{ config_json|safe }};
     </script>
 

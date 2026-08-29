@@ -83,6 +83,7 @@ def create_app(
     cors_origins: list[str] | None = None,
     metrics_enabled: bool = True,
     metrics_cache_ttl: int = 60,
+    metrics_public: bool = False,
     redis_enabled: bool = False,
     redis_host: str = "localhost",
     redis_port: int = 6379,
@@ -112,6 +113,7 @@ def create_app(
         cors_origins: Allowed CORS origins
         metrics_enabled: Enable Prometheus metrics endpoint at /metrics
         metrics_cache_ttl: Seconds to cache metrics output
+        metrics_public: Allow unauthenticated /metrics when no read key is set
         redis_enabled: Enable Redis API response caching
         redis_host: Redis server host
         redis_port: Redis server port
@@ -150,6 +152,7 @@ def create_app(
     app.state.mqtt_transport = mqtt_transport
     app.state.mqtt_ws_path = mqtt_ws_path
     app.state.metrics_cache_ttl = metrics_cache_ttl
+    app.state.metrics_public = metrics_public
     app.state.redis_enabled = redis_enabled
     app.state.redis_host = redis_host
     app.state.redis_port = redis_port
@@ -162,14 +165,24 @@ def create_app(
     app.state.spam_detection_enabled = spam_detection_enabled
     app.state.spam_score_threshold = spam_score_threshold
 
-    # Configure CORS
+    # Configure CORS. An unset CORS_ORIGINS keeps the wildcard default for
+    # compatibility with external API consumers, but wildcard origins are
+    # never valid with credentials (browsers reject credentialed requests
+    # under Access-Control-Allow-Origin: *), so allow_credentials is only
+    # enabled for explicitly configured origin lists.
+    allow_credentials = True
     if cors_origins is None:
         cors_origins = ["*"]
+        allow_credentials = False
+        logger.warning(
+            "CORS_ORIGINS not configured; allowing all origins WITHOUT "
+            "credentials. Set CORS_ORIGINS to restrict cross-origin access."
+        )
 
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins,
-        allow_credentials=True,
+        allow_credentials=allow_credentials,
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -203,6 +216,9 @@ def create_app(
         away.
         """
         response = await call_next(request)
+
+        # Hardening: block MIME-type sniffing on all API responses.
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
 
         # X-Cache observability header (always emitted, even when the kill
         # switch is on, so monitoring can still see hit/miss ratios).
@@ -309,6 +325,7 @@ def create_app_from_env() -> FastAPI:
 
     metrics_enabled = _env_bool("METRICS_ENABLED", True)
     metrics_cache_ttl = int(os.environ.get("METRICS_CACHE_TTL", "60"))
+    metrics_public = settings.metrics_public
 
     # mqtt_transport is an enum on the settings object; create_app wants a str.
     mqtt_transport = getattr(settings.mqtt_transport, "value", settings.mqtt_transport)
@@ -328,6 +345,7 @@ def create_app_from_env() -> FastAPI:
         cors_origins=cors_origins,
         metrics_enabled=metrics_enabled,
         metrics_cache_ttl=metrics_cache_ttl,
+        metrics_public=metrics_public,
         redis_enabled=settings.redis_enabled,
         redis_host=settings.redis_host,
         redis_port=settings.redis_port,

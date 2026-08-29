@@ -417,6 +417,17 @@ class APISettings(CommonSettings):
         default=None, description="Admin API key (full access)"
     )
 
+    # Metrics endpoint
+    metrics_public: bool = Field(
+        default=False,
+        description=(
+            "Allow unauthenticated access to /metrics when no API read key "
+            "is configured. Defaults to false (deny): set API_READ_KEY (and "
+            "scrape with Basic auth user 'metrics') or set this flag to "
+            "expose metrics without authentication."
+        ),
+    )
+
     # Redis cache
     redis_enabled: bool = Field(
         default=False, description="Enable Redis API response caching"
@@ -496,6 +507,23 @@ class WebSettings(CommonSettings):
     web_debug: bool = Field(
         default=False,
         description="Enable debug mode in the web dashboard",
+    )
+
+    # Security headers / Content-Security-Policy
+    web_security_headers: bool = Field(
+        default=True,
+        description=(
+            "Emit security headers (X-Content-Type-Options, X-Frame-Options, "
+            "Referrer-Policy, Permissions-Policy) and a nonce-based "
+            "Content-Security-Policy on web responses"
+        ),
+    )
+    web_csp_extra: Optional[str] = Field(
+        default=None,
+        description=(
+            "Extra CSP directives appended to the default policy "
+            '(e.g. "img-src https://tiles.example.com")'
+        ),
     )
 
     # OIDC / OAuth2 authentication

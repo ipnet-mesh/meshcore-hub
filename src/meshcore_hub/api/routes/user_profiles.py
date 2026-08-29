@@ -8,9 +8,9 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
 from meshcore_hub.api.auth import (
+    OptionalUserIdentity,
     RequireRead,
     RequireUserOwner,
-    X_USER_ID_HEADER,
     X_USER_ROLES_HEADER,
 )
 from meshcore_hub.api.cache import cached
@@ -127,22 +127,18 @@ def list_profiles(
 
 @router.get("/profile/me", response_model=UserProfileWithNodes)
 def get_my_profile(
+    caller_id: RequireUserOwner,
     request: Request,
     session: DbSession,
 ) -> UserProfileWithNodes:
-    """Get the current user's profile (via X-User-Id header).
+    """Get the current user's profile (via validated X-User-Id header).
 
-    Auto-creates the profile if it doesn't exist. Returns the full
-    profile including user_id and adopted nodes.
+    The caller identity comes from the proxy-injected X-User-Id header,
+    which is only trusted when accompanied by a valid API key (see
+    ``require_user_owner``). Auto-creates the profile if it doesn't exist.
+    Returns the full profile including user_id and adopted nodes.
     """
-    oidc_user_id = request.headers.get(X_USER_ID_HEADER)
-    if not oidc_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User identity required",
-        )
-
-    profile = get_or_create_profile(session, oidc_user_id, request)
+    profile = get_or_create_profile(session, caller_id, request)
     return UserProfileWithNodes(
         id=profile.id,
         user_id=profile.user_id,
@@ -160,22 +156,22 @@ def get_my_profile(
 @router.get("/profile/{profile_id}")
 def get_profile(
     profile_id: str,
+    caller_id: OptionalUserIdentity,
     request: Request,
     session: DbSession,
 ) -> UserProfilePublicWithNodes | UserProfileWithNodes:
     """Get a user profile by UUID.
 
     Public access is allowed for viewing any profile. If the caller is the
-    owner (authenticated with matching user_id), the full profile including
-    user_id is returned and the profile is auto-created if missing.
+    owner (authenticated with a valid API key and matching proxy-injected
+    user_id), the full profile including user_id is returned and the
+    profile is auto-created if missing.
     """
-    oidc_user_id = request.headers.get(X_USER_ID_HEADER)
-
-    if oidc_user_id:
-        caller_query = select(UserProfile).where(UserProfile.user_id == oidc_user_id)
+    if caller_id:
+        caller_query = select(UserProfile).where(UserProfile.user_id == caller_id)
         caller_profile = session.execute(caller_query).scalar_one_or_none()
         if caller_profile and str(caller_profile.id) == str(profile_id):
-            profile = get_or_create_profile(session, oidc_user_id, request)
+            profile = get_or_create_profile(session, caller_id, request)
             return UserProfileWithNodes(
                 id=profile.id,
                 user_id=profile.user_id,

@@ -1,6 +1,7 @@
 """Tests for the environment-driven app factory used by multi-worker runs."""
 
 import pytest
+from starlette.middleware.cors import CORSMiddleware
 
 from meshcore_hub.api.app import create_app_from_env
 
@@ -17,6 +18,7 @@ _FACTORY_ENV = [
     "CORS_ORIGINS",
     "METRICS_ENABLED",
     "METRICS_CACHE_TTL",
+    "METRICS_PUBLIC",
 ]
 
 
@@ -91,3 +93,44 @@ def test_factory_metrics_disabled_via_env(clean_env):
     clean_env.setenv("METRICS_ENABLED", "false")
     app = create_app_from_env()
     assert "/metrics" not in _served_paths(app)
+
+
+def _cors_middleware(app):
+    """Return the CORSMiddleware Middleware entry for the app."""
+    for middleware in app.user_middleware:
+        if middleware.cls is CORSMiddleware:
+            return middleware
+    raise AssertionError("CORSMiddleware not installed")
+
+
+def test_factory_default_cors_wildcard_without_credentials(clean_env):
+    """Unset CORS_ORIGINS keeps the wildcard but disables credentials."""
+    app = create_app_from_env()
+    cors = _cors_middleware(app)
+    assert cors.kwargs["allow_origins"] == ["*"]
+    assert cors.kwargs["allow_credentials"] is False
+
+
+def test_factory_explicit_origins_allow_credentials(clean_env):
+    """Explicit CORS_ORIGINS lists keep credentials enabled."""
+    clean_env.setenv("CORS_ORIGINS", "https://mesh.example.com,https://web.example.com")
+    app = create_app_from_env()
+    cors = _cors_middleware(app)
+    assert cors.kwargs["allow_origins"] == [
+        "https://mesh.example.com",
+        "https://web.example.com",
+    ]
+    assert cors.kwargs["allow_credentials"] is True
+
+
+def test_factory_metrics_public_defaults_deny(clean_env):
+    """METRICS_PUBLIC unset means /metrics denies unauthenticated access."""
+    app = create_app_from_env()
+    assert app.state.metrics_public is False
+
+
+def test_factory_metrics_public_via_env(clean_env):
+    """METRICS_PUBLIC=true opts into unauthenticated metrics."""
+    clean_env.setenv("METRICS_PUBLIC", "true")
+    app = create_app_from_env()
+    assert app.state.metrics_public is True

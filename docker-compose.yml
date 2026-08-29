@@ -314,6 +314,8 @@ services:
       - API_ADMIN_KEY=${API_ADMIN_KEY:-}
       - METRICS_ENABLED=${METRICS_ENABLED:-true}
       - METRICS_CACHE_TTL=${METRICS_CACHE_TTL:-60}
+      # Allow unauthenticated /metrics when no API_READ_KEY is set (default: deny)
+      - METRICS_PUBLIC=${METRICS_PUBLIC:-false}
       # Redis cache (optional — API works without Redis)
       - REDIS_ENABLED=${REDIS_ENABLED:-false}
       - REDIS_HOST=redis
