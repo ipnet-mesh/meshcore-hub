@@ -30,6 +30,7 @@ export async function apiGet<T = unknown>(
     }
   }
   const response = await fetch(url, { signal });
+  checkAuthResponse(response);
   if (!response.ok) {
     throw new Error(`API error: ${response.status} ${response.statusText}`);
   }
@@ -91,6 +92,7 @@ export async function apiPostForm<T = unknown>(
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: body.toString(),
   });
+  checkAuthResponse(response);
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`API error: ${response.status} - ${text}`);

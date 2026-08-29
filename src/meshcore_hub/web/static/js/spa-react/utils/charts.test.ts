@@ -18,9 +18,10 @@ import {
 const t = ((key: string) => key) as unknown as TFunction;
 
 const dayLabel = (date: string) =>
-  new Date(date).toLocaleDateString("en-GB", {
+  new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", {
     day: "numeric",
     month: "short",
+    timeZone: "UTC",
   });
 
 const series = (counts: number[]): ActivitySeries => ({

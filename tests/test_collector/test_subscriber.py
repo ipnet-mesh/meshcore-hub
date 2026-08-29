@@ -1288,6 +1288,17 @@ class TestSubscriberDispatch:
 
         assert len(subscriber._webhook_queue) == 0
 
+    def test_webhook_queue_is_bounded_and_drops_oldest(self, subscriber):
+        """A full queue drops the oldest events instead of growing forever."""
+        subscriber._webhook_queue_max = 3
+        for i in range(5):
+            subscriber._queue_webhook_event("test_event", {"seq": i}, "a" * 64)
+
+        assert len(subscriber._webhook_queue) == 3
+        # Oldest two events were dropped; the newest remain in order.
+        remaining = [payload["seq"] for _, payload, _ in subscriber._webhook_queue]
+        assert remaining == [2, 3, 4]
+
     def test_start_with_mqtt_retry(self, mock_mqtt_client, db_manager):
         """MQTT connection is retried on failure."""
         mock_mqtt_client.connect.side_effect = [

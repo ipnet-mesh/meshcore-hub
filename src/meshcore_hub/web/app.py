@@ -828,6 +828,11 @@ def create_app(
     )
     async def api_proxy(request: Request, path: str) -> Response:
         """Proxy API requests to the backend API server."""
+        if getattr(request.app.state, "system_maintenance", False):
+            return JSONResponse(
+                {"detail": "Site is in maintenance mode", "code": "MAINTENANCE"},
+                status_code=503,
+            )
         oidc_enabled = getattr(request.app.state, "oidc_enabled", False)
         user_roles: frozenset[str] = frozenset()
         user_id: str | None = None
@@ -1129,15 +1134,25 @@ def create_app(
         return {"status": "healthy", "version": __version__}
 
     @app.get("/health/ready", tags=["Health"])
-    async def health_ready(request: Request) -> dict:
-        """Readiness check including API connectivity."""
+    async def health_ready(request: Request) -> JSONResponse:
+        """Readiness check including API connectivity.
+
+        Returns 503 when not ready so Docker/Kubernetes readiness probes
+        (which judge by HTTP status code) pull the instance from rotation.
+        """
         try:
             response = await request.app.state.http_client.get("/health")
             if response.status_code == 200:
-                return {"status": "ready", "api": "connected"}
-            return {"status": "not_ready", "api": f"status {response.status_code}"}
+                return JSONResponse({"status": "ready", "api": "connected"})
+            return JSONResponse(
+                {"status": "not_ready", "api": f"status {response.status_code}"},
+                status_code=503,
+            )
         except Exception as e:
-            return {"status": "not_ready", "api": str(e)}
+            return JSONResponse(
+                {"status": "not_ready", "api": type(e).__name__},
+                status_code=503,
+            )
 
     # --- SEO Endpoints ---
     def _get_https_base_url(request: Request) -> str:

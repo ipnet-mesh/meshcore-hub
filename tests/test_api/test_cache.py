@@ -1,7 +1,7 @@
 """Tests for API cache layer."""
 
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI, Request
@@ -1012,7 +1012,9 @@ class TestLifespanRedis:
         app.state.redis_enabled = False
         app_module._db_manager = None
 
-        with patch.object(app_module, "DatabaseManager", return_value=MagicMock()):
+        mock_db = MagicMock()
+        mock_db.adispose = AsyncMock()
+        with patch.object(app_module, "DatabaseManager", return_value=mock_db):
             async with lifespan(app):
                 assert isinstance(app.state.redis_cache, NullCache)
 
@@ -1030,7 +1032,9 @@ class TestLifespanRedis:
         app.state.redis_key_prefix = "myprefix"
         app_module._db_manager = None
 
-        with patch.object(app_module, "DatabaseManager", return_value=MagicMock()):
+        mock_db = MagicMock()
+        mock_db.adispose = AsyncMock()
+        with patch.object(app_module, "DatabaseManager", return_value=mock_db):
             with patch("meshcore_hub.common.redis.RedisCacheBackend") as mock_cls:
                 mock_instance = MagicMock()
                 mock_cls.return_value = mock_instance
@@ -1054,6 +1058,7 @@ class TestLifespanRedis:
 
         mock_cache = MagicMock()
         mock_db_manager = MagicMock()
+        mock_db_manager.adispose = AsyncMock()
         app_module._db_manager = None
 
         with patch.object(app_module, "DatabaseManager", return_value=mock_db_manager):
@@ -1064,7 +1069,7 @@ class TestLifespanRedis:
                 async with lifespan(app):
                     pass
                 mock_cache.close.assert_called_once()
-                mock_db_manager.dispose.assert_called_once()
+                mock_db_manager.adispose.assert_awaited_once()
 
 
 class TestXCacheMiddleware:
@@ -1120,6 +1125,25 @@ class TestHealthReadyRedis:
         response = client_no_auth.get("/health/ready")
         assert response.status_code == 200
         assert response.json()["redis"] == "unreachable"
+
+    def test_health_ready_returns_503_when_db_down(self, client_no_auth):
+        """Readiness probes judge by status code: DB down must be a 503."""
+        import meshcore_hub.api.app as app_module
+
+        def _raise():
+            raise RuntimeError("db down")
+
+        original = app_module.get_db_manager
+        app_module.get_db_manager = _raise
+        try:
+            response = client_no_auth.get("/health/ready")
+        finally:
+            app_module.get_db_manager = original
+        assert response.status_code == 503
+        data = response.json()
+        assert data["status"] == "not_ready"
+        # Error detail is reduced to the exception type, not the raw message.
+        assert data["database"] == "RuntimeError"
 
 
 class TestCliRedis:
@@ -1414,7 +1438,19 @@ class TestCacheInvalidationHelpers:
 
         cache = MagicMock()
         invalidate_channels(_make_request_with_cache(cache))
-        cache.delete.assert_called_once_with("/api/v1/channels")
+        # Channel list itself (URL-path keys)...
+        cache.delete.assert_any_call("/api/v1/channels")
+        # ...plus every dependent namespace: messages/packets redaction is
+        # visibility-driven and dashboard counts embed per-channel series.
+        for prefix in (
+            "/api/v1/messages",
+            "packets",
+            "packet_groups",
+            "dashboard",
+            "/api/v1/dashboard",
+        ):
+            cache.delete.assert_any_call(prefix)
+        assert cache.delete.call_count == 6
 
     def test_invalidate_routes_drops_url_path_prefix(self):
         from meshcore_hub.api.cache_invalidation import invalidate_routes
@@ -1504,6 +1540,18 @@ class TestMutationInvalidationIntegration:
 
     # --- Channels ---------------------------------------------------------
 
+    def _assert_channel_dependent_drops(self, mock_cache: MagicMock) -> None:
+        """Channel visibility drives redaction/counts in these cached reads."""
+        for prefix in (
+            "/api/v1/channels",
+            "/api/v1/messages",
+            "packets",
+            "packet_groups",
+            "dashboard",
+            "/api/v1/dashboard",
+        ):
+            mock_cache.delete.assert_any_call(prefix)
+
     def test_create_channel_invalidates_channels(self, client_no_auth, api_db_session):
         mock_cache = self._install_mock_cache(client_no_auth)
         resp = client_no_auth.post(
@@ -1517,6 +1565,7 @@ class TestMutationInvalidationIntegration:
         )
         assert resp.status_code == 201
         mock_cache.delete.assert_any_call("/api/v1/channels")
+        self._assert_channel_dependent_drops(mock_cache)
 
     def test_update_channel_invalidates_channels(self, client_no_auth, sample_channel):
         mock_cache = self._install_mock_cache(client_no_auth)
@@ -1526,12 +1575,14 @@ class TestMutationInvalidationIntegration:
         )
         assert resp.status_code == 200
         mock_cache.delete.assert_any_call("/api/v1/channels")
+        self._assert_channel_dependent_drops(mock_cache)
 
     def test_delete_channel_invalidates_channels(self, client_no_auth, sample_channel):
         mock_cache = self._install_mock_cache(client_no_auth)
         resp = client_no_auth.delete(f"/api/v1/channels/{sample_channel.id}")
         assert resp.status_code == 204
         mock_cache.delete.assert_any_call("/api/v1/channels")
+        self._assert_channel_dependent_drops(mock_cache)
 
     # --- Routes -----------------------------------------------------------
 

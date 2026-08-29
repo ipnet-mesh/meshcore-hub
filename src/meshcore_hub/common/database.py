@@ -1,5 +1,7 @@
 """Database connection and session management."""
 
+import asyncio
+import logging
 import os
 from contextlib import asynccontextmanager, contextmanager
 from typing import Any, AsyncGenerator, Generator
@@ -10,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engin
 from sqlalchemy.orm import Session, sessionmaker
 
 from meshcore_hub.common.models.base import Base
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_pg_schema(database_url: str, schema: str | None) -> str | None:
@@ -212,8 +216,25 @@ class DatabaseManager:
             if self._schema:
                 server_settings["search_path"] = self._schema
             async_connect_args["server_settings"] = server_settings
+
+        # Mirror the sync engine's pool configuration (see
+        # create_database_engine): without pool_pre_ping a Postgres restart
+        # leaves stale asyncpg connections in the pool that error on next
+        # use. In-memory SQLite uses a non-overflow pool, so skip there.
+        is_memory_sqlite = self.database_url in (
+            "sqlite+aiosqlite://",
+            "sqlite+aiosqlite:///:memory:",
+        )
+        async_engine_kwargs: dict[str, Any] = {"pool_pre_ping": True}
+        if not is_memory_sqlite:
+            async_engine_kwargs["pool_size"] = 20
+            async_engine_kwargs["max_overflow"] = 30
+
         self._async_engine = create_async_engine(
-            async_url, echo=self._echo, connect_args=async_connect_args
+            async_url,
+            echo=self._echo,
+            connect_args=async_connect_args,
+            **async_engine_kwargs,
         )
 
         # Apply the same SQLite pragmas as the sync engine (see
@@ -293,10 +314,36 @@ class DatabaseManager:
             yield session
 
     def dispose(self) -> None:
-        """Dispose of the database engine and connection pool."""
-        self.engine.dispose()
+        """Dispose of the database engines and connection pools.
+
+        The async engine's pooled connections can only be closed from a
+        running event loop. When this method is called outside any loop
+        (e.g. a CLI that used ``async_session`` via ``asyncio.run``), the
+        async engine is disposed on a temporary loop. Inside a running
+        loop, use :meth:`adispose` instead — the async engine is then left
+        for that call and a warning is logged.
+        """
         if self._async_engine is not None:
-            self._async_engine.sync_engine.dispose()
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                asyncio.run(self._async_engine.dispose())
+                self._async_engine = None
+                self._async_session_factory = None
+            else:
+                logger.warning(
+                    "dispose() called inside a running event loop; async "
+                    "engine not closed — use adispose()"
+                )
+        self.engine.dispose()
+
+    async def adispose(self) -> None:
+        """Dispose both engines from an async context (e.g. app lifespan)."""
+        if self._async_engine is not None:
+            await self._async_engine.dispose()
+            self._async_engine = None
+            self._async_session_factory = None
+        self.engine.dispose()
 
 
 # Global database manager instance (initialized at runtime)

@@ -2,7 +2,9 @@
 
 This guide covers upgrading from a previous MeshCore Hub release to the current version. Check the relevant version section below before upgrading.
 
-## Unreleased — Security hardening (fail-closed defaults)
+## v0.18.0
+
+### Security hardening (fail-closed defaults)
 
 Four behaviour changes tighten default security. **Two are potentially breaking for existing deployments — read before upgrading.**
 
@@ -18,7 +20,7 @@ Four behaviour changes tighten default security. **Two are potentially breaking 
 
 **CORS credentials tightened.** An unset `CORS_ORIGINS` still allows all origins for compatibility with external API consumers, but no longer advertises `allow-credentials` (wildcard origins are never valid with credentials in browsers anyway). Explicit origin lists are unchanged.
 
-## Unreleased — Route evaluator performance remediation
+### Route evaluator performance remediation
 
 The background route evaluator was triggering a multi-second `packet_path_hops` scan per route per sweep, flooding the slow-query log and blocking route saves on the same scan. This release reduces load across four orthogonal levers. **Two are destructive / behaviour-changing — read before upgrading.**
 
@@ -33,6 +35,25 @@ The background route evaluator was triggering a multi-second `packet_path_hops` 
 **Database migration required** (revision `a59611449e2a`): clamps `routes.window_hours` to 12 and rebuilds `ix_packet_path_hops_raw_packet_id_position` as a covering index (`INCLUDE node_hash, packet_hash, event_hash, received_at, observer_node_id`) on PostgreSQL so the evaluator's outer scan becomes index-only. The index rebuild runs `CONCURRENTLY` (no write blocking). SQLite is unchanged (no `INCLUDE` support). The `window_hours` clamp is one-way (original values not recoverable on downgrade).
 
 **Performance rationale:** EXPLAIN analysis showed both candidate query plans (Merge Join full scan and forced Nested Loop) cost ~10–15 s at 6.4 M `packet_path_hops` rows; no SQL rewrite, stats change, or CTE trick could avoid the scan. The fix is purely data-volume pressure: smaller table (retention), smaller candidate set (window cap), index-only scan (covering index), and less frequent sweeps. See `docs/routes.md` for the updated evaluator contract.
+
+### Operational hardening (health probes, maintenance mode, webhooks)
+
+A set of correctness fixes around readiness, maintenance mode, and webhook delivery. **One change affects monitoring setups — read before upgrading.**
+
+**⚠️ Monitoring change: `/health/ready` now returns 503 when not ready.** Both the API and web tiers previously answered HTTP 200 with a `{"status": "not_ready", ...}` body while the database/API backend was down — probes that judge by status code (Docker healthchecks, Kubernetes readiness, most load balancers) kept the instance in rotation. The endpoint now returns **503** when not ready and 200 when ready. **Action:** only needed if you run a custom probe that parsed the response body while relying on the 200 — switch it to status-code semantics. The body also no longer echoes raw backend error text (just the exception type).
+
+**Maintenance mode now actually blocks API calls.** `SYSTEM_MAINTENANCE=true` was documented to "prevent all API calls", but only the React UI was gated — the web tier's `/api/*` proxy kept forwarding to the backend. The proxy now returns `503 {"detail": "Site is in maintenance mode", "code": "MAINTENANCE"}` for every API request while maintenance mode is on. **Action:** scripts or automation that call the API through the web tier during maintenance windows will now see 503s — which is the intended behaviour; schedule them outside the window.
+
+**Webhook delivery: fail-fast on permanent errors, bounded queue.**
+
+- Permanent client errors (any 4xx except `408`/`429` — e.g. a mistyped URL, expired auth, or rejected payload) are **no longer retried**. Previously every non-2xx response burned the full retry cycle (up to 4 attempts with backoff), so one misconfigured endpoint stalled the dispatch pipeline for ~14–45 s per event. Server errors (5xx), timeouts, and transport failures are still retried as before.
+- The internal webhook queue is now **capped at 1000 events**. When endpoints are down or too slow, the oldest queued events are dropped with a `WARNING` log (including the dropped count) instead of growing memory without bound. Nothing changes on healthy meshes.
+
+**Channel changes invalidate dependent caches.** Creating, updating, or deleting a channel now also drops the cached `messages`, `packets`, `packet-groups`, and dashboard responses (previously only the channels list itself). A channel demoted from community to member visibility — or deleted — no longer serves its messages to lower-privileged roles for up to the remaining cache TTL (up to 1 h for the dashboard). No action required.
+
+**API survives Postgres restarts (async engine hardening).** The API's async connection pool now matches the sync engine's sizing (`pool_size=20`, `max_overflow=30`) and uses `pool_pre_ping`, so a Postgres restart or failover no longer leaves stale pooled connections that error as 500s until they churn. Shutdown also correctly closes async-pooled connections (previously leaked). No action required; SQLite deployments are unchanged.
+
+**Web UI fixes.** Dashboard chart date labels and route-match timestamps now render in the configured timezone — chart labels were off by one day for users in negative UTC offsets, and route-match times were off by the user's UTC offset. Expired OIDC sessions now redirect to the login flow on any API GET (previously only writes did; reads spun forever). No action required.
 
 ## v0.17.0
 

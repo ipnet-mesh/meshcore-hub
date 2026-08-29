@@ -1,7 +1,7 @@
 """Tests for database engine configuration."""
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from sqlalchemy import text
@@ -149,3 +149,78 @@ class TestPostgresSessionTimezone:
         server_settings = kwargs["connect_args"]["server_settings"]
         assert server_settings["timezone"] == "UTC"
         assert server_settings["search_path"] == "meshcorehub"
+
+    def test_async_engine_gets_pool_pre_ping_and_sizing(self) -> None:
+        """Async engine mirrors the sync engine's pool config."""
+        manager = DatabaseManager.__new__(DatabaseManager)
+        manager.database_url = "postgresql://u:p@h/db"
+        manager._echo = False
+        manager._schema = None
+        manager._async_engine = None
+        manager._async_session_factory = None
+
+        with patch("meshcore_hub.common.database.create_async_engine") as mock_async:
+            manager._ensure_async_engine()
+        _, kwargs = mock_async.call_args
+        assert kwargs["pool_pre_ping"] is True
+        assert kwargs["pool_size"] == 20
+        assert kwargs["max_overflow"] == 30
+
+    def test_async_engine_skips_pool_args_for_memory_sqlite(self) -> None:
+        """In-memory SQLite uses a non-overflow pool; sizing args must be omitted."""
+        manager = DatabaseManager.__new__(DatabaseManager)
+        manager.database_url = "sqlite+aiosqlite:///:memory:"
+        manager._echo = False
+        manager._schema = None
+        manager._async_engine = None
+        manager._async_session_factory = None
+
+        with (
+            patch("meshcore_hub.common.database.create_async_engine") as mock_async,
+            patch("meshcore_hub.common.database.event.listens_for"),
+        ):
+            manager._ensure_async_engine()
+        _, kwargs = mock_async.call_args
+        assert "pool_size" not in kwargs
+        assert "max_overflow" not in kwargs
+
+    async def test_adispose_closes_async_engine(self) -> None:
+        """adispose awaits the async engine dispose and clears it."""
+        manager = DatabaseManager.__new__(DatabaseManager)
+        manager.database_url = "sqlite+aiosqlite:///:memory:"
+        manager._echo = False
+        manager._schema = None
+        mock_async_engine = AsyncMock()
+        manager._async_engine = mock_async_engine
+        manager._async_session_factory = object()
+        manager.engine = MagicMock()
+
+        await manager.adispose()
+
+        mock_async_engine.dispose.assert_awaited_once()
+        manager.engine.dispose.assert_called_once()
+        assert manager._async_engine is None
+        assert manager._async_session_factory is None
+
+    def test_dispose_sync_context_closes_async_engine_via_temp_loop(self) -> None:
+        """Outside a running loop, dispose() drains the async engine too."""
+        manager = DatabaseManager.__new__(DatabaseManager)
+        manager.database_url = "sqlite+aiosqlite:///:memory:"
+        manager._echo = False
+        manager._schema = None
+        disposed = []
+
+        async def _fake_async_dispose() -> None:
+            disposed.append(True)
+
+        mock_async_engine = MagicMock()
+        mock_async_engine.dispose = _fake_async_dispose
+        manager._async_engine = mock_async_engine
+        manager._async_session_factory = object()
+        manager.engine = MagicMock()
+
+        manager.dispose()
+
+        assert disposed == [True]
+        manager.engine.dispose.assert_called_once()
+        assert manager._async_engine is None

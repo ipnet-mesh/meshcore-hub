@@ -64,7 +64,7 @@ class TestHealthReadyEndpoint:
         client = TestClient(web_app, raise_server_exceptions=True)
         response = client.get("/health/ready")
 
-        assert response.status_code == 200
+        assert response.status_code == 503
         data = response.json()
         assert data["status"] == "not_ready"
         assert "status 500" in data["api"]
@@ -81,7 +81,24 @@ class TestHealthReadyEndpoint:
         client = TestClient(web_app, raise_server_exceptions=True)
         response = client.get("/health/ready")
 
-        assert response.status_code == 200
+        assert response.status_code == 503
         data = response.json()
         assert data["status"] == "not_ready"
         assert "status 404" in data["api"]
+
+    def test_health_ready_with_api_unreachable(
+        self, web_app: Any, mock_http_client: MockHttpClient
+    ) -> None:
+        """Test that health/ready returns 503 when the API call raises."""
+        web_app.state.http_client = mock_http_client
+        mock_http_client.set_response(
+            "GET", "/health", exc=RuntimeError("connection refused")
+        )
+
+        client = TestClient(web_app, raise_server_exceptions=True)
+        response = client.get("/health/ready")
+
+        assert response.status_code == 503
+        data = response.json()
+        assert data["status"] == "not_ready"
+        assert data["api"] == "RuntimeError"

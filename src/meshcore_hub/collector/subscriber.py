@@ -15,6 +15,7 @@ import signal
 import threading
 import time
 import uuid
+from collections import deque
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional, TYPE_CHECKING
 
@@ -80,8 +81,11 @@ class Subscriber(LetsMeshNormalizer):
         self._handlers: dict[str, EventHandler] = {}
         self._db_connected = False
         self._health_reporter: Optional[HealthReporter] = None
-        # Webhook processing
-        self._webhook_queue: list[tuple[str, dict[str, Any], str]] = []
+        # Webhook processing. The queue is bounded: a dead endpoint slows
+        # the dispatch thread, and an unbounded queue would grow without
+        # limit on a busy mesh — drop the oldest events instead.
+        self._webhook_queue: deque[tuple[str, dict[str, Any], str]] = deque()
+        self._webhook_queue_max: int = 1000
         self._webhook_lock = threading.Lock()
         self._webhook_thread: Optional[threading.Thread] = None
         # Data cleanup
@@ -377,6 +381,18 @@ class Subscriber(LetsMeshNormalizer):
             public_key: Source node public key
         """
         with self._webhook_lock:
+            if len(self._webhook_queue) >= self._webhook_queue_max:
+                dropped = len(self._webhook_queue) - self._webhook_queue_max + 1
+                # Drop oldest: the slowest path to recovery is a backlog of
+                # stale events; newest events are the most useful.
+                while len(self._webhook_queue) >= self._webhook_queue_max:
+                    self._webhook_queue.popleft()
+                logger.warning(
+                    "Webhook queue full (%d events); dropped %d oldest "
+                    "events (webhook endpoint too slow or down?)",
+                    self._webhook_queue_max,
+                    dropped,
+                )
             self._webhook_queue.append((event_type, payload, public_key))
 
     def _start_webhook_processor(self) -> None:
@@ -398,7 +414,7 @@ class Subscriber(LetsMeshNormalizer):
 
                 while self._running:
                     # Get queued events
-                    events_to_process: list[tuple[str, dict[str, Any], str]] = []
+                    events_to_process: deque[tuple[str, dict[str, Any], str]] = deque()
                     with self._webhook_lock:
                         if self._webhook_queue:
                             events_to_process = self._webhook_queue.copy()
@@ -419,6 +435,14 @@ class Subscriber(LetsMeshNormalizer):
             finally:
                 loop.run_until_complete(dispatcher.stop())
                 loop.close()
+                with self._webhook_lock:
+                    if self._webhook_queue:
+                        logger.warning(
+                            "Webhook processor stopped with %d events still "
+                            "queued (dropped)",
+                            len(self._webhook_queue),
+                        )
+                        self._webhook_queue.clear()
                 logger.info("Webhook processor stopped")
 
         self._webhook_thread = threading.Thread(

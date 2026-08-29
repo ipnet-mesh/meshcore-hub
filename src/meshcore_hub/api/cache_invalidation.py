@@ -79,8 +79,24 @@ def _drop(request: Request, prefix: str) -> None:
 
 
 def invalidate_channels(request: Request) -> None:
-    """Drop cached ``GET /channels`` responses (role-aware, URL-path keys)."""
+    """Drop cached ``GET /channels`` responses (role-aware, URL-path keys).
+
+    Channel visibility also drives role-based redaction and per-channel
+    breakdowns in several other cached endpoints, so they must be dropped
+    alongside the channel list or they serve stale data until their own TTL
+    expires (up to one hour for the dashboard):
+
+    - ``GET /messages`` — visible-channel filtering (URL-path keys)
+    - ``GET /packets`` and ``GET /packet-groups`` — channel/event metadata
+      derived from channel visibility (endpoint-name-style prefixes)
+    - ``GET /dashboard/*`` — ``channel_message_counts`` in ``stats`` and the
+      per-channel series in ``message-activity``
+    """
     _drop(request, "/api/v1/channels")
+    _drop(request, "/api/v1/messages")
+    _drop(request, "packets")
+    _drop(request, "packet_groups")
+    invalidate_dashboard(request)
 
 
 def invalidate_routes(request: Request) -> None:
