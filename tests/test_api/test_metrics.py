@@ -76,11 +76,29 @@ class TestMetricsEndpoint:
 class TestMetricsAuth:
     """Tests for metrics endpoint authentication."""
 
-    def test_no_auth_when_no_read_key(self, client_no_auth):
-        """Test that no auth is required when no read key is configured."""
+    def test_public_when_no_read_key_and_opted_in(self, client_no_auth):
+        """Test that no auth is required when METRICS_PUBLIC is set and no key."""
         _clear_metrics_cache()
         response = client_no_auth.get("/metrics")
         assert response.status_code == 200
+
+    def test_deny_by_default_when_no_read_key(
+        self, test_db_path, api_db_engine, mock_mqtt, mock_db_manager
+    ):
+        """Unauthenticated /metrics is denied when no key is configured."""
+        db_url = f"sqlite:///{test_db_path}"
+
+        with patch("meshcore_hub.api.app._db_manager", mock_db_manager):
+            app = create_app(
+                database_url=db_url,
+                read_key=None,
+                admin_key=None,
+                metrics_public=False,
+            )
+            client = TestClient(app, raise_server_exceptions=True)
+            response = client.get("/metrics")
+            assert response.status_code == 401
+            assert "WWW-Authenticate" in response.headers
 
     def test_401_when_read_key_set_no_auth(self, client_with_auth):
         """Test 401 when read key is set but no auth provided."""

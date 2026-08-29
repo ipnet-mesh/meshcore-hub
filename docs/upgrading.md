@@ -2,6 +2,22 @@
 
 This guide covers upgrading from a previous MeshCore Hub release to the current version. Check the relevant version section below before upgrading.
 
+## Unreleased — Security hardening (fail-closed defaults)
+
+Four behaviour changes tighten default security. **Two are potentially breaking for existing deployments — read before upgrading.**
+
+**⚠️ Breaking: `OIDC_SESSION_SECRET` is now mandatory when `OIDC_ENABLED=true`.** Previously the web tier silently fell back to a hard-coded `insecure-dev-secret`, meaning session cookies were forgeable by anyone who knew it. The web service now refuses to start without a real secret. Generate one with `python -c "import secrets; print(secrets.token_urlsafe(48))"` and set `OIDC_SESSION_SECRET` in your environment / `.env`.
+
+**⚠️ Breaking: `/metrics` denies unauthenticated access by default.** Previously, when no `API_READ_KEY` was configured, the Prometheus endpoint was public (it exports node names, public keys, and role counts, and is often exposed via reverse proxy). Now: set `API_READ_KEY` and scrape with Basic auth (username `metrics`, password = the read key), or explicitly opt back in with `METRICS_PUBLIC=true`. Existing scrapers will start seeing 401s until reconfigured.
+
+**Proxy-injected identity headers are now key-validated.** `GET /api/v1/user/profile/me` and the owner branch of `GET /api/v1/user/profile/{id}` no longer trust a bare `X-User-Id` header: when API keys are configured, the header is only honoured alongside a valid bearer key (exactly how the web proxy already sends it). This closes an OIDC subject-identifier leak to anyone with direct API port access.
+
+**`/map/data` follows the endpoint access model.** The server-side map aggregation now resolves the viewer's OIDC session and applies the same per-endpoint access mapping as the API proxy. Deployments that restrict `v1/user/profiles` no longer leak profile data (names, callsigns, roles) through `/map/data`, and the response is served `Cache-Control: private` when OIDC is enabled since the payload can vary by viewer.
+
+**Security headers + CSP.** The web tier now emits `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, and a nonce-based `Content-Security-Policy`; the API emits `nosniff`. Custom map tile hosts or other CSP exceptions can be added via `WEB_CSP_EXTRA`; set `WEB_SECURITY_HEADERS=false` to disable (not recommended). **Note for reverse-proxy deployments:** if you strip response headers or inject inline scripts at the proxy, verify the CSP nonce still matches.
+
+**CORS credentials tightened.** An unset `CORS_ORIGINS` still allows all origins for compatibility with external API consumers, but no longer advertises `allow-credentials` (wildcard origins are never valid with credentials in browsers anyway). Explicit origin lists are unchanged.
+
 ## Unreleased — Route evaluator performance remediation
 
 The background route evaluator was triggering a multi-second `packet_path_hops` scan per route per sweep, flooding the slow-query log and blocking route saves on the same scan. This release reduces load across four orthogonal levers. **Two are destructive / behaviour-changing — read before upgrading.**

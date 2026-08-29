@@ -201,7 +201,8 @@ REST API server. For multi-worker scaling guidance (`API_WORKERS`), see [deploym
 | `API_ADMIN_KEY` | _(none)_ | Admin API key |
 | `METRICS_ENABLED` | `true` | Enable Prometheus metrics endpoint at `/metrics` |
 | `METRICS_CACHE_TTL` | `60` | Seconds to cache metrics output (reduces database load) |
-| `CORS_ORIGINS` | _(none)_ | Comma-separated list of allowed CORS origins (only needed when the web dashboard runs on a different origin) |
+| `METRICS_PUBLIC` | `false` | Allow unauthenticated `/metrics` when no `API_READ_KEY` is set. Default denies; scrape with Basic auth (user `metrics`, password = read key) or opt in explicitly |
+| `CORS_ORIGINS` | _(none)_ | Comma-separated list of allowed CORS origins (only needed when the web dashboard runs on a different origin). Unset defaults to all origins **without** credentials |
 
 ## Web Dashboard
 
@@ -213,6 +214,8 @@ Web server, dashboard presentation, network metadata, and custom content. For th
 | `WEB_PORT` | `8080` | Web server port |
 | `API_BASE_URL` | `http://localhost:8000` | API endpoint URL |
 | `API_KEY` | _(none)_ | API key for web dashboard queries (optional — set if `API_READ_KEY` is set on the API) |
+| `WEB_SECURITY_HEADERS` | `true` | Emit security headers (nosniff, frame denial, referrer/permissions policy) and a nonce-based Content-Security-Policy |
+| `WEB_CSP_EXTRA` | _(none)_ | Extra CSP directives appended to the default policy (e.g. `img-src https://tiles.example.com` for custom map tiles) |
 | `WEB_THEME` | `dark` | Default theme (`dark` or `light`); users can override via the navbar toggle |
 | `WEB_LOCALE` | `en` | Locale/language for the web dashboard (e.g. `en`, `nl`) |
 | `WEB_DATETIME_LOCALE` | `en-US` | Locale used for date formatting (e.g. `en-US` for MM/DD/YYYY, `en-GB` for DD/MM/YYYY) |

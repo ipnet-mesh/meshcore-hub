@@ -123,6 +123,15 @@ import click
     help="Seconds to cache metrics output (reduces database load)",
 )
 @click.option(
+    "--metrics-public/--no-metrics-public",
+    default=False,
+    envvar="METRICS_PUBLIC",
+    help=(
+        "Allow unauthenticated /metrics access when no read key is "
+        "configured (default: deny)"
+    ),
+)
+@click.option(
     "--redis-enabled/--no-redis",
     default=False,
     envvar="REDIS_ENABLED",
@@ -227,6 +236,7 @@ def api(
     cors_origins: str | None,
     metrics_enabled: bool,
     metrics_cache_ttl: int,
+    metrics_public: bool,
     redis_enabled: bool,
     redis_host: str,
     redis_port: int,
@@ -288,6 +298,7 @@ def api(
     click.echo(f"CORS origins: {cors_origins or 'none'}")
     click.echo(f"Metrics enabled: {metrics_enabled}")
     click.echo(f"Metrics cache TTL: {metrics_cache_ttl}s")
+    click.echo(f"Metrics public (no key): {metrics_public}")
     click.echo(f"Redis enabled: {redis_enabled}")
     if redis_enabled:
         click.echo(f"Redis: {redis_host}:{redis_port}/{redis_db}")
@@ -350,6 +361,7 @@ def api(
             cors_origins=origins_list,
             metrics_enabled=metrics_enabled,
             metrics_cache_ttl=metrics_cache_ttl,
+            metrics_public=metrics_public,
             redis_enabled=redis_enabled,
             redis_host=redis_host,
             redis_port=redis_port,

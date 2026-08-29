@@ -1,5 +1,6 @@
-"""HTTP caching middleware for the web component."""
+"""HTTP caching and security header middleware for the web component."""
 
+import secrets
 from collections.abc import Awaitable, Callable
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -89,5 +90,84 @@ class CacheControlMiddleware(BaseHTTPMiddleware):
         # SPA shell HTML (catch-all for client-side routes) - no cache
         elif response.headers.get("content-type", "").startswith("text/html"):
             response.headers["cache-control"] = "no-cache, public"
+
+        return response
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Middleware adding security headers and a nonce-based CSP to responses.
+
+    Generates a per-request CSP nonce, exposes it to handlers via
+    ``request.state.csp_nonce`` (the SPA shell template applies it to its
+    inline scripts), and sets standard hardening headers plus a
+    Content-Security-Policy on every response.
+
+    Notes on the policy:
+      - ``style-src 'unsafe-inline'``: the SPA shell conditionally emits one
+        small inline ``<style>`` block; style injection is low-risk.
+      - ``img-src ... https:``: custom markdown pages may embed external
+        https images; map tiles load from *.tile.openstreetmap.org.
+      - ``script-src`` allows only same-origin scripts plus nonce'd inline
+        scripts (theme bootstrap + ``window.__APP_CONFIG__``).
+    """
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        enabled: bool = True,
+        csp_extra: str | None = None,
+    ) -> None:
+        """Initialize the middleware.
+
+        Args:
+            app: The ASGI application to wrap.
+            enabled: When False, skip all header setting (kill switch).
+            csp_extra: Extra CSP directives appended to the default policy.
+        """
+        super().__init__(app)
+        self.enabled = enabled
+        self.csp_extra = csp_extra.strip().rstrip(";") if csp_extra else None
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        """Process the request and add security headers to the response.
+
+        Args:
+            request: The incoming HTTP request.
+            call_next: The next middleware or route handler.
+
+        Returns:
+            The response with security headers added.
+        """
+        nonce = secrets.token_urlsafe(16)
+        request.state.csp_nonce = nonce
+
+        response: Response = await call_next(request)
+
+        if self.enabled:
+            csp = (
+                "default-src 'self'; "
+                f"script-src 'self' 'nonce-{nonce}'; "
+                "style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data: https:; "
+                "font-src 'self'; "
+                "connect-src 'self'; "
+                "object-src 'none'; "
+                "base-uri 'self'; "
+                "form-action 'self'; "
+                "frame-ancestors 'none'"
+            )
+            if self.csp_extra:
+                csp = f"{csp}; {self.csp_extra}"
+            response.headers["content-security-policy"] = csp
+            response.headers["x-content-type-options"] = "nosniff"
+            response.headers["x-frame-options"] = "DENY"
+            response.headers["referrer-policy"] = "strict-origin-when-cross-origin"
+            response.headers["permissions-policy"] = (
+                "camera=(), microphone=(), geolocation=()"
+            )
 
         return response

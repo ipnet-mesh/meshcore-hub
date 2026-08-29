@@ -58,6 +58,16 @@ The proxy uses a hardcoded per-endpoint, per-method mapping in `src/meshcore_hub
 
 The SPA receives the user's roles array in `window.__APP_CONFIG__.roles`. Client-side pages use the `hasRole(roleName)` helper, which returns `true` when OIDC is disabled (open access) or when the user has the specified role.
 
+### Trust Model for Identity Headers
+
+When the web proxy forwards a request to the API, it injects `X-User-Id`, `X-User-Name`, and `X-User-Roles` headers derived from the OIDC session, alongside the API bearer key. These headers are only honoured by the API when a valid API key accompanies them (`require_user_owner` / `optional_user_identity` in `api/auth.py`) — client-supplied identity headers are dropped by the proxy and, with API keys configured, a bare `X-User-Id` sent directly to the API port is rejected. Keep the API port unreachable from untrusted networks; the API key is the trust anchor for proxy-injected identity.
+
+Server-side aggregations (e.g. `/map/data`) resolve the viewer's session and apply the same endpoint access mapping as the proxy, so tightening `v1/user/profiles` in `ENDPOINT_ACCESS` also removes profile data from `/map/data` for viewers who would be denied.
+
+### Session Security
+
+Sessions are signed with `OIDC_SESSION_SECRET` using a `SameSite=Lax` cookie (`meshcore-session`). **The web service refuses to start when `OIDC_ENABLED=true` and no secret is set** — there is no insecure fallback. Generate one with `python -c "import secrets; print(secrets.token_urlsafe(48))"`. Set `OIDC_COOKIE_SECURE=true` in production so cookies are restricted to HTTPS.
+
 ## Login Flow
 
 1. User visits `/admin/` — no session exists — server redirects to `/auth/login?next=/admin/`

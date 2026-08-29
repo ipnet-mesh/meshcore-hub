@@ -164,6 +164,35 @@ class TestGetMyProfile:
         response = client_no_auth.get("/api/v1/user/profile/me")
         assert response.status_code == 401
 
+    def test_get_my_profile_forged_header_rejected(self, client_with_auth):
+        """With API keys configured, X-User-Id alone must not be trusted."""
+        response = client_with_auth.get(
+            "/api/v1/user/profile/me",
+            headers=USER_HEADERS,
+        )
+        assert response.status_code == 401
+
+    def test_get_my_profile_invalid_key_rejected(self, client_with_auth):
+        """An invalid bearer key must not authenticate the identity header."""
+        response = client_with_auth.get(
+            "/api/v1/user/profile/me",
+            headers={**USER_HEADERS, "Authorization": "Bearer wrong-key"},
+        )
+        assert response.status_code == 401
+
+    def test_get_my_profile_valid_key_and_header(
+        self, client_with_auth, sample_user_profile
+    ):
+        """Valid API key + proxy-injected X-User-Id returns the full profile."""
+        response = client_with_auth.get(
+            "/api/v1/user/profile/me",
+            headers={**USER_HEADERS, "Authorization": "Bearer test-read-key"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["user_id"] == TEST_USER_ID
+        assert data["name"] == sample_user_profile.name
+
 
 class TestGetProfile:
     """Tests for GET /user/profile/{profile_id} endpoint."""
@@ -239,6 +268,38 @@ class TestGetProfile:
             "/api/v1/user/profile/00000000-0000-0000-0000-000000000000",
         )
         assert response.status_code == 404
+
+    def test_get_profile_forged_header_rejected(
+        self, client_with_auth, sample_user_profile
+    ):
+        """Forged X-User-Id without a valid key must not reveal user_id."""
+        response = client_with_auth.get(
+            f"/api/v1/user/profile/{sample_user_profile.id}",
+            headers=USER_HEADERS,
+        )
+        assert response.status_code == 401
+
+    def test_get_profile_owner_with_valid_key_sees_user_id(
+        self, client_with_auth, sample_user_profile
+    ):
+        """Valid key + matching identity header returns the full profile."""
+        response = client_with_auth.get(
+            f"/api/v1/user/profile/{sample_user_profile.id}",
+            headers={**USER_HEADERS, "Authorization": "Bearer test-read-key"},
+        )
+        assert response.status_code == 200
+        assert response.json()["user_id"] == TEST_USER_ID
+
+    def test_get_profile_public_with_valid_key_no_identity(
+        self, client_with_auth, sample_user_profile
+    ):
+        """Valid key without identity headers returns the public shape."""
+        response = client_with_auth.get(
+            f"/api/v1/user/profile/{sample_user_profile.id}",
+            headers={"Authorization": "Bearer test-read-key"},
+        )
+        assert response.status_code == 200
+        assert "user_id" not in response.json()
 
 
 class TestUpdateProfile:
