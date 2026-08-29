@@ -4,6 +4,7 @@ import base64
 import hmac
 import logging
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Request, Response
@@ -78,6 +79,7 @@ def collect_metrics(session: Any) -> bytes:
         Prometheus text exposition format as bytes
     """
     from meshcore_hub import __version__
+    from meshcore_hub.collector.routes import effective_clear_threshold
 
     registry = CollectorRegistry()
 
@@ -108,8 +110,6 @@ def collect_metrics(session: Any) -> bytes:
     )
     for window, hours in [("1h", 1), ("24h", 24), ("7d", 168), ("30d", 720)]:
         cutoff = time.time() - (hours * 3600)
-        from datetime import datetime, timezone
-
         cutoff_dt = datetime.fromtimestamp(cutoff, tz=timezone.utc)
         count = (
             session.execute(
@@ -368,8 +368,6 @@ def collect_metrics(session: Any) -> bytes:
         route_quality.labels(route=name).set(_QUALITY_VALUES.get(quality_str, 3))
         route_matched.labels(route=name).set(result.matched_count if result else 0)
         route_threshold.labels(route=name).set(route.packet_count_threshold)
-        from meshcore_hub.collector.routes import effective_clear_threshold
-
         route_clear.labels(route=name).set(effective_clear_threshold(route))
 
     output: bytes = generate_latest(registry)
@@ -377,9 +375,12 @@ def collect_metrics(session: Any) -> bytes:
 
 
 @router.get("/metrics")
-async def metrics(request: Request) -> Response:
+def metrics(request: Request) -> Response:
     """Prometheus metrics endpoint.
 
+    Sync (not async) on purpose: collection runs ~20 blocking DB queries, so
+    the handler must run in FastAPI's threadpool instead of stalling the
+    event loop.
     Returns metrics in Prometheus text exposition format.
     Supports HTTP Basic Auth with username 'metrics' and API read key as
     password. When no read key is configured, access is denied unless

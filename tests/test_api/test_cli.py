@@ -47,3 +47,31 @@ def test_api_workers_from_env_var():
     assert result.exit_code == 0
     _, kwargs = mock_run.call_args
     assert kwargs["workers"] == 2
+
+
+def test_api_single_process_passes_spam_and_role_settings():
+    """The single-process app must carry the env-configured spam + OIDC role
+    settings — previously this path dropped them, silently disabling the
+    spam hide-filter and custom role names (the env factory path was fine)."""
+    runner = CliRunner()
+    with patch("uvicorn.run") as mock_run:
+        result = runner.invoke(
+            api,
+            [],
+            env={
+                "SPAM_DETECTION_ENABLED": "true",
+                "SPAM_SCORE_THRESHOLD": "0.8",
+                "OIDC_ROLE_ADMIN": "superadmin",
+                "OIDC_ROLE_OPERATOR": "moderator",
+                "OIDC_ROLE_MEMBER": "user",
+            },
+            catch_exceptions=False,
+        )
+
+    assert result.exit_code == 0
+    app = mock_run.call_args[0][0]
+    assert app.state.spam_detection_enabled is True
+    assert app.state.spam_score_threshold == 0.8
+    assert app.state.oidc_role_admin == "superadmin"
+    assert app.state.oidc_role_operator == "moderator"
+    assert app.state.oidc_role_member == "user"

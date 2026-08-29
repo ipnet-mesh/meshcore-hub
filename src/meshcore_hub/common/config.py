@@ -172,6 +172,25 @@ class CommonSettings(BaseSettings):
         ),
     )
 
+    # OIDC role-name mapping shared by all components. The web tier resolves
+    # session roles against these names (app.state + ENDPOINT_ACCESS proxy);
+    # the API tier matches them for authorization, channel visibility, and
+    # role-filtered lists. Only the IdP claim parsing (oidc_roles_claim) is
+    # web-specific and stays on WebSettings.
+    oidc_role_admin: str = Field(
+        default="admin", description="IdP role name for admin access"
+    )
+    oidc_role_operator: str = Field(
+        default="operator", description="IdP role name for operator access"
+    )
+    oidc_role_member: str = Field(
+        default="member", description="IdP role name for member access"
+    )
+    oidc_role_test: str = Field(
+        default="test",
+        description="IdP role name for test users (excluded from public views)",
+    )
+
 
 class CollectorSettings(CommonSettings):
     """Settings for the Collector component."""
@@ -552,19 +571,8 @@ class WebSettings(CommonSettings):
     oidc_roles_claim: str = Field(
         default="roles", description="ID token claim containing user roles"
     )
-    oidc_role_admin: str = Field(
-        default="admin", description="IdP role name for admin access"
-    )
-    oidc_role_operator: str = Field(
-        default="operator", description="IdP role name for operator access"
-    )
-    oidc_role_member: str = Field(
-        default="member", description="IdP role name for member access"
-    )
-    oidc_role_test: str = Field(
-        default="test",
-        description="IdP role name for test users (excluded from public views)",
-    )
+    # Role-name mapping (oidc_role_admin/operator/member/test) is inherited
+    # from CommonSettings — shared with the API tier.
     oidc_session_secret: Optional[str] = Field(
         default=None, description="Secret key for signing session cookies"
     )

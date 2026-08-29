@@ -72,10 +72,13 @@ class LetsMeshPacketDecoder:
     def reload_keys(self, channel_keys: list[str]) -> None:
         """Reload channel keys from a new key list (thread-safe).
 
-        Rebuilds the key store and channel name map without discarding the
-        decode cache.  The state lock is held only during the atomic swap
-        of ``_key_store`` and ``_channel_names_by_hash``, not during key
-        normalization or KeyStore construction.
+        Rebuilds the key store and channel name map, discarding the decode
+        cache: cached negative results were produced under the previous key
+        set, and packets for a newly added channel key must be re-decoded
+        (otherwise the normalizer permanently drops them as undecodable).
+        The state lock is held only during the atomic swap of
+        ``_key_store``/``_channel_names_by_hash`` and the cache clear, not
+        during key normalization or KeyStore construction.
 
         Args:
             channel_keys: New list of channel key entries to load.
@@ -92,6 +95,7 @@ class LetsMeshPacketDecoder:
             self._channel_keys = new_keys
             self._channel_names_by_hash = new_names
             self._key_store = new_store
+            self._decode_cache.clear()
 
         logger.debug(
             "LetsMesh decoder reloaded: %d channel keys (%s)",

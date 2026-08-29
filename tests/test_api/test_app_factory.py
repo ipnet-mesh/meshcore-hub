@@ -19,6 +19,11 @@ _FACTORY_ENV = [
     "METRICS_ENABLED",
     "METRICS_CACHE_TTL",
     "METRICS_PUBLIC",
+    "SPAM_DETECTION_ENABLED",
+    "SPAM_SCORE_THRESHOLD",
+    "OIDC_ROLE_ADMIN",
+    "OIDC_ROLE_OPERATOR",
+    "OIDC_ROLE_MEMBER",
 ]
 
 
@@ -134,3 +139,44 @@ def test_factory_metrics_public_via_env(clean_env):
     clean_env.setenv("METRICS_PUBLIC", "true")
     app = create_app_from_env()
     assert app.state.metrics_public is True
+
+
+def test_factory_reads_spam_settings_from_env(clean_env):
+    """SPAM_DETECTION_ENABLED / SPAM_SCORE_THRESHOLD reach app.state so the
+    messages hide-filter actually runs when the feature is enabled."""
+    clean_env.setenv("SPAM_DETECTION_ENABLED", "true")
+    clean_env.setenv("SPAM_SCORE_THRESHOLD", "0.9")
+
+    app = create_app_from_env()
+
+    assert app.state.spam_detection_enabled is True
+    assert app.state.spam_score_threshold == 0.9
+
+
+def test_factory_spam_settings_default_off(clean_env):
+    """Without env config the feature stays dark (create_app default)."""
+    app = create_app_from_env()
+    assert app.state.spam_detection_enabled is False
+    assert app.state.spam_score_threshold == 0.65
+
+
+def test_factory_reads_oidc_role_names_from_env(clean_env):
+    """Custom OIDC_ROLE_* names reach app.state, matching the web tier, so
+    API authorization honors customized IdP role naming."""
+    clean_env.setenv("OIDC_ROLE_ADMIN", "superadmin")
+    clean_env.setenv("OIDC_ROLE_OPERATOR", "moderator")
+    clean_env.setenv("OIDC_ROLE_MEMBER", "user")
+
+    app = create_app_from_env()
+
+    assert app.state.oidc_role_admin == "superadmin"
+    assert app.state.oidc_role_operator == "moderator"
+    assert app.state.oidc_role_member == "user"
+
+
+def test_factory_oidc_role_names_default(clean_env):
+    """Default role names match the documented admin/operator/member."""
+    app = create_app_from_env()
+    assert app.state.oidc_role_admin == "admin"
+    assert app.state.oidc_role_operator == "operator"
+    assert app.state.oidc_role_member == "member"
