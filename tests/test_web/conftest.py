@@ -45,6 +45,10 @@ class MockHttpClient:
     def __init__(self) -> None:
         """Initialize mock client with default responses."""
         self._responses: dict[str, dict[str, Any]] = {}
+        # Param-aware handlers for paginated endpoints. Key: "METHOD:path",
+        # value: callable(params) -> {"status_code": int, "json": Any}.
+        # Checked before _responses so pagination tests can override defaults.
+        self._paged_handlers: dict[str, Any] = {}
         # Records the params forwarded by the most recent request() call so
         # tests can assert how the proxy forwards query parameters.
         self.last_request_params: Any = None
@@ -259,19 +263,19 @@ class MockHttpClient:
             "json": json_data,
         }
 
-    def _create_response(self, key: str) -> Response:
-        """Create a mock response for a given key."""
-        import json as _json
+    def set_paged_response(self, method: str, path: str, handler: Any) -> None:
+        """Register a param-aware handler for a paginated endpoint.
 
-        response_data = self._responses.get(key)
-        if response_data is None:
-            # Return 404 for unknown endpoints
-            response = MagicMock(spec=Response)
-            response.status_code = 404
-            response.json.return_value = {"detail": "Not found"}
-            response.content = b'{"detail": "Not found"}'
-            response.headers = {"content-type": "application/json"}
-            return response
+        The handler receives the request params dict (including ``limit`` and
+        ``offset``) and returns the response payload dict
+        (``{"status_code": int, "json": Any}``), enabling different pages per
+        offset. Takes precedence over seeded/static responses for that path.
+        """
+        self._paged_handlers[f"{method}:{path}"] = handler
+
+    def _response_from_data(self, response_data: dict[str, Any]) -> Response:
+        """Create a mock response from a {"status_code", "json"} payload."""
+        import json as _json
 
         response = MagicMock(spec=Response)
         response.status_code = response_data["status_code"]
@@ -279,6 +283,16 @@ class MockHttpClient:
         response.content = _json.dumps(response_data["json"]).encode()
         response.headers = {"content-type": "application/json"}
         return response
+
+    def _create_response(self, key: str) -> Response:
+        """Create a mock response for a given key."""
+        response_data = self._responses.get(key)
+        if response_data is None:
+            # Return 404 for unknown endpoints
+            return self._response_from_data(
+                {"status_code": 404, "json": {"detail": "Not found"}}
+            )
+        return self._response_from_data(response_data)
 
     async def request(
         self,
@@ -307,6 +321,11 @@ class MockHttpClient:
     ) -> Response:
         """Mock GET request."""
         self.last_get_headers = headers
+        # Param-aware paged handlers take precedence over static responses
+        # (including seeded defaults) so pagination tests control every page.
+        handler = self._paged_handlers.get(f"GET:{path}")
+        if handler is not None:
+            return self._response_from_data(handler(params))
         # Try exact match first
         key = f"GET:{path}"
         if key in self._responses:

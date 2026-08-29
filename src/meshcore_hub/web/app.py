@@ -83,6 +83,83 @@ def _load_asset_manifest() -> dict[str, Any]:
         return {}
 
 
+# Pagination bounds for web-tier aggregation fetches (e.g. /map/data).
+# List endpoints cap `limit` at 500, so fetching "everything" requires
+# following offset pages; MAP_MAX_PAGES is a safety valve against a
+# misbehaving API that keeps reporting more data.
+MAP_PAGE_SIZE = 500
+MAP_MAX_PAGES = 40
+
+
+async def _fetch_all_pages(
+    client: httpx.AsyncClient,
+    path: str,
+    extra_params: dict[str, str | int] | None = None,
+    page_size: int = MAP_PAGE_SIZE,
+    max_pages: int = MAP_MAX_PAGES,
+) -> tuple[list[dict[str, Any]], int | None, str | None]:
+    """Fetch every item from a paginated list endpoint via offset paging.
+
+    List endpoints cap ``limit`` at 500, so a single request only covers the
+    first page (e.g. the 500 most recently seen nodes) and silently drops the
+    rest. This helper follows ``offset``/``total`` until the collection is
+    exhausted.
+
+    Returns:
+        ``(items, total, error)``. ``error`` is set only when the FIRST page
+        fails; a failure on a later page logs a warning and returns the items
+        collected so far. ``total`` is the API-reported total, or None when
+        the responses omit it.
+    """
+    items: list[dict[str, Any]] = []
+    total: int | None = None
+    params: dict[str, str | int] = dict(extra_params or {})
+    params["limit"] = page_size
+    offset = 0
+
+    for page in range(max_pages):
+        params["offset"] = offset
+        response = await client.get(path, params=params)
+        if response.status_code != 200:
+            if page == 0:
+                return [], None, f"API returned status {response.status_code}"
+            logger.warning(
+                "Pagination of %s aborted at offset %d: API returned status %d "
+                "(returning %d items collected so far)",
+                path,
+                offset,
+                response.status_code,
+                len(items),
+            )
+            break
+        data = response.json()
+        page_items = data.get("items", [])
+        if not isinstance(page_items, list):
+            break
+        items.extend(page_items)
+        reported_total = data.get("total")
+        if isinstance(reported_total, int):
+            total = reported_total
+        if not page_items:
+            break
+        offset += len(page_items)
+        if total is not None:
+            if offset >= total:
+                break
+        elif len(page_items) < page_size:
+            break
+    else:
+        logger.warning(
+            "Pagination of %s capped at %d pages (%d items); result may be "
+            "truncated",
+            path,
+            max_pages,
+            len(items),
+        )
+
+    return items, total, None
+
+
 # Per-endpoint, per-method role access mapping for the API proxy.
 # Key: URL path prefix (after /api/), Value: {method -> allowed roles}.
 # _OPEN = unconditional access (OIDC on or off, anonymous OK).
@@ -851,30 +928,34 @@ def create_app(
         nodes_with_coords = 0
 
         try:
-            profiles_response = await request.app.state.http_client.get(
-                "/api/v1/user/profiles", params={"limit": 500}
+            profile_items, _, _ = await _fetch_all_pages(
+                request.app.state.http_client, "/api/v1/user/profiles"
             )
-            if profiles_response.status_code == 200:
-                profiles_data = profiles_response.json()
-                for profile in profiles_data.get("items", []):
-                    profiles_by_id[profile["id"]] = {
-                        "id": profile.get("id"),
-                        "name": profile.get("name"),
-                        "callsign": profile.get("callsign"),
-                        "roles": profile.get("roles", []),
-                    }
+            for profile in profile_items:
+                profiles_by_id[profile["id"]] = {
+                    "id": profile.get("id"),
+                    "name": profile.get("name"),
+                    "callsign": profile.get("callsign"),
+                    "roles": profile.get("roles", []),
+                }
 
-            # Fetch all nodes from API
-            nodes_params: dict[str, str | int] = {"limit": 500}
+            # Fetch all nodes from the API, following pagination. The API caps
+            # limit at 500 and sorts last_seen desc, so a single request only
+            # covered the 500 most recently seen nodes and silently hid
+            # stale/offline nodes — including adopted infrastructure — from
+            # the unfiltered map.
+            nodes_params: dict[str, str | int] = {}
             if adopted_by:
                 nodes_params["adopted_by"] = adopted_by
-            response = await request.app.state.http_client.get(
-                "/api/v1/nodes", params=nodes_params
+            nodes, nodes_total, fetch_error = await _fetch_all_pages(
+                request.app.state.http_client, "/api/v1/nodes", nodes_params
             )
-            if response.status_code == 200:
-                data = response.json()
-                nodes = data.get("items", [])
-                total_nodes = len(nodes)
+            if fetch_error is not None:
+                error = fetch_error
+            else:
+                total_nodes = (
+                    nodes_total if isinstance(nodes_total, int) else len(nodes)
+                )
 
                 for node in nodes:
                     tags = node.get("tags", [])
@@ -937,8 +1018,6 @@ def create_app(
                             "owner": owner,
                         }
                     )
-            else:
-                error = f"API returned status {response.status_code}"
 
         except Exception as e:
             error = str(e)
