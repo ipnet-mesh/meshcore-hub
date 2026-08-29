@@ -30,6 +30,36 @@ class TestCommonSettings:
         assert settings.mqtt_transport.value == "websockets"
         assert settings.mqtt_ws_path == "/"
 
+    def test_oidc_role_names_shared_by_all_components(self) -> None:
+        """OIDC role-name mapping lives on CommonSettings so the API tier
+        resolves the same names as the web tier (authorization, channel
+        visibility, role-filtered lists)."""
+        settings = CommonSettings(
+            _env_file=None,
+            oidc_role_admin="superadmin",
+            oidc_role_operator="moderator",
+            oidc_role_member="user",
+            oidc_role_test="sandbox",
+        )
+
+        assert settings.oidc_role_admin == "superadmin"
+        assert settings.oidc_role_operator == "moderator"
+        assert settings.oidc_role_member == "user"
+        assert settings.oidc_role_test == "sandbox"
+
+        # Every component inherits the mapping (previously WebSettings-only).
+        for cls in (CollectorSettings, APISettings, WebSettings):
+            inherited = cls(_env_file=None, oidc_role_operator="moderator")
+            assert inherited.oidc_role_operator == "moderator"
+            assert inherited.oidc_role_admin == "admin"
+
+    def test_oidc_roles_claim_stays_web_specific(self) -> None:
+        """The IdP claim name is only parsed by the web tier."""
+        settings = APISettings(_env_file=None)
+
+        assert not hasattr(settings, "oidc_roles_claim")
+        assert WebSettings(_env_file=None).oidc_roles_claim == "roles"
+
 
 class TestCollectorSettings:
     """Tests for CollectorSettings."""

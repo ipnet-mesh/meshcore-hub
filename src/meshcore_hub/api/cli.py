@@ -308,6 +308,10 @@ def api(
             f"(dashboard: {redis_cache_ttl_dashboard}s)"
         )
     click.echo(f"API Cache-Control enabled: {api_cache_control_enabled}")
+    click.echo(
+        f"Spam detection: {settings.spam_detection_enabled} "
+        f"(threshold: {settings.spam_score_threshold})"
+    )
     click.echo(f"Reload mode: {reload}")
     click.echo(f"Workers: {workers}")
     click.echo("=" * 50)
@@ -371,6 +375,11 @@ def api(
             redis_cache_ttl=redis_cache_ttl,
             redis_cache_ttl_dashboard=redis_cache_ttl_dashboard,
             api_cache_control_enabled=api_cache_control_enabled,
+            spam_detection_enabled=settings.spam_detection_enabled,
+            spam_score_threshold=settings.spam_score_threshold,
+            oidc_role_admin=settings.oidc_role_admin,
+            oidc_role_operator=settings.oidc_role_operator,
+            oidc_role_member=settings.oidc_role_member,
         )
 
         click.echo("\nStarting API server...")

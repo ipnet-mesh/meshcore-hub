@@ -111,6 +111,7 @@ images**; the user does.
 
 ```bash
 npx playwright install chromium        # one-time browser binary (host)
+sudo npx playwright install-deps chromium  # one-time system libs (Debian: nspr/nss/alsa/atk/gbm/X11)
 make e2e-build && make e2e-up          # user: build + start mqtt/pg/migrate/collector/api/web
 make e2e-test                          # user: seeds via e2e/seed_data.py, then runs the suite
 make e2e-down                          # user: tear down (destroys the throwaway DB)

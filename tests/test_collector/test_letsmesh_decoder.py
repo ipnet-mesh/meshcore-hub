@@ -224,6 +224,34 @@ def test_reload_keys_with_empty_list_keeps_builtins() -> None:
     assert "EB50A1BCB3E4E5D7BF69A57C9DADA211" not in decoder._channel_keys
 
 
+def test_reload_keys_clears_decode_cache() -> None:
+    """Reload discards cached results (including negative ones) so packets
+    that were undecodable under the old key set are retried with the new
+    keys instead of being served from the cache forever."""
+    decoder = LetsMeshPacketDecoder()
+
+    undecoded = MagicMock()
+    undecoded.is_valid = False
+    undecoded.errors = ["no channel key"]
+
+    decoded_ok = MagicMock()
+    decoded_ok.is_valid = True
+    decoded_ok.to_dict.return_value = {"payloadType": 5}
+    decoded_ok.payload = {}
+
+    with patch(
+        "meshcore_hub.collector.letsmesh_decoder.MeshCoreDecoder.decode",
+        side_effect=[undecoded, decoded_ok],
+    ) as mock_decode:
+        assert decoder.decode_payload({"raw": "A1B2C3"}) is None
+
+        decoder.reload_keys(["chat=D0BDD6D71538138ED979EEC00D98AD97"])
+        decoded = decoder.decode_payload({"raw": "A1B2C3"})
+
+    assert decoded == {"payloadType": 5}
+    assert mock_decode.call_count == 2
+
+
 def test_enrich_payload_decoded_merges_attributes() -> None:
     """_enrich_payload_decoded merges payload object attributes into dict."""
     payload_obj = MagicMock()

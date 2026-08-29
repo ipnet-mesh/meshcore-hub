@@ -53,6 +53,7 @@ def _make_reception(
     path_hashes: list[str],
     received_at: datetime | None = None,
     event_hash: str | None = None,
+    path_len: int | None = None,
 ) -> str:
     """Insert a RawPacket + PacketPathHop rows for a test reception."""
     ts = received_at or _NOW
@@ -62,6 +63,7 @@ def _make_reception(
         observer_node_id=observer_node_id,
         packet_hash=packet_hash,
         event_hash=event_hash,
+        path_len=path_len if path_len is not None else len(path_hashes),
         received_at=ts,
     )
     db_session.add(rp)
@@ -90,6 +92,7 @@ def _make_route(
     threshold: int = 3,
     clear_bar: int | None = None,
     max_hop_span: int | None = None,
+    max_path_length: int | None = None,
     observers: list[Node] | None = None,
     enabled: bool = True,
     window_hours: int = 24,
@@ -102,6 +105,7 @@ def _make_route(
         packet_count_threshold=threshold,
         clear_threshold=clear_bar,
         max_hop_span=max_hop_span,
+        max_path_length=max_path_length,
         enabled=enabled,
         window_hours=window_hours,
         reversible=reversible,
@@ -1119,6 +1123,54 @@ class TestEvaluateRouteHistory:
         assert today_entry[0] == now.date()
         assert today_entry[3] == 0
         assert today_entry[1] == RouteQuality.UNKNOWN.value
+
+    def test_max_path_length_uses_true_hop_count(self, db_session):
+        """max_path_length must gate on the packet's FULL hop count so
+        history day buckets agree with snapshot evaluation.
+
+        The history fetch only loads prefix-matching hops; before the fix
+        the length guard ran on that filtered list, so a 6-hop packet with
+        only 2 matching hops slipped past max_path_length=3 in history
+        while being rejected by evaluate_route.
+        """
+        node_a = _make_node(db_session, "aa" + "0" * 62)
+        node_b = _make_node(db_session, "bb" + "0" * 62)
+        route = _make_route(
+            db_session, "R1", [node_a, node_b], threshold=1, max_path_length=3
+        )
+
+        now = datetime(2026, 7, 15, 12, 0, 0, tzinfo=timezone.utc)
+        yesterday = now - timedelta(days=1)
+
+        # 6 total hops, only 2 match the route prefixes (AA ... BB).
+        _make_reception(
+            db_session,
+            None,
+            "toolong",
+            ["AA", "11", "22", "33", "44", "BB"],
+            received_at=yesterday,
+            event_hash="ev-toolong",
+        )
+        # 3 total hops — within the cap.
+        _make_reception(
+            db_session,
+            None,
+            "okpkt",
+            ["AA", "12", "BB"],
+            received_at=yesterday,
+            event_hash="ev-ok",
+        )
+        db_session.commit()
+
+        results = evaluate_route_history(db_session, route, days=2, now=now)
+        assert results[-1][0] == yesterday.date()
+        assert results[-1][3] == 1  # only the within-cap packet matched
+
+        # Snapshot evaluation agrees: the long packet is rejected there too.
+        _state, _quality, matched = evaluate_route(
+            db_session, route, now - timedelta(days=2)
+        )
+        assert matched == 1
 
 
 class TestComputeAverageQuality:

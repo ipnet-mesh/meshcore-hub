@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from meshcore_hub.common.models.node import Node
 from meshcore_hub.common.models.packet_path_hop import PacketPathHop
+from meshcore_hub.common.models.raw_packet import RawPacket
 from meshcore_hub.common.models.route import Route
 from meshcore_hub.common.models.route_recent_match import RouteRecentMatch
 from meshcore_hub.common.models.route_result import (
@@ -371,7 +372,7 @@ def _fetch_matching_hops(
     since: datetime,
     until: datetime,
     observer_ids: Optional[list[str]] = None,
-) -> dict[str, list[dict[str, Any]]]:
+) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Optional[int]]]:
     """Fetch only hops whose ``node_hash`` matches any of *prefixes*.
 
     Unlike :func:`fetch_candidate_paths` (which loads **all** hops for
@@ -380,6 +381,13 @@ def _fetch_matching_hops(
     inspects hops whose ``node_hash`` starts with an expected prefix, so
     filtering at the SQL level is semantically identical but returns far
     fewer rows.
+
+    Returns ``(paths, path_lens)`` where *paths* maps raw packet id to its
+    prefix-matching hops and *path_lens* maps raw packet id to the packet's
+    true total hop count (``RawPacket.path_len``, None when unset).  The
+    filtered hop lists must NOT be length-checked against a route's
+    ``max_path_length`` — callers use *path_lens* for that so history
+    evaluation agrees with snapshot evaluation.
     """
     prefix_ranges = []
     for prefix in dict.fromkeys(prefixes):
@@ -399,7 +407,9 @@ def _fetch_matching_hops(
             PacketPathHop.packet_hash,
             PacketPathHop.event_hash,
             PacketPathHop.received_at,
+            RawPacket.path_len,
         )
+        .join(RawPacket, RawPacket.id == PacketPathHop.raw_packet_id)
         .where(
             PacketPathHop.received_at >= since,
             PacketPathHop.received_at < until,
@@ -411,10 +421,12 @@ def _fetch_matching_hops(
         stmt = stmt.where(PacketPathHop.observer_node_id.in_(observer_ids))
 
     paths: dict[str, list[dict[str, Any]]] = {}
+    path_lens: dict[str, Optional[int]] = {}
     for row in session.execute(stmt).all():
         rp_id = row.raw_packet_id
         if rp_id not in paths:
             paths[rp_id] = []
+            path_lens[rp_id] = row.path_len
         paths[rp_id].append(
             {
                 "position": row.position,
@@ -424,7 +436,7 @@ def _fetch_matching_hops(
                 "received_at": row.received_at,
             }
         )
-    return paths
+    return paths, path_lens
 
 
 def _count_candidate_receptions(
@@ -699,8 +711,10 @@ def evaluate_route_history(
     # _subsequence_indices only inspects hops whose node_hash starts with
     # an expected prefix, so filtering at SQL level is semantically
     # identical but returns far fewer rows than loading all hops for
-    # matching raw packets.
-    all_paths = _fetch_matching_hops(
+    # matching raw packets.  The packets' true hop counts (path_lens) ride
+    # along so max_path_length can be applied to the FULL path length,
+    # exactly like snapshot evaluation.
+    all_paths, path_lens = _fetch_matching_hops(
         session, expected, window_start, window_end, observer_ids
     )
 
@@ -753,10 +767,17 @@ def evaluate_route_history(
     results: list[tuple[date, str, str, int]] = []
     for i in range(historical_days):
         matched_packets: set[str] = set()
-        for hops in day_paths[i].values():
-            if _match_hops(
-                hops, expected, route.max_hop_span, route.max_path_length, reversible
-            ):
+        for rp_id, hops in day_paths[i].items():
+            # max_path_length caps the packet's FULL hop count.  The
+            # filtered hop list cannot be used for this (it only contains
+            # prefix-matching hops), so check the true length first and
+            # keep the guard out of _match_hops.  Legacy rows without
+            # path_len are not rejected.
+            if route.max_path_length is not None:
+                true_len = path_lens.get(rp_id)
+                if true_len is not None and true_len > route.max_path_length:
+                    continue
+            if _match_hops(hops, expected, route.max_hop_span, None, reversible):
                 identity = _match_identity(hops)
                 if identity:
                     matched_packets.add(identity)

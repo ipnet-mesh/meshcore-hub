@@ -95,6 +95,9 @@ def create_app(
     api_cache_control_enabled: bool = True,
     spam_detection_enabled: bool = False,
     spam_score_threshold: float = 0.65,
+    oidc_role_admin: str = "admin",
+    oidc_role_operator: str = "operator",
+    oidc_role_member: str = "member",
 ) -> FastAPI:
     """Create and configure the FastAPI application.
 
@@ -125,6 +128,11 @@ def create_app(
             /routes/{id} detail, and per-route health history
         api_cache_control_enabled: Emit HTTP Cache-Control on /api/v1/* and
             ETag/If-None-Match handling on @cached endpoints.
+        spam_detection_enabled: Hide spam-flagged messages in API responses.
+        spam_score_threshold: Score at/above which messages are treated as spam.
+        oidc_role_admin: IdP role name mapping to admin access.
+        oidc_role_operator: IdP role name mapping to operator access.
+        oidc_role_member: IdP role name mapping to member access.
 
     Returns:
         Configured FastAPI application
@@ -164,6 +172,11 @@ def create_app(
     app.state.api_cache_control_enabled = api_cache_control_enabled
     app.state.spam_detection_enabled = spam_detection_enabled
     app.state.spam_score_threshold = spam_score_threshold
+    # OIDC role-name mapping used by auth/channel-visibility/tag/adoption
+    # authorization (mirrors the web tier's app.state.oidc_role_*).
+    app.state.oidc_role_admin = oidc_role_admin
+    app.state.oidc_role_operator = oidc_role_operator
+    app.state.oidc_role_member = oidc_role_member
 
     # Configure CORS. An unset CORS_ORIGINS keeps the wildcard default for
     # compatibility with external API consumers, but wildcard origins are
@@ -357,4 +370,7 @@ def create_app_from_env() -> FastAPI:
         api_cache_control_enabled=settings.api_cache_control_enabled,
         spam_detection_enabled=settings.spam_detection_enabled,
         spam_score_threshold=settings.spam_score_threshold,
+        oidc_role_admin=settings.oidc_role_admin,
+        oidc_role_operator=settings.oidc_role_operator,
+        oidc_role_member=settings.oidc_role_member,
     )
