@@ -462,3 +462,211 @@ class TestMapDataAdoptedByFilter:
         # Default mock has 2 nodes, 1 with coordinates
         assert len(data["nodes"]) == 1
         assert data["nodes"][0]["name"] == "Node Two"
+
+
+class TestMapDataPagination:
+    """Tests that /map/data follows API pagination instead of one 500-item page.
+
+    Regression tests: the endpoint used to fetch a single ``limit=500`` page
+    (the API's hard max), so networks with more than 500 nodes silently hid
+    stale/offline nodes — including adopted infrastructure — from the
+    unfiltered map, while the ``adopted_by`` filter (applied before the limit)
+    still showed them.
+    """
+
+    @staticmethod
+    def _node(
+        idx: int,
+        name: str,
+        lat: float | None = None,
+        lon: float | None = None,
+        last_seen: str | None = "2024-01-01T12:00:00Z",
+        adopted_by: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "id": f"node-{idx}",
+            "public_key": f"{idx:064x}",
+            "name": name,
+            "adv_type": "REPEATER",
+            "lat": lat,
+            "lon": lon,
+            "last_seen": last_seen,
+            "tags": [],
+            "adopted_by": adopted_by,
+        }
+
+    def test_map_data_includes_nodes_beyond_first_page(
+        self, web_app: Any, mock_http_client: MockHttpClient
+    ) -> None:
+        """A stale adopted node on page 2 must appear in the unfiltered map."""
+        calls: list[dict | None] = []
+
+        def handler(params: dict | None) -> dict[str, Any]:
+            calls.append(params)
+            offset = (params or {}).get("offset", 0)
+            if offset == 0:
+                items = [self._node(1, "Recent Node", lat=41.0, lon=-75.0)]
+            else:
+                items = [
+                    self._node(
+                        2,
+                        "Stale Repeater",
+                        lat=40.0,
+                        lon=-74.0,
+                        last_seen="2023-06-01T00:00:00Z",
+                        adopted_by={
+                            "user_id": "user-1",
+                            "name": "Operator",
+                            "callsign": "W1ABC",
+                            "profile_id": "profile-1",
+                        },
+                    )
+                ]
+            return {"status_code": 200, "json": {"items": items, "total": 2}}
+
+        mock_http_client.set_paged_response("GET", "/api/v1/nodes", handler)
+
+        client = TestClient(web_app, raise_server_exceptions=True)
+        response = client.get("/map/data")
+        assert response.status_code == 200
+        data = response.json()
+
+        # Both pages were fetched
+        assert len(calls) == 2
+        nodes_by_name = {n["name"]: n for n in data["nodes"]}
+        assert "Recent Node" in nodes_by_name
+        assert "Stale Repeater" in nodes_by_name
+        assert nodes_by_name["Stale Repeater"]["is_adopted"] is True
+        assert data["adopted_center"] == {"lat": 40.0, "lon": -74.0}
+        # debug.total_nodes reports the API total, not the page length
+        assert data["debug"]["total_nodes"] == 2
+
+    def test_map_data_forwards_adopted_by_on_every_page(
+        self, web_app: Any, mock_http_client: MockHttpClient
+    ) -> None:
+        """The adopted_by filter must be forwarded to every page request."""
+        calls: list[dict | None] = []
+
+        def handler(params: dict | None) -> dict[str, Any]:
+            # Snapshot: the caller mutates the same params dict between pages
+            calls.append(dict(params) if params else None)
+            offset = (params or {}).get("offset", 0)
+            items = [self._node(offset + 1, f"Node {offset}", lat=40.0, lon=-74.0)]
+            return {"status_code": 200, "json": {"items": items, "total": 2}}
+
+        mock_http_client.set_paged_response("GET", "/api/v1/nodes", handler)
+
+        client = TestClient(web_app, raise_server_exceptions=True)
+        response = client.get("/map/data?adopted_by=some-profile-uuid")
+        assert response.status_code == 200
+
+        assert [c.get("offset") if c else None for c in calls] == [0, 1]
+        for params in calls:
+            assert params is not None
+            assert params.get("adopted_by") == "some-profile-uuid"
+            assert params.get("limit") == 500
+
+    def test_map_data_terminates_on_short_page_without_total(
+        self, web_app: Any, mock_http_client: MockHttpClient
+    ) -> None:
+        """A short page with no total field means "last page" — no extra calls."""
+        calls: list[dict | None] = []
+
+        def handler(params: dict | None) -> dict[str, Any]:
+            calls.append(params)
+            return {
+                "status_code": 200,
+                "json": {"items": [self._node(1, "Only Node", lat=40.0, lon=-74.0)]},
+            }
+
+        mock_http_client.set_paged_response("GET", "/api/v1/nodes", handler)
+
+        client = TestClient(web_app, raise_server_exceptions=True)
+        response = client.get("/map/data")
+        assert response.status_code == 200
+        data = response.json()
+
+        assert len(calls) == 1
+        assert [n["name"] for n in data["nodes"]] == ["Only Node"]
+
+    def test_map_data_pagination_capped_at_max_pages(
+        self, web_app: Any, mock_http_client: MockHttpClient
+    ) -> None:
+        """A pathological API reporting a huge total must not loop forever."""
+        from meshcore_hub.web.app import MAP_MAX_PAGES
+
+        calls: list[dict | None] = []
+
+        def handler(params: dict | None) -> dict[str, Any]:
+            calls.append(params)
+            offset = (params or {}).get("offset", 0)
+            items = [self._node(offset, f"Node {offset}", lat=40.0, lon=-74.0)]
+            return {"status_code": 200, "json": {"items": items, "total": 10**9}}
+
+        mock_http_client.set_paged_response("GET", "/api/v1/nodes", handler)
+
+        client = TestClient(web_app, raise_server_exceptions=True)
+        response = client.get("/map/data")
+        assert response.status_code == 200
+        data = response.json()
+
+        assert len(calls) == MAP_MAX_PAGES
+        assert len(data["nodes"]) == MAP_MAX_PAGES
+        # debug.total_nodes still reports the API-reported total
+        assert data["debug"]["total_nodes"] == 10**9
+
+    def test_map_data_keeps_partial_results_when_later_page_fails(
+        self, web_app: Any, mock_http_client: MockHttpClient
+    ) -> None:
+        """A failure on page 2 keeps the nodes collected from page 1."""
+        calls: list[dict | None] = []
+
+        def handler(params: dict | None) -> dict[str, Any]:
+            calls.append(params)
+            offset = (params or {}).get("offset", 0)
+            if offset == 0:
+                return {
+                    "status_code": 200,
+                    "json": {
+                        "items": [self._node(1, "First Page Node", 40.0, -74.0)],
+                        "total": 3,
+                    },
+                }
+            return {"status_code": 500, "json": None}
+
+        mock_http_client.set_paged_response("GET", "/api/v1/nodes", handler)
+
+        client = TestClient(web_app, raise_server_exceptions=True)
+        response = client.get("/map/data")
+        assert response.status_code == 200
+        data = response.json()
+
+        assert len(calls) == 2
+        assert [n["name"] for n in data["nodes"]] == ["First Page Node"]
+
+    def test_map_data_paginates_profiles(
+        self, web_app: Any, mock_http_client: MockHttpClient
+    ) -> None:
+        """The operator dropdown source (profiles) is paginated too."""
+        calls: list[dict | None] = []
+
+        def handler(params: dict | None) -> dict[str, Any]:
+            # Snapshot: the caller mutates the same params dict between pages
+            calls.append(dict(params) if params else None)
+            offset = (params or {}).get("offset", 0)
+            items: list[dict[str, Any]]
+            if offset == 0:
+                items = [{"id": "p1", "name": "Op One", "callsign": None, "roles": []}]
+            else:
+                items = [{"id": "p2", "name": "Op Two", "callsign": None, "roles": []}]
+            return {"status_code": 200, "json": {"items": items, "total": 2}}
+
+        mock_http_client.set_paged_response("GET", "/api/v1/user/profiles", handler)
+
+        client = TestClient(web_app, raise_server_exceptions=True)
+        response = client.get("/map/data")
+        assert response.status_code == 200
+        data = response.json()
+
+        assert len(calls) == 2
+        assert {p["id"] for p in data["profiles"]} == {"p1", "p2"}
