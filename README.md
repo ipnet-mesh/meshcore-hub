@@ -5,7 +5,7 @@
 [![codecov](https://codecov.io/github/ipnet-mesh/meshcore-hub/graph/badge.svg?token=DO4F82DLKS)](https://codecov.io/github/ipnet-mesh/meshcore-hub)
 [![BuyMeACoffee](https://raw.githubusercontent.com/pachadotdev/buymeacoffee-badges/main/bmc-donate-yellow.svg)](https://www.buymeacoffee.com/jinglemansweep)
 
-Python 3.14+ platform for managing and orchestrating MeshCore mesh networks.
+Python 3.13+ platform for managing and orchestrating MeshCore mesh networks.
 
 > [!WARNING]
 > **DEPRECATION NOTICE** — v0.14 adds PostgreSQL support (`DATABASE_BACKEND=postgres`); SQLite remains the zero-config default. SQLite support will be maintained for at least the next few releases (~3 months), then removed in favour of PostgreSQL-only. See [docs/database.md](docs/database.md) to switch backends and [docs/upgrading.md](docs/upgrading.md) to migrate.
