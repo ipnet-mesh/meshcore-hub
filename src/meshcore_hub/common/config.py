@@ -3,7 +3,7 @@
 from enum import Enum
 from typing import Optional
 
-from pydantic import Field, field_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -40,17 +40,7 @@ class CommonSettings(BaseSettings):
     )
 
     # Database connection. PostgreSQL is the only backend since v0.19: either
-    # an explicit DATABASE_URL or the DATABASE_* components below. The legacy
-    # DATABASE_BACKEND selector is kept for one release purely so a leftover
-    # `sqlite` setting fails with a targeted upgrade error instead of being
-    # silently ignored; the field is removed in v0.20.
-    database_backend: str = Field(
-        default="postgres",
-        description=(
-            "Legacy backend selector retained for one release; 'postgres' is "
-            "accepted (no-op) and 'sqlite' is rejected (support removed in v0.19)"
-        ),
-    )
+    # an explicit DATABASE_URL or the DATABASE_* components below.
     database_url: Optional[str] = Field(
         default=None,
         description=(
@@ -77,23 +67,6 @@ class CommonSettings(BaseSettings):
         default=None,
         description="PostgreSQL password (required unless DATABASE_URL is set)",
     )
-
-    @field_validator("database_backend", mode="before")
-    @classmethod
-    def _validate_legacy_backend(cls, value: object) -> str:
-        """Reject the removed SQLite backend with a targeted upgrade error."""
-        raw = "postgres" if value is None else str(value).strip().lower()
-        if raw == "sqlite":
-            raise ValueError(
-                "SQLite support was removed in v0.19 — migrate with "
-                "`meshcore-hub db migrate-to-postgres`, see docs/upgrading.md"
-            )
-        if raw != "postgres":
-            raise ValueError(
-                f"DATABASE_BACKEND must be 'postgres' (the only supported "
-                f"backend), got {value!r}"
-            )
-        return raw
 
     @property
     def effective_database_url(self) -> str:

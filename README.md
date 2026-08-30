@@ -8,7 +8,7 @@
 Python 3.13+ platform for managing and orchestrating MeshCore mesh networks.
 
 > [!WARNING]
-> **PostgreSQL-only since v0.19** — MeshCore Hub runs on PostgreSQL (bundled container by default; `docker compose up` is still zero-effort). SQLite support was removed in v0.19; existing deployments can migrate in place with `meshcore-hub db migrate-to-postgres` — see [docs/upgrading.md](docs/upgrading.md) and [docs/database.md](docs/database.md).
+> **PostgreSQL-only since v0.19** — MeshCore Hub runs on PostgreSQL (bundled container by default; `docker compose up` is still zero-effort). SQLite support was removed in v0.19 and the in-place migration tool was removed in v0.20 — deployments still on SQLite must upgrade through v0.19 and migrate there first; see [docs/upgrading.md](docs/upgrading.md) and [docs/database.md](docs/database.md).
 
 ![MeshCore Hub Web Dashboard](docs/images/web.png)
 

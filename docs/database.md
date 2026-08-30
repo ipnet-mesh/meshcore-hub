@@ -3,7 +3,7 @@
 MeshCore Hub runs on **PostgreSQL** — the only supported database backend since v0.19. A bundled container ships with the stack for development (it joins the `core` compose profile via `docker-compose.dev.yml`, so a standard dev `compose up` works with zero configuration); managed/external Postgres and multiple schema-isolated instances sharing one cluster are equally supported — and are the norm in production.
 
 > [!NOTE]
-> SQLite support (the pre-v0.14 default) was **removed in v0.19**. Existing SQLite deployments can migrate in place with the built-in `meshcore-hub db migrate-to-postgres` command — see [Upgrading from SQLite](#upgrading-from-sqlite) below and the [v0.19 upgrade guide](upgrading.md).
+> SQLite support (the pre-v0.14 default) was **removed in v0.19**. Deployments still on SQLite must upgrade through v0.19 and run the in-place migration there (the `meshcore-hub db migrate-to-postgres` command was itself removed in v0.20) — see the [v0.19 upgrade guide](upgrading.md).
 
 ## Docker (bundled container)
 
@@ -72,9 +72,3 @@ DATABASE_SCHEMA=meshcorehub_stg
 The schema is created automatically on `db upgrade` if it does not exist, so no manual `CREATE SCHEMA` is required. Connect both instances to the same `DATABASE_HOST` / `DATABASE_NAME` / `DATABASE_USER`; only `DATABASE_SCHEMA` (and `COMPOSE_PROJECT_NAME`) differ.
 
 > **Note:** This is the database-level isolation for instances sharing a Postgres cluster. For running multiple instances on the same Docker host (separate volumes, Traefik routing), see [Multi-Instance Deployments](deployment.md#multi-instance-deployments).
-
-## Upgrading from SQLite
-
-Deployments still on SQLite (the pre-v0.14 default, deprecated in v0.14 and removed in v0.19) can be moved to Postgres in place with a single built-in command (`meshcore-hub db migrate-to-postgres`), which copies every table in foreign-key order through the ORM and prints a per-table row-count reconciliation. Downtime is required while writers are stopped; the source SQLite file is never modified. The command is retained through v0.19 and scheduled for removal in v0.20.
-
-See the **v0.19 upgrade guide** in [upgrading.md](upgrading.md) for the full step-by-step runbook (backup, stop writers, bring up Postgres, run the migration, restart).

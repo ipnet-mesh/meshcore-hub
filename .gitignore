@@ -224,7 +224,6 @@ __marimo__/
 
 # MeshCore Hub specific
 *.db
-meshcore.db
 
 # Frontend build artifacts
 node_modules/

@@ -1,7 +1,6 @@
 """Tests for configuration settings."""
 
 import pytest
-from pydantic import ValidationError
 
 from meshcore_hub.common.config import (
     CommonSettings,
@@ -376,27 +375,3 @@ class TestDatabaseUrlResolution:
         )
 
         assert settings.effective_database_url == "postgresql+psycopg2://u:p@h/db"
-
-    def test_backend_defaults_to_postgres_noop(self) -> None:
-        """DATABASE_BACKEND=postgres (the default) is accepted as a no-op."""
-        settings = CommonSettings(
-            _env_file=None,
-            database_backend="postgres",
-            database_host="pg",
-            database_password="pw",
-        )
-
-        assert settings.database_backend == "postgres"
-        assert settings.effective_database_url.startswith("postgresql+psycopg2://")
-
-    def test_backend_sqlite_is_rejected_with_upgrade_hint(self) -> None:
-        """DATABASE_BACKEND=sqlite fails with the targeted v0.19 upgrade error."""
-        with pytest.raises(
-            ValidationError, match="SQLite support was removed in v0.19"
-        ):
-            _ = CommonSettings(_env_file=None, database_backend="sqlite")
-
-    def test_backend_unknown_value_is_rejected(self) -> None:
-        """Anything other than 'postgres' is rejected."""
-        with pytest.raises(ValidationError, match="must be 'postgres'"):
-            _ = CommonSettings(_env_file=None, database_backend="mysql")

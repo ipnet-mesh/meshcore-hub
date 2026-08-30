@@ -113,5 +113,5 @@
 
 ## Follow-ups & Coordination (not part of this implementation)
 
-- [ ] Track for v0.20: remove `db migrate-to-postgres` + `common/db_migrate.py` + its tests, the `database_backend` settings field, and the `[postgres]` extra alias (announced in the v0.19 `docs/upgrading.md`)
+- [x] Track for v0.20: remove `db migrate-to-postgres` + `common/db_migrate.py` + its tests, the `database_backend` settings field, and the `[postgres]` extra alias (announced in the v0.19 `docs/upgrading.md`)
 - [ ] When taskifying `docs/plans/20260705-2306-mesh-link-monitoring` (future session): note its SQLite branches (`sqlite_insert` arm, batch-mode DDL, `SQLITE_MAX_VARIABLE_NUMBER` avoidance) are superseded by this plan — implementation targets Postgres-only
