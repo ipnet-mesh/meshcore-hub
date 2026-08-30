@@ -235,7 +235,7 @@ jobs:
           python-version-file: ".python-version"
 
       - name: Download artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         continue-on-error: true
         with:
           path: results
