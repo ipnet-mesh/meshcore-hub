@@ -103,6 +103,10 @@ def create_app(
     redis_key_prefix: str = "hub",
     redis_cache_ttl: int = 30,
     redis_cache_ttl_dashboard: int = 3600,
+    redis_cache_ttl_feeds: int = 300,
+    feeds_enabled: bool = True,
+    network_name: str = "MeshCore Network",
+    web_public_url: str | None = None,
     api_cache_control_enabled: bool = True,
     spam_detection_enabled: bool = False,
     spam_score_threshold: float = 0.65,
@@ -136,6 +140,12 @@ def create_app(
         redis_cache_ttl: Default cache TTL in seconds
         redis_cache_ttl_dashboard: Cache TTL in seconds for dashboard endpoints,
             /routes/{id} detail, and per-route health history
+        redis_cache_ttl_feeds: Cache TTL in seconds for RSS/Atom feeds (also
+            the Cache-Control max-age on feed responses)
+        feeds_enabled: Serve RSS/Atom feeds at /api/v1/feeds/*
+        network_name: Network display name used in feed titles
+        web_public_url: Canonical public base URL used for feed item/self
+            links (falls back to forwarded request headers)
         api_cache_control_enabled: Emit HTTP Cache-Control on /api/v1/* and
             ETag/If-None-Match handling on @cached endpoints.
         spam_detection_enabled: Hide spam-flagged messages in API responses.
@@ -178,6 +188,10 @@ def create_app(
     app.state.redis_key_prefix = redis_key_prefix
     app.state.redis_cache_ttl = redis_cache_ttl
     app.state.redis_cache_ttl_dashboard = redis_cache_ttl_dashboard
+    app.state.redis_cache_ttl_feeds = redis_cache_ttl_feeds
+    app.state.feeds_enabled = feeds_enabled
+    app.state.network_name = network_name
+    app.state.web_public_url = web_public_url
     app.state.api_cache_control_enabled = api_cache_control_enabled
     app.state.spam_detection_enabled = spam_detection_enabled
     app.state.spam_score_threshold = spam_score_threshold
@@ -381,6 +395,10 @@ def create_app_from_env() -> FastAPI:
         redis_key_prefix=settings.redis_key_prefix,
         redis_cache_ttl=settings.redis_cache_ttl,
         redis_cache_ttl_dashboard=settings.redis_cache_ttl_dashboard,
+        redis_cache_ttl_feeds=settings.redis_cache_ttl_feeds,
+        feeds_enabled=settings.feeds_enabled,
+        network_name=settings.network_name,
+        web_public_url=settings.web_public_url,
         api_cache_control_enabled=settings.api_cache_control_enabled,
         spam_detection_enabled=settings.spam_detection_enabled,
         spam_score_threshold=settings.spam_score_threshold,

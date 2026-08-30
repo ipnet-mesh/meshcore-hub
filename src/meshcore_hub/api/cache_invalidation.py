@@ -87,9 +87,12 @@ def invalidate_channels(request: Request) -> None:
       derived from channel visibility (endpoint-name-style prefixes)
     - ``GET /dashboard/*`` — ``channel_message_counts`` in ``stats`` and the
       per-channel series in ``message-activity``
+    - ``GET /feeds/*`` — per-channel feeds serve that channel's messages
+      (URL-path keys under the ``feeds`` prefix)
     """
     _drop(request, "/api/v1/channels")
     _drop(request, "/api/v1/messages")
+    _drop(request, "feeds")
     _drop(request, "packets")
     _drop(request, "packet_groups")
     invalidate_dashboard(request)
@@ -122,13 +125,23 @@ def invalidate_profiles(request: Request) -> None:
 
 
 def invalidate_messages(request: Request) -> None:
-    """Drop cached ``GET /messages`` responses (role-aware, URL-path keys)."""
+    """Drop cached ``GET /messages`` responses (role-aware, URL-path keys).
+
+    Also drops the ``feeds`` namespace: the messages and per-channel feeds
+    embed message rows and are keyed by URL path under ``feeds:``.
+    """
     _drop(request, "/api/v1/messages")
+    _drop(request, "feeds")
 
 
 def invalidate_advertisements(request: Request) -> None:
-    """Drop cached ``GET /advertisements`` responses (endpoint-name keys)."""
+    """Drop cached ``GET /advertisements`` responses (endpoint-name keys).
+
+    Also drops the ``feeds`` namespace: the adverts feed embeds advert rows
+    (keyed by URL path under ``feeds:``).
+    """
     _drop(request, "advertisements")
+    _drop(request, "feeds")
 
 
 def invalidate_dashboard(request: Request) -> None:

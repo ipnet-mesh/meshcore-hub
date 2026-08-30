@@ -562,6 +562,156 @@ class TestCachedDecorator:
         assert exc_info.value.status_code == 503
 
 
+class TestCachedResponseBuilder:
+    """response_builder wraps both the fresh result and the stored body."""
+
+    @staticmethod
+    def _make_request(app, headers=None):
+        scope = {
+            "type": "http",
+            "query_string": b"",
+            "headers": [(k.lower().encode(), v.encode()) for k, v in (headers or [])],
+            "app": app,
+        }
+        from starlette.datastructures import State
+
+        request = Request(scope)
+        request._state = State()
+        return request
+
+    async def test_async_miss_wraps_fresh_result(self):
+        app = FastAPI()
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+        app.state.redis_cache = mock_cache
+        app.state.redis_cache_ttl = 30
+
+        def build_response(xml: str):
+            from fastapi.responses import Response
+
+            return Response(
+                content=xml,
+                media_type="application/rss+xml",
+                headers={"Cache-Control": "public, max-age=30"},
+            )
+
+        @cached("feeds", response_builder=build_response)
+        async def handler(request: Request):
+            return "<rss>fresh</rss>"
+
+        request = self._make_request(app)
+        result = await handler(request=request)
+        from fastapi.responses import Response
+
+        assert isinstance(result, Response)
+        assert result.body == b"<rss>fresh</rss>"
+        assert result.media_type == "application/rss+xml"
+        assert result.headers["cache-control"] == "public, max-age=30"
+
+    def test_sync_miss_wraps_fresh_result(self):
+        app = FastAPI()
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+        app.state.redis_cache = mock_cache
+        app.state.redis_cache_ttl = 30
+
+        def build_response(xml: str):
+            from fastapi.responses import Response
+
+            return Response(content=xml, media_type="application/atom+xml")
+
+        @cached("feeds", response_builder=build_response)
+        def handler(request: Request):
+            return "<feed>fresh</feed>"
+
+        request = self._make_request(app)
+        result = handler(request=request)
+        from fastapi.responses import Response
+
+        assert isinstance(result, Response)
+        assert result.body == b"<feed>fresh</feed>"
+        assert result.media_type == "application/atom+xml"
+
+    async def test_async_hit_wraps_stored_body(self):
+        """The JSON-deserialized stored string must be wrapped as-is — the
+        round-trip must not double-encode or JSON-quote the XML body."""
+        app = FastAPI()
+        mock_cache = MagicMock()
+        stored = "<rss>cached</rss>"
+        mock_cache.get.return_value = json.dumps({"body": stored, "etag": '"x"'})
+        app.state.redis_cache = mock_cache
+        app.state.redis_cache_ttl = 30
+
+        def build_response(xml: str):
+            from fastapi.responses import Response
+
+            return Response(content=xml, media_type="application/rss+xml")
+
+        @cached("feeds", response_builder=build_response)
+        async def handler(request: Request):
+            return "<rss>should not appear</rss>"
+
+        request = self._make_request(app)
+        result = await handler(request=request)
+        from fastapi.responses import Response
+
+        assert isinstance(result, Response)
+        assert result.body == b"<rss>cached</rss>"
+        assert request.state.cache_status == "HIT"
+
+    def test_sync_hit_wraps_stored_body(self):
+        app = FastAPI()
+        mock_cache = MagicMock()
+        stored = "<feed>cached</feed>"
+        mock_cache.get.return_value = json.dumps({"body": stored, "etag": '"x"'})
+        app.state.redis_cache = mock_cache
+        app.state.redis_cache_ttl = 30
+
+        def build_response(xml: str):
+            from fastapi.responses import Response
+
+            return Response(content=xml, media_type="application/atom+xml")
+
+        @cached("feeds", response_builder=build_response)
+        def handler(request: Request):
+            return "<feed>should not appear</feed>"
+
+        request = self._make_request(app)
+        result = handler(request=request)
+        from fastapi.responses import Response
+
+        assert isinstance(result, Response)
+        assert result.body == b"<feed>cached</feed>"
+
+    async def test_304_short_circuit_skips_builder(self):
+        """A matching If-None-Match must still return the bare 304 Response —
+        there is no body to wrap."""
+        app = FastAPI()
+        mock_cache = MagicMock()
+        stored = "<rss>cached</rss>"
+        etag = '"abc123abc123abc123abc123abc123ab"'
+        mock_cache.get.return_value = json.dumps({"body": stored, "etag": etag})
+        app.state.redis_cache = mock_cache
+        app.state.redis_cache_ttl = 30
+
+        def build_response(xml: str):
+            from fastapi.responses import Response
+
+            return Response(content=xml)
+
+        @cached("feeds", response_builder=build_response)
+        async def handler(request: Request):
+            return "<rss>should not appear</rss>"
+
+        request = self._make_request(app, headers=[("if-none-match", etag)])
+        result = await handler(request=request)
+        from fastapi.responses import Response
+
+        assert isinstance(result, Response)
+        assert result.status_code == 304
+        assert result.body == b""
+
+
 class TestCachedEtag:
     """ETag / If-None-Match behavior of @cached."""
 
@@ -1400,6 +1550,44 @@ class TestKeyBuilders:
             assert _channels_key_builder(channels_req).startswith("/api/v1/channels")
             assert _messages_key_builder(messages_req).startswith("/api/v1/messages")
 
+    def test_feeds_key_builder_prefix(self):
+        """Feed cache keys live under the `feeds` prefix that
+        invalidate_messages/advertisements/channels drop."""
+        from meshcore_hub.api.routes.feeds import _feeds_key_builder
+
+        request = Request(
+            {
+                "type": "http",
+                "path": "/api/v1/feeds/messages.xml",
+                "query_string": b"",
+                "headers": [],
+            }
+        )
+        key = _feeds_key_builder(request)
+        assert key == "feeds:/api/v1/feeds/messages.xml"
+        assert key.startswith("feeds")
+
+    def test_feeds_key_builder_channel_subpaths_share_prefix(self):
+        """All feed endpoints (including per-channel sub-paths) must glob
+        under the single `feeds` prefix used by invalidation."""
+        from meshcore_hub.api.routes.feeds import _feeds_key_builder
+
+        for path in (
+            "/api/v1/feeds/channels/17.xml",
+            "/api/v1/feeds/channels/17.atom",
+            "/api/v1/feeds/adverts.xml",
+            "/api/v1/feeds/nodes.atom",
+        ):
+            request = Request(
+                {
+                    "type": "http",
+                    "path": path,
+                    "query_string": b"",
+                    "headers": [],
+                }
+            )
+            assert _feeds_key_builder(request).startswith("feeds")
+
 
 def _make_request_with_cache(cache):
     """Build a Request whose ``app.state.redis_cache`` is *cache* (or absent)."""
@@ -1422,16 +1610,18 @@ class TestCacheInvalidationHelpers:
         # Channel list itself (URL-path keys)...
         cache.delete.assert_any_call("/api/v1/channels")
         # ...plus every dependent namespace: messages/packets redaction is
-        # visibility-driven and dashboard counts embed per-channel series.
+        # visibility-driven, dashboard counts embed per-channel series, and
+        # per-channel feeds serve the channel's messages.
         for prefix in (
             "/api/v1/messages",
+            "feeds",
             "packets",
             "packet_groups",
             "dashboard",
             "/api/v1/dashboard",
         ):
             cache.delete.assert_any_call(prefix)
-        assert cache.delete.call_count == 6
+        assert cache.delete.call_count == 7
 
     def test_invalidate_routes_drops_url_path_prefix(self):
         from meshcore_hub.api.cache_invalidation import invalidate_routes
@@ -1464,14 +1654,21 @@ class TestCacheInvalidationHelpers:
 
         cache = MagicMock()
         invalidate_messages(_make_request_with_cache(cache))
-        cache.delete.assert_called_once_with("/api/v1/messages")
+        # The messages list (URL-path keys) plus the feeds namespace
+        # (message + per-channel feeds embed message rows).
+        cache.delete.assert_any_call("/api/v1/messages")
+        cache.delete.assert_any_call("feeds")
+        assert cache.delete.call_count == 2
 
     def test_invalidate_advertisements_drops_endpoint_name_prefix(self):
         from meshcore_hub.api.cache_invalidation import invalidate_advertisements
 
         cache = MagicMock()
         invalidate_advertisements(_make_request_with_cache(cache))
-        cache.delete.assert_called_once_with("advertisements")
+        # The adverts list (endpoint-name keys) plus the feeds namespace.
+        cache.delete.assert_any_call("advertisements")
+        cache.delete.assert_any_call("feeds")
+        assert cache.delete.call_count == 2
 
     def test_invalidate_dashboard_drops_both_prefix_formats(self):
         from meshcore_hub.api.cache_invalidation import invalidate_dashboard
@@ -1514,6 +1711,7 @@ class TestMutationInvalidationIntegration:
         for prefix in (
             "/api/v1/channels",
             "/api/v1/messages",
+            "feeds",
             "packets",
             "packet_groups",
             "dashboard",

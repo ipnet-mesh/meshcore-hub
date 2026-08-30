@@ -194,6 +194,7 @@ Mapping (see `api/cache_invalidation.py` for the canonical prefix knowledge):
 | `PUT /user/profile/{id}` | `invalidate_profiles` + `invalidate_dashboard` |
 | `POST/PUT/DELETE /nodes/{pk}/tags` | `invalidate_nodes` + `invalidate_messages` + `invalidate_advertisements` + `invalidate_dashboard` (tags drive names/filters across these) |
 | `POST/DELETE /adoptions` | `invalidate_nodes` + `invalidate_profiles` + `invalidate_advertisements` + `invalidate_dashboard` (`adopted_by` embedded across these) |
+| Feeds read caching | `invalidate_messages` / `invalidate_advertisements` / `invalidate_channels` each also drop the `feeds` namespace (message, per-channel, and advert feeds embed those rows) — new feed key namespaces must join the matching helper |
 
 When adding a new `@cached` read endpoint, decide whether its key namespace belongs in an existing invalidate helper, and add a test in `tests/test_api/test_cache.py::TestMutationInvalidationIntegration`. Cache keys split across two formats (endpoint-name keys like `nodes:` vs URL-path keys like `/api/v1/channels:`) — the helper module encapsulates that, don't hand-roll prefixes.
 

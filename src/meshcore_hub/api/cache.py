@@ -159,6 +159,7 @@ def cached(
     endpoint_name: str,
     ttl_setting: str = "redis_cache_ttl",
     key_builder: Optional[Callable[[Request], str]] = None,
+    response_builder: Optional[Callable[[Any], Response]] = None,
 ) -> Callable[..., Any]:
     """Decorator factory for caching API endpoint responses.
 
@@ -167,6 +168,14 @@ def cached(
         ttl_setting: Attribute name on app.state holding the TTL value.
         key_builder: Optional custom function to build cache key suffix.
                      Receives the Request, returns a string suffix.
+        response_builder: Optional wrapper applied to both the fresh handler
+                     result (cache MISS) and the JSON-deserialized stored
+                     body (cache HIT) before returning. Lets a handler
+                     return a plain value (e.g. an XML string) that gets
+                     stored verbatim but served as a fully-formed Response
+                     with its own headers/media type. The 304 short-circuit
+                     is unchanged (no body to wrap). Default ``None``
+                     preserves the exact current behavior.
     """
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -204,6 +213,9 @@ def cached(
                     # HIT: only have the JSON-deserialized body.
                     return_value = body
 
+                if response_builder is not None:
+                    return_value = response_builder(return_value)
+
                 # ETag + If-None-Match handling.
                 request.state.api_etag = etag
                 if_none_match = request.headers.get("if-none-match")
@@ -238,6 +250,9 @@ def cached(
                 return_value = result
             else:
                 return_value = body
+
+            if response_builder is not None:
+                return_value = response_builder(return_value)
 
             request.state.api_etag = etag
             if_none_match = request.headers.get("if-none-match")

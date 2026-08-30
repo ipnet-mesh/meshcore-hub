@@ -72,6 +72,7 @@ flowchart LR
 - **Raw Packet Inspection**: Capture, browse, and search raw wire packets; a deduplicated packet view shows every observer reception and routing path, with clickable path-hash badges that look up the matching nodes
 - **Route Health Monitoring**: Define multi-hop mesh routes and track each link's health over time with traffic-light status, per-day history, and recent-match attribution
 - **REST API**: Query historical data with filtering and pagination
+- **Web Feeds**: Subscribe to mesh activity via RSS 2.0/Atom — public messages, node adverts, new nodes, and per-channel messages
 - **Node Tagging**: Add custom metadata to nodes for organization
 - **Web Dashboard**: Visualize network status, node locations, and message history
 - **Internationalization**: Full i18n support with composable translation patterns
@@ -175,6 +176,28 @@ All components are configured via environment variables. Copy `.env.example` to 
 ## Seed Data
 
 The database can be seeded with node tags from YAML files. See [docs/seeding.md](docs/seeding.md) for format details, directory structure, and running the seed process.
+
+## Web Feeds (RSS/Atom)
+
+The hub serves subscribable feeds of public mesh activity. Feed generation and Redis caching live in the API tier; the web tier exposes clean public URLs that pass through to it:
+
+| Feed | URLs (`.xml` RSS 2.0 / `.atom` Atom) | Content |
+| ------------------- | ------------------------------------ | ------- |
+| Public messages     | `/feeds/messages.xml` `/feeds/messages.atom` | Newest 50 messages across anonymous-visible channels (spam excluded) |
+| Node adverts        | `/feeds/adverts.xml` `/feeds/adverts.atom`   | Newest advert per node (deduplicated), newest first |
+| New nodes           | `/feeds/nodes.xml` `/feeds/nodes.atom`       | 50 newest nodes by first record |
+| Per-channel         | `/feeds/channels/{idx}.xml` (and `.atom`)    | Newest 50 messages on one community-visibility, enabled channel |
+
+The same endpoints are available directly on the API tier at `/api/v1/feeds/...`.
+
+Guarantees and gating:
+
+- **Feeds always reflect the logged-out view.** Visibility is pinned to community-visibility channels plus the built-in public channel (idx 17); identity/role headers are ignored, so member/operator/admin-channel content can never leak into a feed.
+- **Per-channel feeds 404** unless the channel is community-visibility *and* enabled (idx 17 is always allowed).
+- **Auth inheritance**: feeds use the API read gate — public in default keyless deployments; `401` under `API_READ_KEY` (like any anonymous API call).
+- **Caching**: responses are cached in Redis (`REDIS_CACHE_TTL_FEEDS`, default 300s) with ETag/304 revalidation, `Cache-Control: public, max-age=<ttl>`, and prompt invalidation when messages, adverts, or channels change.
+- **Link targets**: every URL inside a feed document (item links and the feed's self URL) points at the public **web** endpoint — SPA pages like `/messages` and `/nodes/{public_key}`, and the clean `/feeds/...` URLs. The API tier derives the origin from the forwarded request host; set `WEB_PUBLIC_URL` (e.g. `https://hub.example.com`) to pin it explicitly.
+- **Kill switch**: `FEATURE_FEEDS=false` disables the endpoints, the `/feeds/*` web alias, and the `<link rel="alternate">` autodiscovery tags in the SPA shell (default: enabled). Autodiscovery links for a given feed additionally require that feed's UI page feature to be enabled.
 
 ## API Documentation
 

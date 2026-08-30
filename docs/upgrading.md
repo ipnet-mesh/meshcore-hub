@@ -2,6 +2,36 @@
 
 This guide covers upgrading from a previous MeshCore Hub release to the current version. Check the relevant version section below before upgrading.
 
+## v0.21.0
+
+### RSS/Atom feeds for public mesh data
+
+Informational — no breaking changes, no required operator actions.
+
+What's new:
+
+- **Subscribable feeds** served at clean public URLs on the web tier (`/feeds/messages.xml`, `/feeds/adverts.xml`, `/feeds/nodes.xml`, `/feeds/channels/{idx}.xml`, plus `.atom` variants) and directly on the API tier (`/api/v1/feeds/...`). Feeds always reflect the logged-out view: community-visibility channels plus the built-in public channel (idx 17), spam excluded, identity headers ignored — member/operator/admin-channel content never appears in a feed. Per-channel feeds 404 unless the channel is community-visibility **and** enabled.
+- **Feed auth inherits the API read gate**: public in default keyless deployments, `401` under `API_READ_KEY` (identical to any anonymous API call).
+- **Responses are cached** in Redis with ETag/304 revalidation and a `public, max-age` Cache-Control, and are invalidated when messages, adverts, or channels change.
+
+New optional environment variables (defaults shown):
+
+```bash
+# Disable feeds entirely (web alias, API endpoints, and autodiscovery links)
+FEATURE_FEEDS=true
+# Feed cache TTL in seconds (also the Cache-Control max-age)
+REDIS_CACHE_TTL_FEEDS=300
+# Canonical public site URL for absolute feed links — recommended when the
+# API tier is not publicly reachable (it usually isn't); unset derives the
+# origin from the forwarded request host
+# WEB_PUBLIC_URL=https://hub.example.com
+```
+
+Notes:
+
+- `NETWORK_NAME` moved between internal settings classes (web-only → shared) so the API tier can title feeds; the environment variable name and value are unchanged — no action needed.
+- The SPA shell `<head>` now emits feature-gated `<link rel="alternate">` autodiscovery tags for the enabled feeds.
+
 ## v0.20.0
 
 ### Redis is now required

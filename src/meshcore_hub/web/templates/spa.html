@@ -18,6 +18,11 @@
     <meta name="generator" content="MeshCore Hub {{ version }}">
     <link rel="canonical" href="{{ request.url }}">
 
+    <!-- Feed autodiscovery (RSS/Atom; gated per feature) -->
+    {% for link in feed_links %}
+    <link rel="alternate" type="{{ link.type }}" title="{{ link.title }}" href="{{ link.href }}">
+    {% endfor %}
+
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
     <meta property="og:title" content="{{ network_name }}">

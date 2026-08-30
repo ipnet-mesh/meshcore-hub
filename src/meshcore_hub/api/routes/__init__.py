@@ -15,6 +15,7 @@ from meshcore_hub.api.routes.channels import router as channels_router
 from meshcore_hub.api.routes.routes import router as routes_router
 from meshcore_hub.api.routes.raw_packets import router as raw_packets_router
 from meshcore_hub.api.routes.packet_groups import router as packet_groups_router
+from meshcore_hub.api.routes.feeds import router as feeds_router
 
 api_router = APIRouter()
 
@@ -38,3 +39,4 @@ api_router.include_router(raw_packets_router, prefix="/packets", tags=["Packets"
 api_router.include_router(
     packet_groups_router, prefix="/packet-groups", tags=["Packet Groups"]
 )
+api_router.include_router(feeds_router, prefix="/feeds", tags=["Feeds"])

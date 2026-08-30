@@ -337,6 +337,15 @@ services:
       - REDIS_KEY_PREFIX=${REDIS_KEY_PREFIX:-hub}
       - REDIS_CACHE_TTL=${REDIS_CACHE_TTL:-30}
       - REDIS_CACHE_TTL_DASHBOARD=${REDIS_CACHE_TTL_DASHBOARD:-3600}
+      - REDIS_CACHE_TTL_FEEDS=${REDIS_CACHE_TTL_FEEDS:-300}
+      # RSS/Atom feeds kill switch (bridged from FEATURE_FEEDS so the API, the
+      # web alias, and autodiscovery links track one operator-facing var).
+      - FEEDS_ENABLED=${FEATURE_FEEDS:-true}
+      # Feed titles need the network display name in the API tier too.
+      - NETWORK_NAME=${NETWORK_NAME:-MeshCore Network}
+      # Canonical public site URL for absolute feed links (empty = derive
+      # from the forwarded request host via the web proxy).
+      - WEB_PUBLIC_URL=${WEB_PUBLIC_URL:-}
       - API_CACHE_CONTROL_ENABLED=${API_CACHE_CONTROL_ENABLED:-true}
       # Spam detection: hide-filter switch + threshold (bridged from
       # FEATURE_SPAM_DETECTION so it tracks the collector and web toggle). On by
@@ -440,6 +449,9 @@ services:
       - FEATURE_SPAM_DETECTION=${FEATURE_SPAM_DETECTION:-true}
       # Routes page (route health monitoring) is on by default.
       - FEATURE_ROUTES=${FEATURE_ROUTES:-true}
+      # RSS/Atom feeds (/feeds/* + autodiscovery links); mirrors the API's
+      # FEEDS_ENABLED switch via Compose.
+      - FEATURE_FEEDS=${FEATURE_FEEDS:-true}
     command: ["web"]
     healthcheck:
       test:
