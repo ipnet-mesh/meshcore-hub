@@ -56,6 +56,8 @@ class MockHttpClient:
         self.last_request_headers: dict[str, Any] | None = None
         # Records the headers forwarded by the most recent get() call.
         self.last_get_headers: dict[str, Any] | None = None
+        # Records the URL of the most recent request() call.
+        self.last_request_url: str | None = None
         self._default_responses()
 
     def _default_responses(self) -> None:
@@ -253,6 +255,8 @@ class MockHttpClient:
         status_code: int = 200,
         json_data: Any = None,
         exc: Exception | None = None,
+        text: str | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         """Set a custom response for a specific endpoint.
 
@@ -263,12 +267,18 @@ class MockHttpClient:
             json_data: JSON response body
             exc: When set, the client raises this instead of responding
                 (simulates an unreachable backend)
+            text: Raw non-JSON body (e.g. an XML feed document); takes
+                precedence over json_data for the response content
+            headers: Extra response headers (e.g. Cache-Control/ETag for
+                proxied feed responses)
         """
         key = f"{method}:{path}"
         self._responses[key] = {
             "status_code": status_code,
             "json": json_data,
             "exc": exc,
+            "text": text,
+            "headers": headers or {},
         }
 
     def set_paged_response(self, method: str, path: str, handler: Any) -> None:
@@ -288,8 +298,13 @@ class MockHttpClient:
         response = MagicMock(spec=Response)
         response.status_code = response_data["status_code"]
         response.json.return_value = response_data["json"]
-        response.content = _json.dumps(response_data["json"]).encode()
-        response.headers = {"content-type": "application/json"}
+        if response_data.get("text") is not None:
+            response.content = response_data["text"].encode()
+        else:
+            response.content = _json.dumps(response_data["json"]).encode()
+        headers = {"content-type": "application/json"}
+        headers.update(response_data.get("headers") or {})
+        response.headers = headers
         return response
 
     def _create_response(self, key: str) -> Response:
@@ -315,6 +330,7 @@ class MockHttpClient:
         """Mock generic request (used by API proxy)."""
         self.last_request_params = params
         self.last_request_headers = headers
+        self.last_request_url = url
         key = f"{method.upper()}:{url}"
         if key in self._responses:
             return self._create_response(key)

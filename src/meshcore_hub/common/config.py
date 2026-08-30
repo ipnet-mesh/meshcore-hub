@@ -111,6 +111,27 @@ class CommonSettings(BaseSettings):
     # Logging
     log_level: LogLevel = Field(default=LogLevel.INFO, description="Logging level")
 
+    # Network display name. Shared by all components so both the web tier
+    # (SEO/nav) and the API tier (RSS/Atom feed titles) resolve the same
+    # NETWORK_NAME; moved here from WebSettings in v0.21.
+    network_name: str = Field(
+        default="MeshCore Network", description="Network display name"
+    )
+
+    # Canonical public URL of the web dashboard (no trailing slash), e.g.
+    # "https://hub.example.com". Shared like network_name: the API tier
+    # builds absolute RSS/Atom item/self links against it so links stay
+    # stable (and public) regardless of how a request reached the API.
+    # Unset = derive from the forwarded request host (web proxy) or the
+    # request's own base URL.
+    web_public_url: Optional[str] = Field(
+        default=None,
+        description=(
+            "Canonical public base URL of the web dashboard used for feed "
+            "links (falls back to forwarded request headers when unset)"
+        ),
+    )
+
     # MQTT Broker
     mqtt_host: str = Field(default="localhost", description="MQTT broker host")
     mqtt_port: int = Field(default=1883, description="MQTT broker port")
@@ -454,6 +475,24 @@ class APISettings(CommonSettings):
             "redis_cache_ttl."
         ),
     )
+    redis_cache_ttl_feeds: int = Field(
+        default=300,
+        description=(
+            "Cache TTL in seconds for RSS/Atom feed responses. Also surfaced "
+            "as the Cache-Control max-age on feed responses (safe: feed "
+            "content is anonymous-pinned)."
+        ),
+    )
+
+    # RSS/Atom feeds (kill switch; bridged from FEATURE_FEEDS in Compose)
+    feeds_enabled: bool = Field(
+        default=True,
+        description=(
+            "Serve RSS/Atom feeds at /api/v1/feeds/* (bridged from "
+            "FEATURE_FEEDS in Compose so the web alias and autodiscovery "
+            "links track the same switch)"
+        ),
+    )
 
     # HTTP Cache-Control headers
     api_cache_control_enabled: bool = Field(
@@ -571,9 +610,8 @@ class WebSettings(CommonSettings):
     network_domain: Optional[str] = Field(
         default=None, description="Network domain name"
     )
-    network_name: str = Field(
-        default="MeshCore Network", description="Network display name"
-    )
+    # network_name is inherited from CommonSettings (shared with the API tier
+    # for feed titles since v0.21); env name NETWORK_NAME is unchanged.
     network_city: Optional[str] = Field(
         default=None, description="Network city location"
     )
@@ -664,6 +702,13 @@ class WebSettings(CommonSettings):
     feature_routes: bool = Field(
         default=True, description="Enable the /routes page (route health monitoring)"
     )
+    feature_feeds: bool = Field(
+        default=True,
+        description=(
+            "Serve RSS/Atom feeds at /feeds/* and emit autodiscovery link tags "
+            "(mirrors the API's FEEDS_ENABLED switch)"
+        ),
+    )
 
     # Content directory (contains pages/ and media/ subdirectories)
     content_home: Optional[str] = Field(
@@ -696,6 +741,7 @@ class WebSettings(CommonSettings):
             "radio_config": self.feature_radio_config,
             "spam": self.feature_spam_detection,
             "routes": self.feature_routes,
+            "feeds": self.feature_feeds,
         }
 
     @property

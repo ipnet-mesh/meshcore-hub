@@ -254,6 +254,12 @@ def _build_endpoint_access(
             "DELETE": operator_admin,
             "POST": _OPEN,
         },
+        # Public feeds (RSS/Atom). GET-only; feeds are anonymous-pinned in
+        # the API tier (identity headers are ignored there). Longest-prefix
+        # matching covers the v1/feeds/channels/{idx}.* sub-paths.
+        "v1/feeds": {
+            "GET": _OPEN,
+        },
     }
 
 
@@ -343,6 +349,138 @@ def _resolve_logo(media_home: Path) -> tuple[str, bool, Path | None]:
     return "/static/img/logo.svg", True, None
 
 
+async def _proxy_api_request(request: Request, api_path: str) -> Response:
+    """Proxy a request to the backend API at ``/api/{api_path}``.
+
+    Shared by the ``/api/{path}`` proxy route and the public ``/feeds/{path}``
+    alias (which rewrites to ``v1/feeds/{path}``), so the alias inherits
+    maintenance-mode gating and access checks automatically.
+
+    Forwards the conditional-request header (``If-None-Match``) so the API's
+    ETag/304 machinery works end-to-end through the public origin (also for
+    the SPA), and the ``X-Forwarded-Host``/``X-Forwarded-Proto`` headers so
+    the API can build absolute URLs matching the public origin (feed item
+    links).
+    """
+    if getattr(request.app.state, "system_maintenance", False):
+        return JSONResponse(
+            {"detail": "Site is in maintenance mode", "code": "MAINTENANCE"},
+            status_code=503,
+        )
+    oidc_enabled = getattr(request.app.state, "oidc_enabled", False)
+    user_roles: frozenset[str] = frozenset()
+    user_id: str | None = None
+    user: dict[str, Any] | None = None
+    roles_claim = getattr(request.app.state, "oidc_roles_claim", "roles")
+    if oidc_enabled:
+        user = get_session_user(request)
+        user_id = user.get("sub") if user else None
+        user_roles = frozenset(get_session_roles(request, roles_claim))
+    if not check_api_access(
+        api_path,
+        request.method,
+        oidc_enabled,
+        user_roles,
+        user_id=user_id,
+        mapping=request.app.state.endpoint_access,
+    ):
+        return JSONResponse(
+            {"detail": "Access denied", "code": "AUTH_REQUIRED"},
+            status_code=403,
+        )
+
+    client: httpx.AsyncClient = request.app.state.http_client
+    url = f"/api/{api_path}"
+
+    # Forward query parameters. Use multi_items() (a list of (key, value)
+    # tuples) rather than dict(...), which would collapse repeated keys to
+    # the last value and drop all but one value of multi-valued filters such
+    # as observed_by (?observed_by=A&observed_by=B).
+    params = request.query_params.multi_items()
+
+    # Forward body for write methods
+    body = None
+    if request.method in ("POST", "PUT", "PATCH"):
+        body = await request.body()
+
+    # Forward content-type header
+    headers: dict[str, str] = {}
+    if "content-type" in request.headers:
+        headers["content-type"] = request.headers["content-type"]
+
+    # Conditional requests + public origin: lets the API answer 304s
+    # through the proxy and build absolute URLs (feed links) that match
+    # the origin the visitor actually used. Forwarded headers sent by an
+    # outer reverse proxy are passed through; otherwise they are
+    # synthesized from this request's own Host/scheme so the API never
+    # falls back to its internal service URL (e.g. http://api:8000).
+    if "if-none-match" in request.headers:
+        headers["if-none-match"] = request.headers["if-none-match"]
+    forwarded_host = request.headers.get("x-forwarded-host") or request.headers.get(
+        "host"
+    )
+    if forwarded_host:
+        headers["x-forwarded-host"] = forwarded_host
+    headers["x-forwarded-proto"] = (
+        request.headers.get("x-forwarded-proto") or request.url.scheme
+    )
+
+    # Inject authenticated user identity when OIDC is enabled
+    if oidc_enabled and user and user.get("sub"):
+        headers["X-User-Id"] = user["sub"]
+        if user.get("name"):
+            sanitized = _sanitize_header_value(user["name"])
+            if sanitized:
+                headers["X-User-Name"] = sanitized
+        roles = get_session_roles(request, roles_claim)
+        if roles:
+            headers["X-User-Roles"] = ",".join(roles)
+
+    try:
+        response = await client.request(
+            method=request.method,
+            url=url,
+            params=params,
+            content=body,
+            headers=headers,
+        )
+
+        # Filter response headers (remove hop-by-hop headers)
+        resp_headers: dict[str, str] = {}
+        for k, v in response.headers.items():
+            if k.lower() not in (
+                "transfer-encoding",
+                "connection",
+                "keep-alive",
+                "content-encoding",
+            ):
+                resp_headers[k] = v
+
+        if (
+            response.status_code < 300
+            and api_path.startswith("v1/channels")
+            and request.method in ("POST", "PUT", "DELETE")
+        ):
+            request.app.state.channel_labels = _build_channel_labels()
+
+        return Response(
+            content=response.content,
+            status_code=response.status_code,
+            headers=resp_headers,
+        )
+    except httpx.ConnectError:
+        return JSONResponse(
+            {"detail": "API server unavailable"},
+            status_code=502,
+        )
+    except Exception as e:
+        logger.error(f"API proxy error: {e}")
+        return JSONResponse(
+            {"detail": "API proxy error"},
+            status_code=502,
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan handler."""
@@ -374,6 +512,45 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Cleanup
     await app.state.http_client.aclose()
     logger.info("Web dashboard stopped")
+
+
+def _build_feed_links(app: FastAPI) -> list[dict[str, str]]:
+    """Autodiscovery ``<link rel="alternate">`` tags for the SPA shell head.
+
+    Gating policy (FR-8): the feed *endpoints* gate on FEATURE_FEEDS only,
+    but the autodiscovery links additionally gate per feed — a disabled UI
+    page (e.g. FEATURE_MESSAGES=false) doesn't advertise a feed for itself.
+    Per-channel feeds have no fixed URL list and are discovered from the
+    channels page, so they are not linked here.
+    """
+    features = app.state.features
+    if not features.get("feeds", True):
+        return []
+    network_name = getattr(app.state, "network_name", "MeshCore Network")
+    feeds = (
+        ("messages", "Public Messages", "/feeds/messages"),
+        ("advertisements", "Node Adverts", "/feeds/adverts"),
+        ("nodes", "New Nodes", "/feeds/nodes"),
+    )
+    links: list[dict[str, str]] = []
+    for feature, label, feed_path in feeds:
+        if not features.get(feature, True):
+            continue
+        links.append(
+            {
+                "type": "application/rss+xml",
+                "title": f"{network_name} — {label} (RSS)",
+                "href": f"{feed_path}.xml",
+            }
+        )
+        links.append(
+            {
+                "type": "application/atom+xml",
+                "title": f"{network_name} — {label} (Atom)",
+                "href": f"{feed_path}.atom",
+            }
+        )
+    return links
 
 
 def _build_config_json(app: FastAPI, request: Request) -> str:
@@ -828,107 +1005,22 @@ def create_app(
     )
     async def api_proxy(request: Request, path: str) -> Response:
         """Proxy API requests to the backend API server."""
-        if getattr(request.app.state, "system_maintenance", False):
+        return await _proxy_api_request(request, path)
+
+    # --- Public Feeds Alias ---
+    @app.get("/feeds/{path:path}", tags=["Feeds"])
+    async def feeds_alias(request: Request, path: str) -> Response:
+        """Serve clean public feed URLs (e.g. /feeds/messages.xml).
+
+        Delegates to the shared proxy helper against ``v1/feeds/{path}``,
+        so maintenance-mode 503 gating and the endpoint access map apply
+        exactly as for the API proxy. 404s when feeds are disabled (FR-7).
+        """
+        if not request.app.state.features.get("feeds", True):
             return JSONResponse(
-                {"detail": "Site is in maintenance mode", "code": "MAINTENANCE"},
-                status_code=503,
+                {"detail": "Feeds feature is disabled"}, status_code=404
             )
-        oidc_enabled = getattr(request.app.state, "oidc_enabled", False)
-        user_roles: frozenset[str] = frozenset()
-        user_id: str | None = None
-        if oidc_enabled:
-            user = get_session_user(request)
-            user_id = user.get("sub") if user else None
-            roles_claim = getattr(request.app.state, "oidc_roles_claim", "roles")
-            user_roles = frozenset(get_session_roles(request, roles_claim))
-        if not check_api_access(
-            path,
-            request.method,
-            oidc_enabled,
-            user_roles,
-            user_id=user_id,
-            mapping=request.app.state.endpoint_access,
-        ):
-            return JSONResponse(
-                {"detail": "Access denied", "code": "AUTH_REQUIRED"},
-                status_code=403,
-            )
-
-        client: httpx.AsyncClient = request.app.state.http_client
-        url = f"/api/{path}"
-
-        # Forward query parameters. Use multi_items() (a list of (key, value)
-        # tuples) rather than dict(...), which would collapse repeated keys to
-        # the last value and drop all but one value of multi-valued filters such
-        # as observed_by (?observed_by=A&observed_by=B).
-        params = request.query_params.multi_items()
-
-        # Forward body for write methods
-        body = None
-        if request.method in ("POST", "PUT", "PATCH"):
-            body = await request.body()
-
-        # Forward content-type header
-        headers: dict[str, str] = {}
-        if "content-type" in request.headers:
-            headers["content-type"] = request.headers["content-type"]
-
-        # Inject authenticated user identity when OIDC is enabled
-        if oidc_enabled:
-            user = get_session_user(request)
-            if user and user.get("sub"):
-                headers["X-User-Id"] = user["sub"]
-                if user.get("name"):
-                    sanitized = _sanitize_header_value(user["name"])
-                    if sanitized:
-                        headers["X-User-Name"] = sanitized
-                roles = get_session_roles(request, roles_claim)
-                if roles:
-                    headers["X-User-Roles"] = ",".join(roles)
-
-        try:
-            response = await client.request(
-                method=request.method,
-                url=url,
-                params=params,
-                content=body,
-                headers=headers,
-            )
-
-            # Filter response headers (remove hop-by-hop headers)
-            resp_headers: dict[str, str] = {}
-            for k, v in response.headers.items():
-                if k.lower() not in (
-                    "transfer-encoding",
-                    "connection",
-                    "keep-alive",
-                    "content-encoding",
-                ):
-                    resp_headers[k] = v
-
-            if (
-                response.status_code < 300
-                and path.startswith("v1/channels")
-                and request.method in ("POST", "PUT", "DELETE")
-            ):
-                request.app.state.channel_labels = _build_channel_labels()
-
-            return Response(
-                content=response.content,
-                status_code=response.status_code,
-                headers=resp_headers,
-            )
-        except httpx.ConnectError:
-            return JSONResponse(
-                {"detail": "API server unavailable"},
-                status_code=502,
-            )
-        except Exception as e:
-            logger.error(f"API proxy error: {e}")
-            return JSONResponse(
-                {"detail": "API proxy error"},
-                status_code=502,
-            )
+        return await _proxy_api_request(request, f"v1/feeds/{path}")
 
     # --- Map Data Endpoint (server-side aggregation) ---
     @app.get("/map/data", tags=["Map"])
@@ -1394,6 +1486,7 @@ def create_app(
                 "asset_app_js": request.app.state.asset_app_js,
                 "asset_app_css": request.app.state.asset_app_css,
                 "csp_nonce": getattr(request.state, "csp_nonce", None),
+                "feed_links": _build_feed_links(request.app),
             },
         )
 
