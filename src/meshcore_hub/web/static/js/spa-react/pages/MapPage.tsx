@@ -3,11 +3,15 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
+import MarkerClusterGroup from "react-leaflet-cluster";
+import "leaflet.markercluster";
+import "leaflet.markercluster/dist/MarkerCluster.css";
 import {
   divIcon,
   latLngBounds,
   type DivIcon,
   type Map as LeafletMap,
+  type MarkerCluster,
 } from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -91,7 +95,11 @@ function getTypeDisplay(node: MapNode, t: TFunction): string {
     : t("node_types.unknown");
 }
 
-function createNodeIcon(node: MapNode, oidcEnabled: boolean): DivIcon {
+function createNodeIcon(
+  node: MapNode,
+  oidcEnabled: boolean,
+  showLabels: boolean,
+): DivIcon {
   const displayName = node.name || "";
   const relativeTime = formatRelativeTime(node.last_seen);
   const timeDisplay = relativeTime ? " (" + relativeTime + ")" : "";
@@ -100,6 +108,15 @@ function createNodeIcon(node: MapNode, oidcEnabled: boolean): DivIcon {
     oidcEnabled && node.is_adopted
       ? '<div style="width: 12px; height: 12px; background: var(--color-marker-infra); border: 2px solid var(--color-marker-infra-border); border-radius: 50%; box-shadow: 0 0 4px rgba(59,130,246,0.6), 0 1px 2px rgba(0,0,0,0.5);"></div>'
       : '<div style="width: 12px; height: 12px; background: var(--color-marker-public); border: 2px solid var(--color-marker-public-border); border-radius: 50%; box-shadow: 0 0 4px rgba(34,197,94,0.6), 0 1px 2px rgba(0,0,0,0.5);"></div>';
+
+  if (!showLabels) {
+    return divIcon({
+      className: "custom-div-icon",
+      html: '<div class="map-marker">' + iconHtml + "</div>",
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+    });
+  }
 
   return divIcon({
     className: "custom-div-icon",
@@ -113,6 +130,24 @@ function createNodeIcon(node: MapNode, oidcEnabled: boolean): DivIcon {
       "</div>",
     iconSize: [120, 50],
     iconAnchor: [60, 12],
+  });
+}
+
+function createClusterIcon(cluster: MarkerCluster): DivIcon {
+  const count = cluster.getChildCount();
+  const size = count >= 1000 ? 48 : count >= 100 ? 42 : count >= 10 ? 36 : 30;
+  return divIcon({
+    className: "custom-div-icon",
+    html:
+      '<div class="map-cluster" style="width: ' +
+      size +
+      "px; height: " +
+      size +
+      'px;"><span data-testid="cluster-count">' +
+      formatNumber(count) +
+      "</span></div>",
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
   });
 }
 
@@ -342,14 +377,14 @@ export function MapPage() {
         <Marker
           key={node.public_key}
           position={[node.lat, node.lon]}
-          icon={createNodeIcon(node, oidcEnabled)}
+          icon={createNodeIcon(node, oidcEnabled, showLabels)}
         >
           <Popup>
             <NodePopup node={node} oidcEnabled={oidcEnabled} />
           </Popup>
         </Marker>
       )),
-    [filteredNodes, oidcEnabled],
+    [filteredNodes, oidcEnabled, showLabels],
   );
 
   const clearFilters = () => {
@@ -474,7 +509,16 @@ export function MapPage() {
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
-              {markers}
+              <MarkerClusterGroup
+                showCoverageOnHover={false}
+                spiderfyOnMaxZoom
+                zoomToBoundsOnClick
+                disableClusteringAtZoom={15}
+                maxClusterRadius={60}
+                iconCreateFunction={createClusterIcon}
+              >
+                {markers}
+              </MarkerClusterGroup>
               {mapData && (
                 <MapController
                   mapData={mapData}
