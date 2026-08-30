@@ -35,6 +35,16 @@ services:
   migrate:
     pull_policy: build
 
+  # Bundled dev database: unions 'core' into the base [all, postgres] profile
+  # list (profiles merge across files), so the documented dev workflow
+  # (`--profile core`, `make up`) still starts Postgres for zero-effort setup.
+  # Production uses docker-compose.prod.yml instead, which leaves 'core' out —
+  # the bundled container never starts there to shadow a shared instance named
+  # 'postgres' on the same network.
+  postgres:
+    profiles:
+      - core
+
   seed:
     pull_policy: build
 

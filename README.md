@@ -105,16 +105,20 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compos
 
 Service profiles:
 
-| Profile    | Services                        | Use Case                                  |
-| ---------- | ------------------------------- | ----------------------------------------- |
-| `all`      | mqtt, observer, migrate, collector, api, web | Everything on one host        |
-| `core`     | migrate, collector, api, web                 | Central server infrastructure |
-| `mqtt`     | meshcore-mqtt-broker            | Local MQTT broker (optional)              |
-| `observer` | packet capture observer         | Observes RF traffic and publishes to MQTT |
-| `seed`     | seed                            | One-time seed data import                 |
-| `migrate`  | migrate                         | One-time database migration               |
+| Profile    | Services                                                        | Use Case                                  |
+| ---------- | --------------------------------------------------------------- | ----------------------------------------- |
+| `all`      | postgres, redis, mqtt, observer, migrate, collector, api, web   | Everything on one host                    |
+| `core`     | postgres (dev override only), migrate, collector, api, web      | Central server infrastructure             |
+| `mqtt`     | meshcore-mqtt-broker                                            | Local MQTT broker (optional)              |
+| `cache`    | redis                                                           | Local Redis cache (optional)              |
+| `postgres` | postgres                                                        | Bundled database, standalone opt-in       |
+| `observer` | packet capture observer                                         | Observes RF traffic and publishes to MQTT |
+| `seed`     | seed                                                            | One-time seed data import                 |
+| `migrate`  | migrate                                                         | One-time database migration               |
 
 **Note:** Most deployments connect to an external MQTT broker. Add `--profile mqtt` only if you need a local broker. The `observer` profile runs [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) to observe MeshCore RF traffic and publish decoded packets to MQTT.
+
+**Database note:** the bundled `postgres` container joins the `core` profile only when using `docker-compose.dev.yml` (profiles merge across override files), so the zero-config dev workflow is unchanged. Production (`docker-compose.prod.yml`) deliberately leaves it out — the bundled container's `postgres` network alias would shadow a shared instance of the same name on the same Docker network. Point the `DATABASE_*` variables at your shared/external instance, or opt in explicitly with `--profile postgres` / `--profile all`. See [docs/database.md](docs/database.md).
 
 ### Simple Self-Hosted Setup
 

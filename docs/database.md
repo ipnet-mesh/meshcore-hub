@@ -1,22 +1,24 @@
 # Database
 
-MeshCore Hub runs on **PostgreSQL** — the only supported database backend since v0.19. The bundled container is part of the default `core` compose profile, so a standard `docker compose up` works with zero configuration; managed/external Postgres and multiple schema-isolated instances sharing one cluster are equally supported.
+MeshCore Hub runs on **PostgreSQL** — the only supported database backend since v0.19. A bundled container ships with the stack for development (it joins the `core` compose profile via `docker-compose.dev.yml`, so a standard dev `compose up` works with zero configuration); managed/external Postgres and multiple schema-isolated instances sharing one cluster are equally supported — and are the norm in production.
 
 > [!NOTE]
 > SQLite support (the pre-v0.14 default) was **removed in v0.19**. Existing SQLite deployments can migrate in place with the built-in `meshcore-hub db migrate-to-postgres` command — see [Upgrading from SQLite](#upgrading-from-sqlite) below and the [v0.19 upgrade guide](upgrading.md).
 
 ## Docker (bundled container)
 
-Postgres ships with the stack and starts with the `core` profile — no extra flags:
+Postgres ships with the stack. It is a **development convenience**: the base compose file only enables it for the `all` and standalone `postgres` profiles, and `docker-compose.dev.yml` unions it into `core` so the documented dev workflow needs no extra flags:
 
 ```bash
-# Default stack: bundled Postgres starts alongside the app services
+# Default dev stack: bundled Postgres starts alongside the app services
 docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile core up -d
 ```
 
+Production (`docker-compose.prod.yml`) deliberately leaves it out of `core` — the bundled container's `postgres` network alias would shadow a shared instance of the same name on the same network. Start it explicitly with `--profile postgres` (or `--profile all`) if you want the bundled database on a production host.
+
 The container derives `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` from `DATABASE_USER` / `DATABASE_PASSWORD` / `DATABASE_NAME`, and ships a **dev-only default password** (`meshcorehub`) so a default `up` initializes out of the box. **Production deployments must override `DATABASE_PASSWORD`** — the container is not published outside the compose network, but the default password is public knowledge (it is in the repo).
 
-The `migrate` service waits for Postgres to be healthy and runs `db upgrade` before `collector` and `api` start.
+The `migrate` service waits for Postgres to be healthy and runs `db upgrade` before `collector` and `api` start. That dependency is optional (`required: false`): when the bundled container is not enabled (production with an external database), `migrate` simply runs against `DATABASE_HOST` directly.
 
 ## Production provisioning (role and database)
 
@@ -33,7 +35,7 @@ The application **schema** and tables are created automatically by `db upgrade` 
 
 ## Managed or external Postgres
 
-To point Hub at an already-running Postgres (e.g. a managed cloud instance), set the `DATABASE_*` connection variables. The bundled container still starts with the `core` profile (it simply runs idle if the services point elsewhere); to skip it entirely, start a narrower profile set, e.g. `--profile collector --profile api`:
+To point Hub at an already-running Postgres (e.g. a managed cloud instance or a shared cluster on the same Docker network), set the `DATABASE_*` connection variables. With the production compose override the bundled container is not started at all — nothing extra to skip, and no risk of its `postgres` alias intercepting your `DATABASE_HOST`. (If you use the dev override against an external database, add the standalone `--profile postgres` only if you also want the bundled container running.)
 
 ```bash
 DATABASE_HOST=your-managed-postgres.example.com

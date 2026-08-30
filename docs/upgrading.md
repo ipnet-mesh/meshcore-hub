@@ -10,7 +10,7 @@ This guide covers upgrading from a previous MeshCore Hub release to the current 
 
 What changed:
 
-- **The bundled `postgres` container is part of the default `core` compose profile.** A plain `docker compose up` now starts PostgreSQL alongside the app services — still zero-config, including a working default password (`meshcorehub`, overridable via `DATABASE_PASSWORD`). **Production deployments must override `DATABASE_PASSWORD`** — the default is dev-only (the container is not published outside the compose network, but don't rely on that).
+- **The bundled `postgres` container is a development convenience — it joins the `core` compose profile only via `docker-compose.dev.yml`.** With the dev override, a plain `docker compose up` still starts PostgreSQL alongside the app services — zero-config, including a working default password (`meshcorehub`, overridable via `DATABASE_PASSWORD`). Production (`docker-compose.prod.yml`) deliberately does **not** start it with `core`/`migrate` profiles: its `postgres` network alias would shadow a shared instance of the same name on the same Docker network. Point `DATABASE_*` at your shared/managed instance, or opt in explicitly with `--profile postgres` (or `--profile all`). **Production deployments must override `DATABASE_PASSWORD`** — the default is dev-only (the container is not published outside the compose network, but don't rely on that).
 - **`DATABASE_BACKEND` is rejected, not ignored.** A leftover `DATABASE_BACKEND=sqlite` in your environment now fails at startup with a targeted error pointing at the migration command; `DATABASE_BACKEND=postgres` is accepted as a no-op. Remove the variable — the field itself is removed in v0.20.
 - **Missing database configuration fails fast.** With neither `DATABASE_URL` nor the `DATABASE_*` components (`DATABASE_HOST`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD`) set, services refuse to start with an error naming the missing variables — no silent fallback.
 - **Tests run against PostgreSQL.** The backend suite requires a Postgres instance (`make test-db-up` starts a throwaway one; `TEST_POSTGRES_URL` points at your own). CI uses a `postgres:17` service container.
@@ -25,7 +25,7 @@ Downtime is required while writers are stopped; the source SQLite file is never 
    ```bash
    docker compose -f docker-compose.yml -f docker-compose.dev.yml stop collector api
    ```
-3. **Bring up Postgres and create the schema** (on the v0.19 image; the bundled container starts with the `core` profile):
+3. **Bring up Postgres and create the schema** (on the v0.19 image; with the dev override the bundled container joins the `core` profile):
    ```bash
    docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres
    docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm migrate
@@ -43,6 +43,25 @@ Downtime is required while writers are stopped; the source SQLite file is never 
    ```
 
 > **Managed Postgres / non-superuser roles:** the migration disables foreign-key triggers during the copy via `session_replication_role = replica`, which requires a superuser. When the target role is not a superuser (typical for managed Postgres), the command automatically falls back to copying in parent-first order instead. Pass `--no-replication-role` to force the fallback explicitly.
+
+#### One-time cleanup: remove a previously started bundled Postgres (production)
+
+If you ran a v0.19 pre-release with `docker-compose.prod.yml` while pointing `DATABASE_HOST` at a shared/external instance, the bundled `postgres` container also started (it was wrongly part of the `core` profile) and may have been intercepting the `postgres` hostname. After upgrading:
+
+1. **Confirm which Postgres your stack uses** — if `DATABASE_HOST` points at a shared instance but a container named `${COMPOSE_PROJECT_NAME:-hub}-postgres` is running, it was shadowing the shared service:
+   ```bash
+   docker ps --filter name=hub-postgres
+   ```
+2. **Remove it once with a full `down`** (a plain `up` won't remove a service that no longer belongs to the active profile set; the `postgres_data` volume is retained by `down` without `-v`):
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile all down --remove-orphans
+   ```
+3. **Bring the stack back up** with your usual profiles — the bundled container no longer starts, and `DATABASE_HOST` resolves to your shared instance:
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile core up -d
+   ```
+
+> If you intended to keep the bundled container as this deployment's database, start it explicitly with `--profile postgres` instead of relying on `core`.
 
 #### Scheduled for removal in v0.20
 

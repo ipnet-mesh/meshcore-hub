@@ -4,6 +4,13 @@
 # reverse proxy access (Traefik, Nginx, Caddy, etc.).
 # No ports are exposed directly — all traffic goes through the reverse proxy.
 #
+# NOTE: the bundled 'postgres' service is NOT started by the 'core' profile
+# with this override (that convenience is dev-only, via docker-compose.dev.yml).
+# Point the DATABASE_* variables at your shared/external instance instead —
+# starting the bundled container alongside it would shadow a 'postgres' host
+# on the same network. Opt in explicitly with `--profile postgres` (or
+# `--profile all`) if you really want the bundled database on this host.
+#
 # Prerequisites:
 #   docker network create proxy-net
 #
