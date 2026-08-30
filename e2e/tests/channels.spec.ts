@@ -123,7 +123,8 @@ test.describe.serial("channels (admin)", () => {
     await confirm.getByRole("button", { name: "Delete" }).click();
     await expect(confirm).toHaveCount(0);
     await expect(created).toHaveCount(0);
-    await expect(page.getByTestId("channel-card")).toHaveCount(5);
+    // 6 seeded channels + the created one - the deletion = 6.
+    await expect(page.getByTestId("channel-card")).toHaveCount(6);
   });
 
   test("card click and Enter key navigate to the channel messages", async ({

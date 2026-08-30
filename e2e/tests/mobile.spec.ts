@@ -15,7 +15,12 @@ test.describe("mobile layout", () => {
 
     await menu.locator('[data-testid="nav-link"][data-nav-href="/messages"]').click();
     await expect(page).toHaveURL("/messages");
-    await expect(page.getByTestId("list-row").first()).toBeVisible();
+    // The desktop table (and its list-rows) is hidden at mobile widths; the
+    // mobile cards and sort select render instead.
+    await expect(page.getByTestId("mobile-sort-select")).toBeVisible();
+    await expect(
+      page.getByText("Hello from the e2e mesh").first(),
+    ).toBeVisible();
   });
 
   test("nodes list renders mobile cards with the sort select", async ({

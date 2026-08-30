@@ -52,7 +52,9 @@ test.describe("pagination", () => {
 
   test("out-of-range pages render the empty state", async ({ page }) => {
     await page.goto("/packets?page=9");
-    await expect(page.getByText("No packets found")).toBeVisible();
+    await expect(
+      page.getByRole("cell", { name: "No packets found", exact: true }),
+    ).toBeVisible();
     await expect(page.getByTestId("list-row")).toHaveCount(0);
   });
 });

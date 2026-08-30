@@ -17,7 +17,7 @@ test.describe("spa 404 page", () => {
     ).toBeVisible();
 
     await page.getByTestId("go-home").click();
-    await expect(page).toHaveURL("/$");
+    await expect(page).toHaveURL("/");
   });
 
   test("unknown nested paths also land on the 404 page", async ({ page }) => {

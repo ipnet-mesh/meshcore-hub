@@ -18,7 +18,9 @@ test.describe("raw packet detail", () => {
     // Definition grid fields.
     await expect(page.getByText("Packet Hash", { exact: true })).toBeVisible();
     await expect(page.locator("code", { hasText: packet.packet_hash }).first()).toBeVisible();
-    await expect(page.getByText("advertisement", { exact: true }).first()).toBeVisible();
+    await expect(
+      page.getByText(packet.event_type as string, { exact: true }).first(),
+    ).toBeVisible();
 
     // Raw hex and decoded payload blocks.
     await expect(page.getByText("Raw", { exact: true })).toBeVisible();
