@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -7,10 +7,18 @@ vi.mock("react-leaflet", () => ({
     <div data-testid="mock-map">{children}</div>
   ),
   TileLayer: () => null,
-  Marker: () => null,
+  Marker: () => <div data-testid="map-marker" />,
   Popup: () => null,
   useMap: () => ({ fitBounds: () => {}, latLngToContainerPoint: () => ({ x: 0, y: 0 }) }),
 }));
+
+vi.mock("react-leaflet-cluster", () => ({
+  default: ({ children }: { children: ReactNode }) => (
+    <div data-testid="cluster-group">{children}</div>
+  ),
+}));
+
+vi.mock("leaflet.markercluster", () => ({}));
 
 vi.mock("leaflet", () => ({
   divIcon: () => ({}),
@@ -58,6 +66,15 @@ describe("MapPage", () => {
     expect(
       screen.getByRole("heading", { name: "entities.map" }).querySelector("svg"),
     ).not.toBeNull();
+  });
+
+  it("renders node markers inside the cluster group", async () => {
+    vi.spyOn(api, "apiGet").mockResolvedValue(MAP_DATA);
+    renderWithProviders(<MapPage />);
+    const group = await screen.findByTestId("cluster-group");
+    expect(
+      within(group).getAllByTestId("map-marker").length,
+    ).toBeGreaterThan(0);
   });
 
   it("shows an error on fetch failure", async () => {
