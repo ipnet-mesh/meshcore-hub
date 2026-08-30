@@ -186,6 +186,14 @@ class TestDashboardStats:
         """
         from meshcore_hub.common.config import CollectorSettings
 
+        # Always-miss cache: the second GET below must recompute (the real
+        # backend would serve a HIT for the identical request after the
+        # monkeypatched retention changed the expected result).
+        from unittest.mock import MagicMock
+
+        client_no_auth.app.state.redis_cache = MagicMock()
+        client_no_auth.app.state.redis_cache.get.return_value = None
+
         now = datetime.now(timezone.utc)
         api_db_session.add_all(
             [

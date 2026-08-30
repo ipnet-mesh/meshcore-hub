@@ -2,6 +2,26 @@
 
 This guide covers upgrading from a previous MeshCore Hub release to the current version. Check the relevant version section below before upgrading.
 
+## v0.20.0
+
+### Redis is now required
+
+**⚠️ Breaking:** Redis is mandatory infrastructure for the API — the optional-cache mode introduced in v0.13 is removed. Every deployment must be able to reach a Redis server; there is no `REDIS_ENABLED` flag anymore (a leftover value in your environment is ignored and can be removed).
+
+What changed:
+
+- **`REDIS_ENABLED` is gone.** The API always configures its Redis cache backend from the remaining `REDIS_*` variables (`REDIS_HOST`, `REDIS_PORT`, `REDIS_DB`, `REDIS_PASSWORD`, `REDIS_KEY_PREFIX`, `REDIS_CACHE_TTL*`). Remove `REDIS_ENABLED` from your `.env` / orchestrator config.
+- **A Redis outage is a hard failure.** `/health/ready` reports `"redis": "unreachable"` with overall `"status": "not_ready"` (HTTP 503 — the same contract as the database check), and cached endpoints return `503 cache backend unavailable` instead of silently degrading to direct database queries. Cache invalidation after a committed write never fails the request (backend errors log at ERROR).
+- **The bundled `redis` container follows the Postgres profile pattern.** It joins the `core` compose profile only via `docker-compose.dev.yml`, so the documented dev workflow starts it automatically. Production (`docker-compose.prod.yml`) deliberately does **not** start it with `core`: point `REDIS_HOST`/`REDIS_PORT`/`REDIS_PASSWORD` at your shared/external Redis instance, or opt into the bundled container explicitly with `--profile cache` (or `--profile all`) — starting it alongside an external instance would shadow a `redis` host on the same network.
+- **Bare-metal installs** need a running Redis (e.g. a local `redis-server`; the `localhost` defaults point at it) before starting the API.
+- **Tests run against real Redis.** The backend suite requires a reachable Redis (`make test-db-up` starts a throwaway one alongside Postgres; `TEST_REDIS_URL` points at your own). CI uses a `redis:8` service container.
+
+Upgrading:
+
+1. Remove `REDIS_ENABLED` from your environment.
+2. Ensure a Redis server is reachable from the `api` service (set `REDIS_*` accordingly — in Docker use the `cache` profile or an external instance).
+3. Restart the stack and verify `/health/ready` reports `"redis": "connected"`.
+
 ## v0.19.0
 
 ### PostgreSQL-only (SQLite support removed)

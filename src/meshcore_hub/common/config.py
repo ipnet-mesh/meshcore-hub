@@ -454,10 +454,7 @@ class APISettings(CommonSettings):
         ),
     )
 
-    # Redis cache
-    redis_enabled: bool = Field(
-        default=False, description="Enable Redis API response caching"
-    )
+    # Redis cache (required infrastructure)
     redis_host: str = Field(default="localhost", description="Redis server host")
     redis_port: int = Field(default=6379, description="Redis server port")
     redis_db: int = Field(default=0, description="Redis database number")

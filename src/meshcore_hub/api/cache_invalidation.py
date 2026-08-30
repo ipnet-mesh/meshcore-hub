@@ -26,13 +26,13 @@ Helpers here delete every namespace an entity touches — including cross-entity
 embeddings (e.g. adoptions surface inside ``nodes``, ``profiles``, and
 ``advertisements`` listings).
 
-All helpers are no-ops when ``app.state.redis_cache`` is missing (cache
-disabled) and swallow any backend error so a cache outage never breaks a
-successful write — matching the resilience pattern in ``RedisCacheBackend``.
+All helpers never raise: they run after ``session.commit()`` has succeeded,
+so raising would report failure for a durable write and invite duplicate
+client retries. Backend errors log at ERROR instead — only the read/store
+paths in ``api/cache.py`` hard-fail (503) during a Redis outage.
 """
 
 import logging
-from typing import Optional
 
 from fastapi import Request
 
@@ -41,27 +41,23 @@ from meshcore_hub.common.redis import CacheBackend
 logger = logging.getLogger(__name__)
 
 
-def _cache(request: Request) -> Optional[CacheBackend]:
-    """Return the cache backend for this app, or None if caching is disabled."""
-    return getattr(request.app.state, "redis_cache", None)
+def _cache(request: Request) -> CacheBackend:
+    """Return the mandatory cache backend for this app."""
+    cache: CacheBackend = request.app.state.redis_cache
+    return cache
 
 
 def _drop(request: Request, prefix: str) -> None:
-    """Best-effort ``delete(prefix)``; never raises.
+    """``delete(prefix)``; never raises.
 
-    Emits structured log lines so production traces can confirm a mutation
-    handler actually fired invalidation and see how many Redis keys were
-    deleted. The ``backend=`` field distinguishes ``RedisCacheBackend``
-    (real Redis) from ``NullCache`` (Redis disabled) in one glance — useful
-    when ``REDIS_ENABLED`` is misconfigured.
+    Invalidation runs after ``session.commit()`` succeeded, so an exception
+    here would report failure for a durable write. Backend errors log at
+    ERROR (read/store paths in ``api/cache.py`` are the ones that
+    hard-fail). Emits structured log lines so production traces can confirm
+    a mutation handler actually fired invalidation and see how many Redis
+    keys were deleted.
     """
     cache = _cache(request)
-    if cache is None:
-        logger.debug(
-            "Cache invalidate skipped (no backend on app.state): prefix=%s",
-            prefix,
-        )
-        return
     logger.info(
         "Cache invalidate start: prefix=%s backend=%s",
         prefix,
@@ -71,7 +67,7 @@ def _drop(request: Request, prefix: str) -> None:
         cache.delete(prefix)
         logger.info("Cache invalidate ok: prefix=%s", prefix)
     except Exception as e:
-        logger.warning(
+        logger.error(
             "Cache invalidate error: prefix=%s error=%s",
             prefix,
             e,

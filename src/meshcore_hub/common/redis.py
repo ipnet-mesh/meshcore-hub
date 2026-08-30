@@ -22,26 +22,14 @@ class CacheBackend:
         raise NotImplementedError
 
 
-class NullCache(CacheBackend):
-    """No-op cache backend used when Redis is disabled."""
-
-    def get(self, key: str) -> Optional[str]:
-        return None
-
-    def set(self, key: str, value: str, ttl: int) -> None:
-        pass
-
-    def delete(self, prefix: str) -> None:
-        # Logged so production traces can distinguish "Redis disabled" from
-        # "Redis enabled but matched no keys" when diagnosing invalidation.
-        logger.debug("NullCache delete: prefix=%s", prefix)
-
-    def ping(self) -> bool:
-        return False
-
-
 class RedisCacheBackend(CacheBackend):
-    """Redis-backed cache using a connection pool."""
+    """Redis-backed cache using a connection pool.
+
+    Redis is required infrastructure: ``get``/``set``/``delete`` let
+    ``redis.RedisError`` propagate so callers fail loudly (the ``@cached``
+    decorator translates it into a 503 response). Only ``ping()`` swallows
+    errors — it is a boolean health-probe interface.
+    """
 
     def __init__(
         self,
@@ -68,22 +56,15 @@ class RedisCacheBackend(CacheBackend):
         return f"{self._prefix}:{key}"
 
     def get(self, key: str) -> Optional[str]:
-        try:
-            full_key = self._full_key(key)
-            value = self._client.get(full_key)
-            if value is not None:
-                return value.decode("utf-8") if isinstance(value, bytes) else value
-            return None
-        except Exception as e:
-            logger.warning("Redis GET error for %s: %s", key, e)
-            return None
+        full_key = self._full_key(key)
+        value = self._client.get(full_key)
+        if value is not None:
+            return value.decode("utf-8") if isinstance(value, bytes) else value
+        return None
 
     def set(self, key: str, value: str, ttl: int) -> None:
-        try:
-            full_key = self._full_key(key)
-            self._client.setex(full_key, ttl, value)
-        except Exception as e:
-            logger.warning("Redis SET error for %s: %s", key, e)
+        full_key = self._full_key(key)
+        self._client.setex(full_key, ttl, value)
 
     def delete(self, prefix: str) -> None:
         # Diagnostic logging: emit one INFO line per call with the prefix,
@@ -94,32 +75,22 @@ class RedisCacheBackend(CacheBackend):
         full_prefix = self._full_key(prefix)
         total_deleted = 0
         iterations = 0
-        try:
-            cursor = 0
-            while True:
-                cursor, keys = self._client.scan(
-                    cursor, match=f"{full_prefix}*", count=100
-                )
-                iterations += 1
-                if keys:
-                    self._client.delete(*keys)
-                    total_deleted += len(keys)
-                if cursor == 0:
-                    break
-            logger.info(
-                "Redis cache delete: prefix=%s full_prefix=%s keys_deleted=%d scan_iterations=%d",
-                prefix,
-                full_prefix,
-                total_deleted,
-                iterations,
-            )
-        except Exception as e:
-            logger.warning(
-                "Redis DELETE error: prefix=%s full_prefix=%s error=%s",
-                prefix,
-                full_prefix,
-                e,
-            )
+        cursor = 0
+        while True:
+            cursor, keys = self._client.scan(cursor, match=f"{full_prefix}*", count=100)
+            iterations += 1
+            if keys:
+                self._client.delete(*keys)
+                total_deleted += len(keys)
+            if cursor == 0:
+                break
+        logger.info(
+            "Redis cache delete: prefix=%s full_prefix=%s keys_deleted=%d scan_iterations=%d",
+            prefix,
+            full_prefix,
+            total_deleted,
+            iterations,
+        )
 
     def ping(self) -> bool:
         try:

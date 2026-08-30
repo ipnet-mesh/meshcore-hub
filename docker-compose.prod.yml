@@ -10,6 +10,9 @@
 # starting the bundled container alongside it would shadow a 'postgres' host
 # on the same network. Opt in explicitly with `--profile postgres` (or
 # `--profile all`) if you really want the bundled database on this host.
+# The same applies to the bundled 'redis' service (a required dependency of
+# the API): point REDIS_* at your shared/external instance, or opt into the
+# bundled one explicitly with `--profile cache` (or `--profile all`).
 #
 # Prerequisites:
 #   docker network create proxy-net

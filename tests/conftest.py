@@ -118,6 +118,37 @@ DEFAULT_TEST_POSTGRES_URL = (
     "@localhost:55432/meshcorehub_test"
 )
 
+# Default points at the throwaway stack's Redis (127.0.0.1:55433). Override
+# with TEST_REDIS_URL to use any other Redis instance.
+DEFAULT_TEST_REDIS_URL = "redis://localhost:55433/0"
+
+
+@pytest.fixture(scope="session")
+def redis_url() -> str:
+    """Redis URL for this pytest session (Redis is a required dependency).
+
+    Missing or unreachable Redis is a hard exit — mirroring the Postgres
+    fail-fast in ``db_url`` — with an actionable message pointing at
+    ``make test-db-up``.
+    """
+    import redis as redis_lib
+
+    url = os.environ.get("TEST_REDIS_URL") or DEFAULT_TEST_REDIS_URL
+    probe = redis_lib.Redis.from_url(url, socket_timeout=2, socket_connect_timeout=2)
+    try:
+        probe.ping()
+    except Exception as exc:
+        pytest.exit(
+            f"Redis test server unreachable at {url!r}: {exc}\n"
+            "Backend tests require Redis (mandatory cache infrastructure). "
+            "Start the throwaway stack with: make test-db-up\n"
+            "(or point TEST_REDIS_URL at your own instance)",
+            returncode=4,
+        )
+    finally:
+        probe.close()
+    return url
+
 
 @pytest.fixture(scope="session")
 def db_url(worker_id: str) -> str:

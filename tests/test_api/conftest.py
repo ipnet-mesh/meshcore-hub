@@ -7,6 +7,7 @@ suite can reuse the same database; they are inherited here.
 
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,6 +20,7 @@ from meshcore_hub.api.dependencies import (
     get_db_manager,
 )
 from meshcore_hub.common.database import DatabaseManager, create_database_engine
+from meshcore_hub.common.redis import RedisCacheBackend
 from meshcore_hub.common.models import (
     Advertisement,
     Base,
@@ -74,6 +76,39 @@ def api_db_session(api_db_engine):
 
 
 @pytest.fixture(scope="session")
+def api_redis_cache(redis_url: str, worker_id: str):
+    """Session-scoped real Redis backend with a per-xdist-worker prefix.
+
+    Redis is mandatory infrastructure, so the shared app fixtures exercise
+    the production backend. The key prefix mirrors ``db_schema`` naming
+    (``hub_test_gw0``) so parallel xdist workers on one Redis instance never
+    see each other's keys.
+    """
+    parsed = urlparse(redis_url)
+    db_path = (parsed.path or "/0").lstrip("/")
+    return RedisCacheBackend(
+        host=parsed.hostname or "localhost",
+        port=parsed.port or 6379,
+        db=int(db_path) if db_path else 0,
+        password=parsed.password,
+        key_prefix=f"hub_test_{worker_id}",
+    )
+
+
+@pytest.fixture(autouse=True)
+def _flush_redis_cache(api_redis_cache):
+    """Flush this worker's cache keys before each test (autouse).
+
+    The database is truncated between tests; the cache must be too, or
+    module-scoped apps sharing one backend would serve stale HITs from
+    earlier tests. ``delete("")`` SCAN-matches every key under the
+    worker's ``hub_test_<worker>`` prefix — including keys left behind by
+    a previous pytest run (worker prefixes are stable).
+    """
+    api_redis_cache.delete("")
+
+
+@pytest.fixture(scope="session")
 def mock_mqtt():
     """Session-scoped mock MQTT client (no per-test state)."""
     from unittest.mock import MagicMock
@@ -125,8 +160,14 @@ def _isolate_db_global(monkeypatch: pytest.MonkeyPatch, mock_db_manager) -> None
     monkeypatch.setattr(app_module, "_db_manager", mock_db_manager)
 
 
-def _wire_overrides(app, api_db_engine, mock_mqtt, mock_db_manager) -> None:
-    """Install the standard DB/MQTT dependency overrides on ``app``."""
+def _wire_overrides(
+    app, api_db_engine, mock_mqtt, mock_db_manager, redis_cache
+) -> None:
+    """Install the standard DB/MQTT/cache wiring on ``app``.
+
+    ``app.state.redis_cache`` is pinned to the real session backend because
+    TestClient never runs the lifespan (which would normally construct it).
+    """
     Session = sessionmaker(bind=api_db_engine)
 
     def override_get_db_manager(request=None):
@@ -145,10 +186,11 @@ def _wire_overrides(app, api_db_engine, mock_mqtt, mock_db_manager) -> None:
     app.dependency_overrides[get_db_manager] = override_get_db_manager
     app.dependency_overrides[get_db_session] = override_get_db_session
     app.dependency_overrides[get_mqtt_client] = override_get_mqtt_client
+    app.state.redis_cache = redis_cache
 
 
 @pytest.fixture(scope="module")
-def app_no_auth(db_url, api_db_engine, mock_mqtt, mock_db_manager):
+def app_no_auth(db_url, api_db_engine, mock_mqtt, mock_db_manager, api_redis_cache):
     """Module-scoped FastAPI app with no authentication.
 
     Built once per test module; ``create_app`` is the second-most expensive
@@ -164,24 +206,24 @@ def app_no_auth(db_url, api_db_engine, mock_mqtt, mock_db_manager):
         # app opts in so data-shape tests keep working without a key.
         metrics_public=True,
     )
-    _wire_overrides(app, api_db_engine, mock_mqtt, mock_db_manager)
+    _wire_overrides(app, api_db_engine, mock_mqtt, mock_db_manager, api_redis_cache)
     yield app
 
 
 @pytest.fixture(scope="module")
-def app_with_auth(db_url, api_db_engine, mock_mqtt, mock_db_manager):
+def app_with_auth(db_url, api_db_engine, mock_mqtt, mock_db_manager, api_redis_cache):
     """Module-scoped FastAPI app with authentication enabled."""
     app = create_app(
         database_url=db_url,
         read_key="test-read-key",
         admin_key="test-admin-key",
     )
-    _wire_overrides(app, api_db_engine, mock_mqtt, mock_db_manager)
+    _wire_overrides(app, api_db_engine, mock_mqtt, mock_db_manager, api_redis_cache)
     yield app
 
 
 @pytest.fixture(scope="module")
-def app_spam(db_url, api_db_engine, mock_mqtt, mock_db_manager):
+def app_spam(db_url, api_db_engine, mock_mqtt, mock_db_manager, api_redis_cache):
     """Module-scoped app with spam detection enabled (no auth)."""
     app = create_app(
         database_url=db_url,
@@ -190,25 +232,32 @@ def app_spam(db_url, api_db_engine, mock_mqtt, mock_db_manager):
         spam_detection_enabled=True,
         spam_score_threshold=0.6,
     )
-    _wire_overrides(app, api_db_engine, mock_mqtt, mock_db_manager)
+    _wire_overrides(app, api_db_engine, mock_mqtt, mock_db_manager, api_redis_cache)
     yield app
 
 
 @pytest.fixture
-def client_spam(app_spam) -> TestClient:
+def client_spam(app_spam, api_redis_cache) -> TestClient:
     """Test client with spam detection enabled."""
+    # Re-pin the real backend: tests that swap a mock/_FakeCache onto the
+    # shared module-scoped app's state must not displace it permanently.
+    app_spam.state.redis_cache = api_redis_cache
     return TestClient(app_spam, raise_server_exceptions=True)
 
 
 @pytest.fixture
-def client_no_auth(app_no_auth) -> TestClient:
+def client_no_auth(app_no_auth, api_redis_cache) -> TestClient:
     """Test client with no authentication."""
+    # Re-pin the real backend (see client_spam).
+    app_no_auth.state.redis_cache = api_redis_cache
     return TestClient(app_no_auth, raise_server_exceptions=True)
 
 
 @pytest.fixture
-def client_with_auth(app_with_auth) -> TestClient:
+def client_with_auth(app_with_auth, api_redis_cache) -> TestClient:
     """Test client with authentication enabled."""
+    # Re-pin the real backend (see client_spam).
+    app_with_auth.state.redis_cache = api_redis_cache
     return TestClient(app_with_auth, raise_server_exceptions=True)
 
 

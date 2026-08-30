@@ -108,9 +108,9 @@ Service profiles:
 | Profile    | Services                                                        | Use Case                                  |
 | ---------- | --------------------------------------------------------------- | ----------------------------------------- |
 | `all`      | postgres, redis, mqtt, observer, migrate, collector, api, web   | Everything on one host                    |
-| `core`     | postgres (dev override only), migrate, collector, api, web      | Central server infrastructure             |
+| `core`     | postgres, redis (dev override only), migrate, collector, api, web | Central server infrastructure           |
 | `mqtt`     | meshcore-mqtt-broker                                            | Local MQTT broker (optional)              |
-| `cache`    | redis                                                           | Local Redis cache (optional)              |
+| `cache`    | redis                                                           | Bundled Redis, standalone opt-in          |
 | `postgres` | postgres                                                        | Bundled database, standalone opt-in       |
 | `observer` | packet capture observer                                         | Observes RF traffic and publishes to MQTT |
 | `seed`     | seed                                                            | One-time seed data import                 |
@@ -119,6 +119,8 @@ Service profiles:
 **Note:** Most deployments connect to an external MQTT broker. Add `--profile mqtt` only if you need a local broker. The `observer` profile runs [meshcore-packet-capture](https://github.com/agessaman/meshcore-packet-capture) to observe MeshCore RF traffic and publish decoded packets to MQTT.
 
 **Database note:** the bundled `postgres` container joins the `core` profile only when using `docker-compose.dev.yml` (profiles merge across override files), so the zero-config dev workflow is unchanged. Production (`docker-compose.prod.yml`) deliberately leaves it out — the bundled container's `postgres` network alias would shadow a shared instance of the same name on the same Docker network. Point the `DATABASE_*` variables at your shared/external instance, or opt in explicitly with `--profile postgres` / `--profile all`. See [docs/database.md](docs/database.md).
+
+**Redis note:** Redis is required infrastructure for the API, and the bundled `redis` container follows the same profile pattern as Postgres: it joins `core` only via `docker-compose.dev.yml` (dev starts it automatically), while `docker-compose.prod.yml` leaves it out so it cannot shadow a shared `redis` host on the same network. Point the `REDIS_*` variables at your shared/external instance in production, or opt into the bundled one with `--profile cache` / `--profile all`.
 
 ### Simple Self-Hosted Setup
 

@@ -8,10 +8,19 @@ import logging
 from typing import Any, Callable, Optional
 from urllib.parse import urlencode
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 from fastapi.responses import Response
+from redis.exceptions import RedisError
 
 logger = logging.getLogger(__name__)
+
+_CACHE_UNAVAILABLE_DETAIL = "cache backend unavailable"
+
+
+def _cache_unavailable(key: str, e: RedisError) -> HTTPException:
+    """Translate a Redis outage into a 503 (mandatory infrastructure)."""
+    logger.error("Redis error for %s: %s", key, e)
+    return HTTPException(status_code=503, detail=_CACHE_UNAVAILABLE_DETAIL)
 
 
 def sorted_query_string(request: Request) -> str:
@@ -109,10 +118,7 @@ def _store(cache: Any, cache_key: str, result: Any, ttl: int) -> tuple[Any, str]
     body, serialized = _serialize_for_cache(result)
     etag = _compute_etag(serialized)
     envelope = json.dumps({"body": body, "etag": etag})
-    try:
-        cache.set(cache_key, envelope, ttl)
-    except Exception as e:
-        logger.warning("Cache store error for %s: %s", cache_key, e)
+    cache.set(cache_key, envelope, ttl)
     return body, etag
 
 
@@ -124,11 +130,7 @@ def _lookup(cache: Any, cache_key: str, request: Request) -> tuple[Any, str]:
     hashed on read so they still serve correctly; natural expiry migrates
     them to the envelope format on the next write.
     """
-    try:
-        raw = cache.get(cache_key)
-    except Exception as e:
-        logger.warning("Redis GET error for %s: %s", cache_key, e)
-        return _MISS, ""
+    raw = cache.get(cache_key)
 
     if raw is None:
         logger.debug("Cache MISS: %s", cache_key)
@@ -176,24 +178,27 @@ def cached(
             @functools.wraps(func)
             async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
                 request = _find_request(kwargs)
-                cache = getattr(request.app.state, "redis_cache", None)
+                cache = request.app.state.redis_cache
                 ttl = getattr(request.app.state, ttl_setting, 30)
                 # Always advertise the client-cache TTL so the middleware can
-                # emit Cache-Control regardless of whether Redis is configured.
+                # emit Cache-Control for every response.
                 request.state.cache_control_ttl = ttl
 
-                if cache is None:
-                    return await func(*args, **kwargs)
-
                 cache_key = _build_cache_key(request, endpoint_name, key_builder)
-                body, etag = _lookup(cache, cache_key, request)
+                try:
+                    body, etag = _lookup(cache, cache_key, request)
+                except RedisError as e:
+                    raise _cache_unavailable(cache_key, e) from e
 
                 if body is _MISS:
                     # MISS: call the handler, store, and return the original
                     # result so FastAPI's response_model handling still sees
                     # the Pydantic model (not the JSON-dumped dict).
                     result = await func(*args, **kwargs)
-                    _, etag = _store(cache, cache_key, result, ttl)
+                    try:
+                        _, etag = _store(cache, cache_key, result, ttl)
+                    except RedisError as e:
+                        raise _cache_unavailable(cache_key, e) from e
                     return_value = result
                 else:
                     # HIT: only have the JSON-deserialized body.
@@ -214,19 +219,22 @@ def cached(
         @functools.wraps(func)
         def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
             request = _find_request(kwargs)
-            cache = getattr(request.app.state, "redis_cache", None)
+            cache = request.app.state.redis_cache
             ttl = getattr(request.app.state, ttl_setting, 30)
             request.state.cache_control_ttl = ttl
 
-            if cache is None:
-                return func(*args, **kwargs)
-
             cache_key = _build_cache_key(request, endpoint_name, key_builder)
-            body, etag = _lookup(cache, cache_key, request)
+            try:
+                body, etag = _lookup(cache, cache_key, request)
+            except RedisError as e:
+                raise _cache_unavailable(cache_key, e) from e
 
             if body is _MISS:
                 result = func(*args, **kwargs)
-                _, etag = _store(cache, cache_key, result, ttl)
+                try:
+                    _, etag = _store(cache, cache_key, result, ttl)
+                except RedisError as e:
+                    raise _cache_unavailable(cache_key, e) from e
                 return_value = result
             else:
                 return_value = body

@@ -4,11 +4,12 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
+from redis.exceptions import ConnectionError as RedisConnectionError, RedisError
 
 from meshcore_hub.api.cache import cached, sorted_query_string
-from meshcore_hub.common.redis import NullCache, RedisCacheBackend
+from meshcore_hub.common.redis import RedisCacheBackend
 
 
 class _SampleModel(BaseModel):
@@ -99,24 +100,6 @@ class TestSortedQueryString:
         assert sorted_query_string(both) != sorted_query_string(single)
 
 
-class TestNullCache:
-    def test_get_returns_none(self):
-        cache = NullCache()
-        assert cache.get("any_key") is None
-
-    def test_set_does_not_raise(self):
-        cache = NullCache()
-        cache.set("key", "value", 30)
-
-    def test_ping_returns_false(self):
-        cache = NullCache()
-        assert cache.ping() is False
-
-    def test_delete_does_not_raise(self):
-        cache = NullCache()
-        cache.delete("prefix")
-
-
 class TestRedisCacheBackend:
     def test_get_returns_cached_value(self):
         with patch("redis.Redis") as mock_redis_cls:
@@ -167,24 +150,27 @@ class TestRedisCacheBackend:
             backend = RedisCacheBackend(key_prefix="hub")
             assert backend.ping() is False
 
-    def test_get_returns_none_on_connection_error(self):
+    def test_get_raises_on_connection_error(self):
+        """Redis is mandatory: GET errors propagate (caller decides 503)."""
         with patch("redis.Redis") as mock_redis_cls:
             mock_client = MagicMock()
             mock_redis_cls.return_value = mock_client
-            mock_client.get.side_effect = Exception("connection error")
+            mock_client.get.side_effect = RedisConnectionError("connection error")
 
             backend = RedisCacheBackend(key_prefix="hub")
-            assert backend.get("any_key") is None
+            with pytest.raises(RedisError):
+                backend.get("any_key")
 
-    def test_set_logs_warning_on_error(self):
+    def test_set_raises_on_error(self):
+        """Redis is mandatory: SET errors propagate (caller decides 503)."""
         with patch("redis.Redis") as mock_redis_cls:
             mock_client = MagicMock()
             mock_redis_cls.return_value = mock_client
-            mock_client.setex.side_effect = Exception("timeout")
+            mock_client.setex.side_effect = RedisError("timeout")
 
             backend = RedisCacheBackend(key_prefix="hub")
-            backend.set("key", "value", 30)
-            # Should not raise
+            with pytest.raises(RedisError):
+                backend.set("key", "value", 30)
 
     def test_key_prefix_prepended(self):
         with patch("redis.Redis") as mock_redis_cls:
@@ -231,14 +217,16 @@ class TestRedisCacheBackend:
             assert mock_client.scan.call_count == 2
             assert mock_client.delete.call_count == 2
 
-    def test_delete_handles_exception(self):
+    def test_delete_raises_on_scan_error(self):
+        """DELETE errors propagate; ``cache_invalidation._drop`` contains them."""
         with patch("redis.Redis") as mock_redis_cls:
             mock_client = MagicMock()
             mock_redis_cls.return_value = mock_client
-            mock_client.scan.side_effect = Exception("scan error")
+            mock_client.scan.side_effect = RedisError("scan error")
 
             backend = RedisCacheBackend(key_prefix="hub")
-            backend.delete("nodes")
+            with pytest.raises(RedisError):
+                backend.delete("nodes")
 
     def test_close_calls_client_close(self):
         with patch("redis.Redis") as mock_redis_cls:
@@ -313,44 +301,17 @@ class TestCachedDecorator:
         assert request.state.cache_status == "MISS"
         mock_cache.set.assert_called_once()
 
-    async def test_null_cache_always_calls_handler(self):
-        app = FastAPI()
-        app.state.redis_cache = NullCache()
-        app.state.redis_cache_ttl = 30
-
-        call_count = 0
-
-        @cached("nodes")
-        async def handler(request: Request):
-            nonlocal call_count
-            call_count += 1
-            return {"items": [], "total": 0}
-
-        scope = {
-            "type": "http",
-            "query_string": b"limit=50",
-            "headers": [],
-            "app": app,
-        }
-        from starlette.datastructures import State
-
-        request = Request(scope)
-        request._state = State()
-
-        await handler(request=request)
-        await handler(request=request)
-        assert call_count == 2
-
-    async def test_redis_error_falls_through(self):
+    async def test_redis_error_on_lookup_returns_503(self):
+        """Redis is mandatory: a GET error surfaces as 503, not a degrade."""
         app = FastAPI()
         mock_cache = MagicMock()
-        mock_cache.get.side_effect = Exception("redis down")
+        mock_cache.get.side_effect = RedisConnectionError("redis down")
         app.state.redis_cache = mock_cache
         app.state.redis_cache_ttl = 30
 
         @cached("nodes")
         async def handler(request: Request):
-            return {"items": ["fallback"], "total": 1}
+            return {"items": ["should not be reached"], "total": 1}
 
         scope = {
             "type": "http",
@@ -363,8 +324,36 @@ class TestCachedDecorator:
         request = Request(scope)
         request._state = State()
 
-        result = await handler(request=request)
-        assert result == {"items": ["fallback"], "total": 1}
+        with pytest.raises(HTTPException) as exc_info:
+            await handler(request=request)
+        assert exc_info.value.status_code == 503
+
+    def test_sync_wrapper_redis_error_returns_503(self):
+        """The sync wrapper shares the mandatory-backend contract."""
+        app = FastAPI()
+        mock_cache = MagicMock()
+        mock_cache.get.side_effect = RedisConnectionError("redis down")
+        app.state.redis_cache = mock_cache
+        app.state.redis_cache_ttl = 30
+
+        @cached("nodes")
+        def handler(request: Request):
+            return {"items": ["never"], "total": 1}
+
+        scope = {
+            "type": "http",
+            "query_string": b"",
+            "headers": [],
+            "app": app,
+        }
+        from starlette.datastructures import State
+
+        request = Request(scope)
+        request._state = State()
+
+        with pytest.raises(HTTPException) as exc_info:
+            handler(request=request)
+        assert exc_info.value.status_code == 503
 
     async def test_no_request_raises_error(self):
         @cached("nodes")
@@ -544,11 +533,12 @@ class TestCachedDecorator:
         envelope = json.loads(set_call[0][1])
         assert envelope["body"] == ["a", "b"]
 
-    async def test_cache_set_error_falls_through(self):
+    async def test_redis_error_on_store_returns_503(self):
+        """Redis is mandatory: a SET error after the handler also 503s."""
         app = FastAPI()
         mock_cache = MagicMock()
         mock_cache.get.return_value = None
-        mock_cache.set.side_effect = Exception("set error")
+        mock_cache.set.side_effect = RedisError("set error")
         app.state.redis_cache = mock_cache
         app.state.redis_cache_ttl = 30
 
@@ -567,29 +557,9 @@ class TestCachedDecorator:
         request = Request(scope)
         request._state = State()
 
-        result = await handler(request=request)
-        assert result == {"items": ["ok"]}
-
-    async def test_no_cache_on_app_state_calls_handler(self):
-        app = FastAPI()
-
-        @cached("nodes")
-        async def handler(request: Request):
-            return {"items": ["direct"]}
-
-        scope = {
-            "type": "http",
-            "query_string": b"",
-            "headers": [],
-            "app": app,
-        }
-        from starlette.datastructures import State
-
-        request = Request(scope)
-        request._state = State()
-
-        result = await handler(request=request)
-        assert result == {"items": ["direct"]}
+        with pytest.raises(HTTPException) as exc_info:
+            await handler(request=request)
+        assert exc_info.value.status_code == 503
 
 
 class TestCachedEtag:
@@ -789,10 +759,12 @@ class TestCachedEtag:
         assert response.status_code == 304
 
     async def test_cache_control_ttl_always_set(self):
-        """Even when Redis is NullCache, request.state.cache_control_ttl
-        is set so the middleware can emit Cache-Control."""
+        """request.state.cache_control_ttl is set on every request (before
+        any cache interaction) so the middleware can emit Cache-Control."""
         app = FastAPI()
-        app.state.redis_cache = NullCache()
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+        app.state.redis_cache = mock_cache
         app.state.redis_cache_ttl = 30
 
         @cached("nodes")
@@ -805,7 +777,9 @@ class TestCachedEtag:
 
     async def test_cache_control_ttl_uses_overridden_setting(self):
         app = FastAPI()
-        app.state.redis_cache = NullCache()
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+        app.state.redis_cache = mock_cache
         app.state.redis_cache_ttl = 30
         app.state.redis_cache_ttl_dashboard = 90
 
@@ -970,12 +944,19 @@ class TestCacheControlMiddleware:
         monkeypatch.setattr(
             client_no_auth.app.state, "api_cache_control_enabled", False
         )
-        # Remove any pre-existing cache backend for the duration of the test;
-        # ``monkeypatch.delattr`` with raising=False is a no-op when the
-        # attribute is absent.
-        monkeypatch.delattr(client_no_auth.app.state, "redis_cache", raising=False)
         response = client_no_auth.get("/api/v1/nodes")
         assert "cache-control" not in response.headers
+
+    def test_cached_get_returns_503_when_redis_down(self, client_no_auth):
+        """FR3: a Redis outage during request handling yields 503, not a
+        silent degrade to direct database queries."""
+        mock_cache = MagicMock()
+        mock_cache.get.side_effect = RedisConnectionError("redis down")
+        client_no_auth.app.state.redis_cache = mock_cache
+        client_no_auth.app.state.redis_cache_ttl = 30
+        response = client_no_auth.get("/api/v1/nodes")
+        assert response.status_code == 503
+        assert response.json()["detail"] == "cache backend unavailable"
 
     def test_kill_switch_preserves_x_cache_header(self, client_no_auth, monkeypatch):
         """X-Cache is observability, not a client-caching directive, so the
@@ -1003,28 +984,12 @@ class TestCacheControlMiddleware:
 
 
 class TestLifespanRedis:
-    async def test_lifespan_creates_null_cache_when_disabled(self):
+    async def test_lifespan_constructs_backend_from_app_state(self):
         import meshcore_hub.api.app as app_module
         from meshcore_hub.api.app import lifespan
 
         app = FastAPI()
         app.state.database_url = "postgresql+psycopg2://u:p@testhost:5432/testdb"
-        app.state.redis_enabled = False
-        app_module._db_manager = None
-
-        mock_db = MagicMock()
-        mock_db.adispose = AsyncMock()
-        with patch.object(app_module, "DatabaseManager", return_value=mock_db):
-            async with lifespan(app):
-                assert isinstance(app.state.redis_cache, NullCache)
-
-    async def test_lifespan_creates_redis_cache_when_enabled(self):
-        import meshcore_hub.api.app as app_module
-        from meshcore_hub.api.app import lifespan
-
-        app = FastAPI()
-        app.state.database_url = "postgresql+psycopg2://u:p@testhost:5432/testdb"
-        app.state.redis_enabled = True
         app.state.redis_host = "redis-host"
         app.state.redis_port = 6380
         app.state.redis_db = 1
@@ -1037,6 +1002,7 @@ class TestLifespanRedis:
         with patch.object(app_module, "DatabaseManager", return_value=mock_db):
             with patch("meshcore_hub.common.redis.RedisCacheBackend") as mock_cls:
                 mock_instance = MagicMock()
+                mock_instance.ping.return_value = True
                 mock_cls.return_value = mock_instance
                 async with lifespan(app):
                     mock_cls.assert_called_once_with(
@@ -1048,15 +1014,40 @@ class TestLifespanRedis:
                     )
                     assert app.state.redis_cache is mock_instance
 
+    async def test_lifespan_logs_error_when_unreachable(self, caplog):
+        """Startup pings Redis; unreachable logs at ERROR but does not
+        raise (the readiness endpoint reports not_ready instead)."""
+        import meshcore_hub.api.app as app_module
+        from meshcore_hub.api.app import lifespan
+
+        app = FastAPI()
+        app.state.database_url = "postgresql+psycopg2://u:p@testhost:5432/testdb"
+        app_module._db_manager = None
+
+        mock_db = MagicMock()
+        mock_db.adispose = AsyncMock()
+        with patch.object(app_module, "DatabaseManager", return_value=mock_db):
+            with patch("meshcore_hub.common.redis.RedisCacheBackend") as mock_cls:
+                mock_instance = MagicMock()
+                mock_instance.ping.return_value = False
+                mock_cls.return_value = mock_instance
+                with caplog.at_level("ERROR", logger="meshcore_hub.api.app"):
+                    async with lifespan(app):
+                        pass
+
+        assert any("unreachable at startup" in r.message for r in caplog.records), [
+            r.message for r in caplog.records
+        ]
+
     async def test_lifespan_closes_cache_on_shutdown(self):
         import meshcore_hub.api.app as app_module
         from meshcore_hub.api.app import lifespan
 
         app = FastAPI()
         app.state.database_url = "postgresql+psycopg2://u:p@testhost:5432/testdb"
-        app.state.redis_enabled = True
 
         mock_cache = MagicMock()
+        mock_cache.ping.return_value = True
         mock_db_manager = MagicMock()
         mock_db_manager.adispose = AsyncMock()
         app_module._db_manager = None
@@ -1091,40 +1082,47 @@ class TestXCacheMiddleware:
         response = client_no_auth.get("/api/v1/nodes")
         assert response.headers.get("x-cache") == "MISS"
 
-    def test_no_x_cache_header_when_no_cache_status(self, client_no_auth):
-        if hasattr(client_no_auth.app.state, "redis_cache"):
-            del client_no_auth.app.state.redis_cache
-        response = client_no_auth.get("/api/v1/nodes")
+    def test_no_x_cache_header_when_no_cache_status(self, client_no_auth, sample_node):
+        # Uncached endpoints never set request.state.cache_status, so the
+        # middleware must not emit an X-Cache header for them.
+        response = client_no_auth.get(f"/api/v1/nodes/{sample_node.public_key}")
+        assert response.status_code == 200
         assert "x-cache" not in response.headers
 
 
 class TestHealthReadyRedis:
-    def test_health_ready_omits_redis_when_disabled(self, client_no_auth):
-        if hasattr(client_no_auth.app.state, "redis_cache"):
-            del client_no_auth.app.state.redis_cache
-        client_no_auth.app.state.redis_enabled = False
-        response = client_no_auth.get("/health/ready")
-        assert response.status_code == 200
-        data = response.json()
-        assert "redis" not in data
-
     def test_health_ready_reports_connected(self, client_no_auth):
         mock_cache = MagicMock()
         mock_cache.ping.return_value = True
         client_no_auth.app.state.redis_cache = mock_cache
-        client_no_auth.app.state.redis_enabled = True
         response = client_no_auth.get("/health/ready")
         assert response.status_code == 200
         assert response.json()["redis"] == "connected"
 
     def test_health_ready_reports_unreachable(self, client_no_auth):
+        """FR2: Redis is required — unreachable flips overall status to
+        not_ready and the response to 503 (same contract as the database)."""
         mock_cache = MagicMock()
         mock_cache.ping.return_value = False
         client_no_auth.app.state.redis_cache = mock_cache
-        client_no_auth.app.state.redis_enabled = True
         response = client_no_auth.get("/health/ready")
-        assert response.status_code == 200
-        assert response.json()["redis"] == "unreachable"
+        assert response.status_code == 503
+        data = response.json()
+        assert data["redis"] == "unreachable"
+        assert data["status"] == "not_ready"
+
+    def test_health_ready_reports_unreachable_when_backend_missing(
+        self, client_no_auth
+    ):
+        """No backend on app.state (lifespan never ran) is unreachable —
+        mandatory infrastructure has no silent-degrade path."""
+        if hasattr(client_no_auth.app.state, "redis_cache"):
+            del client_no_auth.app.state.redis_cache
+        response = client_no_auth.get("/health/ready")
+        assert response.status_code == 503
+        data = response.json()
+        assert data["redis"] == "unreachable"
+        assert data["status"] == "not_ready"
 
     def test_health_ready_returns_503_when_db_down(self, client_no_auth):
         """Readiness probes judge by status code: DB down must be a 503."""
@@ -1147,7 +1145,8 @@ class TestHealthReadyRedis:
 
 
 class TestCliRedis:
-    def test_redis_enabled_shows_banner(self):
+    def test_redis_target_always_echoed(self):
+        """Redis is required: the CLI always prints the connection target."""
         from click.testing import CliRunner
 
         from meshcore_hub.api.cli import api
@@ -1161,28 +1160,11 @@ class TestCliRedis:
                 )
                 result = runner.invoke(
                     api,
-                    ["--redis-enabled", "--redis-host", "myredis"],
+                    ["--redis-host", "myredis"],
                     catch_exceptions=False,
                 )
-                assert "Redis enabled: True" in result.output
                 assert "Redis: myredis:6379/0" in result.output
                 assert "Redis key prefix: hub" in result.output
-
-    def test_redis_disabled_hides_details(self):
-        from click.testing import CliRunner
-
-        from meshcore_hub.api.cli import api
-
-        runner = CliRunner()
-        with patch("uvicorn.run"):
-            with patch("meshcore_hub.common.config.get_api_settings") as mock_settings:
-                mock_settings.return_value = MagicMock(
-                    data_home="/tmp/test",
-                    effective_database_url="postgresql+psycopg2://u:p@testhost:5432/testdb",
-                )
-                result = runner.invoke(api, catch_exceptions=False)
-                assert "Redis enabled: False" in result.output
-                assert "Redis:" not in result.output.replace("Redis enabled: False", "")
 
     def test_redis_params_passed_to_create_app(self):
         from click.testing import CliRunner
@@ -1201,7 +1183,6 @@ class TestCliRedis:
                     runner.invoke(
                         api,
                         [
-                            "--redis-enabled",
                             "--redis-host",
                             "rhost",
                             "--redis-port",
@@ -1221,7 +1202,7 @@ class TestCliRedis:
                         catch_exceptions=False,
                     )
                     call_kwargs = mock_create_app.call_args[1]
-                    assert call_kwargs["redis_enabled"] is True
+                    assert "redis_enabled" not in call_kwargs
                     assert call_kwargs["redis_host"] == "rhost"
                     assert call_kwargs["redis_port"] == 6380
                     assert call_kwargs["redis_db"] == 2
@@ -1502,20 +1483,8 @@ class TestCacheInvalidationHelpers:
         cache.delete.assert_any_call("/api/v1/dashboard")
         assert cache.delete.call_count == 2
 
-    def test_helpers_are_noop_when_cache_missing(self):
-        # No redis_cache attribute on state — must not raise.
-        from meshcore_hub.api import cache_invalidation as inv
-
-        request = _make_request_with_cache(cache=None)
-        inv.invalidate_channels(request)
-        inv.invalidate_routes(request)
-        inv.invalidate_nodes(request)
-        inv.invalidate_profiles(request)
-        inv.invalidate_messages(request)
-        inv.invalidate_advertisements(request)
-        inv.invalidate_dashboard(request)
-
     def test_helpers_swallow_backend_errors(self):
+        """FR4: invalidation runs after a committed write and never raises."""
         from meshcore_hub.api import cache_invalidation as inv
 
         cache = MagicMock()
@@ -1933,56 +1902,25 @@ class TestInvalidationLogging:
             for m in messages
         ), f"ok line missing or malformed: {messages}"
 
-    def test_drop_logs_warning_on_backend_error(self, caplog):
+    def test_drop_logs_error_on_backend_error(self, caplog):
+        """FR4: backend errors during invalidation log at ERROR (never raise)."""
         from meshcore_hub.api.cache_invalidation import invalidate_channels
 
         cache = MagicMock()
         cache.delete.side_effect = Exception("redis down")
         request = _make_request_with_cache(cache)
 
-        with caplog.at_level("WARNING", logger="meshcore_hub.api.cache_invalidation"):
+        with caplog.at_level("ERROR", logger="meshcore_hub.api.cache_invalidation"):
             invalidate_channels(request)
 
-        # Must not raise; warning must carry prefix + error text.
+        # Must not raise; the error record must carry prefix + error text.
+        error_records = [r for r in caplog.records if r.levelname == "ERROR"]
         assert any(
             "Cache invalidate error" in r.message
             and "prefix=/api/v1/channels" in r.message
             and "redis down" in r.message
-            for r in caplog.records
+            for r in error_records
         ), [r.message for r in caplog.records]
-
-    def test_drop_logs_skipped_when_no_backend(self, caplog):
-        from meshcore_hub.api.cache_invalidation import invalidate_nodes
-
-        # No redis_cache attribute on app.state.
-        request = _make_request_with_cache(cache=None)
-
-        with caplog.at_level("DEBUG", logger="meshcore_hub.api.cache_invalidation"):
-            invalidate_nodes(request)
-
-        assert any(
-            "Cache invalidate skipped" in r.message and "prefix=nodes" in r.message
-            for r in caplog.records
-        ), [r.message for r in caplog.records]
-
-    def test_drop_logs_backend_name_distinguishes_nullcache(self, caplog):
-        """If NullCache is wired in, the start log must say so.
-
-        Catches the 'REDIS_ENABLED is actually false in production' case
-        in one log line.
-        """
-        from meshcore_hub.api.cache_invalidation import invalidate_routes
-
-        null_cache = NullCache()
-        request = _make_request_with_cache(null_cache)
-
-        with caplog.at_level("INFO", logger="meshcore_hub.api.cache_invalidation"):
-            invalidate_routes(request)
-
-        messages = [r.message for r in caplog.records]
-        assert any(
-            "backend=NullCache" in m and "prefix=/api/v1/routes" in m for m in messages
-        ), f"expected backend=NullCache in start log, got: {messages}"
 
     def test_redis_delete_logs_keys_deleted_count(self, caplog):
         with patch("redis.Redis") as mock_redis_cls:
@@ -2027,24 +1965,6 @@ class TestInvalidationLogging:
         assert "prefix=/api/v1/routes" in msg
         assert "full_prefix=hub:/api/v1/routes" in msg
 
-    def test_redis_delete_warning_includes_full_prefix(self, caplog):
-        with patch("redis.Redis") as mock_redis_cls:
-            mock_client = MagicMock()
-            mock_redis_cls.return_value = mock_client
-            mock_client.scan.side_effect = Exception("scan timeout")
-
-            backend = RedisCacheBackend(key_prefix="hub")
-            with caplog.at_level("WARNING", logger="meshcore_hub.common.redis"):
-                backend.delete("nodes")
-
-        warning_records = [r for r in caplog.records if r.levelname == "WARNING"]
-        assert len(warning_records) == 1
-        msg = warning_records[0].message
-        assert "Redis DELETE error" in msg
-        assert "prefix=nodes" in msg
-        assert "full_prefix=hub:nodes" in msg
-        assert "scan timeout" in msg
-
     def test_redis_delete_multi_page_scan_logs_total_keys(self, caplog):
         """Multi-page SCAN must accumulate keys_deleted across iterations."""
         with patch("redis.Redis") as mock_redis_cls:
@@ -2064,12 +1984,3 @@ class TestInvalidationLogging:
         msg = info_records[0].message
         assert "keys_deleted=3" in msg
         assert "scan_iterations=2" in msg
-
-    def test_nullcache_delete_emits_debug_log(self, caplog):
-        cache = NullCache()
-        with caplog.at_level("DEBUG", logger="meshcore_hub.common.redis"):
-            cache.delete("nodes")
-        assert any(
-            "NullCache delete" in r.message and "prefix=nodes" in r.message
-            for r in caplog.records
-        ), [r.message for r in caplog.records]

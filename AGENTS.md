@@ -29,7 +29,7 @@ This venv is only for local testing, linting, and migration authoring. Frontend 
 ## Development
 
 ```bash
-# Build / start / stop the stack (core = collector + api + web + migrate)
+# Build / start / stop the stack (core = collector + api + web + migrate + bundled postgres/redis via the dev override)
 docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile core build
 docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile core up -d
 docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile core down
@@ -78,7 +78,7 @@ npm run test:frontend  # host: vitest unit + component tests
 
 ## Tests & Quality
 
-Coverage is **opt-in**; add `--cov=meshcore_hub` (or `make test-cov`) when you want it. The dev loop defaults to no coverage and parallel across CPU cores. Backend tests require PostgreSQL: `make test` / `make test-cov` / `make test-unit` start and stop the throwaway test Postgres automatically (a `postgres:17-alpine` on `127.0.0.1:55432`; the management is skipped when `TEST_POSTGRES_URL` points at your own instance). For direct `pytest` runs, `make test-db-up` first — pytest fails fast with a hint when the database is unreachable.
+Coverage is **opt-in**; add `--cov=meshcore_hub` (or `make test-cov`) when you want it. The dev loop defaults to no coverage and parallel across CPU cores. Backend tests require PostgreSQL **and Redis** (both mandatory infrastructure): `make test` / `make test-cov` / `make test-unit` start and stop the throwaway test stack automatically (a `postgres:17-alpine` on `127.0.0.1:55432` and a `redis:8-alpine` on `127.0.0.1:55433`; the management is skipped when `TEST_POSTGRES_URL` points at your own instance). For direct `pytest` runs, `make test-db-up` first — pytest fails fast with a hint when either is unreachable (`TEST_REDIS_URL` overrides the Redis target).
 
 ```bash
 # Canonical: run tests in parallel, no coverage, surface the pass/fail summary
@@ -142,7 +142,7 @@ Design notes when extending the suite:
 
 ## Database & Ops
 
-The database backend is **PostgreSQL** (the only backend since v0.19). The bundled container is dev-only: it joins the `core` compose profile via `docker-compose.dev.yml` (profiles union across override files), so the documented dev commands start it automatically — production (`docker-compose.prod.yml`) never starts it with `core`/`migrate`, so it cannot shadow a shared `postgres` host on the same network. See `docs/database.md` for the full reference, production provisioning, and schema-per-instance setup. Backend tests also require Postgres: `make test-db-up` starts a throwaway instance on `127.0.0.1:55432` (or point `TEST_POSTGRES_URL` at your own).
+The database backend is **PostgreSQL** (the only backend since v0.19) and the cache backend is **Redis** (mandatory since v0.20 — same compose-profile pattern: the bundled containers join the `core` profile only via `docker-compose.dev.yml`, so the documented dev commands start them automatically; production (`docker-compose.prod.yml`) never starts them with `core`, so they cannot shadow shared `postgres`/`redis` hosts on the same network). See `docs/database.md` for the full database reference and `docs/deployment.md` → Redis Caching for the Redis one. Backend tests require both: `make test-db-up` starts throwaway instances on `127.0.0.1:55432` (Postgres) and `127.0.0.1:55433` (Redis) — or point `TEST_POSTGRES_URL` / `TEST_REDIS_URL` at your own.
 
 ```bash
 # --- LOCAL (venv): author a migration against a local schema (NOT the dev DB)
@@ -168,7 +168,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile core ex
 
 ### Cache invalidation on writes
 
-Every mutation handler (POST/PUT/DELETE) on a user/admin-mutable entity MUST call the matching `invalidate_*` helper from `meshcore_hub.api.cache_invalidation` after `session.commit()` succeeds, so the UI reflects the change on the next page load instead of waiting for the Redis TTL. The helper is a no-op when Redis is disabled and swallows backend errors, so it's always safe to call.
+Every mutation handler (POST/PUT/DELETE) on a user/admin-mutable entity MUST call the matching `invalidate_*` helper from `meshcore_hub.api.cache_invalidation` after `session.commit()` succeeds, so the UI reflects the change on the next page load instead of waiting for the Redis TTL. The helper never raises (backend errors log at ERROR after a committed write), so it's always safe to call. Redis is a mandatory backend — only read/store paths hard-fail (503) during an outage.
 
 The HTTP-layer cache policy on `/api/v1/*` GETs is `private, no-cache` (i.e. must-revalidate) precisely so this works: the browser always sends `If-None-Match` on navigation, the server answers 304 when Redis is warm and unchanged (cheap — no body) or 200 after an invalidation. Do NOT change this back to `max-age>0` — server-side cache invalidation cannot reach the browser's HTTP cache, so any freshness window would let stale responses survive a mutation until expiry.
 

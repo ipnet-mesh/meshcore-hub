@@ -50,11 +50,10 @@ The bundled `postgres` container derives its `POSTGRES_USER` / `POSTGRES_PASSWOR
 
 ## Caching
 
-Optional Redis-backed caching for API responses. When disabled or unavailable, the API queries the database directly. Operational guidance — Docker `cache` profile, bare-metal Redis, and multi-instance key-prefix isolation — is in [deployment.md → Redis Caching](deployment.md#redis-caching).
+Redis-backed caching for API responses — **required infrastructure** (since v0.20). An unreachable Redis makes `/health/ready` report `not_ready` (503) and cached endpoints return `503 cache backend unavailable`. Operational guidance — Docker profiles, bare-metal Redis, and multi-instance key-prefix isolation — is in [deployment.md → Redis Caching](deployment.md#redis-caching).
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `REDIS_ENABLED` | `false` | Enable Redis API response caching |
 | `REDIS_HOST` | `localhost` (`redis` in Docker) | Redis server host |
 | `REDIS_PORT` | `6379` | Redis server port |
 | `REDIS_DB` | `0` | Redis database number |
