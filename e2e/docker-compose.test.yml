@@ -1,10 +1,10 @@
 # MeshCore Hub - Playwright End-to-End Test Stack
 #
 # Self-contained, throwaway stack for the Playwright suite in this directory.
-# Runs its OWN ephemeral Postgres (schema created by `migrate` via Alembic) and
-# NEVER touches the local development database: distinct project name, distinct
-# named volumes, no host port for Postgres, and no ${VAR} interpolation (so the
-# dev .env is never consulted).
+# Runs its OWN ephemeral Postgres and Redis (schema created by `migrate` via
+# Alembic) and NEVER touches the local development database: distinct project
+# name, distinct named volumes, no host port for Postgres, and no ${VAR}
+# interpolation (so the dev .env is never consulted).
 #
 # Usage (from the repo root):
 #   make e2e-build   # docker compose -f e2e/docker-compose.test.yml build
@@ -29,6 +29,21 @@ services:
       - test_pg_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U meshcorehub -d meshcorehub"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  # ==========================================================================
+  # Redis - required cache backend for the API (ephemeral, not published)
+  # ==========================================================================
+  redis:
+    image: redis:8-alpine
+    container_name: meshcore-test-redis
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -153,6 +168,8 @@ services:
         condition: service_completed_successfully
       mqtt:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "18000:8000"
     volumes:
@@ -177,6 +194,9 @@ services:
       - API_PORT=8000
       - API_READ_KEY=test-read-key
       - API_ADMIN_KEY=test-admin-key
+      # Redis is required — point at the ephemeral service (the code default
+      # 'localhost' would fail inside the container network).
+      - REDIS_HOST=redis
     command: ["api"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]

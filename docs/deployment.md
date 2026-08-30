@@ -93,7 +93,7 @@ The API is read-mostly and holds no per-process state — the response cache liv
 API_WORKERS=4
 ```
 
-Each worker is an independent process sharing one listening socket, so the kernel balances connections across them and CPU-bound work (JSON serialisation, validation) spreads over multiple cores. Workers read their configuration from **environment variables** (CLI flags are not propagated to forked workers), which is how Docker Compose already supplies config. Enabling Redis (`REDIS_ENABLED=true`) is recommended so all workers share one cache.
+Each worker is an independent process sharing one listening socket, so the kernel balances connections across them and CPU-bound work (JSON serialisation, validation) spreads over multiple cores. Workers read their configuration from **environment variables** (CLI flags are not propagated to forked workers), which is how Docker Compose already supplies config. Redis (required infrastructure) gives all workers one shared response cache.
 
 Pick a worker count around the number of CPU cores available to the container; start with `2`–`4` and measure under realistic load. Workers all talk to the same PostgreSQL database (the bundled container or an external instance — see [database.md](database.md)), so scaling extends across hosts unchanged.
 
@@ -101,16 +101,13 @@ Pick a worker count around the number of CPU cores available to the container; s
 
 ## Redis Caching
 
-Optional Redis-backed caching for API responses. When disabled or unavailable, the API queries the database directly.
+Redis-backed caching for API responses — **required infrastructure** (since v0.20). An unreachable Redis fails readiness (`/health/ready` → 503) and cached endpoints return `503 cache backend unavailable`; it is not an optional accelerator.
 
-**Docker:** Redis is included in the `cache` profile. Disabled by default — set `REDIS_ENABLED=true` to enable.
+**Docker (dev):** `docker-compose.dev.yml` unions the bundled `redis` service into the `core` profile, so the standard dev workflow starts it automatically. Start it standalone with the explicit `cache` profile (or `all`).
 
-```bash
-docker compose --profile cache up    # Start with bundled Redis
-docker compose --profile core up     # Start without Redis
-```
+**Docker (production):** `docker-compose.prod.yml` deliberately does **not** start the bundled Redis with `core` — point `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` at your shared/external instance (starting the bundled container alongside it would shadow a `redis` host on the same network), or opt in explicitly with `--profile cache` / `--profile all`.
 
-**Bare-metal:** Install Redis separately, then set `REDIS_ENABLED=true` and `REDIS_HOST=localhost`.
+**Bare-metal:** Install and run a Redis server (the `localhost` defaults point at a local `redis-server`).
 
 **Multi-instance:** Use different `REDIS_KEY_PREFIX` values per instance to share one Redis without key collisions.
 

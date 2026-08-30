@@ -97,6 +97,16 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      redis:
+        # Pinned to match the bundled redis:8-alpine in docker-compose.yml
+        image: redis:8
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v7
 
@@ -114,6 +124,7 @@ jobs:
       - name: Run tests with pytest
         env:
           TEST_POSTGRES_URL: postgresql+psycopg2://meshcorehub:meshcorehub-test@localhost:5432/meshcorehub_test
+          TEST_REDIS_URL: redis://localhost:6379/0
         run: |
           pytest -nauto --cov=meshcore_hub --cov-report=xml --cov-report=term-missing --junitxml=junit.xml -o junit_family=legacy
 

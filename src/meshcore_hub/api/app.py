@@ -42,25 +42,29 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info(f"Initializing database: {database_url}")
     _db_manager = DatabaseManager(database_url)
 
-    # Initialize Redis cache
-    redis_enabled = getattr(app.state, "redis_enabled", False)
-    if redis_enabled:
-        from meshcore_hub.common.redis import RedisCacheBackend
+    # Initialize Redis cache (required infrastructure)
+    from meshcore_hub.common.redis import RedisCacheBackend
 
-        redis_cache = RedisCacheBackend(
-            host=getattr(app.state, "redis_host", "localhost"),
-            port=getattr(app.state, "redis_port", 6379),
-            db=getattr(app.state, "redis_db", 0),
-            password=getattr(app.state, "redis_password", None),
-            key_prefix=getattr(app.state, "redis_key_prefix", "hub"),
+    redis_cache = RedisCacheBackend(
+        host=getattr(app.state, "redis_host", "localhost"),
+        port=getattr(app.state, "redis_port", 6379),
+        db=getattr(app.state, "redis_db", 0),
+        password=getattr(app.state, "redis_password", None),
+        key_prefix=getattr(app.state, "redis_key_prefix", "hub"),
+    )
+    app.state.redis_cache = redis_cache
+    if redis_cache.ping():
+        logger.info(
+            "Redis cache connected: %s:%s/%s",
+            getattr(app.state, "redis_host", "localhost"),
+            getattr(app.state, "redis_port", 6379),
+            getattr(app.state, "redis_db", 0),
         )
-        app.state.redis_cache = redis_cache
-        logger.info("Redis cache enabled")
     else:
-        from meshcore_hub.common.redis import NullCache
-
-        app.state.redis_cache = NullCache()
-        logger.info("Redis cache disabled")
+        logger.error(
+            "Redis cache unreachable at startup — /health/ready will report "
+            "not_ready and cached endpoints will return 503 until it recovers"
+        )
 
     yield
 
@@ -92,7 +96,6 @@ def create_app(
     metrics_enabled: bool = True,
     metrics_cache_ttl: int = 60,
     metrics_public: bool = False,
-    redis_enabled: bool = False,
     redis_host: str = "localhost",
     redis_port: int = 6379,
     redis_db: int = 0,
@@ -125,7 +128,6 @@ def create_app(
         metrics_enabled: Enable Prometheus metrics endpoint at /metrics
         metrics_cache_ttl: Seconds to cache metrics output
         metrics_public: Allow unauthenticated /metrics when no read key is set
-        redis_enabled: Enable Redis API response caching
         redis_host: Redis server host
         redis_port: Redis server port
         redis_db: Redis database number
@@ -169,7 +171,6 @@ def create_app(
     app.state.mqtt_ws_path = mqtt_ws_path
     app.state.metrics_cache_ttl = metrics_cache_ttl
     app.state.metrics_public = metrics_public
-    app.state.redis_enabled = redis_enabled
     app.state.redis_host = redis_host
     app.state.redis_port = redis_port
     app.state.redis_db = redis_db
@@ -297,10 +298,12 @@ def create_app(
 
     @app.get("/health/ready", tags=["Health"])
     def health_ready() -> JSONResponse:
-        """Readiness check including database and optional Redis.
+        """Readiness check including database and Redis.
 
-        Returns 503 when not ready so Docker/Kubernetes readiness probes
-        (which judge by HTTP status code) pull the instance from rotation.
+        Redis is required infrastructure: an unreachable backend flips the
+        overall status to ``not_ready``. Returns 503 when not ready so
+        Docker/Kubernetes readiness probes (which judge by HTTP status
+        code) pull the instance from rotation.
         """
         try:
             db = get_db_manager()
@@ -311,12 +314,11 @@ def create_app(
             result = {"status": "not_ready", "database": type(e).__name__}
 
         redis_cache = getattr(app.state, "redis_cache", None)
-        redis_enabled = getattr(app.state, "redis_enabled", False)
-        if redis_enabled and redis_cache is not None:
-            if redis_cache.ping():
-                result["redis"] = "connected"
-            else:
-                result["redis"] = "unreachable"
+        if redis_cache is not None and redis_cache.ping():
+            result["redis"] = "connected"
+        else:
+            result["redis"] = "unreachable"
+            result["status"] = "not_ready"
 
         status_code = 200 if result.get("status") == "ready" else 503
         return JSONResponse(content=result, status_code=status_code)
@@ -372,7 +374,6 @@ def create_app_from_env() -> FastAPI:
         metrics_enabled=metrics_enabled,
         metrics_cache_ttl=metrics_cache_ttl,
         metrics_public=metrics_public,
-        redis_enabled=settings.redis_enabled,
         redis_host=settings.redis_host,
         redis_port=settings.redis_port,
         redis_db=settings.redis_db,

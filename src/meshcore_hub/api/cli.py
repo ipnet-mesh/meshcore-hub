@@ -132,12 +132,6 @@ import click
     ),
 )
 @click.option(
-    "--redis-enabled/--no-redis",
-    default=False,
-    envvar="REDIS_ENABLED",
-    help="Enable Redis API response caching",
-)
-@click.option(
     "--redis-host",
     type=str,
     default="localhost",
@@ -237,7 +231,6 @@ def api(
     metrics_enabled: bool,
     metrics_cache_ttl: int,
     metrics_public: bool,
-    redis_enabled: bool,
     redis_host: str,
     redis_port: int,
     redis_db: int,
@@ -299,14 +292,12 @@ def api(
     click.echo(f"Metrics enabled: {metrics_enabled}")
     click.echo(f"Metrics cache TTL: {metrics_cache_ttl}s")
     click.echo(f"Metrics public (no key): {metrics_public}")
-    click.echo(f"Redis enabled: {redis_enabled}")
-    if redis_enabled:
-        click.echo(f"Redis: {redis_host}:{redis_port}/{redis_db}")
-        click.echo(f"Redis key prefix: {redis_key_prefix}")
-        click.echo(
-            f"Redis cache TTL: {redis_cache_ttl}s "
-            f"(dashboard: {redis_cache_ttl_dashboard}s)"
-        )
+    click.echo(f"Redis: {redis_host}:{redis_port}/{redis_db}")
+    click.echo(f"Redis key prefix: {redis_key_prefix}")
+    click.echo(
+        f"Redis cache TTL: {redis_cache_ttl}s "
+        f"(dashboard: {redis_cache_ttl_dashboard}s)"
+    )
     click.echo(f"API Cache-Control enabled: {api_cache_control_enabled}")
     click.echo(
         f"Spam detection: {settings.spam_detection_enabled} "
@@ -326,7 +317,6 @@ def api(
         # We need to pass app as string for reload to work
         click.echo("\nStarting in development mode with auto-reload...")
         click.echo("Note: Using default settings for reload mode.")
-        click.echo("Note: Redis defaults to disabled in reload mode.")
 
         uvicorn.run(
             "meshcore_hub.api.app:create_app",
@@ -366,7 +356,6 @@ def api(
             metrics_enabled=metrics_enabled,
             metrics_cache_ttl=metrics_cache_ttl,
             metrics_public=metrics_public,
-            redis_enabled=redis_enabled,
             redis_host=redis_host,
             redis_port=redis_port,
             redis_db=redis_db,

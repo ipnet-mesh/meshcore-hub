@@ -48,6 +48,13 @@ services:
   seed:
     pull_policy: build
 
+  # Bundled dev Redis: same 'core' profile-union as postgres — Redis is
+  # required infrastructure, so the documented dev workflow (`--profile
+  # core`, `make up`) starts it for zero-effort setup. Production uses
+  # docker-compose.prod.yml, which leaves 'core' out so the bundled
+  # container never shadows a shared instance named 'redis' on the network.
   redis:
+    profiles:
+      - core
     ports:
       - "${REDIS_PORT:-6379}:6379"

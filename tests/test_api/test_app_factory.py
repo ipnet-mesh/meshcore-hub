@@ -16,7 +16,6 @@ _FACTORY_ENV = [
     "DATABASE_SCHEMA",
     "DATABASE_USER",
     "DATABASE_PASSWORD",
-    "REDIS_ENABLED",
     "REDIS_HOST",
     "REDIS_PORT",
     "REDIS_CACHE_TTL",
@@ -61,7 +60,6 @@ def test_factory_reads_database_and_redis_from_env(clean_env):
     """Workers must pick up the real DB/Redis config from env, not the
     hardcoded create_app defaults."""
     clean_env.setenv("DATABASE_URL", "postgresql+psycopg2://u:p@workers-test:5432/hub")
-    clean_env.setenv("REDIS_ENABLED", "true")
     clean_env.setenv("REDIS_HOST", "redis-test")
     clean_env.setenv("REDIS_PORT", "6390")
     clean_env.setenv("MQTT_HOST", "mqtt-test")
@@ -70,7 +68,6 @@ def test_factory_reads_database_and_redis_from_env(clean_env):
     app = create_app_from_env()
 
     assert app.state.database_url == "postgresql+psycopg2://u:p@workers-test:5432/hub"
-    assert app.state.redis_enabled is True
     assert app.state.redis_host == "redis-test"
     assert app.state.redis_port == 6390
     assert app.state.mqtt_host == "mqtt-test"
@@ -81,13 +78,11 @@ def test_factory_assembles_url_from_component_vars(clean_env):
     """Without an explicit DATABASE_URL, the DATABASE_* components assemble
     the connection — the app factory never falls back to a default file DB."""
     clean_env.delenv("DATABASE_URL")
-    clean_env.setenv("REDIS_ENABLED", "false")
     clean_env.setenv("DATABASE_HOST", "pg-test")
     clean_env.setenv("DATABASE_PASSWORD", "pw")
 
     app = create_app_from_env()
 
-    assert app.state.redis_enabled is False
     assert app.state.database_url == (
         "postgresql+psycopg2://meshcorehub:pw@pg-test:5432/meshcorehub"
     )
@@ -98,13 +93,6 @@ def test_factory_without_database_config_raises(clean_env):
     clean_env.delenv("DATABASE_URL")
     with pytest.raises(ValueError, match="PostgreSQL connection is not configured"):
         _ = create_app_from_env()
-
-
-def test_factory_redis_enabled_accepts_truthy_values(clean_env):
-    """REDIS_ENABLED / METRICS_ENABLED parse common truthy spellings."""
-    clean_env.setenv("REDIS_ENABLED", "1")
-    app = create_app_from_env()
-    assert app.state.redis_enabled is True
 
 
 def test_factory_metrics_enabled_via_env(clean_env):

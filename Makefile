@@ -36,11 +36,11 @@ restore:
 		alpine sh -c "cd / && tar xzf /backup/$$(basename $(FILE))"
 
 # --- Tests ---------------------------------------------------------------
-# Backend tests run against PostgreSQL only: `test`, `test-cov`, and
-# `test-unit` start the throwaway test DB automatically and stop it again
-# afterwards — even when pytest fails (EXIT trap). Set TEST_POSTGRES_URL to
-# point at your own instance and the automatic up/down is skipped.
-# For direct pytest runs, start it manually with `make test-db-up`.
+# Backend tests run against PostgreSQL and Redis: `test`, `test-cov`, and
+# `test-unit` start the throwaway test stack automatically and stop it again
+# afterwards — even when pytest fails (EXIT trap). Set TEST_POSTGRES_URL /
+# TEST_REDIS_URL to point at your own instances and the automatic up/down is
+# skipped. For direct pytest runs, start it manually with `make test-db-up`.
 # Coverage is opt-in (use test-cov). Dev loop runs in parallel across cores.
 # `test` runs the backend suite then the frontend (vitest) suite.
 test:
@@ -71,10 +71,11 @@ test-unit:
 test-frontend:
 	npm run test:frontend
 
-# Throwaway PostgreSQL for the backend suite (127.0.0.1:55432, dev-only creds,
-# ephemeral tmpfs storage). pytest fails fast with a hint if it is unreachable.
-# The project name is pinned so a COMPOSE_PROJECT_NAME set in .env (the dev
-# stack) can never make `down` target the dev services.
+# Throwaway PostgreSQL (127.0.0.1:55432) + Redis (127.0.0.1:55433) for the
+# backend suite (dev-only creds, ephemeral tmpfs storage). Redis is required
+# cache infrastructure — pytest fails fast with a hint if either is
+# unreachable. The project name is pinned so a COMPOSE_PROJECT_NAME set in
+# .env (the dev stack) can never make `down` target the dev services.
 TEST_DB_COMPOSE = docker compose -f docker-compose.test-db.yml -p meshcore-hub-test-db
 
 test-db-up:

@@ -1,5 +1,5 @@
 # ==========================================================================
-# Throwaway PostgreSQL instance for the backend test suite (pytest).
+# Throwaway PostgreSQL + Redis instances for the backend test suite (pytest).
 #
 # NOT part of the application stack. Start/stop with:
 #   make test-db-up
@@ -11,7 +11,8 @@
 # The meshcorehub role owns the meshcorehub_test database (image entrypoint),
 # which is exactly the privilege the per-xdist-worker test schemas need
 # (CREATE SCHEMA) — no superuser and no CREATEDB required. The data directory
-# is a tmpfs mount, so nothing survives `down`.
+# is a tmpfs mount, so nothing survives `down`. Redis (required cache
+# infrastructure) is published on 55433 with the same tmpfs treatment.
 # ==========================================================================
 name: meshcore-hub-test-db
 
@@ -33,6 +34,19 @@ services:
       - /var/lib/postgresql/data:size=512m
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U meshcorehub -d meshcorehub_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  test-redis:
+    image: redis:8-alpine
+    container_name: meshcore-hub-test-redis
+    ports:
+      - "127.0.0.1:55433:6379"
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 10
