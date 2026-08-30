@@ -34,11 +34,11 @@ Process-wide and MQTT-broker settings used by every service. For multi-instance 
 
 ## Database
 
-MeshCore Hub runs on **PostgreSQL** — the only supported database backend since v0.19. The bundled container is part of the default `core` compose profile (zero-config), and the same `DATABASE_*` variables point the services at a managed/external instance or a shared cluster with schema-per-instance isolation. See [database.md](database.md) for the full reference: bundled container, production role/database provisioning, managed/external Postgres, and schema-per-instance isolation. Upgrading an old SQLite deployment? See [upgrading.md](upgrading.md) (v0.19 section).
+MeshCore Hub runs on **PostgreSQL** — the only supported database backend since v0.19. The bundled container is a development convenience (it joins the `core` compose profile via `docker-compose.dev.yml`, zero-config); in production the same `DATABASE_*` variables point the services at a managed/external instance or a shared cluster with schema-per-instance isolation. See [database.md](database.md) for the full reference: bundled container, production role/database provisioning, managed/external Postgres, and schema-per-instance isolation. Upgrading an old SQLite deployment? See [upgrading.md](upgrading.md) (v0.19 section).
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `DATABASE_HOST` | `postgres` | Postgres hostname (`postgres` = bundled container service name) |
+| `DATABASE_HOST` | `postgres` | Postgres hostname. `postgres` = the bundled container's service name (started with `core` only when using `docker-compose.dev.yml`; production points this at the shared/external instance) |
 | `DATABASE_PORT` | `5432` | Postgres port |
 | `DATABASE_NAME` | `meshcorehub` | Database name |
 | `DATABASE_SCHEMA` | `meshcorehub` | Schema (`search_path`). Set a distinct value per instance on a shared cluster |

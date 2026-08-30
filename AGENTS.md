@@ -138,7 +138,7 @@ Design notes when extending the suite:
 
 ## Database & Ops
 
-The database backend is **PostgreSQL** (the only backend since v0.19). The bundled container starts with the `core` compose profile — see `docs/database.md` for the full reference, production provisioning, and schema-per-instance setup. Backend tests also require Postgres: `make test-db-up` starts a throwaway instance on `127.0.0.1:55432` (or point `TEST_POSTGRES_URL` at your own).
+The database backend is **PostgreSQL** (the only backend since v0.19). The bundled container is dev-only: it joins the `core` compose profile via `docker-compose.dev.yml` (profiles union across override files), so the documented dev commands start it automatically — production (`docker-compose.prod.yml`) never starts it with `core`/`migrate`, so it cannot shadow a shared `postgres` host on the same network. See `docs/database.md` for the full reference, production provisioning, and schema-per-instance setup. Backend tests also require Postgres: `make test-db-up` starts a throwaway instance on `127.0.0.1:55432` (or point `TEST_POSTGRES_URL` at your own).
 
 ```bash
 # --- LOCAL (venv): author a migration against a local schema (NOT the dev DB)

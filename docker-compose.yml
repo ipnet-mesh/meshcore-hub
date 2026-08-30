@@ -149,8 +149,12 @@ services:
 
   # ==========================================================================
   # PostgreSQL - the database backend (the only one since v0.19)
-  # Part of the core/all profiles so a default `compose up` is zero-effort;
-  # the explicit 'postgres' profile also starts it standalone.
+  # Bundled development database: docker-compose.dev.yml unions 'core' into
+  # these profiles so a default dev `compose up` is zero-effort. Production
+  # (prod.yml) does NOT — pointing DATABASE_* at a shared/external instance
+  # while the bundled container also starts would shadow a 'postgres' host on
+  # the same network. Start it standalone with the explicit 'postgres'
+  # profile (or 'all') only when the bundled database is really wanted.
   # POSTGRES_* init vars derive from the same DATABASE_* values (single source
   # of truth); the schema itself is created by `db upgrade` (alembic).
   # The default password is dev-only — override DATABASE_PASSWORD in
@@ -161,7 +165,6 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME:-hub}-postgres
     profiles:
       - all
-      - core
       - postgres
     restart: unless-stopped
     environment:
@@ -458,9 +461,11 @@ services:
       - migrate
     restart: "no"
     depends_on:
+      # Optional: healthy when the bundled postgres is enabled (dev override),
+      # skipped when it is profile-inactive (production external database).
       postgres:
         condition: service_healthy
-        required: true
+        required: false
     volumes:
       - data:/data
     environment:

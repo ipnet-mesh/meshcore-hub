@@ -35,6 +35,8 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile mqtt -
 docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile mqtt --profile core --profile observer up -d
 ```
 
+> **Database in production:** the bundled `postgres` container is **not** started by the `core` profile with `docker-compose.prod.yml` — its `postgres` network alias would shadow a shared instance of the same name on the same network. Point the `DATABASE_*` variables at your shared/managed Postgres (see [database.md](database.md)). If this host has no external database, opt in to the bundled container explicitly with `--profile postgres` and set a strong `DATABASE_PASSWORD`.
+
 Configure your reverse proxy to forward to the containers:
 
 | Service        | Container                     | Port | Path                             |
@@ -80,7 +82,7 @@ TRAEFIK_PRIORITY=20
 
 This ensures `beta.example.com` (priority 20) is matched before the production wildcard `*.example.com` (priority 10). For other services on the same network (e.g., an MQTT broker at `mqtt.example.com`), use an even higher priority (e.g., 30).
 
-> **Shared Postgres cluster:** the setup above runs each instance in its own directory with its own volumes (bundled Postgres container per instance). To instead run several instances (e.g. `prod` + `stg`) against **one** PostgreSQL cluster — isolated via a per-instance schema (`search_path`) — see [database.md](database.md#schema-per-instance-search_path).
+> **Shared Postgres cluster:** the setup above runs each instance in its own directory with its own volumes — add `--profile postgres` to each instance's `up` command for a bundled Postgres container per instance. To instead run several instances (e.g. `prod` + `stg`) against **one** PostgreSQL cluster — isolated via a per-instance schema (`search_path`) — see [database.md](database.md#schema-per-instance-search_path).
 
 ## Scaling the API
 
