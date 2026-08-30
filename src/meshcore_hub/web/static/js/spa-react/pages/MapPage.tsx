@@ -143,7 +143,7 @@ function createClusterIcon(cluster: MarkerCluster): DivIcon {
       size +
       "px; height: " +
       size +
-      'px;"><span>' +
+      'px;"><span data-testid="cluster-count">' +
       formatNumber(count) +
       "</span></div>",
     iconSize: [size, size],
