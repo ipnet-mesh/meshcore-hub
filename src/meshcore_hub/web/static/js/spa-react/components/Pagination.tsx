@@ -38,7 +38,12 @@ export function Pagination({
   for (let p = 1; p <= totalPages; p++) {
     if (p === page) {
       pageNumbers.push(
-        <button key={p} className="join-item btn btn-sm btn-active">
+        <button
+          key={p}
+          data-testid="pagination-page"
+          data-page={p}
+          className="join-item btn btn-sm btn-active"
+        >
           {p}
         </button>,
       );
@@ -48,7 +53,13 @@ export function Pagination({
       (p >= page - 2 && p <= page + 2)
     ) {
       pageNumbers.push(
-        <Link key={p} to={pageUrl(p)} className="join-item btn btn-sm">
+        <Link
+          key={p}
+          to={pageUrl(p)}
+          data-testid="pagination-page"
+          data-page={p}
+          className="join-item btn btn-sm"
+        >
           {p}
         </Link>,
       );
@@ -67,23 +78,39 @@ export function Pagination({
 
   return (
     <div className="flex justify-center mt-6">
-      <div className="join">
+      <div className="join" data-testid="pagination">
         {page > 1 ? (
-          <Link to={pageUrl(page - 1)} className="join-item btn btn-sm">
+          <Link
+            to={pageUrl(page - 1)}
+            data-testid="pagination-prev"
+            className="join-item btn btn-sm"
+          >
             {t("common.previous")}
           </Link>
         ) : (
-          <button className="join-item btn btn-sm btn-disabled" disabled>
+          <button
+            data-testid="pagination-prev"
+            className="join-item btn btn-sm btn-disabled"
+            disabled
+          >
             {t("common.previous")}
           </button>
         )}
         {pageNumbers}
         {page < totalPages ? (
-          <Link to={pageUrl(page + 1)} className="join-item btn btn-sm">
+          <Link
+            to={pageUrl(page + 1)}
+            data-testid="pagination-next"
+            className="join-item btn btn-sm"
+          >
             {t("common.next")}
           </Link>
         ) : (
-          <button className="join-item btn btn-sm btn-disabled" disabled>
+          <button
+            data-testid="pagination-next"
+            className="join-item btn btn-sm btn-disabled"
+            disabled
+          >
             {t("common.next")}
           </button>
         )}

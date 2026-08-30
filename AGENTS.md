@@ -129,12 +129,16 @@ Design notes when extending the suite:
 - **Data is deterministic.** `e2e/seed_data.py` clears + recreates fixed rows
   (nodes/observers with `area` tags, adverts, messages on channel idx 17 + the
   "E2E General" custom channel, raw packets + path hops keyed to node prefixes,
-  a route + health, profiles + adoptions) using recent timestamps (7-day windows).
+  30 `trace_data` filler groups for pagination tests, channels at every
+  visibility tier (community/member/operator/admin + one disabled), a route +
+  health, profiles incl. `pw-operator` + adoptions) using recent timestamps
+  (7-day windows).
 - **Single shared backend:** `workers: 1`, `fullyParallel: false`; routes/profile
   specs are `describe.serial`. `WEB_AUTO_REFRESH_SECONDS=2` makes polling assertable.
 - Selectors rely on purposeful `data-testid`s (theme/auto-refresh toggles, observer
   area badges, path-hop badge + popover, route modal fields, nav/hero/member/list
-  rows) added to the React components.
+  rows, channel cards/modal, node adoption/tag forms, pagination, sort headers,
+  mobile nav) added to the React components.
 
 ## Database & Ops
 

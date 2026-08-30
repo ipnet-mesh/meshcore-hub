@@ -8,7 +8,8 @@ test.describe("packets", () => {
   test("filter options work", async ({ page }) => {
     await page.goto("/packets");
     await expectListLoaded(page);
-    await expect(page.getByTestId("list-row")).toHaveCount(10);
+    // 40 seeded groups (10 events + 30 trace_data fillers), page size 20.
+    await expect(page.getByTestId("list-row")).toHaveCount(20);
 
     await openFilters(page);
     await page.locator('select[name="event_type"]').selectOption("advertisement");
