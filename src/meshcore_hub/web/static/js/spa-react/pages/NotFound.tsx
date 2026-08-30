@@ -8,7 +8,7 @@ export function NotFound() {
   usePageTitle();
 
   return (
-    <div className="hero min-h-[60vh]">
+    <div className="hero min-h-[60vh]" data-testid="not-found">
       <div className="hero-content text-center">
         <div className="max-w-md">
           <div className="text-9xl font-bold text-primary opacity-20">404</div>
@@ -17,7 +17,7 @@ export function NotFound() {
           </h1>
           <p className="py-6 opacity-70">{t("not_found.description")}</p>
           <div className="flex gap-4 justify-center">
-            <Link to="/" className="btn btn-primary">
+            <Link to="/" data-testid="go-home" className="btn btn-primary">
               <IconHome className="h-5 w-5 mr-2" />
               {t("common.go_home")}
             </Link>

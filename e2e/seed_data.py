@@ -312,19 +312,72 @@ def seed_raw_packets(
     return first_raw_packet_id
 
 
+def seed_packet_filler(session: Session, nodes: dict[str, Node]) -> None:
+    """Extra raw packet groups used by the pagination tests.
+
+    Uses the ``trace_data`` event type so the groups surface on /packets but
+    never on the dedicated /advertisements or /messages pages, and never
+    interfere with the event_type=advertisement filter assertions. The 30
+    filler groups (on top of the 10 seeded events) push /packets past one
+    page (limit 20). Timestamps stay older than every seeded event so the
+    newest groups keep their ordering.
+    """
+    for i in range(30):
+        packet_hash = _hash(f"pf{i + 1:02d}")
+        event_hash = _event_hash(200 + i)
+        received_at = _ago(hours=3 + i * 0.25)
+        observer_pk = NORTH_1 if i % 2 == 0 else SOUTH_1
+        raw = RawPacket(
+            observer_node_id=nodes[observer_pk].id,
+            packet_hash=packet_hash,
+            event_hash=event_hash,
+            raw_hex=(packet_hash * 4)[:128],
+            packet_type=5,
+            payload_type=4,
+            event_type="trace_data",
+            channel_idx=None,
+            source_pubkey_prefix=ALPHA[:12],
+            route_type="flood",
+            path_len=3,
+            path_hash_bytes=2,
+            snr=7.0,
+            decoded={"e2e": True, "filler": i + 1},
+            received_at=received_at,
+        )
+        session.add(raw)
+        session.flush()
+        for position, node_hash in enumerate(PATH_HOPS):
+            session.add(
+                PacketPathHop(
+                    raw_packet_id=raw.id,
+                    position=position,
+                    node_hash=node_hash,
+                    packet_hash=packet_hash,
+                    event_hash=event_hash,
+                    received_at=received_at,
+                    observer_node_id=nodes[observer_pk].id,
+                )
+            )
+    session.flush()
+
+
 def seed_channels(session: Session) -> int:
     keys = [
-        ("E2E General", "00112233445566778899aabbccddeeff" * 2),
-        ("E2E Ops", "ffeeddccbbaa99887766554433221100" * 2),
+        ("E2E General", "00112233445566778899aabbccddeeff" * 2, "community", True),
+        ("E2E Ops", "ffeeddccbbaa99887766554433221100" * 2, "community", True),
+        ("E2E Members", "0f0e0d0c0b0a09080706050403020100" * 2, "member", True),
+        ("E2E Crew", "102030405060708090a0b0c0d0e0f00" * 2, "operator", True),
+        ("E2E Staff", "11223344556677889900aabbccddeeff" * 2, "admin", True),
+        ("E2E Retired", "deadbeefdeadbeefdeadbeefdeadbeef" * 2, "community", False),
     ]
-    for name, key_hex in keys:
+    for name, key_hex, visibility, enabled in keys:
         session.add(
             Channel(
                 name=name,
                 key_hex=key_hex,
                 channel_hash=Channel.compute_channel_hash(key_hex),
-                visibility="community",
-                enabled=True,
+                visibility=visibility,
+                enabled=enabled,
             )
         )
     session.flush()
@@ -458,6 +511,14 @@ def seed_profiles(session: Session, nodes: dict[str, Node]) -> None:
             "Playwright member user",
             None,
         ),
+        (
+            "pw-operator",
+            "PW Operator",
+            "E2EOPR",
+            "operator,member",
+            "Playwright operator user",
+            None,
+        ),
         ("op-north", "Op North", "OPN1", "operator,member", "North operator", None),
         ("mem-south", "Mem South", "MEMS1", "member", "South member", None),
     ]
@@ -508,6 +569,7 @@ def main() -> None:
                 first_raw_packet_id = seed_raw_packets(
                     session, nodes, advert_events, message_events, custom_channel_idx
                 )
+                seed_packet_filler(session, nodes)
                 seed_routes(session, nodes, first_raw_packet_id)
                 seed_profiles(session, nodes)
                 session.commit()

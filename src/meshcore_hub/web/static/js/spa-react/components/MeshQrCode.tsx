@@ -5,14 +5,15 @@ export function MeshQrCode({
   size = 140,
   level = "L",
   className = "bg-white p-2 rounded-box",
+  ...rest
 }: {
   value: string;
   size?: number;
   level?: "L" | "M" | "Q" | "H";
   className?: string;
-}) {
+} & React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={className}>
+    <div className={className} {...rest}>
       <QRCode
         value={value}
         size={size}

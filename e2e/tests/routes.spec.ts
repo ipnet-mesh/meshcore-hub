@@ -6,6 +6,35 @@ test.use({ storageState: ADMIN_STATE });
 const ROUTE_LABEL = "E2E From \u2192 E2E To";
 
 test.describe.serial("routes (admin)", () => {
+  test("seeded route cards render history, recent matches and owner", async ({
+    page,
+  }) => {
+    await page.goto("/routes");
+
+    const legacy = page.locator(
+      '[data-testid="route-card"][data-route-label="Alpha Site \u2192 Bravo Site"]',
+    );
+    await expect(legacy).toBeVisible();
+
+    // History strip (chart.js canvas) with date labels ending in "Now".
+    await expect(legacy.locator("canvas").first()).toBeVisible();
+    await expect(legacy.getByText("Now", { exact: true })).toBeVisible();
+
+    // Recent match rows navigate into the packet group detail.
+    await legacy.getByText("Recent Packets").waitFor();
+    await legacy.locator("div.cursor-pointer").first().click();
+    await expect(page).toHaveURL(/\/packets\/hash\//);
+
+    // Operator-owned card links to the owner's profile.
+    await page.goto("/routes");
+    const op = page.locator(
+      '[data-testid="route-card"][data-route-label="Op North \u2192 Op South"]',
+    );
+    const owner = op.getByRole("link", { name: "PW Operator" });
+    await expect(owner).toBeVisible();
+    await expect(owner).toHaveAttribute("href", /^\/profile\//);
+  });
+
   test("add route displays the modal and all options are persisted", async ({
     page,
   }) => {

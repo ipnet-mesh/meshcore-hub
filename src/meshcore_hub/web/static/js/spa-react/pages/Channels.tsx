@@ -78,6 +78,8 @@ function ChannelCard({
       className="card bg-base-100 shadow-xl cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       role="button"
       tabIndex={0}
+      data-testid="channel-card"
+      data-channel-name={channel.name}
       onClick={() => onNavigate(channelIdx)}
       onKeyDown={handleKeyDown}
     >
@@ -104,6 +106,7 @@ function ChannelCard({
           {isAdmin && (
             <div className="flex gap-2 mt-2">
               <button
+                data-testid="channel-edit"
                 className="btn btn-xs btn-outline"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -113,6 +116,7 @@ function ChannelCard({
                 <IconEdit className="h-3 w-3" /> {t("common.edit")}
               </button>
               <button
+                data-testid="channel-delete"
                 className="btn btn-xs btn-outline btn-error"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -124,7 +128,7 @@ function ChannelCard({
             </div>
           )}
         </div>
-        <div className="flex-shrink-0 self-center">
+        <div className="flex-shrink-0 self-center" data-testid="channel-qr">
           {channel.key_hex && <ChannelQrCode channel={channel} />}
         </div>
       </div>
@@ -178,6 +182,7 @@ function ChannelModal({
             </label>
             <input
               type="text"
+              data-testid="channel-name"
               className="input input-sm"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -193,6 +198,7 @@ function ChannelModal({
                 </label>
                 <input
                   type="text"
+                  data-testid="channel-key"
                   className="input input-sm font-mono"
                   value={keyHex}
                   onChange={(e) => setKeyHex(e.target.value)}
@@ -208,6 +214,7 @@ function ChannelModal({
               {t("channels.visibility_label")}
             </label>
             <select
+              data-testid="channel-visibility"
               className="select select-sm"
               value={visibility}
               onChange={(e) => setVisibility(e.target.value)}
@@ -221,6 +228,7 @@ function ChannelModal({
             <label className="label cursor-pointer justify-start gap-3">
               <input
                 type="checkbox"
+                data-testid="channel-enabled"
                 className="checkbox checkbox-sm"
                 checked={enabled}
                 onChange={(e) => setEnabled(e.target.checked)}
@@ -231,13 +239,19 @@ function ChannelModal({
           <div className="modal-action">
             <button
               type="button"
+              data-testid="channel-cancel"
               className="btn btn-ghost"
               onClick={onCancel}
               disabled={saving}
             >
               {t("common.cancel")}
             </button>
-            <button type="submit" className="btn btn-primary" disabled={saving}>
+            <button
+              type="submit"
+              data-testid="channel-save"
+              className="btn btn-primary"
+              disabled={saving}
+            >
               {saving && (
                 <span className="loading loading-spinner loading-sm"></span>
               )}
@@ -371,6 +385,7 @@ export function Channels() {
       {isAdmin && (
         <div className="flex justify-end mb-4">
           <button
+            data-testid="add-channel"
             className="btn btn-primary btn-sm"
             onClick={() => setModal({ type: "add" })}
           >

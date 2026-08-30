@@ -42,7 +42,12 @@ export function Navbar() {
         <ThemeToggle />
         {config.oidc_enabled && !config.system_maintenance && <AuthSection />}
         <div className="dropdown dropdown-end lg:hidden">
-          <div tabIndex={0} role="button" className="btn btn-ghost">
+          <div
+            tabIndex={0}
+            role="button"
+            data-testid="mobile-nav-toggle"
+            className="btn btn-ghost"
+          >
             <svg
               xmlns="http://www.w3.org/2000/svg"
               className="h-5 w-5"
@@ -60,6 +65,7 @@ export function Navbar() {
           </div>
           <ul
             tabIndex={0}
+            data-testid="mobile-nav-menu"
             className="dropdown-content menu z-50 p-2 shadow bg-base-100 rounded-box w-56 mt-3"
           >
             <MobileNav />

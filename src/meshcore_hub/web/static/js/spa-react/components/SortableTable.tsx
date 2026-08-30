@@ -57,10 +57,18 @@ export function SortableTableHeader({
 
   const url = buildSortUrl(basePath, params, sortKey, nextOrder);
 
+  const ariaSort =
+    currentSort !== sortKey
+      ? "none"
+      : currentOrder === "asc"
+        ? "ascending"
+        : "descending";
+
   return (
-    <th>
+    <th aria-sort={ariaSort}>
       <Link
         to={url}
+        data-testid={`sort-header-${sortKey}`}
         className="link link-hover inline-flex items-center gap-1 no-underline"
         onClick={(e) => e.stopPropagation()}
       >
@@ -105,6 +113,7 @@ export function MobileSortSelect({
       <div className="flex items-center gap-2">
         <span className="text-xs opacity-60">{t("common.sort_by")}</span>
         <select
+          data-testid="mobile-sort-select"
           className="select select-sm flex-1"
           value={currentValue}
           onChange={handleChange}

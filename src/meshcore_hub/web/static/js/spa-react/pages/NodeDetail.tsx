@@ -434,7 +434,7 @@ export function NodeDetailPage() {
         (isOperator || isAdmin) &&
         (adoptedBy.user_id === config.user.sub || isAdmin);
       adoptionCard = (
-        <div className="card bg-base-100 shadow-xl h-full">
+        <div className="card bg-base-100 shadow-xl h-full" data-testid="adoption-card">
           <div className="card-body">
             <h2 className="card-title">{t("nodes.ownership")}</h2>
             <div className="flex items-center justify-between">
@@ -442,6 +442,7 @@ export function NodeDetailPage() {
                 {t("nodes.adopted_by_prefix")}{" "}
                 <Link
                   to={`/profile/${adoptedBy.profile_id}`}
+                  data-testid="adoption-owner"
                   className="link link-hover text-primary"
                 >
                   {ownerName}
@@ -449,6 +450,7 @@ export function NodeDetailPage() {
               </p>
               {canRelease && (
                 <button
+                  data-testid="release-button"
                   className="btn btn-sm btn-outline btn-error"
                   onClick={() => setConfirmRelease(true)}
                 >
@@ -461,12 +463,16 @@ export function NodeDetailPage() {
       );
     } else if (isOperator || isAdmin) {
       adoptionCard = (
-        <div className="card bg-base-100 shadow-xl h-full">
+        <div className="card bg-base-100 shadow-xl h-full" data-testid="adoption-card">
           <div className="card-body">
             <h2 className="card-title">{t("nodes.ownership")}</h2>
             <p className="text-sm opacity-70">{t("nodes.not_adopted")}</p>
             <div className="mt-2">
-              <button className="btn btn-sm btn-primary" onClick={handleAdopt}>
+              <button
+                data-testid="adopt-button"
+                className="btn btn-sm btn-primary"
+                onClick={handleAdopt}
+              >
                 {t("nodes.adopt")}
               </button>
             </div>
@@ -521,7 +527,7 @@ export function NodeDetailPage() {
           </thead>
           <tbody>
             {tags.map((tag) => (
-              <tr key={tag.key}>
+              <tr key={tag.key} data-testid="tag-row" data-tag-key={tag.key}>
                 <td className="font-mono min-w-0 truncate max-w-[8rem]">
                   {tag.key}
                 </td>
@@ -534,12 +540,14 @@ export function NodeDetailPage() {
                 <td>
                   <div className="flex gap-1">
                     <button
+                      data-testid="tag-edit"
                       className="btn btn-xs btn-ghost"
                       onClick={() => openEditTag(tag)}
                     >
                       <IconEdit className="h-4 w-4" />
                     </button>
                     <button
+                      data-testid="tag-delete"
                       className="btn btn-xs btn-ghost"
                       onClick={() => setDeleteKey(tag.key)}
                     >
@@ -633,6 +641,7 @@ export function NodeDetailPage() {
         <div
           className="relative rounded-box overflow-hidden mb-6 shadow-xl"
           style={{ height: 180 }}
+          data-testid="node-mini-map"
         >
           <div className="absolute inset-0 z-0">
             <MapContainer
@@ -656,13 +665,14 @@ export function NodeDetailPage() {
             <MeshQrCode
               value={qrUrl}
               className="bg-white p-2 rounded-box shadow-lg"
+              data-testid="contact-qr"
             />
           </div>
         </div>
       ) : (
         <div className="card bg-base-100 shadow-xl mb-6">
           <div className="card-body flex-row items-center gap-4">
-            <MeshQrCode value={qrUrl} />
+            <MeshQrCode value={qrUrl} data-testid="contact-qr" />
             <p className="text-sm opacity-70">{t("nodes.scan_to_add")}</p>
           </div>
         </div>
@@ -766,11 +776,12 @@ export function NodeDetailPage() {
             <h2 className="card-title">{t("entities.tags")}</h2>
             {tagsTable}
             {canEditTags && (
-              <form className="mt-4" onSubmit={handleAddTag}>
+              <form className="mt-4" data-testid="tag-form" onSubmit={handleAddTag}>
                 <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto_auto] gap-2 items-end">
                   <div className="fieldset">
                     <input
                       type="text"
+                      data-testid="tag-key"
                       className="input input-sm w-full"
                       placeholder={t("common.key")}
                       required
@@ -781,6 +792,7 @@ export function NodeDetailPage() {
                   <div className="fieldset">
                     <input
                       type="text"
+                      data-testid="tag-value"
                       className="input input-sm w-full"
                       placeholder={t("common.value")}
                       value={addValue}
@@ -791,6 +803,7 @@ export function NodeDetailPage() {
                     )}
                   </div>
                   <select
+                    data-testid="tag-type"
                     className="select select-sm w-28"
                     value={addType}
                     onChange={(e) => setAddType(e.target.value)}
@@ -799,7 +812,11 @@ export function NodeDetailPage() {
                     <option value="number">number</option>
                     <option value="boolean">boolean</option>
                   </select>
-                  <button type="submit" className="btn btn-sm btn-primary">
+                  <button
+                    type="submit"
+                    data-testid="tag-add"
+                    className="btn btn-sm btn-primary"
+                  >
                     <IconPlus className="h-4 w-4" /> {t("common.add")}
                   </button>
                 </div>
@@ -823,11 +840,12 @@ export function NodeDetailPage() {
             if (!editSaving) setEditTag(null);
           }}
         >
-          <form className="py-4" onSubmit={handleEditTag}>
+          <form className="py-4" data-testid="tag-edit-modal" onSubmit={handleEditTag}>
               <div className="fieldset mb-4">
                 <label className="fieldset-label">{t("common.value")}</label>
                 <input
                   type="text"
+                  data-testid="tag-edit-value"
                   className="input w-full"
                   value={editValue}
                   onChange={(e) => setEditValue(e.target.value)}
@@ -839,6 +857,7 @@ export function NodeDetailPage() {
               <div className="fieldset mb-4">
                 <label className="fieldset-label">{t("common.type")}</label>
                 <select
+                  data-testid="tag-edit-type"
                   className="select w-full"
                   value={editType}
                   onChange={(e) => setEditType(e.target.value)}
@@ -851,6 +870,7 @@ export function NodeDetailPage() {
               <div className="modal-action">
                 <button
                   type="button"
+                  data-testid="tag-edit-cancel"
                   className="btn"
                   onClick={() => setEditTag(null)}
                   disabled={editSaving}
@@ -859,6 +879,7 @@ export function NodeDetailPage() {
                 </button>
                 <button
                   type="submit"
+                  data-testid="tag-edit-save"
                   className="btn btn-primary"
                   disabled={editSaving}
                 >
