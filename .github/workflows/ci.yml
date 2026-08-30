@@ -189,6 +189,7 @@ jobs:
           path: |
             e2e/playwright-report/
             e2e/test-results/
+            e2e/junit.xml
           retention-days: 14
 
   build:
@@ -218,3 +219,28 @@ jobs:
         with:
           name: dist
           path: dist/
+
+  summary:
+    name: Summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [lint, frontend, test, e2e, build]
+    if: ${{ !cancelled() }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: ".python-version"
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v7
+        continue-on-error: true
+        with:
+          path: results
+
+      - name: Render CI summary
+        env:
+          NEEDS_JSON: ${{ toJson(needs) }}
+        run: python .github/scripts/ci_summary.py
