@@ -6,7 +6,7 @@ import os
 from contextlib import asynccontextmanager, contextmanager
 from typing import Any, AsyncGenerator, Generator
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -16,38 +16,27 @@ from meshcore_hub.common.models.base import Base
 logger = logging.getLogger(__name__)
 
 
-def _resolve_pg_schema(database_url: str, schema: str | None) -> str | None:
+def _resolve_pg_schema(schema: str | None) -> str | None:
     """Resolve the Postgres schema to scope a connection to (search_path).
 
-    Returns None for SQLite (no schema concept). For Postgres, an explicit ``schema``
-    wins; otherwise it falls back to the ``DATABASE_SCHEMA`` env var. The CLI's
-    ``load_dotenv()`` and Docker both populate that var, so runtime entrypoints don't
-    need to thread the schema through every constructor.
+    An explicit ``schema`` wins; otherwise it falls back to the
+    ``DATABASE_SCHEMA`` env var. The CLI's ``load_dotenv()`` and Docker both
+    populate that var, so runtime entrypoints don't need to thread the schema
+    through every constructor.
     """
-    if not database_url.startswith(("postgresql", "postgres")):
-        return None
-    if schema:
-        return schema
-    return os.environ.get("DATABASE_SCHEMA")
+    return schema or os.environ.get("DATABASE_SCHEMA")
 
 
 def _to_async_url(database_url: str) -> str:
-    """Map a sync database URL to its async-driver equivalent.
+    """Map a sync database URL to its asyncpg equivalent.
 
-    Postgres always maps to asyncpg for the async engine, even when the sync URL
-    names a sync driver (e.g. ``postgresql+psycopg2://``, which is what the config
-    assembler produces) — otherwise async sessions would try to use the sync driver.
-    SQLite maps to aiosqlite unless a driver is already specified.
+    The async engine always uses asyncpg, even when the sync URL names a sync
+    driver (e.g. ``postgresql+psycopg2://``, which is what the config
+    assembler produces) — otherwise async sessions would try to use the sync
+    driver.
     """
     scheme = database_url.split("://", 1)[0]
-    dialect = scheme.split("+", 1)[0]
-    if dialect in ("postgresql", "postgres"):
-        return database_url.replace(f"{scheme}://", "postgresql+asyncpg://", 1)
-    if dialect == "sqlite":
-        if "+" in scheme:
-            return database_url
-        return database_url.replace("sqlite://", "sqlite+aiosqlite://", 1)
-    return database_url
+    return database_url.replace(f"{scheme}://", "postgresql+asyncpg://", 1)
 
 
 def create_database_engine(
@@ -60,67 +49,41 @@ def create_database_engine(
     Args:
         database_url: SQLAlchemy database URL
         echo: Enable SQL query logging
-        schema: Postgres schema to scope connections to via search_path. Defaults to
-            the DATABASE_SCHEMA env var when not given. Ignored for SQLite.
+        schema: Postgres schema to scope connections to via search_path.
+            Defaults to the DATABASE_SCHEMA env var when not given.
 
     Returns:
         SQLAlchemy Engine instance
     """
     connect_args: dict[str, Any] = {}
-    engine_kwargs: dict[str, Any] = {}
 
-    # SQLite-specific configuration
-    if database_url.startswith("sqlite"):
-        connect_args["check_same_thread"] = False
-
-    # Scope Postgres connections to the configured schema via search_path and pin
-    # the session timezone to UTC so func.date(<timestamptz>) truncates on the UTC
-    # day boundary — matching SQLite, which stores UTC text. This keeps the models
-    # schema-agnostic (no hardcoded schema=) so the same code serves SQLite,
-    # single-instance Postgres, and multiple schema-isolated instances on one cluster.
-    resolved_schema = _resolve_pg_schema(database_url, schema)
-    is_postgres = database_url.startswith(("postgresql", "postgres"))
-    if is_postgres:
-        options_parts: list[str] = []
-        if resolved_schema:
-            options_parts.append(f"-csearch_path={resolved_schema}")
-        options_parts.append("-ctimezone=UTC")
-        connect_args["options"] = " ".join(options_parts)
+    # Scope connections to the configured schema via search_path and pin the
+    # session timezone to UTC so func.date(<timestamptz>) truncates on the UTC
+    # day boundary — the collector writes UTC, so day buckets must line up on
+    # it. This keeps the models schema-agnostic (no hardcoded schema=) so the
+    # same code serves single-instance Postgres and multiple schema-isolated
+    # instances on one cluster.
+    resolved_schema = _resolve_pg_schema(schema)
+    options_parts: list[str] = []
+    if resolved_schema:
+        options_parts.append(f"-csearch_path={resolved_schema}")
+    options_parts.append("-ctimezone=UTC")
+    connect_args["options"] = " ".join(options_parts)
 
     # Size the pool above the default Starlette threadpool (~40 threads) so
-    # concurrent request handlers don't block waiting for a connection. Applies
-    # to file-based SQLite and networked backends (e.g. a future Postgres).
-    # In-memory SQLite uses a non-overflow pool, so skip these args there.
-    is_memory_sqlite = database_url in ("sqlite://", "sqlite:///:memory:")
-    if not is_memory_sqlite:
-        engine_kwargs["pool_size"] = 20
-        engine_kwargs["max_overflow"] = 30
+    # concurrent request handlers don't block waiting for a connection.
+    engine_kwargs: dict[str, Any] = {
+        "pool_size": 20,
+        "max_overflow": 30,
+    }
 
-    engine = create_engine(
+    return create_engine(
         database_url,
         echo=echo,
         connect_args=connect_args,
         pool_pre_ping=True,
         **engine_kwargs,
     )
-
-    # Apply SQLite pragmas on every new connection
-    if database_url.startswith("sqlite"):
-
-        @event.listens_for(engine, "connect")
-        def set_sqlite_pragma(dbapi_connection, connection_record):  # type: ignore
-            cursor = dbapi_connection.cursor()
-            # WAL lets readers run concurrently with a single writer (the
-            # collector), and busy_timeout waits instead of immediately raising
-            # "database is locked" under contention. synchronous=NORMAL is safe
-            # under WAL and faster.
-            cursor.execute("PRAGMA journal_mode=WAL")
-            cursor.execute("PRAGMA busy_timeout=5000")
-            cursor.execute("PRAGMA synchronous=NORMAL")
-            cursor.execute("PRAGMA foreign_keys=ON")
-            cursor.close()
-
-    return engine
 
 
 def create_session_factory(engine: Engine) -> sessionmaker[Session]:
@@ -175,19 +138,11 @@ class DatabaseManager:
             database_url: SQLAlchemy database URL
             echo: Enable SQL query logging
             schema: Postgres schema to scope connections to (search_path). Defaults to
-                the DATABASE_SCHEMA env var when not given; ignored for SQLite.
+                the DATABASE_SCHEMA env var when not given.
         """
         self.database_url = database_url
         self._echo = echo
-        self._schema = _resolve_pg_schema(database_url, schema)
-
-        # Ensure parent directory exists for SQLite databases
-        if database_url.startswith("sqlite:///"):
-            from pathlib import Path
-
-            # Extract path from sqlite:///path/to/db.sqlite
-            db_path = Path(database_url.replace("sqlite:///", ""))
-            db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._schema = _resolve_pg_schema(schema)
 
         self.engine = create_database_engine(database_url, echo=echo, schema=schema)
         self.session_factory = create_session_factory(self.engine)
@@ -204,31 +159,24 @@ class DatabaseManager:
         from sqlalchemy.ext.asyncio import async_sessionmaker
 
         async_url = _to_async_url(self.database_url)
-        async_connect_args: dict[str, Any] = {}
-        # asyncpg sets search_path and timezone via server_settings (not the libpq
-        # -c options string the sync psycopg2 engine uses). self._schema is already
-        # resolved (explicit arg or DATABASE_SCHEMA env) and None for SQLite.
-        # Timezone is pinned to UTC unconditionally for Postgres so day boundaries
-        # match SQLite's UTC-text truncation.
-        is_postgres = self.database_url.startswith(("postgresql", "postgres"))
-        if is_postgres:
-            server_settings: dict[str, str] = {"timezone": "UTC"}
-            if self._schema:
-                server_settings["search_path"] = self._schema
-            async_connect_args["server_settings"] = server_settings
+        # asyncpg sets search_path and timezone via server_settings (not the
+        # libpq -c options string the sync psycopg2 engine uses). self._schema
+        # is already resolved (explicit arg or DATABASE_SCHEMA env). Timezone
+        # is pinned to UTC so day boundaries line up with the collector's
+        # UTC writes.
+        server_settings: dict[str, str] = {"timezone": "UTC"}
+        if self._schema:
+            server_settings["search_path"] = self._schema
+        async_connect_args: dict[str, Any] = {"server_settings": server_settings}
 
         # Mirror the sync engine's pool configuration (see
         # create_database_engine): without pool_pre_ping a Postgres restart
-        # leaves stale asyncpg connections in the pool that error on next
-        # use. In-memory SQLite uses a non-overflow pool, so skip there.
-        is_memory_sqlite = self.database_url in (
-            "sqlite+aiosqlite://",
-            "sqlite+aiosqlite:///:memory:",
-        )
-        async_engine_kwargs: dict[str, Any] = {"pool_pre_ping": True}
-        if not is_memory_sqlite:
-            async_engine_kwargs["pool_size"] = 20
-            async_engine_kwargs["max_overflow"] = 30
+        # leaves stale asyncpg connections in the pool that error on next use.
+        async_engine_kwargs: dict[str, Any] = {
+            "pool_pre_ping": True,
+            "pool_size": 20,
+            "max_overflow": 30,
+        }
 
         self._async_engine = create_async_engine(
             async_url,
@@ -236,21 +184,6 @@ class DatabaseManager:
             connect_args=async_connect_args,
             **async_engine_kwargs,
         )
-
-        # Apply the same SQLite pragmas as the sync engine (see
-        # create_database_engine) for the async engine's connections.
-        if self.database_url.startswith("sqlite"):
-
-            @event.listens_for(self._async_engine.sync_engine, "connect")
-            def set_sqlite_pragma_async(
-                dbapi_connection: object, connection_record: object
-            ) -> None:
-                cursor = dbapi_connection.cursor()  # type: ignore[attr-defined]
-                cursor.execute("PRAGMA journal_mode=WAL")
-                cursor.execute("PRAGMA busy_timeout=5000")
-                cursor.execute("PRAGMA synchronous=NORMAL")
-                cursor.execute("PRAGMA foreign_keys=ON")
-                cursor.close()
 
         self._async_session_factory = async_sessionmaker(
             self._async_engine,

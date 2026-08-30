@@ -8,13 +8,13 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
-    Insert,
     Integer,
     Index,
     String,
     UniqueConstraint,
     update,
 )
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
 
 from meshcore_hub.common.models.base import Base, TimestampMixin, UUIDMixin, utc_now
@@ -104,7 +104,8 @@ def add_event_observer(
 ) -> bool:
     """Add an observer to an event, handling duplicates gracefully.
 
-    Uses INSERT OR IGNORE to handle the unique constraint on (event_hash, observer_node_id).
+    Uses a Postgres ``INSERT ... ON CONFLICT DO NOTHING`` against the unique
+    constraint on (event_hash, observer_node_id).
 
     Args:
         session: SQLAlchemy session
@@ -122,10 +123,6 @@ def add_event_observer(
 
     now = observed_at or datetime.now(timezone.utc)
 
-    # Both SQLite and Postgres expose on_conflict_do_nothing() with the same signature,
-    # but the INSERT construct must come from the matching dialect or it emits SQL for
-    # the wrong backend. Build the statement in each branch (rather than aliasing the
-    # insert() function) so the two dialect-specific Insert types stay distinct.
     values = {
         "id": str(uuid4()),
         "event_type": event_type,
@@ -137,25 +134,11 @@ def add_event_observer(
         "created_at": now,
         "updated_at": now,
     }
-    conflict_cols = ["event_hash", "observer_node_id"]
-    stmt: Insert
-
-    if session.get_bind().dialect.name == "postgresql":
-        from sqlalchemy.dialects.postgresql import insert as pg_insert
-
-        stmt = (
-            pg_insert(EventObserver)
-            .values(**values)
-            .on_conflict_do_nothing(index_elements=conflict_cols)
-        )
-    else:
-        from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-
-        stmt = (
-            sqlite_insert(EventObserver)
-            .values(**values)
-            .on_conflict_do_nothing(index_elements=conflict_cols)
-        )
+    stmt = (
+        pg_insert(EventObserver)
+        .values(**values)
+        .on_conflict_do_nothing(index_elements=["event_hash", "observer_node_id"])
+    )
     result = session.execute(stmt)
     rowcount = getattr(result, "rowcount", 0)
 

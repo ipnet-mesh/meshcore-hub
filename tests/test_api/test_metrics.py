@@ -83,11 +83,9 @@ class TestMetricsAuth:
         assert response.status_code == 200
 
     def test_deny_by_default_when_no_read_key(
-        self, test_db_path, api_db_engine, mock_mqtt, mock_db_manager
+        self, db_url, api_db_engine, mock_mqtt, mock_db_manager
     ):
         """Unauthenticated /metrics is denied when no key is configured."""
-        db_url = f"sqlite:///{test_db_path}"
-
         with patch("meshcore_hub.api.app._db_manager", mock_db_manager):
             app = create_app(
                 database_url=db_url,
@@ -375,11 +373,9 @@ class TestMetricsDisabled:
     """Tests for when metrics are disabled."""
 
     def test_metrics_404_when_disabled(
-        self, test_db_path, api_db_engine, mock_mqtt, mock_db_manager
+        self, db_url, api_db_engine, mock_mqtt, mock_db_manager
     ):
         """Test that /metrics returns 404 when disabled."""
-        db_url = f"sqlite:///{test_db_path}"
-
         with patch("meshcore_hub.api.app._db_manager", mock_db_manager):
             app = create_app(
                 database_url=db_url,

@@ -3,7 +3,7 @@
 from enum import Enum
 from typing import Optional
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,13 +24,6 @@ class MQTTTransport(str, Enum):
     WEBSOCKETS = "websockets"
 
 
-class DatabaseBackend(str, Enum):
-    """Database backend selector."""
-
-    SQLITE = "sqlite"
-    POSTGRES = "postgres"
-
-
 class CommonSettings(BaseSettings):
     """Common settings shared by all components."""
 
@@ -46,87 +39,101 @@ class CommonSettings(BaseSettings):
         description="Base directory for service data (e.g., ./data or /data)",
     )
 
-    # Database backend selection and connection components.
-    # SQLite is the zero-config default; set DATABASE_BACKEND=postgres (plus the
-    # DATABASE_* component vars) to use Postgres. An explicit DATABASE_URL overrides
-    # everything (managed/external Postgres, tests).
-    database_backend: DatabaseBackend = Field(
-        default=DatabaseBackend.SQLITE,
-        description="Database backend: 'sqlite' (default) or 'postgres'",
+    # Database connection. PostgreSQL is the only backend since v0.19: either
+    # an explicit DATABASE_URL or the DATABASE_* components below. The legacy
+    # DATABASE_BACKEND selector is kept for one release purely so a leftover
+    # `sqlite` setting fails with a targeted upgrade error instead of being
+    # silently ignored; the field is removed in v0.20.
+    database_backend: str = Field(
+        default="postgres",
+        description=(
+            "Legacy backend selector retained for one release; 'postgres' is "
+            "accepted (no-op) and 'sqlite' is rejected (support removed in v0.19)"
+        ),
     )
     database_url: Optional[str] = Field(
         default=None,
         description=(
-            "Explicit SQLAlchemy database URL; overrides DATABASE_BACKEND/component vars. "
-            "Default: sqlite:///{data_home}/collector/meshcore.db"
+            "Explicit SQLAlchemy PostgreSQL URL; overrides the DATABASE_* "
+            "component vars (managed/external Postgres, tests)"
         ),
     )
     database_host: Optional[str] = Field(
         default=None,
-        description="Postgres host (required when DATABASE_BACKEND=postgres)",
+        description="PostgreSQL host (required unless DATABASE_URL is set)",
     )
-    database_port: int = Field(default=5432, description="Postgres port")
+    database_port: int = Field(default=5432, description="PostgreSQL port")
     database_name: str = Field(
-        default="meshcorehub", description="Postgres database name"
+        default="meshcorehub", description="PostgreSQL database name"
     )
     database_schema: str = Field(
         default="meshcorehub",
-        description="Postgres schema (namespace); override per instance on a shared cluster",
+        description="PostgreSQL schema (namespace); override per instance on a shared cluster",
     )
-    database_user: str = Field(default="meshcorehub", description="Postgres role/user")
+    database_user: str = Field(
+        default="meshcorehub", description="PostgreSQL role/user"
+    )
     database_password: Optional[str] = Field(
         default=None,
-        description="Postgres password (required when DATABASE_BACKEND=postgres)",
+        description="PostgreSQL password (required unless DATABASE_URL is set)",
     )
+
+    @field_validator("database_backend", mode="before")
+    @classmethod
+    def _validate_legacy_backend(cls, value: object) -> str:
+        """Reject the removed SQLite backend with a targeted upgrade error."""
+        raw = "postgres" if value is None else str(value).strip().lower()
+        if raw == "sqlite":
+            raise ValueError(
+                "SQLite support was removed in v0.19 — migrate with "
+                "`meshcore-hub db migrate-to-postgres`, see docs/upgrading.md"
+            )
+        if raw != "postgres":
+            raise ValueError(
+                f"DATABASE_BACKEND must be 'postgres' (the only supported "
+                f"backend), got {value!r}"
+            )
+        return raw
 
     @property
     def effective_database_url(self) -> str:
-        """Resolve the SQLAlchemy database URL.
+        """Resolve the SQLAlchemy PostgreSQL URL.
 
-        Precedence: explicit DATABASE_URL > postgres (assembled from components) >
-        SQLite default under DATA_HOME. Fails fast for a misconfigured postgres backend
-        rather than silently falling back to SQLite.
+        Precedence: explicit DATABASE_URL > URL assembled from the DATABASE_*
+        components. Fails fast when components are missing rather than
+        silently falling back to anything.
         """
         if self.database_url:
             return self.database_url
-        if self.database_backend == DatabaseBackend.POSTGRES:
-            missing = [
-                name
-                for name, value in (
-                    ("DATABASE_HOST", self.database_host),
-                    ("DATABASE_NAME", self.database_name),
-                    ("DATABASE_USER", self.database_user),
-                    ("DATABASE_PASSWORD", self.database_password),
-                )
-                if not value
-            ]
-            if missing:
-                raise ValueError(
-                    "DATABASE_BACKEND=postgres requires: " + ", ".join(missing)
-                )
-            from urllib.parse import quote_plus
-
-            user = quote_plus(self.database_user)
-            password = quote_plus(self.database_password or "")
-            return (
-                f"postgresql+psycopg2://{user}:{password}"
-                f"@{self.database_host}:{self.database_port}/{self.database_name}"
+        missing = [
+            name
+            for name, value in (
+                ("DATABASE_HOST", self.database_host),
+                ("DATABASE_NAME", self.database_name),
+                ("DATABASE_USER", self.database_user),
+                ("DATABASE_PASSWORD", self.database_password),
             )
-        from pathlib import Path
+            if not value
+        ]
+        if missing:
+            raise ValueError(
+                "PostgreSQL connection is not configured: missing "
+                + ", ".join(missing)
+                + " (or set DATABASE_URL)"
+            )
+        from urllib.parse import quote_plus
 
-        db_path = Path(self.data_home) / "collector" / "meshcore.db"
-        return f"sqlite:///{db_path}"
+        user = quote_plus(self.database_user)
+        password = quote_plus(self.database_password or "")
+        return (
+            f"postgresql+psycopg2://{user}:{password}"
+            f"@{self.database_host}:{self.database_port}/{self.database_name}"
+        )
 
     @property
-    def effective_database_schema(self) -> Optional[str]:
-        """Postgres schema to scope connections to, or None for SQLite.
-
-        Returns the schema only when the effective URL is Postgres; SQLite has no
-        schema concept, so callers leave search_path untouched.
-        """
-        if self.effective_database_url.startswith(("postgresql", "postgres")):
-            return self.database_schema
-        return None
+    def effective_database_schema(self) -> str:
+        """PostgreSQL schema to scope connections to (search_path)."""
+        return self.database_schema
 
     # Logging
     log_level: LogLevel = Field(default=LogLevel.INFO, description="Logging level")

@@ -1,8 +1,7 @@
 """Tests for the spam scoring module (collector/spam.py).
 
-The DB-touching tests run against whichever backend the shared ``db_manager``
-fixture is configured for (SQLite by default, Postgres when
-``TEST_DATABASE_BACKEND=postgres``).
+The DB-touching tests run against the per-worker Postgres schema via the
+shared ``db_manager`` fixture.
 """
 
 from dataclasses import replace

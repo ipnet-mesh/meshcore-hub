@@ -213,6 +213,28 @@ ends with the full suite green.
   - `tests/test_collector/conftest.py::async_db_session` (in-memory
     `sqlite+aiosqlite:///:memory:` + pragma listener) → async session from the
     worker-schema `DatabaseManager` (production `async_session()` path).
+  - `tests/test_collector/test_cli.py` — `TestChannelCommands` has its own
+    `cli_db_url` fixture (line 128) creating real temp-file SQLite databases
+    (usages at 287, 406, 439, 699), plus `sqlite:///` mock-settings URL
+    strings (lines 48, 66, 93, 113) → point `cli_db_url` at the worker-schema
+    Postgres engine (truncate between tests) and sweep the mock URLs.
+  - `tests/test_api/test_metrics.py` (lines 89, 381) — builds isolated app
+    instances from `sqlite:///{test_db_path}`, consuming the `test_db_path`
+    fixture Phase 1 deletes → create them against the worker-schema Postgres
+    URL (truncate to isolate from the shared client).
+  - `tests/test_collector/test_tag_import.py::db_manager` (line 180, in-memory
+    `DatabaseManager`) → worker-schema `DatabaseManager`.
+  - `tests/test_collector/test_subscriber.py:1376` —
+    `database_url="sqlite:///:memory:"` factory arg (MQTT is mocked, the URL
+    is opaque) → sweep to the Postgres test URL.
+  - Reword stale SQLite comments/docstrings the Gate 2 grep would flag:
+    `tests/test_api/test_dashboard.py:30,1366` (the `_date_bucket_key` tests
+    themselves stay — the helper is dialect-neutral),
+    `tests/test_collector/test_handlers/test_contacts.py:76`,
+    `tests/test_api/test_user_profiles.py:103`,
+    `tests/test_api/test_routes.py:521` ("the shared SQLite file" — stale once
+    fixtures convert), `tests/test_collector/test_spam.py:4`,
+    `tests/test_collector/test_cli.py:126`.
   - `tests/test_api/conftest.py` and `tests/test_collector/conftest.py`
     proper: delete the `db_backend == "postgres"` branches and the SQLite
     pragma listeners; `api_db_engine` / `db_manager` use the schema-scoped
@@ -254,7 +276,8 @@ ends with the full suite green.
 - `api/routes/dashboard.py`: update the SQLite-contrast comments (lines 104,
   433, 451); the `func.date()` str-vs-date coercion stays (it is the
   dialect-neutral fix from plan `20260616-2023-fix-postgres-charts-flatline`).
-  `collector/spam.py` has no SQLite references (verified) — no change there.
+  `collector/spam.py` needs only a docstring reword — its module docstring
+  says "Postgres/SQLite" (line 7); no code changes there.
 - `common/db_migrate.py` + the `db migrate-to-postgres` command in
   `__main__.py`: **kept** in v0.19 (decided); annotate the module docstring
   with its v0.20 removal.
@@ -395,9 +418,10 @@ ends with the full suite green.
 
 ## Review
 
-**Status**: Approved with Changes
+**Status**: Approved
 
-**Reviewed**: 2026-08-29
+**Reviewed**: 2026-08-30 (second pass; first review 2026-08-29 resolved the
+original open questions — those resolutions are retained below)
 
 ### Resolutions
 
@@ -436,13 +460,25 @@ ends with the full suite green.
   `tests/test_api/test_app_factory.py:52-79` (asserts SQLite default URL
   resolution) and cosmetic mock-URL sweep in `tests/test_api/test_cache.py`.
 - **Factual correction:** Phase 2 originally cited SQLite comments in
-  `collector/spam.py`; verified no SQLite references exist there. Removed;
-  `api/routes/dashboard.py:104,433,451` confirmed as the real sites.
+  `collector/spam.py`; the first review found no *code* references there and
+  `api/routes/dashboard.py:104,433,451` were confirmed as the real sites.
+  Second pass correction: `collector/spam.py:7` (module docstring) does say
+  "Postgres/SQLite" — a wording-only fix is now listed in Phase 2 (Gate 2's
+  case-insensitive grep would otherwise fail).
 - **Connection-pool pressure (new, found in review):** added Risk + mitigation
   (`max_connections=200` on the test container).
 - **mesh-link-monitoring coordination (new, found in review):** approved but
   unimplemented plan designs dual-backend code; added Risk with ordering rule
   (this plan lands first; link-monitoring implementation drops SQLite arms).
+- **Missed real-SQLite test files (second pass, 2026-08-30):** Phase 1 now
+  also enumerates `tests/test_collector/test_cli.py` (`TestChannelCommands`
+  real temp-file SQLite DBs + mock URLs), `tests/test_api/test_metrics.py:89,381`
+  (isolated app instances via the `test_db_path` fixture being deleted),
+  `tests/test_collector/test_tag_import.py:180` (in-memory `DatabaseManager`),
+  and `tests/test_collector/test_subscriber.py:1376` (`:memory:` factory arg),
+  plus wording sweeps in six comment-only test locations. All previously would
+  have surfaced only as Gate 2 grep failures or broken tests after fixture
+  deletion.
 
 ### Remaining Action Items
 

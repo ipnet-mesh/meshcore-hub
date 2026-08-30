@@ -2,6 +2,56 @@
 
 This guide covers upgrading from a previous MeshCore Hub release to the current version. Check the relevant version section below before upgrading.
 
+## v0.19.0
+
+### PostgreSQL-only (SQLite support removed)
+
+**⚠️ Breaking:** SQLite is no longer a supported database backend. PostgreSQL is the only backend — announced in v0.14 and removed here. Existing SQLite deployments must migrate their data (runbook below) before upgrading.
+
+What changed:
+
+- **The bundled `postgres` container is part of the default `core` compose profile.** A plain `docker compose up` now starts PostgreSQL alongside the app services — still zero-config, including a working default password (`meshcorehub`, overridable via `DATABASE_PASSWORD`). **Production deployments must override `DATABASE_PASSWORD`** — the default is dev-only (the container is not published outside the compose network, but don't rely on that).
+- **`DATABASE_BACKEND` is rejected, not ignored.** A leftover `DATABASE_BACKEND=sqlite` in your environment now fails at startup with a targeted error pointing at the migration command; `DATABASE_BACKEND=postgres` is accepted as a no-op. Remove the variable — the field itself is removed in v0.20.
+- **Missing database configuration fails fast.** With neither `DATABASE_URL` nor the `DATABASE_*` components (`DATABASE_HOST`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD`) set, services refuse to start with an error naming the missing variables — no silent fallback.
+- **Tests run against PostgreSQL.** The backend suite requires a Postgres instance (`make test-db-up` starts a throwaway one; `TEST_POSTGRES_URL` points at your own). CI uses a `postgres:17` service container.
+- The `sqlite3` CLI was removed from the Docker image, and `aiosqlite` is no longer a dependency (the retained migration command reads SQLite via Python's stdlib driver only).
+
+#### Migrating an existing SQLite deployment in place
+
+Downtime is required while writers are stopped; the source SQLite file is never modified.
+
+1. **Back up first.** Copy your `meshcore.db` (or back up the `hub_data` volume — see [Backup & Restore](maintenance.md)).
+2. **Stop the writers** (collector and api):
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.dev.yml stop collector api
+   ```
+3. **Bring up Postgres and create the schema** (on the v0.19 image; the bundled container starts with the `core` profile):
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres
+   docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm migrate
+   ```
+   `migrate` runs `db upgrade`, creating the schema, all tables (with correct native types — `boolean`, `json`, `timestamptz`), and stamping `alembic_version`.
+4. **Copy the data** with the built-in command:
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.dev.yml \
+     run --rm migrate meshcore-hub db migrate-to-postgres
+   ```
+   It defaults the source to `sqlite:///{DATA_HOME}/collector/meshcore.db` and the target to your configured `DATABASE_*` connection. It copies every table in foreign-key order through the ORM (so SQLite's dynamically typed values are converted correctly — `0/1` → `boolean`, JSON text → `json`, naive datetimes → UTC `timestamptz`), then prints a per-table source-vs-target row-count reconciliation and fails on any mismatch. Use `--dry-run` to preview counts first, and `--truncate` to overwrite a non-empty target.
+5. **Remove `DATABASE_BACKEND` from your `.env`** (any value) and bring the stack back up:
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile core up -d
+   ```
+
+> **Managed Postgres / non-superuser roles:** the migration disables foreign-key triggers during the copy via `session_replication_role = replica`, which requires a superuser. When the target role is not a superuser (typical for managed Postgres), the command automatically falls back to copying in parent-first order instead. Pass `--no-replication-role` to force the fallback explicitly.
+
+#### Scheduled for removal in v0.20
+
+The following are retained through v0.19 for upgrade compatibility and removed in v0.20:
+
+- the `meshcore-hub db migrate-to-postgres` command and its `common/db_migrate.py` module,
+- the `database_backend` settings field (the `DATABASE_BACKEND` rejection),
+- the `[postgres]` pip extra alias (the drivers are core dependencies since v0.19).
+
 ## v0.18.0
 
 ### Security hardening (fail-closed defaults)
