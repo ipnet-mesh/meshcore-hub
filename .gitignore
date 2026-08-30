@@ -58,6 +58,8 @@ htmlcov/
 .coverage.*
 .cache
 nosetests.xml
+junit.xml
+vitest-junit.xml
 coverage.xml
 *.cover
 *.py.cover

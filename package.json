@@ -7,7 +7,7 @@
   "scripts": {
     "build": "node build.js",
     "dev": "vite --config vite.config.ts",
-    "test:frontend": "vitest run",
+    "test:frontend": "vitest run --reporter=default --reporter=junit --outputFile.junit=vitest-junit.xml",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test --config=e2e/playwright.config.ts",
     "typecheck:e2e": "tsc -p e2e/tsconfig.json --noEmit"
