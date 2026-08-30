@@ -100,22 +100,14 @@ class TestListProfiles:
         api_db_session.commit()
 
         # Temporarily disable FK enforcement to simulate an orphaned adoption
-        # (node deleted while the adoption record persists). SQLite uses
-        # PRAGMA; Postgres uses session_replication_role = replica.
-        dialect = api_db_session.bind.dialect.name  # type: ignore[union-attr]
-        if dialect == "postgresql":
-            api_db_session.execute(text("SET session_replication_role = replica"))
-        else:
-            api_db_session.execute(text("PRAGMA foreign_keys=OFF"))
+        # (node deleted while the adoption record persists).
+        api_db_session.execute(text("SET session_replication_role = replica"))
         api_db_session.execute(
             text("DELETE FROM nodes WHERE id = :id"),
             {"id": sample_node.id},
         )
         api_db_session.commit()
-        if dialect == "postgresql":
-            api_db_session.execute(text("SET session_replication_role = DEFAULT"))
-        else:
-            api_db_session.execute(text("PRAGMA foreign_keys=ON"))
+        api_db_session.execute(text("SET session_replication_role = DEFAULT"))
 
         response = client_no_auth.get(
             "/api/v1/user/profiles",

@@ -5,7 +5,7 @@ VOLUMES = $(COMPOSE_PROJECT_NAME)_data $(COMPOSE_PROJECT_NAME)_mqtt_data \
           $(COMPOSE_PROJECT_NAME)_observer_data
 
 .PHONY: build up down logs backup restore test test-cov test-unit test-frontend \
-        e2e-build e2e-up e2e-down e2e-seed e2e-test
+        test-db-up test-db-down e2e-build e2e-up e2e-down e2e-seed e2e-test
 
 build:
 	docker compose $(COMPOSE_FILES) --profile all build --no-cache
@@ -36,20 +36,52 @@ restore:
 		alpine sh -c "cd / && tar xzf /backup/$$(basename $(FILE))"
 
 # --- Tests ---------------------------------------------------------------
+# Backend tests run against PostgreSQL only: `test`, `test-cov`, and
+# `test-unit` start the throwaway test DB automatically and stop it again
+# afterwards — even when pytest fails (EXIT trap). Set TEST_POSTGRES_URL to
+# point at your own instance and the automatic up/down is skipped.
+# For direct pytest runs, start it manually with `make test-db-up`.
 # Coverage is opt-in (use test-cov). Dev loop runs in parallel across cores.
 # `test` runs the backend suite then the frontend (vitest) suite.
 test:
-	pytest -nauto --no-cov
-	$(MAKE) test-frontend
+	set -e; \
+	if [ -z "$$TEST_POSTGRES_URL" ]; then \
+		$(MAKE) --no-print-directory test-db-up; \
+		trap '$(MAKE) --no-print-directory test-db-down' EXIT; \
+	fi; \
+	pytest -nauto --no-cov; \
+	$(MAKE) --no-print-directory test-frontend
 
 test-cov:
+	set -e; \
+	if [ -z "$$TEST_POSTGRES_URL" ]; then \
+		$(MAKE) --no-print-directory test-db-up; \
+		trap '$(MAKE) --no-print-directory test-db-down' EXIT; \
+	fi; \
 	pytest --cov=meshcore_hub --cov-report=term-missing
 
 test-unit:
+	set -e; \
+	if [ -z "$$TEST_POSTGRES_URL" ]; then \
+		$(MAKE) --no-print-directory test-db-up; \
+		trap '$(MAKE) --no-print-directory test-db-down' EXIT; \
+	fi; \
 	pytest -nauto --no-cov tests/test_common/ tests/test_api/ tests/test_collector/ tests/test_web/
 
 test-frontend:
 	npm run test:frontend
+
+# Throwaway PostgreSQL for the backend suite (127.0.0.1:55432, dev-only creds,
+# ephemeral tmpfs storage). pytest fails fast with a hint if it is unreachable.
+# The project name is pinned so a COMPOSE_PROJECT_NAME set in .env (the dev
+# stack) can never make `down` target the dev services.
+TEST_DB_COMPOSE = docker compose -f docker-compose.test-db.yml -p meshcore-hub-test-db
+
+test-db-up:
+	$(TEST_DB_COMPOSE) up -d --wait
+
+test-db-down:
+	$(TEST_DB_COMPOSE) down -v --remove-orphans
 
 # --- E2E (Playwright) ---------------------------------------------------
 # Self-contained throwaway stack (own ephemeral Postgres, isolated volumes).

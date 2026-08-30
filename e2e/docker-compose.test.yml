@@ -50,7 +50,6 @@ services:
       - test_data:/data
     environment:
       - DATA_HOME=/data
-      - DATABASE_BACKEND=postgres
       - DATABASE_HOST=postgres
       - DATABASE_PORT=5432
       - DATABASE_NAME=meshcorehub
@@ -126,7 +125,6 @@ services:
       - MQTT_USERNAME=test-admin
       - MQTT_PASSWORD=test-password
       - DATA_HOME=/data
-      - DATABASE_BACKEND=postgres
       - DATABASE_HOST=postgres
       - DATABASE_PORT=5432
       - DATABASE_NAME=meshcorehub
@@ -169,7 +167,6 @@ services:
       - MQTT_USERNAME=test-admin
       - MQTT_PASSWORD=test-password
       - DATA_HOME=/data
-      - DATABASE_BACKEND=postgres
       - DATABASE_HOST=postgres
       - DATABASE_PORT=5432
       - DATABASE_NAME=meshcorehub

@@ -7,12 +7,23 @@ from click.testing import CliRunner
 
 from meshcore_hub.collector.cli import _import_channels, _import_routes, collector
 from meshcore_hub.collector.routes import derive_expected_hash
-from meshcore_hub.common.database import DatabaseManager
+from meshcore_hub.common.database import DatabaseManager, create_database_engine
+from meshcore_hub.common.models import Base
 from meshcore_hub.common.models.channel import Channel
 from meshcore_hub.common.models.node import Node
 from meshcore_hub.common.models.route import Route
 from meshcore_hub.common.models.route_node import RouteNode
 from meshcore_hub.common.models.route_observer import RouteObserver
+
+# Opaque URL handed to mocked settings (nothing connects to it).
+_MOCK_PG_URL = "postgresql+psycopg2://meshcorehub:pw@localhost:5432/meshcorehub"
+
+
+def _truncate_all(engine) -> None:
+    """Delete rows from every table in child-first order (FK-safe)."""
+    with engine.begin() as conn:
+        for table in reversed(Base.metadata.sorted_tables):
+            conn.execute(table.delete())
 
 
 def _make_mock_settings(db_url: str, seed_home: str = "/tmp/seed") -> MagicMock:
@@ -45,7 +56,7 @@ class TestCollectorGroup:
 
     def test_collector_without_subcommand_calls_run_service(self):
         runner = CliRunner()
-        mock_settings = _make_mock_settings("sqlite:///tmp/test.db")
+        mock_settings = _make_mock_settings(_MOCK_PG_URL)
 
         with (
             patch(
@@ -63,7 +74,7 @@ class TestCollectorGroup:
 
     def test_collector_with_data_home_override(self):
         runner = CliRunner()
-        mock_settings = _make_mock_settings("sqlite:///default/db")
+        mock_settings = _make_mock_settings(_MOCK_PG_URL)
 
         with (
             patch(
@@ -90,7 +101,7 @@ class TestCollectorRunSubcommand:
 
     def test_run_subcommand_calls_run_service(self):
         runner = CliRunner()
-        mock_settings = _make_mock_settings("sqlite:///tmp/test.db")
+        mock_settings = _make_mock_settings(_MOCK_PG_URL)
 
         with (
             patch(
@@ -110,7 +121,7 @@ class TestCollectorSeedSubcommand:
 
     def test_seed_command_help(self):
         runner = CliRunner()
-        mock_settings = _make_mock_settings("sqlite:///tmp/test.db")
+        mock_settings = _make_mock_settings(_MOCK_PG_URL)
 
         with patch(
             "meshcore_hub.common.config.get_collector_settings",
@@ -123,16 +134,23 @@ class TestCollectorSeedSubcommand:
 
 
 class TestChannelCommands:
-    """Integration tests for channel CLI commands using real SQLite."""
+    """Integration tests for channel CLI commands against worker-schema Postgres."""
 
     @pytest.fixture
-    def cli_db_url(self, tmp_path):
-        db_path = tmp_path / "test.db"
-        db_url = f"sqlite:///{db_path}"
-        db = DatabaseManager(db_url)
-        db.create_tables()
-        db.dispose()
-        return db_url
+    def cli_db_url(self, db_url, db_schema, monkeypatch):
+        """Worker-schema Postgres URL for the CLI.
+
+        ``DATABASE_SCHEMA`` is exported so the CLI's own
+        ``DatabaseManager(ctx.obj["database_url"])`` resolves the same schema
+        via the production env fallback.
+        """
+        monkeypatch.setenv("DATABASE_SCHEMA", db_schema)
+        engine = create_database_engine(db_url, schema=db_schema)
+        Base.metadata.create_all(engine)
+        _truncate_all(engine)
+        yield db_url
+        _truncate_all(engine)
+        engine.dispose()
 
     def test_channel_list_empty(self, cli_db_url):
         runner = CliRunner()
@@ -282,11 +300,12 @@ class TestImportChannels:
     """Unit tests for _import_channels YAML import function."""
 
     @pytest.fixture
-    def import_db(self, tmp_path):
-        db_path = tmp_path / "import.db"
-        db = DatabaseManager(f"sqlite:///{db_path}")
+    def import_db(self, db_url, db_schema):
+        db = DatabaseManager(db_url, schema=db_schema)
         db.create_tables()
+        _truncate_all(db.engine)
         yield db
+        _truncate_all(db.engine)
         db.dispose()
 
     def _write_yaml(self, tmp_path, content: str) -> str:
@@ -394,7 +413,7 @@ class TestImportChannels:
 class TestChannelSeedImport:
     """Integration tests for seed command with channels.yaml."""
 
-    def test_seed_imports_channels_yaml(self, tmp_path):
+    def test_seed_imports_channels_yaml(self, tmp_path, db_url, db_schema, monkeypatch):
         runner = CliRunner()
         seed_dir = tmp_path / "seed"
         seed_dir.mkdir()
@@ -402,10 +421,11 @@ class TestChannelSeedImport:
             "SeededCh: AABBCCDDEEFF00112233445566778899\n"
         )
 
-        db_path = tmp_path / "seed_test.db"
-        db_url = f"sqlite:///{db_path}"
-        db = DatabaseManager(db_url)
+        # DATABASE_SCHEMA routes the CLI's own DatabaseManager to the worker schema.
+        monkeypatch.setenv("DATABASE_SCHEMA", db_schema)
+        db = DatabaseManager(db_url, schema=db_schema)
         db.create_tables()
+        _truncate_all(db.engine)
         db.dispose()
 
         mock_settings = _make_mock_settings(db_url, seed_home=str(seed_dir))
@@ -423,22 +443,22 @@ class TestChannelSeedImport:
         assert result.exit_code == 0
         assert "Channels: 1 created" in result.output
 
-        db = DatabaseManager(db_url)
+        db = DatabaseManager(db_url, schema=db_schema)
         with db.session_scope() as session:
             ch = session.query(Channel).filter(Channel.name == "SeededCh").first()
             assert ch is not None
             assert ch.visibility == "community"
         db.dispose()
 
-    def test_seed_no_seed_files(self, tmp_path):
+    def test_seed_no_seed_files(self, tmp_path, db_url, db_schema, monkeypatch):
         runner = CliRunner()
         empty_seed = tmp_path / "empty_seed"
         empty_seed.mkdir()
 
-        db_path = tmp_path / "noseed.db"
-        db_url = f"sqlite:///{db_path}"
-        db = DatabaseManager(db_url)
+        monkeypatch.setenv("DATABASE_SCHEMA", db_schema)
+        db = DatabaseManager(db_url, schema=db_schema)
         db.create_tables()
+        _truncate_all(db.engine)
         db.dispose()
 
         mock_settings = _make_mock_settings(db_url, seed_home=str(empty_seed))
@@ -681,7 +701,7 @@ class TestImportRoutes:
 class TestRouteSeedImport:
     """Integration tests for the ``seed`` command with routes.yaml."""
 
-    def test_seed_imports_routes_yaml(self, tmp_path):
+    def test_seed_imports_routes_yaml(self, tmp_path, db_url, db_schema, monkeypatch):
         runner = CliRunner()
         seed_dir = tmp_path / "seed"
         seed_dir.mkdir()
@@ -695,10 +715,10 @@ class TestRouteSeedImport:
             f"    path:\n      - '{pk_a}'\n      - '{pk_b}'\n"
         )
 
-        db_path = tmp_path / "seed_route.db"
-        db_url = f"sqlite:///{db_path}"
-        db = DatabaseManager(db_url)
+        monkeypatch.setenv("DATABASE_SCHEMA", db_schema)
+        db = DatabaseManager(db_url, schema=db_schema)
         db.create_tables()
+        _truncate_all(db.engine)
         with db.session_scope() as session:
             session.add(Node(public_key=pk_a, name="NodeA"))
             session.add(Node(public_key=pk_b, name="NodeB"))
@@ -718,7 +738,7 @@ class TestRouteSeedImport:
         assert result.exit_code == 0
         assert "Routes: 1 created" in result.output
 
-        db = DatabaseManager(db_url)
+        db = DatabaseManager(db_url, schema=db_schema)
         with db.session_scope() as session:
             route = session.query(Route).filter(Route.from_label == "NodeA").first()
             assert route is not None

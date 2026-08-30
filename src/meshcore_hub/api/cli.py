@@ -30,7 +30,7 @@ import click
     type=str,
     default=None,
     envvar="DATABASE_URL",
-    help="Database connection URL (default: sqlite:///{data_home}/collector/meshcore.db)",
+    help="Database connection URL (default: the configured PostgreSQL connection from DATABASE_URL / DATABASE_* vars)",
 )
 @click.option(
     "--read-key",

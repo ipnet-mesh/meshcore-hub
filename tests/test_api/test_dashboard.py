@@ -27,7 +27,7 @@ class TestDateBucketKey:
     """Unit tests for the _date_bucket_key dialect-neutral normalization helper."""
 
     def test_str_passthrough(self) -> None:
-        """SQLite returns str — pass through unchanged."""
+        """String keys (as stored/serialized) pass through unchanged."""
         assert _date_bucket_key("2026-06-15") == "2026-06-15"
 
     def test_date_object_normalized(self) -> None:
@@ -1363,16 +1363,13 @@ class TestDashboardDateBucketRegression:
     """Regression tests for the Postgres date-bucket flatline bug.
 
     These tests seed data at deterministic UTC timestamps and assert the
-    specific date buckets have non-zero counts. On SQLite (where
-    func.date() returns str) these always passed. On Postgres (where
-    func.date() returns date) these would have failed before the
-    _date_bucket_key fix, because the dict lookup by string key would
-    miss the date-object key.
+    specific date buckets have non-zero counts. Postgres's ``func.date()``
+    returns ``date`` objects, so without the ``_date_bucket_key`` fix the
+    dict lookup by string key would miss the date-object key.
 
     Run against Postgres with::
 
-        TEST_DATABASE_BACKEND=postgres \\
-        TEST_POSTGRES_URL=postgresql+psycopg2://postgres:postgres@localhost:55432/test \\
+        make test-db-up
         pytest tests/test_api/test_dashboard.py -k Regression
     """
 

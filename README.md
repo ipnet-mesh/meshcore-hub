@@ -8,7 +8,7 @@
 Python 3.13+ platform for managing and orchestrating MeshCore mesh networks.
 
 > [!WARNING]
-> **DEPRECATION NOTICE** — v0.14 adds PostgreSQL support (`DATABASE_BACKEND=postgres`); SQLite remains the zero-config default. SQLite support will be maintained for at least the next few releases (~3 months), then removed in favour of PostgreSQL-only. See [docs/database.md](docs/database.md) to switch backends and [docs/upgrading.md](docs/upgrading.md) to migrate.
+> **PostgreSQL-only since v0.19** — MeshCore Hub runs on PostgreSQL (bundled container by default; `docker compose up` is still zero-effort). SQLite support was removed in v0.19; existing deployments can migrate in place with `meshcore-hub db migrate-to-postgres` — see [docs/upgrading.md](docs/upgrading.md) and [docs/database.md](docs/database.md).
 
 ![MeshCore Hub Web Dashboard](docs/images/web.png)
 
@@ -350,7 +350,7 @@ meshcore-hub/
 │   ├── hosting/             # Reverse proxy hosting guides
 │   ├── configuration.md     # Single source of truth for environment variables
 │   ├── content.md           # Custom content setup guide
-│   ├── database.md          # Database backends (SQLite/PostgreSQL) reference
+│   ├── database.md          # Database (PostgreSQL) reference
 │   ├── deployment.md        # Production setup, scaling, Redis, multi-instance
 │   ├── i18n.md              # Translation reference guide
 │   ├── letsmesh.md          # LetsMesh packet decoding details
@@ -372,7 +372,7 @@ meshcore-hub/
 - [docs/observer.md](docs/observer.md) - Remote packet-capture observers and `PACKETCAPTURE_*` reference
 - [docs/routes.md](docs/routes.md) - Route health monitoring and link status
 - [docs/maintenance.md](docs/maintenance.md) - Backup and restore procedures
-- [docs/database.md](docs/database.md) - Database backends (SQLite/PostgreSQL) and migration
+- [docs/database.md](docs/database.md) - Database (PostgreSQL) reference and upgrade path
 - [docs/upgrading.md](docs/upgrading.md) - Upgrade guide for breaking changes
 - [docs/letsmesh.md](docs/letsmesh.md) - LetsMesh packet decoding details
 - [docs/seeding.md](docs/seeding.md) - Seed data format and import guide

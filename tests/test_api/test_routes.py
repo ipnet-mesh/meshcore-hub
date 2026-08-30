@@ -518,7 +518,7 @@ class TestRouteQualityAvg:
         # Use uuid-derived public_keys so concurrent tests using _sample_nodes
         # (which always inserts "a"*64 / "b"*64) can't trip the unique
         # constraint on Node.public_key during parallel xdist runs against
-        # the shared SQLite file.
+        # the shared worker schema.
         suffix = uuid4().hex
         keys = [(suffix[:32]).rjust(64, "0"), (suffix[32:64]).rjust(64, "0")]
         nodes = [_make_node(session, k) for k in keys]

@@ -1,10 +1,13 @@
 """Copy all data from a source (SQLite) database into a target (Postgres) database.
 
-This powers ``meshcore-hub db migrate-to-postgres``. It operates at the SQLAlchemy
-Core level, iterating ``Base.metadata.sorted_tables`` and copying each table through
-the ORM's typed columns. The round-trip ``SQLite value -> Python object -> Postgres
-value`` is what makes the conversion correct (e.g. integer ``0/1`` -> ``bool``, JSON
-``TEXT`` -> ``dict``, datetime string -> ``timestamptz``) without any per-model code.
+This powers ``meshcore-hub db migrate-to-postgres`` — the v0.19 upgrade path for
+existing SQLite deployments. It is scheduled for removal in v0.20. It operates at
+the SQLAlchemy Core level, iterating ``Base.metadata.sorted_tables`` and copying
+each table through the ORM's typed columns. The round-trip ``SQLite value ->
+Python object -> Postgres value`` is what makes the conversion correct (e.g.
+integer ``0/1`` -> ``bool``, JSON ``TEXT`` -> ``dict``, datetime string ->
+``timestamptz``) without any per-model code. SQLite is read via Python's stdlib
+``sqlite3`` driver — it is not a supported runtime backend.
 
 The schema must already exist in the target (created by ``db upgrade``); this module
 only moves data and never mutates the source.

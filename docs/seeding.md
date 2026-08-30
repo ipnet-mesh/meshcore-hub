@@ -25,8 +25,8 @@ seed/                          # SEED_HOME (seed data files)
 └── routes.yaml               # Route health definitions for import
 
 data/                          # DATA_HOME (runtime data)
-└── collector/
-    └── meshcore.db           # SQLite database
+├── collector/                # collector health/state files
+└── web/                      # web tier data
 ```
 
 Example seed files are provided in `example/seed/`.

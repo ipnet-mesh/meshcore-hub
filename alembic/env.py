@@ -20,34 +20,25 @@ target_metadata = Base.metadata
 
 
 def get_database_url() -> str:
-    """Get the database URL using the same resolution as the app.
+    """Get the PostgreSQL URL using the same resolution as the app.
 
-    Delegates to CommonSettings.effective_database_url so DATABASE_BACKEND=postgres
-    (+ DATABASE_* components) and an explicit DATABASE_URL are honoured identically to
-    the running services — otherwise migrations would silently target SQLite.
+    Delegates to CommonSettings.effective_database_url so the DATABASE_*
+    components and an explicit DATABASE_URL are honoured identically to the
+    running services.
     """
-    from pathlib import Path
-
     from meshcore_hub.common.config import CommonSettings
 
-    url = CommonSettings().effective_database_url
-    # Ensure the parent directory exists for SQLite file URLs.
-    if url.startswith("sqlite:///"):
-        db_path = Path(url.replace("sqlite:///", ""))
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-    return url
+    return CommonSettings().effective_database_url
 
 
-def get_schema(url: str) -> str | None:
+def get_schema(url: str) -> str:
     """Postgres schema to migrate into, or None for SQLite.
 
     Each Hub instance keeps its tables and alembic_version in its own schema so
     multiple instances (prod, stg, ...) can share one Postgres database with
     independent migration state.
     """
-    if url.startswith(("postgresql", "postgres")):
-        return os.environ.get("DATABASE_SCHEMA", "meshcorehub")
-    return None
+    return os.environ.get("DATABASE_SCHEMA", "meshcorehub")
 
 
 def run_migrations_offline() -> None:
@@ -68,11 +59,8 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        # Batch mode is a SQLite-only workaround for its limited ALTER TABLE;
-        # Postgres performs ALTERs directly.
-        render_as_batch=url.startswith("sqlite"),
         version_table_schema=schema,
-        include_schemas=schema is not None,
+        include_schemas=True,
     )
 
     with context.begin_transaction():
@@ -97,20 +85,17 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        # Ensure the instance's schema exists and scope this connection to it so
-        # tables (and alembic_version) are created there. No-op for SQLite.
-        if schema is not None:
-            connection.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema}"'))
-            connection.execute(text(f'SET search_path TO "{schema}"'))
-            connection.commit()
+        # Ensure the instance's schema exists and scope this connection to it
+        # so tables (and alembic_version) are created there.
+        connection.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema}"'))
+        connection.execute(text(f'SET search_path TO "{schema}"'))
+        connection.commit()
 
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            # Batch mode is a SQLite-only workaround for its limited ALTER TABLE.
-            render_as_batch=url.startswith("sqlite"),
             version_table_schema=schema,
-            include_schemas=schema is not None,
+            include_schemas=True,
         )
 
         with context.begin_transaction():

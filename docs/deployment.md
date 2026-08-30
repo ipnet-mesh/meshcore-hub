@@ -80,7 +80,7 @@ TRAEFIK_PRIORITY=20
 
 This ensures `beta.example.com` (priority 20) is matched before the production wildcard `*.example.com` (priority 10). For other services on the same network (e.g., an MQTT broker at `mqtt.example.com`), use an even higher priority (e.g., 30).
 
-> **Shared Postgres cluster:** the setup above runs each instance in its own directory with its own volumes (the default SQLite path). To instead run several instances (e.g. `prod` + `stg`) against **one** PostgreSQL cluster — isolated via a per-instance schema (`search_path`) — see [database.md](database.md#schema-per-instance-search_path).
+> **Shared Postgres cluster:** the setup above runs each instance in its own directory with its own volumes (bundled Postgres container per instance). To instead run several instances (e.g. `prod` + `stg`) against **one** PostgreSQL cluster — isolated via a per-instance schema (`search_path`) — see [database.md](database.md#schema-per-instance-search_path).
 
 ## Scaling the API
 
@@ -93,9 +93,7 @@ API_WORKERS=4
 
 Each worker is an independent process sharing one listening socket, so the kernel balances connections across them and CPU-bound work (JSON serialisation, validation) spreads over multiple cores. Workers read their configuration from **environment variables** (CLI flags are not propagated to forked workers), which is how Docker Compose already supplies config. Enabling Redis (`REDIS_ENABLED=true`) is recommended so all workers share one cache.
 
-Pick a worker count around the number of CPU cores available to the container; start with `2`–`4` and measure under realistic load.
-
-**SQLite caveat:** all workers share one SQLite file on the same host (WAL mode lets concurrent readers coexist with the single writer), but writes do not scale and this does not extend across hosts. To scale the API across hosts, switch to PostgreSQL (`DATABASE_BACKEND=postgres`) — the API requires no code changes. See [database.md](database.md) for backend setup and the SQLite → Postgres migration runbook.
+Pick a worker count around the number of CPU cores available to the container; start with `2`–`4` and measure under realistic load. Workers all talk to the same PostgreSQL database (the bundled container or an external instance — see [database.md](database.md)), so scaling extends across hosts unchanged.
 
 > Prefer `API_WORKERS` over running multiple `api` containers (`--scale api=N`): the `api` service uses a fixed `container_name`, and one process-managed container per stack keeps logs, health checks, and monitoring simple.
 

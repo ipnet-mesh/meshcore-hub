@@ -1,6 +1,7 @@
 """Tests for configuration settings."""
 
 import pytest
+from pydantic import ValidationError
 
 from meshcore_hub.common.config import (
     CommonSettings,
@@ -68,14 +69,10 @@ class TestCollectorSettings:
         """Test that custom data_home affects effective paths."""
         settings = CollectorSettings(_env_file=None, data_home="/custom/data")
 
-        assert (
-            settings.effective_database_url
-            == "sqlite:////custom/data/collector/meshcore.db"
-        )
         assert settings.collector_data_dir == "/custom/data/collector"
 
     def test_explicit_database_url_overrides(self) -> None:
-        """Test that explicit database_url overrides the default."""
+        """Test that explicit database_url overrides the components."""
         settings = CollectorSettings(
             _env_file=None, database_url="postgresql://user@host/db"
         )
@@ -181,16 +178,13 @@ class TestAPISettings:
     """Tests for APISettings."""
 
     def test_custom_data_home(self) -> None:
-        """Test that custom data_home affects effective database path."""
+        """Test that custom data_home is stored (seed/health/content paths)."""
         settings = APISettings(_env_file=None, data_home="/custom/data")
 
-        assert (
-            settings.effective_database_url
-            == "sqlite:////custom/data/collector/meshcore.db"
-        )
+        assert settings.data_home == "/custom/data"
 
     def test_explicit_database_url_overrides(self) -> None:
-        """Test that explicit database_url overrides the default."""
+        """Test that explicit database_url overrides the components."""
         settings = APISettings(_env_file=None, database_url="postgresql://user@host/db")
 
         assert settings.database_url == "postgresql://user@host/db"
@@ -328,24 +322,13 @@ class TestWebSettings:
         assert settings.features["radio_config"] is False
 
 
-class TestDatabaseBackendResolution:
-    """Tests for DATABASE_BACKEND selection and URL/schema resolution."""
+class TestDatabaseUrlResolution:
+    """Tests for the PostgreSQL-only URL/schema resolution contract."""
 
-    def test_default_backend_is_sqlite_unchanged(self) -> None:
-        """No DB env vars -> the same SQLite path and no schema as before."""
-        settings = CollectorSettings(_env_file=None, data_home="/data")
-
-        assert settings.database_backend.value == "sqlite"
-        assert (
-            settings.effective_database_url == "sqlite:////data/collector/meshcore.db"
-        )
-        assert settings.effective_database_schema is None
-
-    def test_postgres_backend_assembles_url_and_schema(self) -> None:
-        """Postgres backend assembles a URL from components and exposes the schema."""
+    def test_components_assemble_url_and_schema(self) -> None:
+        """DATABASE_* components assemble a URL; the schema is always exposed."""
         settings = APISettings(
             _env_file=None,
-            database_backend="postgres",
             database_host="pg",
             database_password="pw",
         )
@@ -355,22 +338,20 @@ class TestDatabaseBackendResolution:
         )
         assert settings.effective_database_schema == "meshcorehub"
 
-    def test_postgres_password_is_url_encoded(self) -> None:
+    def test_password_is_url_encoded(self) -> None:
         """Special characters in the password are percent-encoded."""
         settings = APISettings(
             _env_file=None,
-            database_backend="postgres",
             database_host="pg",
             database_password="s3cr3t/p@ss",
         )
 
         assert "s3cr3t%2Fp%40ss" in settings.effective_database_url
 
-    def test_postgres_schema_override_per_instance(self) -> None:
+    def test_schema_override_per_instance(self) -> None:
         """DATABASE_SCHEMA isolates instances sharing one database."""
         settings = APISettings(
             _env_file=None,
-            database_backend="postgres",
             database_host="pg",
             database_password="pw",
             database_schema="stg",
@@ -378,19 +359,44 @@ class TestDatabaseBackendResolution:
 
         assert settings.effective_database_schema == "stg"
 
-    def test_postgres_missing_required_vars_fails_fast(self) -> None:
-        """Misconfigured postgres backend raises rather than silently using SQLite."""
-        settings = APISettings(_env_file=None, database_backend="postgres")
+    def test_missing_required_vars_fails_fast(self) -> None:
+        """No DATABASE_URL and no components raises rather than guessing."""
+        settings = APISettings(_env_file=None)
 
-        with pytest.raises(ValueError, match="DATABASE_BACKEND=postgres requires"):
+        with pytest.raises(ValueError, match="PostgreSQL connection is not configured"):
             _ = settings.effective_database_url
 
-    def test_explicit_url_overrides_backend(self) -> None:
-        """An explicit DATABASE_URL wins even when a backend is selected."""
+    def test_explicit_url_overrides_components(self) -> None:
+        """An explicit DATABASE_URL wins over the component vars."""
         settings = CollectorSettings(
             _env_file=None,
-            database_backend="postgres",
+            database_host="pg",
+            database_password="pw",
             database_url="postgresql+psycopg2://u:p@h/db",
         )
 
         assert settings.effective_database_url == "postgresql+psycopg2://u:p@h/db"
+
+    def test_backend_defaults_to_postgres_noop(self) -> None:
+        """DATABASE_BACKEND=postgres (the default) is accepted as a no-op."""
+        settings = CommonSettings(
+            _env_file=None,
+            database_backend="postgres",
+            database_host="pg",
+            database_password="pw",
+        )
+
+        assert settings.database_backend == "postgres"
+        assert settings.effective_database_url.startswith("postgresql+psycopg2://")
+
+    def test_backend_sqlite_is_rejected_with_upgrade_hint(self) -> None:
+        """DATABASE_BACKEND=sqlite fails with the targeted v0.19 upgrade error."""
+        with pytest.raises(
+            ValidationError, match="SQLite support was removed in v0.19"
+        ):
+            _ = CommonSettings(_env_file=None, database_backend="sqlite")
+
+    def test_backend_unknown_value_is_rejected(self) -> None:
+        """Anything other than 'postgres' is rejected."""
+        with pytest.raises(ValidationError, match="must be 'postgres'"):
+            _ = CommonSettings(_env_file=None, database_backend="mysql")

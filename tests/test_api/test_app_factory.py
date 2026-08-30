@@ -10,6 +10,12 @@ from meshcore_hub.api.app import create_app_from_env
 _FACTORY_ENV = [
     "DATABASE_URL",
     "DATA_HOME",
+    "DATABASE_HOST",
+    "DATABASE_PORT",
+    "DATABASE_NAME",
+    "DATABASE_SCHEMA",
+    "DATABASE_USER",
+    "DATABASE_PASSWORD",
     "REDIS_ENABLED",
     "REDIS_HOST",
     "REDIS_PORT",
@@ -31,6 +37,11 @@ _FACTORY_ENV = [
 def clean_env(monkeypatch):
     for var in _FACTORY_ENV:
         monkeypatch.delenv(var, raising=False)
+    # The factory requires a database connection (PostgreSQL-only); default
+    # to an explicit URL so tests not about DB resolution still build an app.
+    monkeypatch.setenv(
+        "DATABASE_URL", "postgresql+psycopg2://u:p@factory-test:5432/hub"
+    )
     return monkeypatch
 
 
@@ -49,7 +60,7 @@ def _served_paths(app):
 def test_factory_reads_database_and_redis_from_env(clean_env):
     """Workers must pick up the real DB/Redis config from env, not the
     hardcoded create_app defaults."""
-    clean_env.setenv("DATABASE_URL", "sqlite:////tmp/workers-test.db")
+    clean_env.setenv("DATABASE_URL", "postgresql+psycopg2://u:p@workers-test:5432/hub")
     clean_env.setenv("REDIS_ENABLED", "true")
     clean_env.setenv("REDIS_HOST", "redis-test")
     clean_env.setenv("REDIS_PORT", "6390")
@@ -58,7 +69,7 @@ def test_factory_reads_database_and_redis_from_env(clean_env):
 
     app = create_app_from_env()
 
-    assert app.state.database_url == "sqlite:////tmp/workers-test.db"
+    assert app.state.database_url == "postgresql+psycopg2://u:p@workers-test:5432/hub"
     assert app.state.redis_enabled is True
     assert app.state.redis_host == "redis-test"
     assert app.state.redis_port == 6390
@@ -66,17 +77,27 @@ def test_factory_reads_database_and_redis_from_env(clean_env):
     assert app.state.metrics_cache_ttl == 99
 
 
-def test_factory_honours_explicit_disable_and_data_home(clean_env):
-    """Env values override anything else, and a data-home (no explicit
-    DATABASE_URL) resolves to the collector DB path — never the bare
-    create_app default that would point workers at ./meshcore.db."""
+def test_factory_assembles_url_from_component_vars(clean_env):
+    """Without an explicit DATABASE_URL, the DATABASE_* components assemble
+    the connection — the app factory never falls back to a default file DB."""
+    clean_env.delenv("DATABASE_URL")
     clean_env.setenv("REDIS_ENABLED", "false")
-    clean_env.setenv("DATA_HOME", "/srv/hubdata")
+    clean_env.setenv("DATABASE_HOST", "pg-test")
+    clean_env.setenv("DATABASE_PASSWORD", "pw")
 
     app = create_app_from_env()
 
     assert app.state.redis_enabled is False
-    assert app.state.database_url == "sqlite:////srv/hubdata/collector/meshcore.db"
+    assert app.state.database_url == (
+        "postgresql+psycopg2://meshcorehub:pw@pg-test:5432/meshcorehub"
+    )
+
+
+def test_factory_without_database_config_raises(clean_env):
+    """Missing connection config fails fast instead of guessing a default."""
+    clean_env.delenv("DATABASE_URL")
+    with pytest.raises(ValueError, match="PostgreSQL connection is not configured"):
+        _ = create_app_from_env()
 
 
 def test_factory_redis_enabled_accepts_truthy_values(clean_env):

@@ -2,34 +2,13 @@
 
 from unittest.mock import MagicMock
 
-import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
 from meshcore_hub.api.channel_visibility import (
     get_all_known_channel_indices,
     get_max_visibility_level,
     get_visible_channel_indices,
     resolve_user_role,
 )
-from meshcore_hub.common.models import Base
 from meshcore_hub.common.models.channel import Channel
-
-
-@pytest.fixture
-def db_session():
-    """Create an in-memory SQLite database session."""
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-    )
-    Base.metadata.create_all(engine)
-    Session = sessionmaker(bind=engine)
-    session = Session()
-    yield session
-    session.close()
-    Base.metadata.drop_all(engine)
-    engine.dispose()
 
 
 def _make_request(

@@ -916,7 +916,7 @@ def create_subscriber(
     mqtt_tls: bool = False,
     mqtt_transport: str = "websockets",
     mqtt_ws_path: str = "/",
-    database_url: str = "sqlite:///./meshcore.db",
+    database_url: Optional[str] = None,
     webhook_dispatcher: Optional["WebhookDispatcher"] = None,
     cleanup_enabled: bool = False,
     cleanup_retention_days: int = 30,
@@ -939,7 +939,7 @@ def create_subscriber(
         mqtt_tls: Enable TLS/SSL for MQTT connection
         mqtt_transport: MQTT transport protocol (tcp or websockets)
         mqtt_ws_path: WebSocket path (used when transport=websockets)
-        database_url: Database connection URL
+        database_url: PostgreSQL connection URL (required)
         webhook_dispatcher: Optional webhook dispatcher for event forwarding
         cleanup_enabled: Enable automatic event data cleanup
         cleanup_retention_days: Number of days to retain event data
@@ -951,6 +951,11 @@ def create_subscriber(
     Returns:
         Configured Subscriber instance
     """
+    if not database_url:
+        raise ValueError(
+            "database_url is required (PostgreSQL) — configure DATABASE_URL "
+            "or the DATABASE_* component vars"
+        )
     # Create MQTT client with unique client ID to allow multiple collectors
     unique_id = uuid.uuid4().hex[:8]
     mqtt_config = MQTTConfig(
@@ -1002,7 +1007,7 @@ def run_collector(
     mqtt_tls: bool = False,
     mqtt_transport: str = "websockets",
     mqtt_ws_path: str = "/",
-    database_url: str = "sqlite:///./meshcore.db",
+    database_url: Optional[str] = None,
     webhook_dispatcher: Optional["WebhookDispatcher"] = None,
     cleanup_enabled: bool = False,
     cleanup_retention_days: int = 30,

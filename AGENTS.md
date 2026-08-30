@@ -78,7 +78,7 @@ npm run test:frontend  # host: vitest unit + component tests
 
 ## Tests & Quality
 
-Coverage is **opt-in**; add `--cov=meshcore_hub` (or `make test-cov`) when you want it. The dev loop defaults to no coverage and parallel across CPU cores.
+Coverage is **opt-in**; add `--cov=meshcore_hub` (or `make test-cov`) when you want it. The dev loop defaults to no coverage and parallel across CPU cores. Backend tests require PostgreSQL: `make test` / `make test-cov` / `make test-unit` start and stop the throwaway test Postgres automatically (a `postgres:17-alpine` on `127.0.0.1:55432`; the management is skipped when `TEST_POSTGRES_URL` points at your own instance). For direct `pytest` runs, `make test-db-up` first — pytest fails fast with a hint when the database is unreachable.
 
 ```bash
 # Canonical: run tests in parallel, no coverage, surface the pass/fail summary
@@ -138,16 +138,17 @@ Design notes when extending the suite:
 
 ## Database & Ops
 
-The default backend is **SQLite** (zero-config, file at `${DATA_HOME}/collector/meshcore.db`). **PostgreSQL** is also supported via `DATABASE_BACKEND=postgres` — see `docs/database.md` for the full backend reference, production provisioning, and schema-per-instance setup. Migrations are backend-agnostic; the commands below work for both.
+The database backend is **PostgreSQL** (the only backend since v0.19). The bundled container starts with the `core` compose profile — see `docs/database.md` for the full reference, production provisioning, and schema-per-instance setup. Backend tests also require Postgres: `make test-db-up` starts a throwaway instance on `127.0.0.1:55432` (or point `TEST_POSTGRES_URL` at your own).
 
 ```bash
-# --- LOCAL (venv): sync the volume DB to ./meshcore.db, then author a migration
-# Volume name is ${COMPOSE_PROJECT_NAME:-hub}_data (default: hub_data)
-# (SQLite only — for Postgres, point the migration env at the cluster directly)
-docker run -it --rm -v hub_data:/data -v "$PWD":/pwd ubuntu cp /data/collector/meshcore.db /pwd/meshcore.db
-meshcore-hub db revision --autogenerate -m "description"
+# --- LOCAL (venv): author a migration against a local schema (NOT the dev DB)
+# Use a scratch schema on the test DB so autogenerate diffs against a clean
+# schema; never point revision tooling at the running dev database.
+TEST_POSTGRES_URL=postgresql+psycopg2://meshcorehub:meshcorehub-test@localhost:55432/meshcorehub_test \
+DATABASE_URL=postgresql+psycopg2://meshcorehub:meshcorehub-test@localhost:55432/meshcorehub_test \
+DATABASE_SCHEMA=scratch meshcore-hub db revision --autogenerate -m "description"
 
-# --- CONTAINER: apply migrations (the DB lives in the data volume)
+# --- CONTAINER: apply migrations (the DB lives in the postgres_data volume)
 # Migrations auto-apply on `up` via the migrate service. Manual one-off:
 docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile core run --rm migrate db upgrade
 
@@ -358,16 +359,14 @@ async def test_collector_handles_advertisement():
 # Integration test
 import pytest
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession
 
 @pytest.fixture
-async def db_session():
-    """Create in-memory SQLite database for testing."""
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    async with AsyncSession(engine) as session:
+async def db_session(db_url, db_schema):
+    """Async session on the per-worker Postgres schema (see tests/conftest.py)."""
+    manager = DatabaseManager(db_url, schema=db_schema)
+    manager.create_tables()
+    async with manager.async_session() as session:
         yield session
 
 @pytest.fixture
