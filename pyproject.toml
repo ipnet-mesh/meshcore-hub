@@ -62,10 +62,6 @@ dev = [
     "types-paho-mqtt>=1.6.0",
     "types-PyYAML>=6.0.0",
 ]
-# Deprecated no-op alias: the Postgres drivers are core dependencies since
-# v0.19. Kept one release for external install instructions that reference
-# `.[postgres]`; removed in v0.20.
-postgres = []
 
 [project.scripts]
 meshcore-hub = "meshcore_hub.__main__:main"

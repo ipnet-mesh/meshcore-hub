@@ -22,6 +22,14 @@ Upgrading:
 2. Ensure a Redis server is reachable from the `api` service (set `REDIS_*` accordingly — in Docker use the `cache` profile or an external instance).
 3. Restart the stack and verify `/health/ready` reports `"redis": "connected"`.
 
+### v0.19 Postgres-transition shims removed
+
+The three upgrade-compatibility items retained through v0.19 (see the v0.19 notes below) are removed:
+
+- **The `meshcore-hub db migrate-to-postgres` command** (and its `common/db_migrate.py` module) — the in-place SQLite→Postgres data copy. **Still on SQLite?** Upgrade to v0.19 first and run the migration there (see the [v0.19 runbook](#migrating-an-existing-sqlite-deployment-in-place)), then upgrade to v0.20 — or copy the data manually.
+- **The `database_backend` settings field** — a leftover `DATABASE_BACKEND` in your environment is now **silently ignored** (previously `sqlite` failed with a targeted upgrade error; any other value than `postgres` was rejected). Remove the variable — it has had no effect since v0.19.
+- **The `[postgres]` pip extra** — a deprecated no-op since v0.19 (the Postgres drivers are core dependencies). Update external scripts that install `meshcore-hub[postgres]` to drop the extra.
+
 ## v0.19.0
 
 ### PostgreSQL-only (SQLite support removed)
@@ -82,14 +90,6 @@ If you ran a v0.19 pre-release with `docker-compose.prod.yml` while pointing `DA
    ```
 
 > If you intended to keep the bundled container as this deployment's database, start it explicitly with `--profile postgres` instead of relying on `core`.
-
-#### Scheduled for removal in v0.20
-
-The following are retained through v0.19 for upgrade compatibility and removed in v0.20:
-
-- the `meshcore-hub db migrate-to-postgres` command and its `common/db_migrate.py` module,
-- the `database_backend` settings field (the `DATABASE_BACKEND` rejection),
-- the `[postgres]` pip extra alias (the drivers are core dependencies since v0.19).
 
 ## v0.18.0
 

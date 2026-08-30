@@ -1,127 +1,39 @@
-"""Tests for the top-level CLI, focused on ``db migrate-to-postgres``.
+"""Smoke tests for the top-level CLI entry point.
 
-The migration engine itself is covered in test_common/test_db_migrate.py; here we
-verify the command's wiring: option plumbing, dry-run vs. real output, and how the
-MigrationResult (or an error) maps onto exit codes and messages.
+Verify the ``cli`` group wiring: version reporting, help output, and the
+registered component subcommands (collector, api, web, db).
 """
-
-from unittest.mock import patch
 
 from click.testing import CliRunner
 
+from meshcore_hub import __version__
 from meshcore_hub.__main__ import cli
-from meshcore_hub.common.db_migrate import MigrationResult, TableResult
 
 
-def _result(*tables: TableResult, dry_run: bool = False) -> MigrationResult:
-    return MigrationResult(tables=list(tables), dry_run=dry_run)
-
-
-def test_migrate_to_postgres_success() -> None:
-    """A matching run reports OK per table and exits 0."""
+def test_version_reports_package_version() -> None:
+    """--version prints the package version and exits 0."""
     runner = CliRunner()
-    fake = _result(TableResult("nodes", 5, 5))
-
-    with patch(
-        "meshcore_hub.common.db_migrate.migrate_sqlite_to_postgres",
-        return_value=fake,
-    ) as mock_migrate:
-        result = runner.invoke(
-            cli,
-            [
-                "db",
-                "migrate-to-postgres",
-                "--source",
-                "sqlite:///src.db",
-                "--target",
-                "postgresql://u@h/db",
-            ],
-        )
+    result = runner.invoke(cli, ["--version"])
 
     assert result.exit_code == 0
-    assert "nodes" in result.output
-    assert "OK" in result.output
-    assert "Migration complete." in result.output
-    # Flags thread through to the engine call.
-    _, kwargs = mock_migrate.call_args
-    assert kwargs["dry_run"] is False
-    assert kwargs["truncate"] is False
+    assert __version__ in result.output
 
 
-def test_migrate_to_postgres_dry_run() -> None:
-    """Dry run prints a preview and never renders OK/MISMATCH judgements."""
+def test_help_lists_component_commands() -> None:
+    """--help advertises the component subcommands."""
     runner = CliRunner()
-    fake = _result(TableResult("nodes", 3, 0), dry_run=True)
-
-    with patch(
-        "meshcore_hub.common.db_migrate.migrate_sqlite_to_postgres",
-        return_value=fake,
-    ) as mock_migrate:
-        result = runner.invoke(
-            cli,
-            [
-                "db",
-                "migrate-to-postgres",
-                "--source",
-                "sqlite:///src.db",
-                "--target",
-                "postgresql://u@h/db",
-                "--dry-run",
-            ],
-        )
+    result = runner.invoke(cli, ["--help"])
 
     assert result.exit_code == 0
-    assert "dry-run" in result.output
-    assert "Dry run complete." in result.output
-    assert "OK" not in result.output
-    assert mock_migrate.call_args.kwargs["dry_run"] is True
+    for command in ("collector", "api", "web", "db"):
+        assert command in result.output
 
 
-def test_migrate_to_postgres_mismatch_exits_nonzero() -> None:
-    """A row-count mismatch surfaces as a ClickException (non-zero exit)."""
+def test_db_help_lists_migration_commands() -> None:
+    """db --help advertises the Alembic migration commands."""
     runner = CliRunner()
-    fake = _result(TableResult("nodes", 5, 4))  # ok == False
+    result = runner.invoke(cli, ["db", "--help"])
 
-    with patch(
-        "meshcore_hub.common.db_migrate.migrate_sqlite_to_postgres",
-        return_value=fake,
-    ):
-        result = runner.invoke(
-            cli,
-            [
-                "db",
-                "migrate-to-postgres",
-                "--source",
-                "sqlite:///src.db",
-                "--target",
-                "postgresql://u@h/db",
-            ],
-        )
-
-    assert result.exit_code != 0
-    assert "MISMATCH" in result.output
-    assert "mismatch" in result.output.lower()
-
-
-def test_migrate_to_postgres_value_error_becomes_click_exception() -> None:
-    """A ValueError from the engine (e.g. bad target) maps to a clean CLI error."""
-    runner = CliRunner()
-
-    with patch(
-        "meshcore_hub.common.db_migrate.migrate_sqlite_to_postgres",
-        side_effect=ValueError("Target must be a PostgreSQL database URL"),
-    ):
-        result = runner.invoke(
-            cli,
-            [
-                "db",
-                "migrate-to-postgres",
-                "--source",
-                "sqlite:///src.db",
-                "--target",
-                "sqlite:///bad.db",
-            ],
-        )
-
-    assert result.exit_code != 0
-    assert "PostgreSQL" in result.output
+    assert result.exit_code == 0
+    assert "upgrade" in result.output
+    assert "downgrade" in result.output
