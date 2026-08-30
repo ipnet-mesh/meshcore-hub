@@ -6,13 +6,19 @@ from click.testing import CliRunner
 
 from meshcore_hub.api.cli import api
 
+# Opaque URL: satisfies the fail-fast database check; nothing connects
+# (uvicorn.run is mocked, so the lifespan never starts).
+_TEST_DB_URL = "postgresql+psycopg2://meshcorehub:pw@localhost:5432/meshcorehub"
+
 
 def test_api_default_runs_single_process():
     """With the default worker count, the app object is passed directly and no
     worker/factory options are used."""
     runner = CliRunner()
     with patch("uvicorn.run") as mock_run:
-        result = runner.invoke(api, [], catch_exceptions=False)
+        result = runner.invoke(
+            api, ["--database-url", _TEST_DB_URL], catch_exceptions=False
+        )
 
     assert result.exit_code == 0
     assert mock_run.call_count == 1
@@ -27,7 +33,11 @@ def test_api_workers_uses_env_factory_import_string():
     string with the requested worker count."""
     runner = CliRunner()
     with patch("uvicorn.run") as mock_run:
-        result = runner.invoke(api, ["--workers", "3"], catch_exceptions=False)
+        result = runner.invoke(
+            api,
+            ["--database-url", _TEST_DB_URL, "--workers", "3"],
+            catch_exceptions=False,
+        )
 
     assert result.exit_code == 0
     args, kwargs = mock_run.call_args
@@ -41,7 +51,10 @@ def test_api_workers_from_env_var():
     runner = CliRunner()
     with patch("uvicorn.run") as mock_run:
         result = runner.invoke(
-            api, [], env={"API_WORKERS": "2"}, catch_exceptions=False
+            api,
+            ["--database-url", _TEST_DB_URL],
+            env={"API_WORKERS": "2"},
+            catch_exceptions=False,
         )
 
     assert result.exit_code == 0
@@ -57,7 +70,7 @@ def test_api_single_process_passes_spam_and_role_settings():
     with patch("uvicorn.run") as mock_run:
         result = runner.invoke(
             api,
-            [],
+            ["--database-url", _TEST_DB_URL],
             env={
                 "SPAM_DETECTION_ENABLED": "true",
                 "SPAM_SCORE_THRESHOLD": "0.8",

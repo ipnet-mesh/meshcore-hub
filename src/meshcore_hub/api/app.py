@@ -31,7 +31,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     global _db_manager
 
     # Get database URL from app state
-    database_url = getattr(app.state, "database_url", "sqlite:///./meshcore.db")
+    database_url = getattr(app.state, "database_url", None)
+    if not database_url:
+        raise RuntimeError(
+            "No database URL configured — pass database_url to create_app "
+            "or configure DATABASE_URL / DATABASE_* for the app factory"
+        )
 
     # Initialize database (schema managed by Alembic migrations)
     logger.info(f"Initializing database: {database_url}")
@@ -72,7 +77,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 def create_app(
-    database_url: str = "sqlite:///./meshcore.db",
+    database_url: str | None = None,
     read_key: str | None = None,
     admin_key: str | None = None,
     mqtt_host: str = "localhost",

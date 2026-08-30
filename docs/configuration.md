@@ -17,7 +17,7 @@ Process-wide and MQTT-broker settings used by every service. For multi-instance 
 | `COMPOSE_PROJECT_NAME` | `hub` | Docker Compose project name; prefixes container and volume names. Change per instance when running multiple deployments on the same host |
 | `IMAGE_VERSION` | `latest` | Docker image tag to use (`latest`, `main`, `v1.0.0`, etc.) |
 | `LOG_LEVEL` | `INFO` | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`) |
-| `DATA_HOME` | `./data` | Base directory for runtime data (the SQLite file lives under `${DATA_HOME}/collector/meshcore.db`) |
+| `DATA_HOME` | `./data` | Base directory for runtime data (seed/health/content files under `${DATA_HOME}/collector` and `${DATA_HOME}/web`) |
 | `SEED_HOME` | `./seed` | Directory containing seed data files |
 | `TZ` | `UTC` | IANA timezone for displaying dates/times (e.g. `America/New_York`, `Europe/London`) |
 | `MQTT_HOST` | `localhost` (`mqtt` in Docker) | MQTT broker hostname |
@@ -34,11 +34,10 @@ Process-wide and MQTT-broker settings used by every service. For multi-instance 
 
 ## Database
 
-MeshCore Hub defaults to **SQLite** (zero-config, single host). Set `DATABASE_BACKEND=postgres` to switch to **PostgreSQL** for write scaling, multi-host deployments, and multiple instances sharing one cluster via schema-per-instance. Postgres is opt-in — leave the `DATABASE_*` variables unset to keep using SQLite. See [database.md](database.md) for the full backend reference: bundled container, production role/database provisioning, managed/external Postgres, schema-per-instance isolation, and the SQLite → PostgreSQL migration runbook.
+MeshCore Hub runs on **PostgreSQL** — the only supported database backend since v0.19. The bundled container is part of the default `core` compose profile (zero-config), and the same `DATABASE_*` variables point the services at a managed/external instance or a shared cluster with schema-per-instance isolation. See [database.md](database.md) for the full reference: bundled container, production role/database provisioning, managed/external Postgres, and schema-per-instance isolation. Upgrading an old SQLite deployment? See [upgrading.md](upgrading.md) (v0.19 section).
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `DATABASE_BACKEND` | `sqlite` | `sqlite` or `postgres`. Explicit switch — Postgres is never selected implicitly |
 | `DATABASE_HOST` | `postgres` | Postgres hostname (`postgres` = bundled container service name) |
 | `DATABASE_PORT` | `5432` | Postgres port |
 | `DATABASE_NAME` | `meshcorehub` | Database name |

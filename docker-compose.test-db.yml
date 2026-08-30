@@ -1,0 +1,38 @@
+# ==========================================================================
+# Throwaway PostgreSQL instance for the backend test suite (pytest).
+#
+# NOT part of the application stack. Start/stop with:
+#   make test-db-up
+#   make test-db-down
+#
+# The Makefile pins -p meshcore-hub-test-db so a COMPOSE_PROJECT_NAME set in
+# the repo .env (the dev stack) can never make `down` target dev services.
+#
+# The meshcorehub role owns the meshcorehub_test database (image entrypoint),
+# which is exactly the privilege the per-xdist-worker test schemas need
+# (CREATE SCHEMA) — no superuser and no CREATEDB required. The data directory
+# is a tmpfs mount, so nothing survives `down`.
+# ==========================================================================
+name: meshcore-hub-test-db
+
+services:
+  test-postgres:
+    image: postgres:17-alpine
+    container_name: meshcore-hub-test-postgres
+    ports:
+      - "127.0.0.1:55432:5432"
+    environment:
+      - POSTGRES_USER=meshcorehub
+      - POSTGRES_PASSWORD=meshcorehub-test
+      - POSTGRES_DB=meshcorehub_test
+    # Every pytest-xdist worker holds its own pooled engine (pool_size=20 +
+    # max_overflow=30) against this one instance, so raise max_connections
+    # above the Postgres default of 100.
+    command: ["postgres", "-c", "max_connections=200"]
+    tmpfs:
+      - /var/lib/postgresql/data:size=512m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U meshcorehub -d meshcorehub_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10

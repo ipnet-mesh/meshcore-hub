@@ -1,11 +1,8 @@
 """Tests for database models."""
 
-import pytest
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import select
 
 from meshcore_hub.common.models import (
-    Base,
     Node,
     NodeTag,
     Message,
@@ -17,22 +14,6 @@ from meshcore_hub.common.models import (
     RawPacket,
     add_event_observer,
 )
-
-
-@pytest.fixture
-def db_session():
-    """Create an in-memory SQLite database session."""
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-    )
-    Base.metadata.create_all(engine)
-    Session = sessionmaker(bind=engine)
-    session = Session()
-    yield session
-    session.close()
-    Base.metadata.drop_all(engine)
-    engine.dispose()
 
 
 class TestNodeModel:

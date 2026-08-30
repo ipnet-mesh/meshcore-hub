@@ -73,7 +73,7 @@ def test_handle_contact_updates_existing_node_name(db_session, mock_db_manager):
     db_session.expire_all()
     node = db_session.query(Node).filter_by(public_key="b" * 64).first()
     assert node.name == "NewName"
-    # Compare timestamps without timezone (SQLite strips timezone info)
+    # Compare timestamps without timezone (naive datetimes from the handler)
     assert node.last_seen is not None
     assert node.last_seen.replace(tzinfo=None) == last_seen_time.replace(tzinfo=None)
 

@@ -101,10 +101,10 @@ def _flood_only_filter(
 def _date_bucket_key(value: str | date | None) -> str | None:
     """Coerce a DB-returned date bucket key to a canonical ``%Y-%m-%d`` string.
 
-    SQLite's ``func.date()`` returns a ``str``; Postgres returns a
-    ``datetime.date``. This normalizes both to the same string key so dict
-    lookups by ``"%Y-%m-%d"`` succeed on either backend. ``None`` passes
-    through unchanged.
+    Postgres's ``func.date()`` returns a ``datetime.date``; this normalizes it
+    to the same string key the frontend/serializers expect so dict lookups by
+    ``"%Y-%m-%d"`` succeed. String values pass through unchanged; ``None``
+    passes through unchanged.
     """
     if isinstance(value, str):
         return value
@@ -430,7 +430,8 @@ def get_activity(
     start_date = end_date - timedelta(days=days)
 
     # Query advertisement counts grouped by date
-    # Use SQLite's date() function for grouping (returns string 'YYYY-MM-DD')
+    # (func.date() truncates to the UTC day boundary; the session timezone
+    # is pinned to UTC by the engine layer)
     date_expr = func.date(Advertisement.received_at)
 
     query = (
@@ -447,8 +448,8 @@ def get_activity(
 
     results = session.execute(query).all()
 
-    # Build a dict of date -> count, normalizing the key to a string so it
-    # works on both SQLite (func.date() returns str) and Postgres (returns date).
+    # Build a dict of date -> count, normalizing the key to a string
+    # (func.date() returns date objects on Postgres).
     counts_by_date = {_date_bucket_key(row.date): row.count for row in results}
 
     # Generate all dates in the range, filling in zeros for missing days

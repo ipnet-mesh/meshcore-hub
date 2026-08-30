@@ -4,10 +4,10 @@ Pure helpers (`normalize_sender`, `compute_path_prefix`) plus two DB-querying
 scorers (`score_message`, `rescore_recent`) and a config object (`SpamConfig`).
 
 The design is described in ``docs/plans/20260622-2243-spam-detection/plan.md``.
-Counts are computed directly from Postgres/SQLite over the
+Counts are computed directly from PostgreSQL over the
 ``(path_prefix, received_at)`` and ``(sender_normalized, received_at)`` indexes;
 the window cutoff is always a Python-computed datetime passed as a bound
-parameter, so identical code runs on both backends (no SQL ``NOW()``/``INTERVAL``).
+parameter (no SQL ``NOW()``/``INTERVAL``).
 """
 
 from __future__ import annotations

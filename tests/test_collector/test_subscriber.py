@@ -1367,13 +1367,13 @@ class TestSubscriberDispatch:
 class TestCreateSubscriber:
     """Tests for create_subscriber factory function."""
 
-    def test_creates_subscriber(self):
+    def test_creates_subscriber(self, db_url):
         """Test creating a subscriber."""
         with patch("meshcore_hub.collector.subscriber.MQTTClient") as MockMQTT:
             subscriber = create_subscriber(
                 mqtt_host="localhost",
                 mqtt_port=1883,
-                database_url="sqlite:///:memory:",
+                database_url=db_url,
             )
 
             assert subscriber is not None

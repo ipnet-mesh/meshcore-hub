@@ -1008,7 +1008,7 @@ class TestLifespanRedis:
         from meshcore_hub.api.app import lifespan
 
         app = FastAPI()
-        app.state.database_url = "sqlite:///./test.db"
+        app.state.database_url = "postgresql+psycopg2://u:p@testhost:5432/testdb"
         app.state.redis_enabled = False
         app_module._db_manager = None
 
@@ -1023,7 +1023,7 @@ class TestLifespanRedis:
         from meshcore_hub.api.app import lifespan
 
         app = FastAPI()
-        app.state.database_url = "sqlite:///./test.db"
+        app.state.database_url = "postgresql+psycopg2://u:p@testhost:5432/testdb"
         app.state.redis_enabled = True
         app.state.redis_host = "redis-host"
         app.state.redis_port = 6380
@@ -1053,7 +1053,7 @@ class TestLifespanRedis:
         from meshcore_hub.api.app import lifespan
 
         app = FastAPI()
-        app.state.database_url = "sqlite:///./test.db"
+        app.state.database_url = "postgresql+psycopg2://u:p@testhost:5432/testdb"
         app.state.redis_enabled = True
 
         mock_cache = MagicMock()
@@ -1157,7 +1157,7 @@ class TestCliRedis:
             with patch("meshcore_hub.common.config.get_api_settings") as mock_settings:
                 mock_settings.return_value = MagicMock(
                     data_home="/tmp/test",
-                    effective_database_url="sqlite:///test.db",
+                    effective_database_url="postgresql+psycopg2://u:p@testhost:5432/testdb",
                 )
                 result = runner.invoke(
                     api,
@@ -1178,7 +1178,7 @@ class TestCliRedis:
             with patch("meshcore_hub.common.config.get_api_settings") as mock_settings:
                 mock_settings.return_value = MagicMock(
                     data_home="/tmp/test",
-                    effective_database_url="sqlite:///test.db",
+                    effective_database_url="postgresql+psycopg2://u:p@testhost:5432/testdb",
                 )
                 result = runner.invoke(api, catch_exceptions=False)
                 assert "Redis enabled: False" in result.output
@@ -1194,7 +1194,7 @@ class TestCliRedis:
             with patch("meshcore_hub.common.config.get_api_settings") as mock_settings:
                 mock_settings.return_value = MagicMock(
                     data_home="/tmp/test",
-                    effective_database_url="sqlite:///test.db",
+                    effective_database_url="postgresql+psycopg2://u:p@testhost:5432/testdb",
                 )
                 with patch("meshcore_hub.api.app.create_app") as mock_create_app:
                     mock_create_app.return_value = MagicMock()
@@ -1242,7 +1242,7 @@ class TestCliRedis:
             with patch("meshcore_hub.common.config.get_api_settings") as mock_settings:
                 mock_settings.return_value = MagicMock(
                     data_home="/tmp/test",
-                    effective_database_url="sqlite:///test.db",
+                    effective_database_url="postgresql+psycopg2://u:p@testhost:5432/testdb",
                 )
                 with patch("meshcore_hub.api.app.create_app") as mock_create_app:
                     mock_create_app.return_value = MagicMock()
@@ -1268,7 +1268,7 @@ class TestCliRedis:
             with patch("meshcore_hub.common.config.get_api_settings") as mock_settings:
                 mock_settings.return_value = MagicMock(
                     data_home="/tmp/test",
-                    effective_database_url="sqlite:///test.db",
+                    effective_database_url="postgresql+psycopg2://u:p@testhost:5432/testdb",
                 )
                 with patch("meshcore_hub.api.app.create_app") as mock_create_app:
                     mock_create_app.return_value = MagicMock()

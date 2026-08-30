@@ -12,7 +12,6 @@ from meshcore_hub.collector.tag_import import (
     load_tags_file,
     validate_public_key,
 )
-from meshcore_hub.common.database import DatabaseManager
 from meshcore_hub.common.models import Node, NodeTag
 
 
@@ -173,14 +172,6 @@ class TestLoadTagsFile:
 
 class TestImportTags:
     """Tests for import_tags function."""
-
-    @pytest.fixture
-    def db_manager(self):
-        """Create an in-memory database manager for testing."""
-        manager = DatabaseManager("sqlite:///:memory:")
-        manager.create_tables()
-        yield manager
-        manager.dispose()
 
     @pytest.fixture
     def sample_tags_file(self):

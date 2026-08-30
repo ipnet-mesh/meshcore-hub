@@ -1,8 +1,8 @@
 """API test fixtures.
 
-The ``db_backend`` / ``db_url`` / ``test_db_path`` fixtures that drive the
-SQLite-vs-Postgres switch live in the shared ``tests/conftest.py`` so the
-collector suite can reuse the same backend; they are inherited here.
+The ``db_url`` / ``db_schema`` fixtures that provide the per-xdist-worker
+Postgres schema live in the shared ``tests/conftest.py`` so the collector
+suite can reuse the same database; they are inherited here.
 """
 
 from contextlib import contextmanager
@@ -10,7 +10,6 @@ from datetime import datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event as sa_event
 from sqlalchemy.orm import sessionmaker
 
 from meshcore_hub.api.app import create_app
@@ -36,31 +35,16 @@ from meshcore_hub.common.models import (
 
 
 @pytest.fixture(scope="session")
-def api_db_engine(db_url: str, db_backend: str):
-    """Session-scoped database engine. Schema is built once per pytest session.
+def api_db_engine(db_url: str, db_schema: str):
+    """Session-scoped worker-schema Postgres engine. Schema built once.
 
-    For Postgres, uses the production ``create_database_engine`` factory so the
-    test exercises the same ``connect_args`` (including ``-ctimezone=UTC``).
-    Each xdist worker has its own database (see ``db_url``), so no locking
-    is needed.
+    Uses the production ``create_database_engine`` factory so tests exercise
+    the same ``connect_args`` (``search_path`` + ``-ctimezone=UTC``) as the
+    running services. Each xdist worker has its own schema (see
+    ``db_schema``), so no locking is needed.
     """
-    if db_backend == "postgres":
-        engine = create_database_engine(db_url)
-        Base.metadata.drop_all(engine)
-    else:
-        engine = create_engine(
-            db_url,
-            connect_args={"check_same_thread": False},
-        )
-
-        @sa_event.listens_for(engine, "connect")
-        def set_sqlite_pragma(
-            dbapi_connection: object, connection_record: object
-        ) -> None:
-            cursor = dbapi_connection.cursor()  # type: ignore[attr-defined]
-            cursor.execute("PRAGMA foreign_keys=ON")
-            cursor.close()
-
+    engine = create_database_engine(db_url, schema=db_schema)
+    Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     yield engine
     Base.metadata.drop_all(engine)

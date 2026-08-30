@@ -118,7 +118,7 @@ async def test_cleanup_old_data_live(async_db_session: AsyncSession) -> None:
 
     old_trace = TracePath(
         observer_node_id=node.id,
-        initiator_tag="test",
+        initiator_tag=12345,
         created_at=old_date,
         updated_at=old_date,
     )
@@ -354,12 +354,12 @@ async def test_cleanup_orphaned_node_relations(
 
     await async_db_session.commit()
 
-    await async_db_session.execute(text("PRAGMA foreign_keys=OFF"))
+    await async_db_session.execute(text("SET session_replication_role = replica"))
     await async_db_session.execute(
         text("DELETE FROM nodes WHERE id = :id"), {"id": node.id}
     )
     await async_db_session.commit()
-    await async_db_session.execute(text("PRAGMA foreign_keys=ON"))
+    await async_db_session.execute(text("SET session_replication_role = DEFAULT"))
 
     counts = await cleanup_orphaned_node_relations(async_db_session, dry_run=False)
 
@@ -403,12 +403,12 @@ async def test_cleanup_orphaned_node_relations_dry_run(
     async_db_session.add(adoption)
     await async_db_session.commit()
 
-    await async_db_session.execute(text("PRAGMA foreign_keys=OFF"))
+    await async_db_session.execute(text("SET session_replication_role = replica"))
     await async_db_session.execute(
         text("DELETE FROM nodes WHERE id = :id"), {"id": node.id}
     )
     await async_db_session.commit()
-    await async_db_session.execute(text("PRAGMA foreign_keys=ON"))
+    await async_db_session.execute(text("SET session_replication_role = DEFAULT"))
 
     counts = await cleanup_orphaned_node_relations(async_db_session, dry_run=True)
 
