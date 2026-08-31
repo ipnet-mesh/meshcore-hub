@@ -28,6 +28,37 @@ test.describe("messages", () => {
     await expect(page.getByTestId("list-row")).toHaveCount(4);
   });
 
+  test("feed link respects the channel filter", async ({ page }) => {
+    await page.goto("/messages");
+    await expectListLoaded(page);
+    // No channel filter: defaults to the built-in public channel (idx 17).
+    const feedLink = page.getByTestId("feed-link");
+    await expect(feedLink).toHaveAttribute("href", "/feeds/channels/17.xml");
+
+    await feedLink.click();
+    await expect(page).toHaveURL(/\/feeds\/channels\/17\.xml$/);
+    const xml17 = await page.locator("pre").innerText();
+    expect(xml17).toContain("Hello from the e2e mesh");
+
+    // Selecting a community channel repoints the feed at that channel.
+    await page.goto("/messages");
+    await expectListLoaded(page);
+    await openFilters(page);
+    await page
+      .locator('select[name="channel_idx"]')
+      .selectOption({ label: "E2E General" });
+    await expect(page).toHaveURL(/channel_idx=\d+/);
+    const customLink = page.getByTestId("feed-link");
+    const href = await customLink.getAttribute("href");
+    expect(href).toMatch(/^\/feeds\/channels\/\d+\.xml$/);
+    expect(href).not.toBe("/feeds/channels/17.xml");
+
+    await customLink.click();
+    await expect(page).toHaveURL(/\/feeds\/channels\/\d+\.xml$/);
+    const xmlCustom = await page.locator("pre").innerText();
+    expect(xmlCustom).toContain("Ops channel traffic");
+  });
+
   test("auto-refresh works and can be paused", async ({ page }) => {
     await page.goto("/messages");
     await expectListLoaded(page);

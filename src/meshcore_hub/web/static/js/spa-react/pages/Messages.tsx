@@ -73,12 +73,16 @@ interface NodeItem {
 interface ChannelItem {
   channel_hash: string;
   name: string;
+  visibility?: string;
+  enabled?: boolean;
 }
 
 interface ListResponse<T> {
   items?: T[];
   total?: number;
 }
+
+const BUILTIN_PUBLIC_CHANNEL_IDX = 17;
 
 export function Messages() {
   const { t } = useTranslation();
@@ -150,6 +154,15 @@ export function Messages() {
       );
       const channelLabels = new Map([...builtin, ...custom]);
 
+      // Channels that can serve a public per-channel feed (community +
+      // enabled, plus the built-in public channel idx 17).
+      const feedableChannelIdxs = new Set<number>([BUILTIN_PUBLIC_CHANNEL_IDX]);
+      for (const ch of channelsData.items ?? []) {
+        if (ch.visibility !== "community" || ch.enabled === false) continue;
+        const idx = parseInt(ch.channel_hash, 16);
+        if (Number.isInteger(idx)) feedableChannelIdxs.add(idx);
+      }
+
       const areaMap = new Map<string, string[]>();
       for (const n of nodesData.items ?? []) {
         const area = n.tags?.find((tg) => tg.key === "area")?.value;
@@ -192,6 +205,7 @@ export function Messages() {
         builtinLabels: builtin,
         customLabels: custom,
         channelLabels,
+        feedableChannelIdxs,
       };
     },
   });
@@ -203,6 +217,16 @@ export function Messages() {
   const builtinLabels = data?.builtinLabels ?? new Map<number, string>();
   const customLabels = data?.customLabels ?? new Map<number, string>();
   const channelLabels = data?.channelLabels ?? new Map<number, string>();
+  const feedableChannelIdxs =
+    data?.feedableChannelIdxs ?? new Set<number>([BUILTIN_PUBLIC_CHANNEL_IDX]);
+  const feedIdx =
+    channelIdx !== "" ? channelIdx : String(BUILTIN_PUBLIC_CHANNEL_IDX);
+  const feedable =
+    channelIdx === "" || feedableChannelIdxs.has(parseInt(channelIdx, 10));
+  const feedHref =
+    features.feeds !== false && feedable
+      ? `/feeds/channels/${feedIdx}.xml`
+      : undefined;
 
   const handleObserverToggle = (area: string) => {
     const updated = toggleObserverArea(area, sortedAreas.length);
@@ -286,6 +310,7 @@ export function Messages() {
         error={error}
         autoRefresh={{ paused, onToggle: toggle, intervalSeconds }}
         filterToggle={{ open: filterOpen, onChange: () => setFilterOpen((o) => !o) }}
+        feedHref={feedHref}
       />
 
       {filterOpen && (

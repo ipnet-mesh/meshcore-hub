@@ -298,16 +298,18 @@ def _advert_items(
         node = nodes_by_id.get(advert.node_id) if advert.node_id else None
         title = _node_display_name(advert.name, node, advert.public_key)
         description = (
-            f"{advert.adv_type or 'node'} advertisement; "
-            f"advertised at {_format_ts(advert.advert_timestamp)}, "
-            f"received {_format_ts(advert.received_at)}"
+            f"{advert.adv_type or 'node'} - {_format_ts(advert.advert_timestamp)}"
         )
+        if advert.packet_hash:
+            link = f"{base}/packets/hash/{advert.packet_hash}"
+        else:
+            link = f"{base}/nodes/{advert.public_key}"
         items.append(
             FeedItem(
                 title=title,
                 description=description,
                 guid=f"advert:{advert.id}",
-                link=f"{base}/nodes/{advert.public_key}",
+                link=link,
                 pub_date=advert.received_at,
                 guid_is_permalink=False,
             )
@@ -325,10 +327,7 @@ def _node_items(nodes: list[Node], base: str) -> list[FeedItem]:
     items: list[FeedItem] = []
     for node in nodes:
         title = _node_display_name(None, node, node.public_key)
-        description = (
-            f"{node.adv_type or 'node'} joined the mesh; "
-            f"last seen {_format_ts(node.last_seen)}"
-        )
+        description = f"{node.adv_type or 'node'} - {_format_ts(node.last_seen)}"
         items.append(
             FeedItem(
                 title=title,

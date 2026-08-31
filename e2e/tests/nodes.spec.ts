@@ -34,6 +34,21 @@ test.describe("nodes", () => {
     await expect(table.getByText("Bravo Node").first()).toBeVisible();
   });
 
+  test("feed link points at the nodes RSS feed", async ({ page }) => {
+    await page.goto("/nodes");
+    await expectListLoaded(page);
+    const feedLink = page.getByTestId("feed-link");
+    await expect(feedLink).toHaveAttribute("href", "/feeds/nodes.xml");
+
+    await feedLink.click();
+    await expect(page).toHaveURL(/\/feeds\/nodes\.xml$/);
+    // Chromium wraps raw XML in <pre> and HTML-escapes tags; innerText gives
+    // us the unescaped RSS XML.
+    const content = await page.locator("pre").innerText();
+    expect(content).toContain("<rss");
+    expect(content).toContain("Alpha Node");
+  });
+
   test("auto-refresh works and can be paused", async ({ page }) => {
     await page.goto("/nodes");
     await expectListLoaded(page);

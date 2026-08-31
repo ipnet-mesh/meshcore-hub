@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { Advertisements } from "@/pages/Advertisements";
 import { renderWithProviders } from "@/test/renderWithProviders";
+import { makeConfig } from "@/test/makeConfig";
 import * as api from "@/utils/api";
 
 const ADVERTS = {
@@ -53,6 +54,28 @@ describe("Advertisements", () => {
     await waitFor(() => {
       expect(container.querySelector('[data-tip="timeout"]')).not.toBeNull();
     });
+  });
+
+  it("links the RSS feed when feeds are enabled", async () => {
+    mockAdvertsApi();
+    renderWithProviders(<Advertisements />);
+    await waitFor(() => {
+      expect(screen.getByTestId("feed-link")).toHaveAttribute(
+        "href",
+        "/feeds/adverts.xml",
+      );
+    });
+  });
+
+  it("omits the RSS feed link when feeds are disabled", async () => {
+    mockAdvertsApi();
+    renderWithProviders(<Advertisements />, {
+      config: makeConfig({ features: { feeds: false } }),
+    });
+    await waitFor(() => {
+      expect(screen.getAllByText("AdNode").length).toBeGreaterThanOrEqual(1);
+    });
+    expect(screen.queryByTestId("feed-link")).not.toBeInTheDocument();
   });
 
   it("renders an empty state when no adverts exist", async () => {

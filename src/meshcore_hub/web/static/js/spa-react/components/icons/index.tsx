@@ -516,6 +516,19 @@ export function IconClock(props: IconProps) {
   );
 }
 
+export function IconRss(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M6 5c7.18 0 13 5.82 13 13M6 11a7 7 0 017 7m-9 1a1 1 0 100-2 1 1 0 000 2z"
+      />
+    </svg>
+  );
+}
+
 export function IconGithub(props: IconProps) {
   return (
     <svg
