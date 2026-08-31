@@ -48,6 +48,24 @@ describe("ListToolbar", () => {
     expect(container.querySelector('input[type="checkbox"]')).toBeNull();
   });
 
+  it("renders the feed link only when feedHref is provided", () => {
+    const { rerender } = render(
+      <ListToolbar total={null} autoRefresh={autoRefresh} />,
+    );
+    expect(screen.queryByTestId("feed-link")).not.toBeInTheDocument();
+    rerender(
+      <ListToolbar
+        total={null}
+        autoRefresh={autoRefresh}
+        feedHref="/feeds/nodes.xml"
+      />,
+    );
+    const link = screen.getByTestId("feed-link");
+    expect(link).toHaveAttribute("href", "/feeds/nodes.xml");
+    expect(link).toHaveAttribute("aria-label", "RSS");
+    expect(link.querySelector("svg")).toBeInTheDocument();
+  });
+
   it("renders the filter toggle only when provided", () => {
     const { container, rerender } = render(
       <ListToolbar total={null} autoRefresh={autoRefresh} />,

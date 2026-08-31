@@ -310,13 +310,64 @@ class TestFeedItemLinks:
         assert ("aabbccddeeff00112233445566778899", "false") in guids
         assert any(guid.startswith("msg:") for guid, _ in guids)
 
-    def test_advert_and_node_links(
+    def test_advert_link_prefers_packet_hash(
+        self, client_no_auth, api_db_session, sample_node
+    ):
+        advert = Advertisement(
+            public_key=sample_node.public_key,
+            name="HashedNode",
+            received_at=NOW,
+            packet_hash="aabbccddeeff00112233445566778899",
+        )
+        api_db_session.add(advert)
+        api_db_session.commit()
+        response = client_no_auth.get("/api/v1/feeds/adverts.xml")
+        root = ET.fromstring(response.text)
+        assert _text(root, "channel/item/link").endswith(
+            "/packets/hash/aabbccddeeff00112233445566778899"
+        )
+
+    def test_advert_link_falls_back_to_node_without_hash(
         self, client_no_auth, api_db_session, sample_advertisement, sample_node
     ):
         response = client_no_auth.get("/api/v1/feeds/adverts.xml")
         root = ET.fromstring(response.text)
         assert _text(root, "channel/item/link").endswith(
             f"/nodes/{sample_advertisement.public_key}"
+        )
+
+    def test_advert_description_is_minimal(
+        self, client_no_auth, api_db_session, sample_node
+    ):
+        advert = Advertisement(
+            public_key=sample_node.public_key,
+            adv_type="REPEATER",
+            received_at=NOW,
+            advert_timestamp=NOW,
+        )
+        api_db_session.add(advert)
+        api_db_session.commit()
+        response = client_no_auth.get("/api/v1/feeds/adverts.xml")
+        root = ET.fromstring(response.text)
+        assert (
+            _text(root, "channel/item/description")
+            == "REPEATER - 2026-08-30T12:00:00+00:00"
+        )
+
+    def test_node_description_is_minimal(self, client_no_auth, api_db_session):
+        node = Node(
+            public_key="33" * 32,
+            adv_type="REPEATER",
+            created_at=NOW,
+            last_seen=NOW,
+        )
+        api_db_session.add(node)
+        api_db_session.commit()
+        response = client_no_auth.get("/api/v1/feeds/nodes.xml")
+        root = ET.fromstring(response.text)
+        assert (
+            _text(root, "channel/item/description")
+            == "REPEATER - 2026-08-30T12:00:00+00:00"
         )
 
     def test_channel_feed_link_uses_channel_idx_query(

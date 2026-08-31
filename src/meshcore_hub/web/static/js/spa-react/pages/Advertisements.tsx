@@ -243,6 +243,7 @@ export function Advertisements() {
         error={error}
         autoRefresh={{ paused, onToggle: toggle, intervalSeconds }}
         filterToggle={{ open: filterOpen, onChange: () => setFilterOpen((o) => !o) }}
+        feedHref={features.feeds !== false ? "/feeds/adverts.xml" : undefined}
       />
 
       {filterOpen && (

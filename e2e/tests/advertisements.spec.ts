@@ -26,6 +26,22 @@ test.describe("advertisements", () => {
     await expect(table.getByText("Alpha Node")).toHaveCount(0);
   });
 
+  test("feed link points at the adverts RSS feed", async ({ page }) => {
+    await page.goto("/advertisements");
+    await expectListLoaded(page);
+    const feedLink = page.getByTestId("feed-link");
+    await expect(feedLink).toHaveAttribute("href", "/feeds/adverts.xml");
+
+    await feedLink.click();
+    await expect(page).toHaveURL(/\/feeds\/adverts\.xml$/);
+    // Chromium wraps raw XML in <pre> and HTML-escapes tags; innerText gives
+    // us the unescaped RSS XML.
+    const content = await page.locator("pre").innerText();
+    expect(content).toContain("<rss");
+    expect(content).toContain("Alpha Node");
+    expect(content).toContain("/packets/hash/");
+  });
+
   test("auto-refresh works and can be paused", async ({ page }) => {
     await page.goto("/advertisements");
     await expectListLoaded(page);

@@ -260,6 +260,9 @@ export function Nodes() {
           open: filterOpen,
           onChange: () => setFilterOpen((open) => !open),
         }}
+        feedHref={
+          (config.features ?? {}).feeds !== false ? "/feeds/nodes.xml" : undefined
+        }
       />
 
       {filterOpen && (

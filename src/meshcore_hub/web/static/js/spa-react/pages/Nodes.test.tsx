@@ -69,6 +69,28 @@ describe("Nodes", () => {
     });
   });
 
+  it("links the RSS feed when feeds are enabled", async () => {
+    mockNodesApi();
+    renderWithProviders(<Nodes />);
+    await waitFor(() => {
+      expect(screen.getByTestId("feed-link")).toHaveAttribute(
+        "href",
+        "/feeds/nodes.xml",
+      );
+    });
+  });
+
+  it("omits the RSS feed link when feeds are disabled", async () => {
+    mockNodesApi();
+    renderWithProviders(<Nodes />, {
+      config: makeConfig({ features: { feeds: false } }),
+    });
+    await waitFor(() => {
+      expect(screen.getAllByText("TestNode").length).toBeGreaterThanOrEqual(1);
+    });
+    expect(screen.queryByTestId("feed-link")).not.toBeInTheDocument();
+  });
+
   it("renders without error when OIDC is enabled", async () => {
     mockNodesApi();
     renderWithProviders(<Nodes />, {
