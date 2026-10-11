@@ -217,7 +217,9 @@ def get_stats(
     )
     channel_results = session.execute(channel_counts_query).all()
     channel_message_counts = {
-        int(channel): int(count) for channel, count in channel_results
+        int(channel): int(count)
+        for channel, count in channel_results
+        if channel is not None
     }
 
     from meshcore_hub.common.config import get_web_settings
@@ -325,7 +327,8 @@ def get_recent_activity(
             .where(NodeTag.key == "name")
         )
         for public_key, value in session.execute(tag_name_query).all():
-            tag_names[public_key] = value
+            if value is not None:
+                tag_names[public_key] = value
 
     # Batch-resolve observers (via event_observers) and the legacy
     # observed_by public key for the recent adverts, mirroring the

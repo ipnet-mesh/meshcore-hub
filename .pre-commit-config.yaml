@@ -29,14 +29,14 @@ repos:
           - flake8-comprehensions
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.9.0
+    rev: v2.4.0
     hooks:
       - id: mypy
         exclude: ^alembic/
         additional_dependencies:
           - pydantic>=2.0.0
           - pydantic-settings>=2.0.0
-          - sqlalchemy>=2.0.0
+          - sqlalchemy[asyncio]>=2.0.0
           - fastapi>=0.100.0
           - alembic>=1.7.0
           - types-paho-mqtt>=1.6.0
