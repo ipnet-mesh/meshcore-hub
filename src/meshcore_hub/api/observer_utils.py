@@ -84,7 +84,8 @@ def fetch_observers_for_events(
             .where(NodeTag.key == "name")
         )
         for node_id, value in session.execute(tag_query).all():
-            tag_names[node_id] = value
+            if value is not None:
+                tag_names[node_id] = value
 
     for row in results:
         if row.event_hash not in observers_by_hash:
@@ -150,6 +151,7 @@ def resolve_sender_names(
         .where(NodeTag.key == "name")
     )
     for public_key, value in session.execute(tag_query).all():
-        tag_names[public_key[:12]] = value
+        if value is not None:
+            tag_names[public_key[:12]] = value
 
     return names, tag_names
